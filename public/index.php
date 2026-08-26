@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use StandardBoard\App;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Http\Cors;
-use StandardBoard\Http\Request;
-use StandardBoard\Http\Response;
+use ApiBoard\App;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Http\Cors;
+use ApiBoard\Http\Request;
+use ApiBoard\Http\Response;
 
 // display_errors 가 켜진 호스팅에서도 경고문이 JSON 앞에 섞이지 않게 한다.
 ini_set('display_errors', '0');

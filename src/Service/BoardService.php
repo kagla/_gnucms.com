@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Service;
+namespace ApiBoard\Service;
 
-use StandardBoard\Auth\Acl;
-use StandardBoard\Db\Connection;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Repository\BoardRepository;
-use StandardBoard\Repository\CommentRepository;
-use StandardBoard\Repository\PostRepository;
-use StandardBoard\Validation\Validator;
+use ApiBoard\Auth\Acl;
+use ApiBoard\Db\Connection;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Repository\BoardRepository;
+use ApiBoard\Repository\CommentRepository;
+use ApiBoard\Repository\PostRepository;
+use ApiBoard\Validation\Validator;
 
 final class BoardService
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Auth;
+namespace ApiBoard\Auth;
 
-use StandardBoard\Http\ApiError;
+use ApiBoard\Http\ApiError;
 
 /**
  * 권한 판정의 단일 출처. 판정 순서는 다음과 같고 위에서부터 단락 평가한다.

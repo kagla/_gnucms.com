@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard;
+namespace ApiBoard;
 
-use StandardBoard\Auth\Acl;
-use StandardBoard\Auth\TokenIssuer;
-use StandardBoard\Auth\TokenVerifier;
-use StandardBoard\Db\Connection;
-use StandardBoard\Http\Request;
-use StandardBoard\Http\Router;
-use StandardBoard\Repository\BoardRepository;
-use StandardBoard\Repository\CommentRepository;
-use StandardBoard\Repository\PostRepository;
-use StandardBoard\Service\AttachmentService;
-use StandardBoard\Service\AuthService;
-use StandardBoard\Service\BoardService;
-use StandardBoard\Service\CommentService;
-use StandardBoard\Service\PostService;
+use ApiBoard\Auth\Acl;
+use ApiBoard\Auth\TokenIssuer;
+use ApiBoard\Auth\TokenVerifier;
+use ApiBoard\Db\Connection;
+use ApiBoard\Http\Request;
+use ApiBoard\Http\Router;
+use ApiBoard\Repository\BoardRepository;
+use ApiBoard\Repository\CommentRepository;
+use ApiBoard\Repository\PostRepository;
+use ApiBoard\Service\AttachmentService;
+use ApiBoard\Service\AuthService;
+use ApiBoard\Service\BoardService;
+use ApiBoard\Service\CommentService;
+use ApiBoard\Service\PostService;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는

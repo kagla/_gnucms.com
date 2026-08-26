@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Http;
+namespace ApiBoard\Tests\Http;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Http\Cors;
-use StandardBoard\Http\Request;
+use ApiBoard\Http\Cors;
+use ApiBoard\Http\Request;
 
 final class RequestTest extends TestCase
 {

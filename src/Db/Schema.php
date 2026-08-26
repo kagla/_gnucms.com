@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Db;
+namespace ApiBoard\Db;
 
-use StandardBoard\Http\ApiError;
+use ApiBoard\Http\ApiError;
 
 /**
  * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고

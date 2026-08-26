@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Http;
+namespace ApiBoard\Http;
 
-use StandardBoard\Support\Json;
+use ApiBoard\Support\Json;
 
 final class Response implements ResponseInterface
 {

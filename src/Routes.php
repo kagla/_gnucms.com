@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard;
+namespace ApiBoard;
 
-use StandardBoard\Http\Request;
-use StandardBoard\Http\Response;
-use StandardBoard\Http\Router;
+use ApiBoard\Http\Request;
+use ApiBoard\Http\Response;
+use ApiBoard\Http\Router;
 
 /**
  * 경로 등록의 단일 지점. 이후 태스크가 여기에 자기 경로를 추가한다.
@@ -23,7 +23,7 @@ final class Routes
         });
 
         $router->post('/auth/login', static function (Request $request, array $params) use ($app): Response {
-            $v = new \StandardBoard\Validation\Validator($request->body());
+            $v = new \ApiBoard\Validation\Validator($request->body());
             $id = $v->requiredString('id', 64);
             $password = $v->requiredString('password', 255);
             $v->check();
@@ -142,7 +142,7 @@ final class Routes
             $boardKey = (string) $request->input('board_key', '');
             $files = $request->files();
             if (!isset($files['file'])) {
-                throw \StandardBoard\Http\ApiError::validation(['file' => '파일이 없습니다.']);
+                throw \ApiBoard\Http\ApiError::validation(['file' => '파일이 없습니다.']);
             }
 
             return Response::json(['data' => $app->attachments()->upload(

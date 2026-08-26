@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Api;
+namespace ApiBoard\Tests\Api;
 
-use StandardBoard\Auth\TokenVerifier;
+use ApiBoard\Auth\TokenVerifier;
 use PHPUnit\Framework\Attributes\DataProvider;
-use StandardBoard\Tests\Support\ApiTestCase;
+use ApiBoard\Tests\Support\ApiTestCase;
 
 final class AuthApiTest extends ApiTestCase
 {

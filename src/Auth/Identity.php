@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Auth;
+namespace ApiBoard\Auth;
 
 /**
  * 요청자의 신원. 게시판은 사용자 저장소를 갖지 않으므로 이 값은

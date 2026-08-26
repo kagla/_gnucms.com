@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Db;
+namespace ApiBoard\Db;
 
 use PDO;
 use PDOException;
-use StandardBoard\Db\Dialect\DialectInterface;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Db\Dialect\DialectInterface;
+use ApiBoard\Http\ApiError;
 use Throwable;
 
 /**

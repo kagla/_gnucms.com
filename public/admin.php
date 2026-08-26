@@ -10,7 +10,7 @@ declare(strict_types=1);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>표준 게시판 관리</title>
+<title>apiboard 관리</title>
 <style>
   /*
    * 테마는 토큰으로만 바꾼다. 밝은 값이 바탕이고, 어두운 값은
@@ -165,7 +165,7 @@ declare(strict_types=1);
 <body>
 
 <header>
-  <h1>표준 게시판 관리</h1>
+  <h1>apiboard 관리</h1>
   <span id="who" class="muted"></span>
   <button id="theme" class="icon" type="button" aria-label="어둡게 전환" title="어둡게 전환"></button>
   <button id="logout" class="hidden">로그아웃</button>

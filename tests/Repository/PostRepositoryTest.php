@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Repository;
+namespace ApiBoard\Tests\Repository;
 
-use StandardBoard\Db\Connection;
-use StandardBoard\Repository\BoardRepository;
-use StandardBoard\Repository\PostRepository;
-use StandardBoard\Support\Clock;
+use ApiBoard\Db\Connection;
+use ApiBoard\Repository\BoardRepository;
+use ApiBoard\Repository\PostRepository;
+use ApiBoard\Support\Clock;
 use PHPUnit\Framework\Attributes\DataProvider;
-use StandardBoard\Tests\Support\DatabaseTestCase;
+use ApiBoard\Tests\Support\DatabaseTestCase;
 
 final class PostRepositoryTest extends DatabaseTestCase
 {

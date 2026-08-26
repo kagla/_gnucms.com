@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Http;
+namespace ApiBoard\Http;
 
 interface ResponseInterface
 {

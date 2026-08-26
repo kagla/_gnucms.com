@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Install;
+namespace ApiBoard\Tests\Install;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Db\Connection;
-use StandardBoard\Db\Schema;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Install\Installer;
+use ApiBoard\Db\Connection;
+use ApiBoard\Db\Schema;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Install\Installer;
 
 final class InstallerTest extends TestCase
 {
@@ -17,7 +17,7 @@ final class InstallerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->workDir = sys_get_temp_dir() . '/standard-board-install-' . bin2hex(random_bytes(4));
+        $this->workDir = sys_get_temp_dir() . '/apiboard-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
     }

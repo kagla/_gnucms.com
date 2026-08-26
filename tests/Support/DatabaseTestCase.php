@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Support;
+namespace ApiBoard\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Db\Connection;
-use StandardBoard\Db\Schema;
+use ApiBoard\Db\Connection;
+use ApiBoard\Db\Schema;
 
 /**
  * 데이터 제공자로 사용 가능한 DB 를 모두 돌린다. SQLite 는 항상 돌고,

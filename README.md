@@ -1,4 +1,4 @@
-# 표준 게시판 (standard-board)
+# apiboard
 
 SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시판. PHP 7.4 이상이면 되고
 런타임 의존성이 없다. 저가형 공유 호스팅에 폴더째 올리면 동작한다.

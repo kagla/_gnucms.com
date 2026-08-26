@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Comment;
+namespace ApiBoard\Tests\Comment;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Comment\TreeBuilder;
+use ApiBoard\Comment\TreeBuilder;
 
 final class TreeBuilderTest extends TestCase
 {

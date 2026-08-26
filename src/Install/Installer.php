@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Install;
+namespace ApiBoard\Install;
 
-use StandardBoard\Db\Connection;
-use StandardBoard\Db\DialectFactory;
-use StandardBoard\Db\Schema;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Support\Base64Url;
-use StandardBoard\Validation\Validator;
+use ApiBoard\Db\Connection;
+use ApiBoard\Db\DialectFactory;
+use ApiBoard\Db\Schema;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Support\Base64Url;
+use ApiBoard\Validation\Validator;
 use Throwable;
 
 final class Installer

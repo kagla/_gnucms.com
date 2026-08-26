@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Support;
+namespace ApiBoard\Support;
 
 /**
  * 모든 시각의 단일 출처. 저장 형식은 UTC 'Y-m-d H:i:s' 문자열이며,

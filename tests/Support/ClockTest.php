@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Support;
+namespace ApiBoard\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Support\Clock;
+use ApiBoard\Support\Clock;
 
 final class ClockTest extends TestCase
 {

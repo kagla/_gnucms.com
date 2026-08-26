@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Db\Dialect;
+namespace ApiBoard\Db\Dialect;
 
 use PDO;
 

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Db;
+namespace ApiBoard\Db;
 
-use StandardBoard\Db\Dialect\DialectInterface;
-use StandardBoard\Db\Dialect\MysqlDialect;
-use StandardBoard\Db\Dialect\PgsqlDialect;
-use StandardBoard\Db\Dialect\SqliteDialect;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Db\Dialect\DialectInterface;
+use ApiBoard\Db\Dialect\MysqlDialect;
+use ApiBoard\Db\Dialect\PgsqlDialect;
+use ApiBoard\Db\Dialect\SqliteDialect;
+use ApiBoard\Http\ApiError;
 
 final class DialectFactory
 {

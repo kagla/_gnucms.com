@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Docs;
+namespace ApiBoard\Tests\Docs;
 
 use PHPUnit\Framework\TestCase;
 

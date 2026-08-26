@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Api;
+namespace ApiBoard\Tests\Api;
 
-use StandardBoard\App;
-use StandardBoard\Http\FileResponse;
-use StandardBoard\Http\Request;
+use ApiBoard\App;
+use ApiBoard\Http\FileResponse;
+use ApiBoard\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
-use StandardBoard\Tests\Support\ApiTestCase;
+use ApiBoard\Tests\Support\ApiTestCase;
 
 final class AttachmentApiTest extends ApiTestCase
 {
@@ -35,7 +35,7 @@ final class AttachmentApiTest extends ApiTestCase
         $app = $this->makeApp($config);
         $this->board($app);
 
-        $this->expectException(\StandardBoard\Http\ApiError::class);
+        $this->expectException(\ApiBoard\Http\ApiError::class);
         $app->attachments()->upload(
             $app->aclFor($this->authed($app, 'user-1', '홍길동')),
             'free',
@@ -56,7 +56,7 @@ final class AttachmentApiTest extends ApiTestCase
                 $this->fakeUpload('큰파일.txt', str_repeat('x', 1024 * 1024 + 1))
             );
             $this->fail('413 이 나와야 한다');
-        } catch (\StandardBoard\Http\ApiError $e) {
+        } catch (\ApiBoard\Http\ApiError $e) {
             $this->assertSame(413, $e->status());
         }
     }
@@ -157,7 +157,7 @@ final class AttachmentApiTest extends ApiTestCase
                 $this->fakeUpload('메모.txt', '내용')
             );
             $this->fail('거부되어야 한다');
-        } catch (\StandardBoard\Http\ApiError $e) {
+        } catch (\ApiBoard\Http\ApiError $e) {
             $this->assertSame(422, $e->status());
         }
     }
@@ -189,7 +189,7 @@ final class AttachmentApiTest extends ApiTestCase
     {
         $app = $this->makeApp($config);
         $this->board($app);
-        $dir = sys_get_temp_dir() . '/standard-board-test-uploads';
+        $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
         @mkdir($dir, 0775, true);
         $keep = $dir . '/.gitkeep';
         file_put_contents($keep, '');
@@ -215,7 +215,7 @@ final class AttachmentApiTest extends ApiTestCase
 
     protected function tearDown(): void
     {
-        $dir = sys_get_temp_dir() . '/standard-board-test-uploads';
+        $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
         if (is_dir($dir)) {
             $iterator = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),

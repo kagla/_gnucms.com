@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 spl_autoload_register(static function (string $class): void {
-    $prefix = 'StandardBoard\\';
+    $prefix = 'ApiBoard\\';
     $length = strlen($prefix);
     if (strncmp($class, $prefix, $length) !== 0) {
         return;

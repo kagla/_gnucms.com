@@ -36,7 +36,7 @@ if (isset($_GET['spec'])) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>표준 게시판 API 문서</title>
+<title>apiboard API 문서</title>
 <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.32.14/swagger-ui.css">
 <style>
   body { margin: 0; background: #fafafa; }
@@ -53,7 +53,7 @@ if (isset($_GET['spec'])) {
 <body>
 
 <div class="sb-head">
-  <h1>표준 게시판 API</h1>
+  <h1>apiboard API</h1>
   <p>
     스펙 원본: <a href="?spec">openapi.yaml</a> ·
     관리자 화면: <a href="admin.php">admin.php</a> ·

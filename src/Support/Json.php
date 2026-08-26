@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Support;
+namespace ApiBoard\Support;
 
-use StandardBoard\Http\ApiError;
+use ApiBoard\Http\ApiError;
 
 final class Json
 {

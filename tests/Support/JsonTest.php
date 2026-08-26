@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Support;
+namespace ApiBoard\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Support\Json;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Support\Json;
 
 final class JsonTest extends TestCase
 {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Auth;
+namespace ApiBoard\Auth;
 
-use StandardBoard\Http\ApiError;
-use StandardBoard\Support\Base64Url;
-use StandardBoard\Support\Clock;
-use StandardBoard\Support\Json;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Support\Base64Url;
+use ApiBoard\Support\Clock;
+use ApiBoard\Support\Json;
 
 final class TokenVerifier
 {

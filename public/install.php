@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../src/autoload.php';
 
-use StandardBoard\Http\ApiError;
-use StandardBoard\Install\Installer;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Install\Installer;
 
 $installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
 
@@ -39,7 +39,7 @@ function h(?string $value): string
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>표준 게시판 설치</title>
+<title>apiboard 설치</title>
 <style>
   body { font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
   h1 { font-size: 22px; }
@@ -52,7 +52,7 @@ function h(?string $value): string
 </style>
 </head>
 <body>
-<h1>표준 게시판 설치</h1>
+<h1>apiboard 설치</h1>
 
 <?php if ($done !== null): ?>
   <div class="done">

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Service;
+namespace ApiBoard\Service;
 
-use StandardBoard\Auth\Acl;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Http\FileResponse;
-use StandardBoard\Repository\PostRepository;
-use StandardBoard\Support\Clock;
+use ApiBoard\Auth\Acl;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Http\FileResponse;
+use ApiBoard\Repository\PostRepository;
+use ApiBoard\Support\Clock;
 
 final class AttachmentService
 {

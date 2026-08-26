@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Auth;
+namespace ApiBoard\Tests\Auth;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Auth\Acl;
-use StandardBoard\Auth\Identity;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Auth\Acl;
+use ApiBoard\Auth\Identity;
+use ApiBoard\Http\ApiError;
 
 final class AclTest extends TestCase
 {

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Auth;
+namespace ApiBoard\Tests\Auth;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Auth\TokenIssuer;
-use StandardBoard\Auth\TokenVerifier;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Support\Base64Url;
-use StandardBoard\Support\Clock;
-use StandardBoard\Support\Json;
+use ApiBoard\Auth\TokenIssuer;
+use ApiBoard\Auth\TokenVerifier;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Support\Base64Url;
+use ApiBoard\Support\Clock;
+use ApiBoard\Support\Json;
 
 final class TokenTest extends TestCase
 {

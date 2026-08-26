@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Repository;
+namespace ApiBoard\Repository;
 
-use StandardBoard\Db\Connection;
-use StandardBoard\Support\Clock;
+use ApiBoard\Db\Connection;
+use ApiBoard\Support\Clock;
 
 final class CommentRepository
 {

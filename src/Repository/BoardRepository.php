@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Repository;
+namespace ApiBoard\Repository;
 
-use StandardBoard\Db\Connection;
-use StandardBoard\Support\Clock;
-use StandardBoard\Support\Json;
+use ApiBoard\Db\Connection;
+use ApiBoard\Support\Clock;
+use ApiBoard\Support\Json;
 
 final class BoardRepository
 {

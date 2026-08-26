@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Validation;
+namespace ApiBoard\Tests\Validation;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Validation\Validator;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Validation\Validator;
 
 final class ValidatorTest extends TestCase
 {

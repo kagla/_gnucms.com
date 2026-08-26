@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Db\Dialect;
+namespace ApiBoard\Db\Dialect;
 
 use PDO;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Http\ApiError;
 
 final class PgsqlDialect implements DialectInterface
 {

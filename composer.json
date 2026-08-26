@@ -1,6 +1,6 @@
 {
-    "name": "kagla/standard-board",
-    "description": "DB 무관 표준 게시판 API",
+    "name": "kagla/apiboard",
+    "description": "어느 DB 에서나 도는 게시판 JSON API",
     "type": "project",
     "license": "MIT",
     "require": {
@@ -11,7 +11,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "StandardBoard\\Tests\\": "tests/"
+            "ApiBoard\\Tests\\": "tests/"
         }
     },
     "config": {

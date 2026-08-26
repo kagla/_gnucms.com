@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Db;
+namespace ApiBoard\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Db\DialectFactory;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Db\DialectFactory;
+use ApiBoard\Http\ApiError;
 
 final class DialectFactoryTest extends TestCase
 {

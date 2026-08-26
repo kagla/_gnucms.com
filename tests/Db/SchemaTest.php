@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Db;
+namespace ApiBoard\Tests\Db;
 
 use PHPUnit\Framework\Attributes\DataProvider;
-use StandardBoard\Db\Connection;
-use StandardBoard\Db\Schema;
-use StandardBoard\Tests\Support\DatabaseTestCase;
+use ApiBoard\Db\Connection;
+use ApiBoard\Db\Schema;
+use ApiBoard\Tests\Support\DatabaseTestCase;
 
 final class SchemaTest extends DatabaseTestCase
 {
@@ -76,7 +76,7 @@ final class SchemaTest extends DatabaseTestCase
         $db = $this->freshDatabase($config);
         $db->insert('boards', $this->boardRow('dup'));
 
-        $this->expectException(\StandardBoard\Http\ApiError::class);
+        $this->expectException(\ApiBoard\Http\ApiError::class);
         $db->insert('boards', $this->boardRow('dup'));
     }
 

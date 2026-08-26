@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Db;
+namespace ApiBoard\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Db\Connection;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Db\Connection;
+use ApiBoard\Http\ApiError;
 
 final class ConnectionTest extends TestCase
 {

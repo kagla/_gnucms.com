@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Http;
+namespace ApiBoard\Tests\Http;
 
 use PHPUnit\Framework\TestCase;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Http\Request;
-use StandardBoard\Http\Response;
-use StandardBoard\Http\Router;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Http\Request;
+use ApiBoard\Http\Response;
+use ApiBoard\Http\Router;
 
 final class RouterTest extends TestCase
 {

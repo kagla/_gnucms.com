@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Support;
+namespace ApiBoard\Tests\Support;
 
-use StandardBoard\App;
-use StandardBoard\Auth\TokenIssuer;
-use StandardBoard\Db\Schema;
-use StandardBoard\Http\ApiError;
-use StandardBoard\Http\Request;
-use StandardBoard\Http\Response;
-use StandardBoard\Http\ResponseInterface;
+use ApiBoard\App;
+use ApiBoard\Auth\TokenIssuer;
+use ApiBoard\Db\Schema;
+use ApiBoard\Http\ApiError;
+use ApiBoard\Http\Request;
+use ApiBoard\Http\Response;
+use ApiBoard\Http\ResponseInterface;
 
 abstract class ApiTestCase extends DatabaseTestCase
 {
@@ -26,7 +26,7 @@ abstract class ApiTestCase extends DatabaseTestCase
                 'password_hash' => password_hash('rootpass', PASSWORD_DEFAULT),
             ],
             'uploads' => [
-                'dir'         => sys_get_temp_dir() . '/standard-board-test-uploads',
+                'dir'         => sys_get_temp_dir() . '/apiboard-test-uploads',
                 'max_bytes'   => 1024 * 1024,
                 'allowed_ext' => ['txt', 'png', 'pdf'],
             ],

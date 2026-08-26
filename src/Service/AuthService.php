@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Service;
+namespace ApiBoard\Service;
 
-use StandardBoard\Auth\TokenIssuer;
-use StandardBoard\Http\ApiError;
+use ApiBoard\Auth\TokenIssuer;
+use ApiBoard\Http\ApiError;
 
 /**
  * 호스트 앱이 없을 때를 위한 진입점. 호스트를 붙인 뒤에는 설정에서

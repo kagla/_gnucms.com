@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Tests\Api;
+namespace ApiBoard\Tests\Api;
 
-use StandardBoard\App;
+use ApiBoard\App;
 use PHPUnit\Framework\Attributes\DataProvider;
-use StandardBoard\Tests\Support\ApiTestCase;
+use ApiBoard\Tests\Support\ApiTestCase;
 
 final class PostApiTest extends ApiTestCase
 {

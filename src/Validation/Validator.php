@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace StandardBoard\Validation;
+namespace ApiBoard\Validation;
 
-use StandardBoard\Http\ApiError;
+use ApiBoard\Http\ApiError;
 
 /**
  * 오류를 모았다가 check() 에서 한 번에 던진다. 필드 하나 고칠 때마다
