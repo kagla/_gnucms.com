@@ -1,5 +1,6 @@
 # 실제 설정 (샘플만 커밋한다)
 /config/config.php
+/.env
 
 # 업로드된 첨부
 /storage/uploads/*

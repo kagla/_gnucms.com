@@ -24,7 +24,7 @@ final class InstallerTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['config/config.php', 'storage/board.sqlite'] as $file) {
+        foreach (['config/config.php', 'storage/board.sqlite', '.env'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
         @rmdir($this->workDir . '/config');
@@ -120,9 +120,37 @@ final class InstallerTest extends TestCase
         }
     }
 
+    public function testEnvProvidedDsnCountsAsInstalled(): void
+    {
+        // config.php 없이 .env 만으로 배포한 경우다. 설치 화면이 다시 열리면
+        // 두 번째 설정 출처가 생겨 어느 쪽이 이기는지 알 수 없게 된다.
+        file_put_contents($this->workDir . '/.env', "DB_DSN=sqlite:/tmp/whatever.sqlite\n");
+
+        $this->assertTrue($this->installer()->isInstalled());
+    }
+
+    public function testEnvProvidedDsnAlsoRefusesReinstall(): void
+    {
+        file_put_contents($this->workDir . '/.env', "DB_DSN=sqlite:/tmp/whatever.sqlite\n");
+
+        try {
+            $this->installer()->run($this->input());
+            $this->fail('거부되어야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(403, $e->status());
+        }
+    }
+
+    public function testEmptyEnvDoesNotCountAsInstalled(): void
+    {
+        file_put_contents($this->workDir . '/.env', "# 아직 아무것도 없다\nDEBUG=true\n");
+
+        $this->assertFalse($this->installer()->isInstalled());
+    }
+
     private function installer(): Installer
     {
-        return new Installer($this->configPath(), $this->workDir . '/storage');
+        return new Installer($this->configPath(), $this->workDir . '/storage', $this->workDir . '/.env');
     }
 
     private function configPath(): string

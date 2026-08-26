@@ -9,6 +9,7 @@ use StandardBoard\Db\DialectFactory;
 use StandardBoard\Db\Schema;
 use StandardBoard\Http\ApiError;
 use StandardBoard\Support\Base64Url;
+use StandardBoard\Support\Env;
 use StandardBoard\Validation\Validator;
 use Throwable;
 
@@ -22,22 +23,53 @@ final class Installer
     /** @var string */
     private $storageDir;
 
-    public function __construct(string $configPath, string $storageDir)
+    /** @var string|null */
+    private $envFile;
+
+    public function __construct(string $configPath, string $storageDir, ?string $envFile = null)
     {
         $this->configPath = $configPath;
         $this->storageDir = rtrim($storageDir, '/');
+        $this->envFile = $envFile;
     }
 
+    /**
+     * config.php 가 없어도 .env 나 진짜 환경변수가 접속할 DB 를 정해 두었다면
+     * 이미 설치된 것으로 본다. 그 상태에서 설치 화면을 다시 열어 주면
+     * 설정 출처가 둘이 되고, 어느 쪽이 이기는지 아무도 모르게 된다.
+     */
     public function isInstalled(): bool
     {
-        return is_file($this->configPath);
+        return is_file($this->configPath) || $this->dsnFromEnvironment() !== '';
+    }
+
+    private function dsnFromEnvironment(): string
+    {
+        foreach ([$_SERVER, $_ENV] as $source) {
+            if (isset($source['DB_DSN']) && is_scalar($source['DB_DSN'])) {
+                return trim((string) $source['DB_DSN']);
+            }
+        }
+
+        $value = getenv('DB_DSN');
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
+        }
+
+        if ($this->envFile === null) {
+            return '';
+        }
+
+        $values = Env::parseFile($this->envFile);
+
+        return isset($values['DB_DSN']) ? trim($values['DB_DSN']) : '';
     }
 
     /** @return array{dialect: string, config_path: string} */
     public function run(array $input): array
     {
         if ($this->isInstalled()) {
-            throw ApiError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
+            throw ApiError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 와 .env 의 DB_DSN 을 지우세요.');
         }
 
         $v = new Validator($input);

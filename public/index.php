@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use StandardBoard\App;
+use StandardBoard\Config;
 use StandardBoard\Http\ApiError;
 use StandardBoard\Http\Cors;
 use StandardBoard\Http\Request;
@@ -15,17 +16,37 @@ ob_start();
 
 require __DIR__ . '/../src/autoload.php';
 
-$configFile = __DIR__ . '/../config/config.php';
-if (!is_file($configFile)) {
+$basePath = dirname(__DIR__);
+
+$bail = static function (string $message): void {
     ob_end_clean();
     http_response_code(500);
     header('Content-Type: application/json; charset=utf-8');
-    echo '{"error":{"code":"INTERNAL","message":"설치가 필요합니다. install.php 를 실행하세요.","details":{}}}';
+    echo '{"error":{"code":"INTERNAL","message":"' . $message . '","details":{}}}';
+    exit;
+};
+
+try {
+    /** @var array $config */
+    $config = Config::load($basePath . '/config/config.php', $basePath . '/.env', $basePath);
+} catch (Throwable $e) {
+    // 설정을 읽다 죽으면 로그 경로도 아직 모른다. 기본 경로에 남긴다.
+    @error_log(
+        '[' . gmdate('Y-m-d H:i:s') . '] ' . get_class($e) . ': ' . $e->getMessage() . PHP_EOL,
+        3,
+        $basePath . '/storage/logs/error.log'
+    );
+    $bail('설정을 읽지 못했습니다. .env 문법을 확인하세요.');
     exit;
 }
 
-/** @var array $config */
-$config = require $configFile;
+// config.php 없이 .env 만으로 배포할 수도 있으므로 파일 존재가 아니라
+// 실제로 접속할 DB 가 정해졌는지를 본다.
+if ((string) ($config['db']['dsn'] ?? '') === '') {
+    $bail('설치가 필요합니다. install.php 를 실행하세요.');
+    exit;
+}
+
 $debug = (bool) ($config['debug'] ?? false);
 
 $corsHeaders = Cors::headersFor(

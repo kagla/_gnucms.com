@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// 이 파일은 설치 마법사가 만들어 주는 파일의 모양이다.
+// 값을 바꾸려고 이 파일을 열 필요는 없다. 프로젝트 루트의 .env 에 적으면
+// 여기 있는 값을 덮는다. .env.example 을 참고한다.
 return [
     // DSN 은 sqlite: / mysql: / pgsql: 중 하나로 시작한다.
     'db' => [
