@@ -211,6 +211,12 @@ final class PostService
         return (string) $board['board_key'];
     }
 
+    /** 댓글 서비스가 소속 게시판을 찾을 때 쓴다. */
+    public function boardById(int $boardId): ?array
+    {
+        return $this->boards->findBoardById($boardId);
+    }
+
     private function boardsRepositoryLookup(int $boardId): array
     {
         $board = $this->boards->findBoardById($boardId);

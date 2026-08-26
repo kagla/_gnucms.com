@@ -102,5 +102,38 @@ final class Routes
 
             return Response::json(['data' => $post]);
         });
+
+        $router->get('/posts/{id}/comments', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+
+            return Response::json(['data' => $app->commentService()->listComments(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            )]);
+        });
+
+        $router->post('/posts/{id}/comments', static function (Request $request, array $params) use ($app): Response {
+            $comment = $app->commentService()->create($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $comment], 201);
+        });
+
+        $router->patch('/comments/{id}', static function (Request $request, array $params) use ($app): Response {
+            $comment = $app->commentService()->update($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $comment]);
+        });
+
+        $router->delete('/comments/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $app->commentService()->delete(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json([], 204);
+        });
     }
 }

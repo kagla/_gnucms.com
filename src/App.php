@@ -15,6 +15,7 @@ use StandardBoard\Repository\CommentRepository;
 use StandardBoard\Repository\PostRepository;
 use StandardBoard\Service\AuthService;
 use StandardBoard\Service\BoardService;
+use StandardBoard\Service\CommentService;
 use StandardBoard\Service\PostService;
 
 /**
@@ -46,6 +47,9 @@ final class App
 
     /** @var PostService|null */
     private $postService = null;
+
+    /** @var CommentService|null */
+    private $commentService = null;
 
     public function __construct(array $config)
     {
@@ -136,6 +140,15 @@ final class App
         }
 
         return $this->postService;
+    }
+
+    public function commentService(): CommentService
+    {
+        if ($this->commentService === null) {
+            $this->commentService = new CommentService($this->postService(), $this->posts(), $this->comments());
+        }
+
+        return $this->commentService;
     }
 
     public function aclFor(Request $request): Acl
