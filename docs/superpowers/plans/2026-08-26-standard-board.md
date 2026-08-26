@@ -14,9 +14,10 @@
 
 이 절의 제약은 **모든 태스크의 요구사항에 암묵적으로 포함된다.**
 
-- **PHP 7.4 에서 동작해야 한다.** `enum`, `readonly`, 생성자 프로퍼티 승격, `match`, nullsafe 연산자(`?->`), 유니온 타입을 쓰지 않는다. 화살표 함수(`fn()`), 타입 프로퍼티, 스프레드, `??=` 는 7.4 에 있으므로 써도 된다.
+- **PHP 7.4 에서 동작해야 한다 — `src/` 와 `public/` 에 한해서.** 이 두 곳에서는 `enum`, `readonly`, 생성자 프로퍼티 승격, `match`, nullsafe 연산자(`?->`), 유니온 타입, 속성(attribute)을 쓰지 않는다. 화살표 함수(`fn()`), 타입 프로퍼티, 스프레드, `??=` 는 7.4 에 있으므로 써도 된다.
+- **`tests/` 는 배포물이 아니므로 이 제약을 받지 않는다.** 개발 머신의 PHP 8.4 에서만 돌면 되고, 데이터 제공자는 `#[DataProvider('...')]` 속성으로 쓴다. PHPUnit 10 은 `@dataProvider` 애너테이션을 deprecated 로 보고 실행마다 경고를 찍으며, PHPUnit 12 에서는 아예 제거된다. 테스트 출력은 깨끗해야 한다.
 - **런타임 의존성 0.** `composer.json` 의 `require` 에는 `php` 만 있다. PHPUnit 은 `require-dev` 다. 배포물에 `vendor/` 가 포함되지 않는다.
-- **개발 머신의 PHP 는 8.4 이고 7.4 바이너리가 없다.** 따라서 테스트는 8.4 에서 돌지만 `src/` 와 `public/` 의 코드는 7.4 문법을 지켜야 한다. 7.4 파싱 여부는 Task 16 에서 도커로 한 번에 확인한다. PHPUnit 10.5 를 쓰는 것은 8.4 를 지원하면서 `@dataProvider` 애너테이션을 그대로 받기 때문이다.
+- **개발 머신의 PHP 는 8.4 이고 7.4 바이너리가 없다.** 따라서 테스트는 8.4 에서 돌지만 `src/` 와 `public/` 의 코드는 7.4 문법을 지켜야 한다. 7.4 파싱 여부는 Task 16 에서 도커로 한 번에 확인한다. PHPUnit 은 10.5 를 쓴다. 9.x 는 8.4 를 지원하지 않는다.
 - **오토로딩은 `src/autoload.php` 하나로 한다.** Composer 오토로더는 `StandardBoard\` 를 매핑하지 않는다. 테스트도 배포물과 같은 오토로더를 쓴다.
 - **MySQL 5.7 을 지원한다.** 재귀 CTE(`WITH RECURSIVE`), `JSON` 컬럼 타입, JSON 함수(`JSON_EXTRACT` 등), 윈도 함수를 쓰지 않는다.
 - **SQL 은 세 DB 공통 문법으로만 쓴다.** 방언 차이는 `Dialect` 를 통해서만 표현한다. `LIMIT ? OFFSET ?` 는 공통이므로 그대로 쓴다.
@@ -181,7 +182,8 @@ require __DIR__ . '/../src/autoload.php';
          colors="true"
          cacheDirectory=".phpunit.cache"
          failOnWarning="true"
-         failOnRisky="true">
+         failOnRisky="true"
+         failOnDeprecation="true">
     <testsuites>
         <testsuite name="all">
             <directory>tests</directory>
@@ -189,6 +191,10 @@ require __DIR__ . '/../src/autoload.php';
     </testsuites>
 </phpunit>
 ```
+
+`failOnDeprecation="true"` 를 켜는 이유: deprecation 은 기본 설정에서 `OK, but there were issues!` 로만
+찍히고 종료 코드는 0 이라 그냥 쌓인다. 테스트 파일이 열댓 개로 늘어난 뒤에 한꺼번에 고치는 것보다
+처음부터 실패로 만들어 즉시 고치는 편이 싸다.
 
 `.gitignore` 에 두 줄 추가:
 
@@ -1342,11 +1348,12 @@ namespace StandardBoard\Tests\Db;
 
 use StandardBoard\Db\Connection;
 use StandardBoard\Db\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\DatabaseTestCase;
 
 final class SchemaTest extends DatabaseTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreatesAllThreeTables(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1360,7 +1367,7 @@ final class SchemaTest extends DatabaseTestCase
         }
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreateIsIdempotent(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1372,7 +1379,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertTrue($schema->exists());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDropRemovesEverything(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1383,7 +1390,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertFalse($schema->exists());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAutoIncrementPrimaryKeyWorks(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1394,7 +1401,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertGreaterThan((int) $first, (int) $second);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDatetimeColumnRoundTripsUtcString(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1405,7 +1412,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertSame('2026-08-26 01:02:03', substr((string) $row['created_at'], 0, 19));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardKeyIsUnique(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -1641,6 +1648,7 @@ namespace StandardBoard\Tests\Repository;
 
 use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Support\Clock;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\DatabaseTestCase;
 
 final class BoardRepositoryTest extends DatabaseTestCase
@@ -1655,7 +1663,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         Clock::unfreeze();
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreateAndFindByKey(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1670,7 +1678,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertSame('2026-08-26 01:02:03', substr((string) $board['created_at'], 0, 19));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testJsonColumnsComeBackAsArrays(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1687,7 +1695,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertSame(['user-1', 'user-2'], $board['managers']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testEmptyJsonColumnsBecomeEmptyArrays(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1699,7 +1707,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertSame([], $board['managers']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindByKeyReturnsNullWhenMissing(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1707,7 +1715,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertNull($repo->findByKey('nope'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUpdateTouchesUpdatedAtAndKeepsOtherFields(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1724,7 +1732,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertSame('2026-08-26 01:02:03', substr((string) $board['created_at'], 0, 19));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindAllOrdersBySortOrderThenId(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1737,7 +1745,7 @@ final class BoardRepositoryTest extends DatabaseTestCase
         $this->assertSame(['a', 'b', 'c'], $keys);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDeleteRemovesRow(array $config): void
     {
         $repo = new BoardRepository($this->freshDatabase($config));
@@ -1923,6 +1931,7 @@ use StandardBoard\Db\Connection;
 use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Repository\PostRepository;
 use StandardBoard\Support\Clock;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\DatabaseTestCase;
 
 final class PostRepositoryTest extends DatabaseTestCase
@@ -1937,7 +1946,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         Clock::unfreeze();
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreateAndFind(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -1958,7 +1967,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertNull($post['deleted_at']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindNeverExposesGuestPassword(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -1969,7 +1978,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertArrayNotHasKey('guest_password', $post);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindWithSecretExposesGuestPassword(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -1980,7 +1989,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertTrue(password_verify('1234', (string) $post['guest_password']));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testPaginateExcludesNoticesAndDeleted(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -1996,7 +2005,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(['일반 1'], array_column($page['rows'], 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testPaginateCanIncludeDeletedPosts(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2010,7 +2019,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(['삭제된 글', '살아 있는 글'], array_column($page['rows'], 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testPaginateOrdersByIdDescendingAndSlices(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2024,7 +2033,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(['3', '2'], array_column($page['rows'], 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSearchMatchesTitleOrContent(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2038,7 +2047,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(2, $page['total']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSearchTreatsPercentAsLiteral(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2051,7 +2060,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame('할인 50% 행사', $page['rows'][0]['title']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSearchTreatsUnderscoreAsLiteral(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2063,7 +2072,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(1, $page['total']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFilterByCategory(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2076,7 +2085,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame('질문 글', $page['rows'][0]['title']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testNoticesAreReturnedSeparatelyNewestFirst(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2088,7 +2097,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(['공지 2', '공지 1'], array_column($repo->notices($boardId), 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSoftDeleteAndRestore(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2101,7 +2110,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertNull($repo->find($id)['deleted_at']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testIncrementViewsAndCommentCount(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2118,7 +2127,7 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(1, $post['comment_count']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAttachmentsRoundTripAsArray(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -2681,6 +2690,7 @@ use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Repository\CommentRepository;
 use StandardBoard\Repository\PostRepository;
 use StandardBoard\Support\Clock;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\DatabaseTestCase;
 
 final class CommentRepositoryTest extends DatabaseTestCase
@@ -2695,7 +2705,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         Clock::unfreeze();
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testRootCommentHasDepthZero(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -2704,7 +2714,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertSame(0, $repo->find($id)['depth']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDepthIsDerivedFromParent(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -2716,7 +2726,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertSame(2, $repo->find($grandChild)['depth']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindByPostReturnsIdAscendingIncludingDeleted(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -2730,7 +2740,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertNotNull($rows[0]['deleted_at']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testFindByPostNeverExposesGuestPassword(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -2742,7 +2752,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertArrayNotHasKey('guest_password', $repo->findByPost($postId)[0]);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testHasChildren(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -2753,7 +2763,7 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertFalse($repo->hasChildren($leaf));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUpdateTouchesUpdatedAt(array $config): void
     {
         [$repo, $postId, $boardId] = $this->setUpPost($config);
@@ -4982,11 +4992,12 @@ declare(strict_types=1);
 namespace StandardBoard\Tests\Api;
 
 use StandardBoard\Auth\TokenVerifier;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\ApiTestCase;
 
 final class AuthApiTest extends ApiTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testLoginReturnsAdminToken(array $config): void
     {
         $app = $this->makeApp($config);
@@ -4999,7 +5010,7 @@ final class AuthApiTest extends ApiTestCase
         $this->assertSame('root', $identity->sub());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testWrongPasswordIsRejected(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5009,7 +5020,7 @@ final class AuthApiTest extends ApiTestCase
         $this->assertSame(401, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testWrongIdIsRejected(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5031,11 +5042,12 @@ declare(strict_types=1);
 namespace StandardBoard\Tests\Api;
 
 use StandardBoard\App;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\ApiTestCase;
 
 final class BoardApiTest extends ApiTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAdminCreatesBoard(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5051,7 +5063,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(['잡담', '질문'], $response->payload()['data']['categories']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestCannotCreateBoard(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5061,7 +5073,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(401, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testMemberCannotCreateBoard(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5072,7 +5084,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(403, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardKeyIsValidated(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5086,7 +5098,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertArrayHasKey('board_key', (array) $response->payload()['error']['details']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDuplicateBoardKeyIsRejected(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5100,7 +5112,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(422, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testListHidesBoardsTheCallerCannotRead(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5115,7 +5127,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(['open', 'secret'], $adminKeys);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testManagersAreHiddenFromNonAdmins(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5132,7 +5144,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(['mgr-1'], $adminView['managers']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardManagerSeesManagersButCannotChangeSettings(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5150,7 +5162,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(403, $update->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUpdateChangesOnlyGivenFields(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5164,7 +5176,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(20, $response->payload()['data']['per_page']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUnknownBoardGives404(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5172,7 +5184,7 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame(404, $this->call($app, 'GET', '/boards/nope')->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDeleteRemovesBoardAndItsContent(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5659,11 +5671,12 @@ declare(strict_types=1);
 namespace StandardBoard\Tests\Api;
 
 use StandardBoard\App;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\ApiTestCase;
 
 final class PostApiTest extends ApiTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testMemberCreatesPost(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5680,7 +5693,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame('홍길동', $response->payload()['data']['author_name']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAuthorNameIsForcedFromTokenNotRequest(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5696,7 +5709,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame('홍길동', $response->payload()['data']['author_name']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestCannotWriteToMemberBoard(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5707,7 +5720,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(401, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestWritesWithNameAndPassword(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5725,7 +5738,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertNull($response->payload()['data']['author_id']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestPostRequiresPasswordOfAtLeastFourCharacters(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5739,7 +5752,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertArrayHasKey('password', (array) $response->payload()['error']['details']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestEditsOwnPostWithPassword(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5754,7 +5767,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(401, $bad->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testStrangerCannotEditAnothersPost(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5767,7 +5780,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(403, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardManagerCanEditAndDeleteOthersPost(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5779,7 +5792,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(204, $this->call($app, 'DELETE', '/posts/' . $id, [], $manager)->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testOnlyAdminCanSetNotice(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5795,7 +5808,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertTrue($allowed->payload()['data']['is_notice']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testNoticesComeSeparatelyAndAreExcludedFromTotal(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5811,7 +5824,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(['공지 글'], array_column($page['notices'], 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testListItemsHaveNoContent(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5824,7 +5837,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertArrayHasKey('comment_count', $item);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testPaginationMetadata(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5842,7 +5855,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(['글 3', '글 2'], array_column($page['data'], 'title'));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testViewCountIncrementsForOthersButNotForAuthor(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5858,7 +5871,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(1, $this->call($app, 'GET', '/posts/' . $id, [], $author)->payload()['data']['view_count']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSecretPostIsHiddenFromStrangersButVisibleToAuthorAndAdmin(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5874,7 +5887,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id, [], $this->adminToken($app))->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSecretFlagRejectedWhenBoardDoesNotAllowIt(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5887,7 +5900,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(422, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCategoryMustBeOneOfBoardCategories(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5903,7 +5916,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(422, $bad->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDeletedPostIsInvisibleToOthersAndRestorableByAdmin(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5920,7 +5933,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id)->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testIncludeDeletedIsHonoredForAdminsAndIgnoredForOthers(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5939,7 +5952,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(1, $asMember['total']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testNonAdminCannotRestore(array $config): void
     {
         $app = $this->makeApp($config);
@@ -5951,7 +5964,7 @@ final class PostApiTest extends ApiTestCase
         $this->assertSame(403, $this->call($app, 'POST', '/posts/' . $id . '/restore', [], $author)->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSearchFindsByTitle(array $config): void
     {
         $app = $this->makeApp($config);
@@ -6429,11 +6442,12 @@ declare(strict_types=1);
 namespace StandardBoard\Tests\Api;
 
 use StandardBoard\App;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\ApiTestCase;
 
 final class CommentApiTest extends ApiTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreateRootComment(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6446,7 +6460,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame(0, $response->payload()['data']['depth']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testRepliesNestWithoutDepthLimit(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6474,7 +6488,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame('댓글 30', $node['content']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCommentCountTracksCreateAndDelete(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6491,7 +6505,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame(1, $this->call($app, 'GET', '/posts/' . $postId)->payload()['data']['comment_count']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDeletedCommentWithReplyBecomesPlaceholder(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6510,7 +6524,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame('자식', $tree[0]['children'][0]['content']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDeletedLeafCommentDisappears(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6523,7 +6537,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame([], $this->call($app, 'GET', '/posts/' . $postId . '/comments')->payload()['data']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGuestCommentUsesPasswordForOwnership(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config, ['perm_comment' => 'guest']);
@@ -6536,7 +6550,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame(204, $this->call($app, 'DELETE', '/comments/' . $id, ['password' => '1234'])->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testParentFromAnotherPostIsRejected(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6552,7 +6566,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame(422, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testSecretCommentIsMaskedForStrangers(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config);
@@ -6573,7 +6587,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame('비밀 내용', $byAuthor['content']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCommentsOnSecretPostRequirePermission(array $config): void
     {
         $app = $this->makeApp($config);
@@ -6590,7 +6604,7 @@ final class CommentApiTest extends ApiTestCase
         $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $author)->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardManagerCanDeleteAnyComment(array $config): void
     {
         [$app, $postId] = $this->setUpPost($config, ['managers' => ['mgr-1']]);
@@ -6995,11 +7009,12 @@ namespace StandardBoard\Tests\Api;
 use StandardBoard\App;
 use StandardBoard\Http\FileResponse;
 use StandardBoard\Http\Request;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Tests\Support\ApiTestCase;
 
 final class AttachmentApiTest extends ApiTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUploadReturnsSignedDescriptor(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7016,7 +7031,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertFileExists($descriptor['path']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDisallowedExtensionIsRejected(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7030,7 +7045,7 @@ final class AttachmentApiTest extends ApiTestCase
         );
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testOversizedFileIsRejectedWith413(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7048,7 +7063,7 @@ final class AttachmentApiTest extends ApiTestCase
         }
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testTamperedDescriptorIsRejected(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7068,7 +7083,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertSame(422, $response->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAttachmentSurvivesPostCreationAndIsDownloadable(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7098,7 +7113,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertSame(200, $download->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDownloadOfSecretPostIsDeniedToStrangers(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7119,7 +7134,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertSame(403, $denied->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUnknownFileIndexGives404(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7131,7 +7146,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertSame(404, $this->call($app, 'GET', '/posts/' . $postId . '/files/7')->status());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testUploadDeniedWhenBoardDoesNotAllowFiles(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7149,7 +7164,7 @@ final class AttachmentApiTest extends ApiTestCase
         }
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGarbageCollectionRemovesUnreferencedFilesOnly(array $config): void
     {
         $app = $this->makeApp($config);
@@ -7171,7 +7186,7 @@ final class AttachmentApiTest extends ApiTestCase
         $this->assertFileDoesNotExist($orphan['path']);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testGarbageCollectionRequiresGlobalAdmin(array $config): void
     {
         $app = $this->makeApp($config);
