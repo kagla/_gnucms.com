@@ -103,6 +103,13 @@ declare(strict_types=1);
   .cat-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
   .cat-row input { flex: 1 1 auto; min-width: 0; }
   .cat-row button { flex: 0 0 auto; }
+  /* 이름을 고치는 중이면 옛 이름을 앞에 남겨 둔다. 무엇이 무엇으로 바뀌는지
+     저장하기 전에 눈으로 확인할 수 있어야 한다. */
+  .cat-from { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .cat-row.renaming input { border-color: var(--link); }
+  .rename-hint { margin: 6px 0 0; font-size: 13px; color: var(--fg); white-space: pre-line; }
+  /* 분류 칸은 "옛 이름 → [입력칸] ×" 가 한 줄에 들어가야 해서 두 칸을 쓴다. */
+  .field.wide { grid-column: span 2; }
   .muted { color: var(--muted); font-size: 13px; }
   .deleted { text-decoration: line-through; color: var(--muted); }
   .toast {
@@ -125,6 +132,8 @@ declare(strict_types=1);
     /* iOS 는 16px 미만 입력란에 자동 확대를 건다 */
     input, select, textarea { font-size: 16px; }
     .row input:not([type="checkbox"]):not([type="radio"]) { flex: 1 1 100%; }
+    /* 한 칸짜리 그리드에서 span 2 는 넘친다 */
+    .field.wide { grid-column: span 1; }
 
     table, tbody, tr, td { display: block; width: 100%; }
     thead { display: none; }
@@ -200,9 +209,10 @@ declare(strict_types=1);
         <label class="field">댓글 권한<select id="f-perm_comment"></select></label>
         <label class="field">페이지당 글 수<input id="f-per_page" type="number" min="1" max="100"></label>
         <label class="field">정렬 순서<input id="f-sort_order" type="number"></label>
-        <div class="field">분류
+        <div class="field wide">분류
           <div id="f-categories"></div>
           <button type="button" id="add-category">분류 추가</button>
+          <p id="cat-renames" class="rename-hint hidden"></p>
         </div>
         <label class="field">게시판 관리자 (쉼표 구분 user id)<input id="f-managers"></label>
         <label class="field">비밀글 사용<select id="f-use_secret"></select></label>
@@ -329,10 +339,16 @@ declare(strict_types=1);
     var row = document.createElement('div');
     row.className = 'cat-row';
 
+    // 이름을 고치면 여기에 "옛 이름 →" 가 나타난다.
+    var from = document.createElement('span');
+    from.className = 'cat-from hidden';
+    row.appendChild(from);
+
     var input = document.createElement('input');
     input.value = value;
     input.setAttribute('data-original', value);
     input.placeholder = '분류 이름';
+    input.oninput = function () { syncRow(row); refreshRenameHint(); };
     row.appendChild(input);
 
     var remove = document.createElement('button');
@@ -341,16 +357,50 @@ declare(strict_types=1);
     remove.textContent = '\u00d7';
     remove.title = '이 분류 지우기';
     remove.setAttribute('aria-label', '이 분류 지우기');
-    remove.onclick = function () { row.remove(); };
+    remove.onclick = function () { row.remove(); refreshRenameHint(); };
     row.appendChild(remove);
 
+    syncRow(row);
+
     return row;
+  }
+
+  function syncRow(row) {
+    var input = row.querySelector('input');
+    var original = input.getAttribute('data-original') || '';
+    var value = input.value.trim();
+    var renaming = original !== '' && value !== '' && value !== original;
+    var from = row.querySelector('.cat-from');
+
+    from.textContent = renaming ? original + ' \u2192' : '';
+    from.className = 'cat-from' + (renaming ? '' : ' hidden');
+    row.className = 'cat-row' + (renaming ? ' renaming' : '');
+  }
+
+  function renameLines(renames) {
+    return Object.keys(renames).map(function (from) {
+      return '\u00b7 ' + from + ' \u2192 ' + renames[from];
+    });
+  }
+
+  function refreshRenameHint() {
+    var lines = renameLines(collectCategories().renames);
+    var hint = $('cat-renames');
+
+    if (lines.length === 0) {
+      hint.textContent = '';
+      hint.className = 'rename-hint hidden';
+      return;
+    }
+    hint.textContent = '저장하면 이 분류로 쓰인 글도 함께 옮겨집니다.\n' + lines.join('\n');
+    hint.className = 'rename-hint';
   }
 
   function renderCategories(list) {
     var box = $('f-categories');
     box.innerHTML = '';
     (list || []).forEach(function (name) { box.appendChild(categoryRow(name)); });
+    refreshRenameHint();
   }
 
   /** @return {{categories: string[], renames: Object}} */
@@ -372,6 +422,7 @@ declare(strict_types=1);
 
   $('add-category').onclick = function () {
     $('f-categories').appendChild(categoryRow(''));
+    refreshRenameHint();
   };
 
   function splitList(value) {
@@ -543,10 +594,18 @@ declare(strict_types=1);
       use_category: $('f-use_category').value === 'true'
     };
     // 고친 줄이 있을 때만 보낸다. 서버는 짝이 없으면 글을 옮기지 않는다.
-    if (Object.keys(cats.renames).length > 0) { payload.category_renames = cats.renames; }
+    var lines = renameLines(cats.renames);
+    if (lines.length > 0) {
+      payload.category_renames = cats.renames;
+      // 남이 쓴 글까지 움직이는 일이다. 저장 전에 무엇이 바뀌는지 확인받는다.
+      if (!confirm('분류 이름을 바꿉니다.\n\n' + lines.join('\n')
+          + '\n\n이 분류로 쓰인 글도 모두 새 이름으로 함께 바뀝니다. 계속할까요?')) {
+        return;
+      }
+    }
 
     api('PATCH', '/boards/' + state.board.board_key, payload).then(function () {
-      toast('저장했습니다.');
+      toast(lines.length > 0 ? '저장했습니다. 분류 이름과 글을 함께 바꿨습니다.' : '저장했습니다.');
       loadBoards();
       openBoard(state.board.board_key);
     }).catch(fail);
