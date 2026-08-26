@@ -1274,7 +1274,7 @@ git commit -m "feat: 방언 계층과 PDO 래퍼
   - `Schema::drop(): void`
   - `Schema::exists(): bool`
   - `Schema::TABLES` — `['boards', 'posts', 'comments']`
-  - `StandardBoard\Tests\Support\DatabaseTestCase::connectionProvider(): array` — 사용 가능한 DB 별 설정
+  - `StandardBoard\Tests\Support\DatabaseTestCase::connectionProvider(): array` — **static**. 사용 가능한 DB 별 설정. PHPUnit 10 은 데이터 제공자가 static 이 아니면 deprecation 을 낸다
   - `DatabaseTestCase::freshDatabase(array $config): Connection` — 스키마를 비우고 새로 만든 연결
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
@@ -1298,7 +1298,7 @@ use StandardBoard\Db\Schema;
  */
 abstract class DatabaseTestCase extends TestCase
 {
-    public function connectionProvider(): array
+    public static function connectionProvider(): array
     {
         $cases = [
             'sqlite' => [['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]],
