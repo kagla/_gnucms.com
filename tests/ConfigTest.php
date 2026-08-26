@@ -140,12 +140,51 @@ final class ConfigTest extends TestCase
         $this->assertSame(['txt'], $this->load()['uploads']['allowed_ext']);
     }
 
-    public function testEmptyStringMeansNullForOptionalValues(): void
+    public function testEmptyValueMeansUnsetAndKeepsTheLowerLayer(): void
     {
-        $this->writeConfig(['db' => ['username' => 'someone']]);
-        $this->writeEnv("DB_USERNAME=\n");
+        // .env.example 을 복사해 일부만 채우는 것이 정상적인 사용법이다.
+        // 채우지 않은 줄이 아래 층을 지워 버리면 안 된다.
+        $this->writeConfig([
+            'db'   => ['dsn' => 'sqlite:/from/config.sqlite', 'username' => 'someone'],
+            'auth' => ['secret' => 'from-config'],
+        ]);
+        $this->writeEnv("DB_DSN=\nDB_USERNAME=\nAUTH_SECRET=\nCORS_ALLOWED_ORIGINS=\n");
 
-        $this->assertNull($this->load()['db']['username']);
+        $config = $this->load();
+
+        $this->assertSame('sqlite:/from/config.sqlite', $config['db']['dsn']);
+        $this->assertSame('someone', $config['db']['username']);
+        $this->assertSame('from-config', $config['auth']['secret']);
+    }
+
+    public function testCopyingTheShippedExampleOverridesNothing(): void
+    {
+        // 배포물의 .env.example 을 그대로 .env 로 복사해도 설정이 그대로여야 한다.
+        $this->writeConfig([
+            'db'    => ['dsn' => 'sqlite:/from/config.sqlite'],
+            'auth'  => ['secret' => 'from-config', 'ttl' => 111],
+            'debug' => true,
+        ]);
+        copy(__DIR__ . '/../.env.example', $this->dir . '/.env');
+
+        $config = $this->load();
+
+        $this->assertSame('sqlite:/from/config.sqlite', $config['db']['dsn']);
+        $this->assertSame('from-config', $config['auth']['secret']);
+        $this->assertSame(111, $config['auth']['ttl']);
+        $this->assertTrue($config['debug']);
+    }
+
+    public function testLiteralNullClearsAnOptionalValue(): void
+    {
+        // 빈 값이 "설정하지 않음" 이 되었으므로 지우는 방법이 따로 필요하다.
+        $this->writeConfig(['db' => ['username' => 'someone', 'password' => 'secret']]);
+        $this->writeEnv("DB_USERNAME=null\nDB_PASSWORD=NULL\n");
+
+        $config = $this->load();
+
+        $this->assertNull($config['db']['username']);
+        $this->assertNull($config['db']['password']);
     }
 
     public function testBootstrapAdminCanBeConfiguredFromEnv(): void

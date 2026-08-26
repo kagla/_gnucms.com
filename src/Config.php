@@ -22,6 +22,11 @@ use StandardBoard\Support\Env;
  * 비밀번호 해시를 담을 곳이 필요하고, 문서 루트를 옮길 수 없는 호스팅에서
  * .env 는 평문으로 노출될 수 있지만 PHP 파일은 실행되어 아무것도 내보내지
  * 않기 때문이다. 그래서 .env 는 선택이고, 있으면 이긴다.
+ *
+ * 빈 값(`KEY=`)은 "설정하지 않음" 이다. 아래 층 값을 그대로 둔다. .env.example
+ * 을 복사해 필요한 줄만 채우는 것이 정상적인 사용법인데, 채우지 않은 줄이
+ * 설치 마법사가 만든 시크릿을 지워 버리면 안 되기 때문이다. 값을 명시적으로
+ * 비우려면 `KEY=null` 이라고 쓴다.
  */
 final class Config
 {
@@ -50,7 +55,7 @@ final class Config
     private const BOOTSTRAP_SWITCH = 'BOOTSTRAP_ADMIN_ENABLED';
 
     private const TRUE_VALUES = ['1', 'true', 'yes', 'on'];
-    private const FALSE_VALUES = ['0', 'false', 'no', 'off', ''];
+    private const FALSE_VALUES = ['0', 'false', 'no', 'off'];
 
     public static function load(string $configFile, string $envFile, string $basePath): array
     {
@@ -129,14 +134,15 @@ final class Config
     {
         foreach (self::MAP as $key => $spec) {
             $raw = self::lookup($key, $fromFile);
-            if ($raw === null) {
+            if ($raw === null || $raw === '') {
                 continue;
             }
             $config = self::setPath($config, $spec[0], self::cast($key, $raw, $spec[1]));
         }
 
         $switch = self::lookup(self::BOOTSTRAP_SWITCH, $fromFile);
-        if ($switch !== null && !self::cast(self::BOOTSTRAP_SWITCH, $switch, 'bool')) {
+        if ($switch !== null && $switch !== ''
+            && !self::cast(self::BOOTSTRAP_SWITCH, $switch, 'bool')) {
             $config['bootstrap_admin'] = null;
         }
 
@@ -144,7 +150,8 @@ final class Config
     }
 
     /**
-     * 진짜 환경변수를 .env 보다 먼저 본다.
+     * 진짜 환경변수를 .env 보다 먼저 본다. 빈 값은 호출자가 "설정하지 않음"
+     * 으로 처리하므로 여기서는 있는 그대로 돌려준다.
      *
      * 요청 헤더는 언제나 HTTP_ 접두사가 붙어 $_SERVER 에 들어오므로,
      * 정확한 이름만 찾는 이 조회로는 밖에서 설정을 밀어 넣을 수 없다.
@@ -203,7 +210,9 @@ final class Config
                 return $items;
 
             case 'nullable':
-                return $raw === '' ? null : $raw;
+                // 빈 값은 여기까지 오지 않는다(= 설정하지 않음).
+                // 아래 층의 값을 실제로 지우고 싶을 때 쓰는 통로다.
+                return strtolower(trim($raw)) === 'null' ? null : $raw;
         }
 
         return $raw;
