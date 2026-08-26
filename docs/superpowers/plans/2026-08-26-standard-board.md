@@ -610,7 +610,7 @@ StandardBoard 네임스페이스를 일부러 제외한다."
   - `Connection::selectOne(string $sql, array $params = []): ?array`
   - `Connection::execute(string $sql, array $params = []): int`
   - `Connection::insert(string $table, array $data): string`
-  - `Connection::update(string $table, array $data, string $where, array $whereParams = []): int`
+  - `Connection::update(string $table, array $data, string $where, array $whereParams = []): int` — `$where` 에는 **이름 파라미터(`:name`)만** 쓸 수 있다. 아래 Step 4 참고
   - `Connection::delete(string $table, string $where, array $whereParams = []): int`
   - `Connection::transaction(callable $fn)`
 
@@ -740,9 +740,19 @@ final class ConnectionTest extends TestCase
         $this->db->insert('widgets', ['name' => '라', 'qty' => 1]);
         $this->db->insert('widgets', ['name' => '마', 'qty' => 1]);
 
-        $affected = $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
+        $affected = $this->db->update('widgets', ['qty' => 9], 'qty = :qty', ['qty' => 1]);
 
         $this->assertSame(2, $affected);
+    }
+
+    public function testUpdateRejectsPositionalWhereParameters(): void
+    {
+        // PDO 는 한 문장에서 이름 파라미터와 위치 파라미터를 섞는 것을 금지한다.
+        // update() 는 SET 절에 :set_* 이름 파라미터를 쓰므로 WHERE 도 이름이어야 한다.
+        // SQLite 만 이 혼용을 눈감아 주기 때문에, 막지 않으면 SQLite 테스트는 통과하고
+        // MySQL/PostgreSQL 에서만 SQLSTATE[HY093] 로 터진다. 그래서 즉시 거부한다.
+        $this->expectException(ApiError::class);
+        $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
     }
 
     public function testNullValuesRoundTrip(): void
@@ -1141,8 +1151,21 @@ final class Connection
         return $this->dialect->lastInsertId($this->pdo, $table);
     }
 
+    /**
+     * @param string $where 이름 파라미터(`:name`)만 쓸 수 있다. 위치 파라미터(`?`)는 거부한다.
+     */
     public function update(string $table, array $data, string $where, array $whereParams = []): int
     {
+        foreach ($whereParams as $key => $ignored) {
+            if (is_int($key)) {
+                throw ApiError::internal(
+                    'update() 의 WHERE 절에는 이름 파라미터(:name)만 쓸 수 있습니다.'
+                    . ' PDO 는 한 문장에서 이름과 위치 파라미터를 섞는 것을 금지하는데,'
+                    . ' SQLite 만 이를 눈감아 주어 SQLite 테스트로는 잡히지 않습니다.'
+                );
+            }
+        }
+
         $assignments = [];
         $params = [];
         foreach ($data as $column => $value) {
@@ -1199,10 +1222,16 @@ final class Connection
 
 `update()` 가 바인딩 이름에 `set_` 접두사를 붙이는 이유: `WHERE id = :id` 와 `SET title = :title` 이 같은 이름을 쓰면 조용히 충돌한다. 접두사가 그 충돌을 구조적으로 막는다.
 
+위치 파라미터를 거부하는 가드가 더 중요하다. PDO 는 한 문장에서 `:name` 과 `?` 를 섞는 것을
+금지하지만 **SQLite 드라이버만 이를 눈감아 준다.** 이 프로젝트의 기본 테스트가 SQLite 이므로,
+막지 않으면 "로컬 테스트는 전부 통과하는데 배포한 MySQL 에서만 `SQLSTATE[HY093]` 로 터지는"
+가장 고약한 형태의 버그가 된다. `delete()` 와 `execute()` 는 이름 파라미터를 스스로 만들지
+않으므로 위치 파라미터를 그대로 써도 된다.
+
 - [ ] **Step 5: 테스트가 통과하는지 확인한다**
 
 Run: `vendor/bin/phpunit tests/Db`
-Expected: PASS — 17 tests
+Expected: PASS — 18 tests
 
 - [ ] **Step 6: 커밋한다**
 
