@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace StandardBoard\Db;
 
 use StandardBoard\Http\ApiError;
-use Throwable;
 
 /**
  * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고
@@ -29,7 +28,11 @@ final class Schema
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('boards'));
 
             return true;
-        } catch (Throwable $e) {
+        } catch (ApiError $e) {
+            // Throwable 이 아니라 ApiError 로 좁혀 잡는다. Connection 은 PDOException 을
+            // ApiError 로 감싸므로 "테이블 없음" 은 여기로 온다. Throwable 까지 잡으면
+            // Connection 이나 Schema 자체의 버그(TypeError 등)가 "테이블 없음" 으로
+            // 둔갑해 조용히 묻힌다.
             return false;
         }
     }
