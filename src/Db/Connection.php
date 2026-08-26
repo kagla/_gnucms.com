@@ -107,8 +107,21 @@ final class Connection
         return $this->dialect->lastInsertId($this->pdo, $table);
     }
 
+    /**
+     * @param string $where 이름 파라미터(`:name`)만 쓸 수 있다. 위치 파라미터(`?`)는 거부한다.
+     */
     public function update(string $table, array $data, string $where, array $whereParams = []): int
     {
+        foreach ($whereParams as $key => $ignored) {
+            if (is_int($key)) {
+                throw ApiError::internal(
+                    'update() 의 WHERE 절에는 이름 파라미터(:name)만 쓸 수 있습니다.'
+                    . ' PDO 는 한 문장에서 이름과 위치 파라미터를 섞는 것을 금지하는데,'
+                    . ' SQLite 만 이를 눈감아 주어 SQLite 테스트로는 잡히지 않습니다.'
+                );
+            }
+        }
+
         $assignments = [];
         $params = [];
         foreach ($data as $column => $value) {
@@ -120,19 +133,7 @@ final class Connection
             . ' SET ' . implode(', ', $assignments)
             . ' WHERE ' . $where;
 
-        // PDO requires positional parameters to be 1-indexed when mixed with named parameters
-        $adjustedWhereParams = [];
-        $positionalIndex = 1;
-        foreach ($whereParams as $key => $value) {
-            if (is_int($key)) {
-                $adjustedWhereParams[$positionalIndex] = $value;
-                $positionalIndex++;
-            } else {
-                $adjustedWhereParams[$key] = $value;
-            }
-        }
-
-        return $this->execute($sql, $params + $adjustedWhereParams);
+        return $this->execute($sql, array_merge($params, $whereParams));
     }
 
     public function delete(string $table, string $where, array $whereParams = []): int

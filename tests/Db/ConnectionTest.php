@@ -58,9 +58,18 @@ final class ConnectionTest extends TestCase
         $this->db->insert('widgets', ['name' => '라', 'qty' => 1]);
         $this->db->insert('widgets', ['name' => '마', 'qty' => 1]);
 
-        $affected = $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
+        $affected = $this->db->update('widgets', ['qty' => 9], 'qty = :qty', ['qty' => 1]);
 
         $this->assertSame(2, $affected);
+    }
+
+    public function testUpdateRejectsPositionalWhereParameters(): void
+    {
+        // PDO 는 한 문장에서 이름 파라미터와 위치 파라미터를 섞는 것을 금지한다.
+        // SQLite 만 이 혼용을 눈감아 주기 때문에, 막지 않으면 SQLite 테스트는 통과하고
+        // MySQL/PostgreSQL 에서만 SQLSTATE[HY093] 로 터진다. 그래서 즉시 거부한다.
+        $this->expectException(ApiError::class);
+        $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
     }
 
     public function testNullValuesRoundTrip(): void
