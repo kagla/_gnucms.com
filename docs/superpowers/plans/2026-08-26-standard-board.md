@@ -1231,7 +1231,7 @@ final class Connection
 - [ ] **Step 5: 테스트가 통과하는지 확인한다**
 
 Run: `vendor/bin/phpunit tests/Db`
-Expected: PASS — 18 tests
+Expected: PASS — 17 tests (DialectFactoryTest 7 + ConnectionTest 10)
 
 - [ ] **Step 6: 커밋한다**
 
