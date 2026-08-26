@@ -32,6 +32,14 @@ return [
         ],
     ],
 
+    // 브라우저가 직접 호출하는 호스트 앱의 출처를 정확히 적는다.
+    // 와일드카드는 지원하지 않는다.
+    'cors' => [
+        'allowed_origins' => [
+            // 'https://app.example.com',
+        ],
+    ],
+
     'log' => [
         'file' => __DIR__ . '/../storage/logs/error.log',
     ],
