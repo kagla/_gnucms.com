@@ -1,0 +1,20 @@
+# 실제 설정 (샘플만 커밋한다)
+/config/config.php
+
+# 업로드된 첨부
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+
+# 개발 전용 의존성 (배포물에는 포함되지 않는다)
+/vendor/
+composer.lock
+
+# 로컬 테스트 DB
+*.sqlite
+*.sqlite3
+
+# 로그
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+.DS_Store
