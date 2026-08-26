@@ -7,11 +7,7 @@ require __DIR__ . '/../src/autoload.php';
 use StandardBoard\Http\ApiError;
 use StandardBoard\Install\Installer;
 
-$installer = new Installer(
-    __DIR__ . '/../config/config.php',
-    __DIR__ . '/../storage',
-    __DIR__ . '/../.env'
-);
+$installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
 
 $done = null;
 $errors = [];
@@ -31,13 +27,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-try {
-    $installed = $installer->isInstalled();
-} catch (ApiError $e) {
-    // .env 문법이 깨졌다면 설치 여부를 판단할 수 없다. 설치된 것으로 보고 멈춘다.
-    $installed = true;
-    $errors = ['_' => $e->getMessage()];
-}
+$installed = $installer->isInstalled();
 
 function h(?string $value): string
 {
@@ -71,8 +61,7 @@ function h(?string $value): string
     <p><a href="admin.php">관리자 화면으로 이동</a></p>
   </div>
 <?php elseif ($installed): ?>
-  <?php if (isset($errors['_'])): ?><p class="error"><?= h($errors['_']) ?></p><?php endif; ?>
-  <p>이미 설치되어 있습니다. 다시 설치하려면 <code>config/config.php</code> 와 <code>.env</code> 의 <code>DB_DSN</code> 을 지우세요.</p>
+  <p>이미 설치되어 있습니다. 다시 설치하려면 <code>config/config.php</code> 를 지우세요.</p>
 <?php else: ?>
   <?php if (isset($errors['_'])): ?><p class="error"><?= h($errors['_']) ?></p><?php endif; ?>
   <form method="post">

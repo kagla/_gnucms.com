@@ -14,7 +14,6 @@ SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시�
    그 위 디렉터리에 둔다. `storage/` 가 웹으로 접근 가능한 위치에 있으면 안 된다.
 2. 브라우저로 `install.php` 를 연다. DSN 과 관리자 계정을 입력한다.
 3. **설치가 끝나면 `public/install.php` 를 지운다.**
-   설치 뒤에 값을 바꾸고 싶으면 `.env` 를 쓴다. 아래 "설정" 을 참고한다.
 4. `admin.php` 로 들어가 게시판을 만든다.
 
 DSN 을 어떻게 적는지는 아래 "데이터베이스" 에 DB 별로 정리해 두었다.
@@ -131,28 +130,28 @@ pgsql:host=127.0.0.1;port=5432;dbname=board
 스키마를 만들지 않는다.
 
 **1. 테이블이 이미 있는 DB 로 옮길 때** — 접속 정보만 바뀌었거나, 덤프를 새 서버에
-옮겨 놓은 경우다. `.env` 만 고치면 끝이다. 재설치도, `config/config.php` 를 열 필요도 없다.
+옮겨 놓은 경우다. `config/config.php` 의 `db` 항목만 고치면 끝이다. 재설치할 필요 없다.
 
-```
-DB_DSN=pgsql:host=127.0.0.1;port=5432;dbname=board
-DB_USERNAME=board
-DB_PASSWORD=비밀번호
+```php
+'db' => [
+    'dsn'      => 'pgsql:host=127.0.0.1;port=5432;dbname=board',
+    'username' => 'board',
+    'password' => '비밀번호',
+],
 ```
 
-**2. 빈 새 DB 로 옮길 때** — `DB_DSN` 만 바꾸면 **깨진다.** 접속은 되지만 테이블이 없어서
+**2. 빈 새 DB 로 옮길 때** — DSN 만 바꾸면 **깨진다.** 접속은 되지만 테이블이 없어서
 첫 요청부터 `relation "boards" does not exist` 같은 500 이 난다. 설치 마법사를 다시 한 번
 돌려야 하고, 순서가 중요하다.
 
-1. **먼저 `.env` 에 지금 쓰고 있는 `AUTH_SECRET` 을 옮겨 적는다.**
-   `config/config.php` 의 `auth.secret` 값이다. 이 단계를 건너뛰면 재설치가 새 시크릿을
-   만들어 버려서 호스트 앱이 이미 발급한 토큰이 전부 무효가 된다. `.env` 가
-   `config/config.php` 를 이기므로, 여기 적어 두면 재설치해도 시크릿이 유지된다.
-   부트스트랩 관리자를 계속 쓴다면 `BOOTSTRAP_ADMIN_ID` 와
-   `BOOTSTRAP_ADMIN_PASSWORD_HASH` 도 같이 옮긴다.
-2. `.env` 의 `DB_DSN` 을 비우고 `config/config.php` 를 지운다. 둘 다 지워야 설치 마법사가
-   "아직 설치되지 않았다" 고 판단한다.
+1. **먼저 지금 `config/config.php` 의 `auth.secret` 과 `bootstrap_admin` 을 복사해 둔다.**
+   재설치는 시크릿을 새로 만든다. 그대로 두면 호스트 앱이 이미 발급해 둔 토큰이 전부
+   무효가 되고, 관리자 비밀번호도 바뀐다.
+2. `config/config.php` 를 지운다.
 3. `public/install.php` 를 다시 올리고 새 DSN 으로 설치한다. 새 DB 에 테이블이 만들어진다.
-4. `public/install.php` 를 다시 지운다.
+4. 새로 생긴 `config/config.php` 의 `auth.secret` 과 `bootstrap_admin` 을 1번에서 복사해
+   둔 값으로 되돌린다.
+5. `public/install.php` 를 다시 지운다.
 
 기존 데이터는 어느 쪽이든 따라오지 않는다. 옮기려면 `mysqldump`, `pg_dump`, 또는 SQLite
 파일 복사 같은 DB 별 도구를 쓴다.
@@ -161,67 +160,18 @@ DB_PASSWORD=비밀번호
 > 스키마가 비어 있어도 `{"ok":true}` 를 준다. 옮긴 뒤에는 `/boards` 를 한 번 호출해
 > 200 이 오는지로 확인한다.
 
-## 설정
-
-설정은 세 겹이고 뒤에 오는 것이 앞을 덮는다.
-
-| 순서 | 출처 | 언제 쓰나 |
-|---|---|---|
-| 1 | `config/config.php` | 설치 마법사가 만든다. 손대지 않아도 된다 |
-| 2 | `.env` (프로젝트 루트) | 환경마다 달라지는 값. **PHP 를 편집하지 않고 바꾼다** |
-| 3 | 진짜 환경변수 | 도커·호스팅 패널이 주입하는 값. `.env` 보다 세다 |
-
-`config/config.php` 는 설치 마법사가 만들어 주는 파일이다. 생성된 JWT 시크릿과
-관리자 비밀번호 해시가 여기 들어 있고, `.env` 가 덮지 않은 값의 기본값 역할을 한다.
-값을 바꾸고 싶으면 이 파일이 아니라 `.env` 에 적는다.
-`.env.example` 을 `.env` 로 복사해 필요한 줄만 채우면 된다.
-
-```
-DB_DSN=mysql:host=localhost;dbname=board;charset=utf8mb4
-DB_USERNAME=board
-DB_PASSWORD=비밀번호
-CORS_ALLOWED_ORIGINS=https://app.example.com,https://www.example.com
-DEBUG=false
-```
-
-쓸 수 있는 이름은 `.env.example` 에 전부 적혀 있다. 요약하면
-`DB_DSN` `DB_USERNAME` `DB_PASSWORD` ·
-`AUTH_SECRET` `AUTH_TTL` `AUTH_LEEWAY` ·
-`BOOTSTRAP_ADMIN_ENABLED` `BOOTSTRAP_ADMIN_ID` `BOOTSTRAP_ADMIN_PASSWORD_HASH` ·
-`UPLOADS_DIR` `UPLOADS_MAX_BYTES` `UPLOADS_ALLOWED_EXT` ·
-`CORS_ALLOWED_ORIGINS` · `LOG_FILE` · `DEBUG` 이다.
-목록형(`UPLOADS_ALLOWED_EXT`, `CORS_ALLOWED_ORIGINS`)은 쉼표로 나눈다.
-
-주의할 점 몇 가지.
-
-- **빈 값(`KEY=`)은 "설정하지 않음" 이다.** `config/config.php` 의 값이 그대로 쓰인다.
-  그래서 `.env.example` 을 통째로 복사해도 기존 설정이 바뀌지 않고, 채운 줄만 효력이
-  생긴다. 아래 층의 값을 실제로 비우려면 `KEY=null` 이라고 쓴다.
-- **`.env` 는 `public/` 안에 두지 않는다.** PHP 파일과 달리 평문이라 그대로
-  내려받힐 수 있다. 문서 루트를 옮길 수 없어 어쩔 수 없이 같은 폴더에 두게 되면
-  `public/.htaccess` 의 차단 규칙이 막아 주지만, nginx 는 `.htaccess` 를 읽지
-  않으므로 서버 설정에서 직접 막아야 한다.
-- 주석은 줄 전체(`#` 로 시작)만이다. `DB_PASSWORD=p@ss#word` 의 `#` 뒤는
-  잘리지 않는다.
-- 오타가 있는 줄은 조용히 무시하지 않고 500 으로 알린다.
-- 호스트 앱을 붙인 뒤에는 `BOOTSTRAP_ADMIN_ENABLED=false` 한 줄로 관리자
-  로그인 경로를 닫을 수 있다.
-
-`config/config.php` 없이 `.env` 만으로도 배포할 수 있다. `DB_DSN` 만 정해지면
-동작하고, 그 경우 `install.php` 는 이미 설치된 것으로 보고 재설치를 거부한다.
-
 ## 호스트 앱 연동
 
 게시판은 사용자 저장소를 갖지 않는다. 호스트 앱이 공유 시크릿으로 HS256 JWT 를 발급하고,
 게시판은 서명을 검증해 그 주장을 그대로 믿는다.
 
-`auth.secret`(`.env` 의 `AUTH_SECRET`)을 호스트 앱과 공유한 뒤, 로그인한 사용자에게 이런
+`config/config.php` 의 `auth.secret` 을 호스트 앱과 공유한 뒤, 로그인한 사용자에게 이런
 토큰을 만들어 준다.
 
 ```php
 function issueBoardToken(string $userId, string $displayName, bool $isAdmin): string
 {
-    $secret = '게시판의 AUTH_SECRET 과 같은 값';
+    $secret = 'config.php 의 auth.secret 과 같은 값';
 
     $header = ['typ' => 'JWT', 'alg' => 'HS256'];
     $payload = [
@@ -257,9 +207,9 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 4. 비회원 글이고 비밀번호가 맞음 → **비회원 본인**. 3번과 같은 권한
 5. 그 외 → 게시판의 `perm_read` / `perm_write` / `perm_comment` 설정
 
-호스트 앱이 아직 없다면 `bootstrap_admin` 계정으로 `admin.php` 에 로그인해 전역 관리자
-토큰을 발급받는다. 호스트를 붙인 뒤에는 `.env` 에 `BOOTSTRAP_ADMIN_ENABLED=false` 를
-적어 이 경로를 닫는다.
+호스트 앱이 아직 없다면 `config.php` 의 `bootstrap_admin` 계정으로 `admin.php` 에 로그인해
+전역 관리자 토큰을 발급받는다. 호스트를 붙인 뒤에는 `bootstrap_admin` 을 `null` 로 두어
+이 경로를 닫는다.
 
 ## API
 
