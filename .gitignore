@@ -7,7 +7,6 @@
 
 # 개발 전용 의존성 (배포물에는 포함되지 않는다)
 /vendor/
-composer.lock
 
 # 로컬 테스트 DB
 *.sqlite
