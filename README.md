@@ -213,6 +213,17 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 
 ## API
 
+전체 명세는 **OpenAPI 3.0** 문서로 있다.
+
+- 스펙 원본: [`docs/openapi.yaml`](docs/openapi.yaml)
+- 브라우저에서 보기: `public/docs.php` (Swagger UI). 예) `https://example.com/docs.php`
+  - 스펙만 받으려면 `docs.php?spec`
+  - 이 화면은 Swagger UI 를 CDN 에서 받아 쓴다. 게시판 자체의 런타임 의존성이 아니라
+    이 파일 하나의 의존성이며, 지워도 API 는 그대로 동작한다. 외부 접속이 막힌 곳이라면
+    지우고 `docs/openapi.yaml` 을 다른 뷰어에 넣으면 된다.
+
+아래는 요약이다.
+
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | POST | `/auth/login` | 부트스트랩 관리자 로그인 |

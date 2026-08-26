@@ -1,0 +1,869 @@
+openapi: 3.0.3
+
+info:
+  title: 표준 게시판 (standard-board) API
+  version: "1.0.0"
+  description: |
+    SQLite / MySQL / PostgreSQL 어디서나 동작하는 게시판 JSON API.
+
+    ## 인증
+
+    게시판은 사용자 저장소를 갖지 않는다. 호스트 앱이 공유 시크릿으로 HS256 JWT 를
+    발급하고, 게시판은 서명을 검증해 그 주장을 그대로 믿는다.
+    토큰은 `Authorization: Bearer <토큰>` 헤더로 보낸다.
+
+    토큰이 없으면 비회원(guest)으로 취급하며, 게시판 설정에 따라 읽기·쓰기가 허용될 수 있다.
+    즉 **대부분의 경로에서 토큰은 선택**이고, 권한이 모자랄 때만 401/403 이 난다.
+
+    호스트 앱이 아직 없다면 `POST /auth/login` 으로 부트스트랩 관리자 토큰을 받는다.
+
+    ## 권한 판정 순서
+
+    1. 토큰의 `admin` 이 `true` → 전역 관리자. 전권
+    2. 토큰의 `sub` 가 게시판 `managers` 에 있음 → 게시판 관리자
+    3. 글/댓글의 `author_id` 가 토큰의 `sub` 와 같음 → 본인
+    4. 비회원 글이고 `password` 가 맞음 → 비회원 본인 (3번과 같은 권한)
+    5. 그 외 → 게시판의 `perm_read` / `perm_write` / `perm_comment`
+
+    ## 경로 표기
+
+    `mod_rewrite` 가 있으면 `/boards/free/posts` 처럼 쓴다.
+    없는 호스팅에서는 `index.php?p=/boards/free/posts` 형태로 같은 경로를 부른다.
+
+    ## 오류
+
+    오류는 항상 같은 모양이다.
+
+    ```json
+    { "error": { "code": "VALIDATION_FAILED", "message": "입력값을 확인해 주세요.",
+                 "details": { "title": "필수 항목입니다." } } }
+    ```
+
+    `INTERNAL` 은 운영(`debug=false`)에서 원문 대신 일반 문구로 바뀐다.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /
+    description: 이 문서를 서비스하는 서버
+
+tags:
+  - name: 인증
+    description: 호스트 앱이 없을 때 쓰는 부트스트랩 관리자 로그인.
+  - name: 게시판
+    description: 게시판 목록·생성·설정·삭제. 생성과 설정 변경은 전역 관리자만.
+  - name: 글
+    description: 글 목록·작성·조회·수정·삭제·복구. 공지와 비밀글도 여기서 다룬다.
+  - name: 댓글
+    description: 깊이 제한 없는 댓글 트리. 조회·작성·수정·삭제.
+  - name: 첨부
+    description: 서명된 디스크립터로 업로드와 글을 잇는다. 다운로드는 권한 검사를 거친다.
+  - name: 유지보수
+    description: 상태 확인과 고아 첨부 정리.
+
+security:
+  - bearerAuth: []
+  - {}
+
+paths:
+  /health:
+    get:
+      tags: [유지보수]
+      operationId: getHealth
+      summary: 살아 있는지 확인
+      description: |
+        접속한 DB 방언만 알려 준다. **테이블이 있는지는 보지 않으므로**
+        스키마가 비어 있어도 `ok: true` 를 준다.
+      security: [{}]
+      responses:
+        "200":
+          description: 정상
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  dialect: { type: string, enum: [sqlite, mysql, pgsql] }
+        "500":
+          description: |
+            설정을 읽지 못했거나 DB 에 접속하지 못했다 (`INTERNAL`).
+            이 경로에는 4xx 가 없다. 권한을 보지 않기 때문이다.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/login:
+    post:
+      tags: [인증]
+      operationId: login
+      summary: 부트스트랩 관리자 로그인
+      description: |
+        호스트 앱이 없을 때를 위한 진입점. 설정의 `bootstrap_admin` 계정으로
+        전역 관리자 토큰을 받는다. 호스트를 붙인 뒤에는 설정에서 이 계정을 없애
+        경로를 닫는다.
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, password]
+              properties:
+                id: { type: string, maxLength: 64, example: root }
+                password: { type: string, maxLength: 255, format: password }
+      responses:
+        "200":
+          description: 발급됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, description: HS256 JWT }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /boards:
+    get:
+      tags: [게시판]
+      operationId: listBoards
+      summary: 게시판 목록
+      description: 요청자가 **읽을 수 있는** 게시판만 나온다. `sort_order`, `id` 오름차순.
+      responses:
+        "200":
+          description: 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [게시판]
+      operationId: createBoard
+      summary: 게시판 생성
+      description: 전역 관리자만.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoardCreate" }
+      responses:
+        "201":
+          description: 생성됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /boards/{key}:
+    parameters:
+      - $ref: "#/components/parameters/BoardKey"
+    get:
+      tags: [게시판]
+      operationId: getBoard
+      summary: 게시판 조회
+      responses:
+        "200":
+          description: 게시판
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [게시판]
+      operationId: updateBoard
+      summary: 게시판 수정
+      description: |
+        전역 관리자만. 보낸 필드만 바뀐다. `board_key` 는 바꿀 수 없다(무시된다).
+
+        ### 분류 이름 변경
+
+        `category_renames` 를 함께 보내면 그 게시판의 글에서도 분류 이름이 같이 바뀐다.
+        설정 변경과 글 이동은 한 트랜잭션이다.
+
+        서버가 옛 목록과 새 목록을 비교해 짐작하지는 않는다.
+        `["질문","잡담"]` 이 `["문의","잡담"]` 이 되었을 때 이름을 고친 것인지 지우고
+        새로 만든 것인지 목록만으로는 알 수 없기 때문이다. 짝이 없으면 목록만 갈리고
+        글의 분류 문자열은 그대로 남는다.
+
+        검증 규칙은 셋이다. 옛 이름은 현재 목록에 있어야 하고, 새 목록에서는 빠져
+        있어야 하며(남아 있으면 이름 변경이 아니다), 새 이름은 새 목록에 있어야 한다.
+        여럿을 한 이름으로 보내는 병합은 허용한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoardUpdate" }
+      responses:
+        "200":
+          description: 수정됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [게시판]
+      operationId: deleteBoard
+      summary: 게시판 삭제
+      description: 전역 관리자만. **그 게시판의 글과 댓글을 함께 지운다.** 복구할 수 없다.
+      responses:
+        "204": { description: 삭제됨 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /boards/{key}/posts:
+    parameters:
+      - $ref: "#/components/parameters/BoardKey"
+    get:
+      tags: [글]
+      operationId: listPosts
+      summary: 글 목록
+      description: |
+        공지는 `notices` 로 따로 나가며 `total` 에 포함되지 않는다.
+        목록 항목에는 `content` 가 없다. 본문은 상세 조회로만 나간다.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          description: 기본값은 게시판의 `per_page`.
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: q
+          in: query
+          description: 제목 또는 본문에서 찾는다. `%` 와 `_` 는 글자 그대로 취급한다.
+          schema: { type: string, maxLength: 100 }
+        - name: category
+          in: query
+          schema: { type: string, maxLength: 50 }
+        - name: include_deleted
+          in: query
+          description: 삭제된 글도 포함한다. **그 게시판의 관리자일 때만** 반영되고, 아니면 조용히 무시된다.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: 목록
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PostPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [글]
+      operationId: createPost
+      summary: 글 작성
+      description: |
+        토큰이 있으면 `author_name` 은 **토큰의 `name` 으로 강제된다.** 사칭 방지다.
+        비회원은 `author_name` 과 `password`(4자 이상)를 반드시 보내야 하며,
+        그 비밀번호가 이후 수정·삭제의 소유 증명 수단이 된다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostCreate" }
+      responses:
+        "201":
+          description: 작성됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PostDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /posts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PostId"
+    get:
+      tags: [글]
+      operationId: getPost
+      summary: 글 상세
+      description: |
+        조회수는 이때 오른다. 다만 요청자가 작성자 본인이면 오르지 않는다.
+
+        삭제된 글은 그 게시판의 관리자에게만 보이고, 그 외에는 404 다.
+        비밀글은 작성자·비회원 본인·관리자만 볼 수 있고, 그 외에는 403 이다.
+      parameters:
+        - $ref: "#/components/parameters/GuestPassword"
+      responses:
+        "200":
+          description: 글
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PostDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [글]
+      operationId: updatePost
+      summary: 글 수정
+      description: 보낸 필드만 바뀐다. `is_notice` 는 그 게시판의 관리자만 지정할 수 있다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostUpdate" }
+      responses:
+        "200":
+          description: 수정됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PostDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [글]
+      operationId: deletePost
+      summary: 글 삭제
+      description: 소프트 삭제다. 관리자가 `POST /posts/{id}/restore` 로 되살릴 수 있다.
+      parameters:
+        - $ref: "#/components/parameters/GuestPassword"
+      responses:
+        "204": { description: 삭제됨 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /posts/{id}/restore:
+    parameters:
+      - $ref: "#/components/parameters/PostId"
+    post:
+      tags: [글]
+      operationId: restorePost
+      summary: 삭제된 글 복구
+      description: 그 게시판의 관리자만.
+      responses:
+        "200":
+          description: 복구됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PostDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /posts/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/PostId"
+    get:
+      tags: [댓글]
+      operationId: listComments
+      summary: 댓글 트리
+      description: |
+        중첩 트리로 나온다. **깊이 제한이 없다.**
+
+        자식이 있는 삭제 댓글은 `deleted: true` 와 함께 "삭제된 댓글입니다." 자리표시자로
+        남고, 자식이 없으면 아예 사라진다. 구조를 보존하기 위해서다.
+
+        비밀 댓글은 작성자·원글 작성자·관리자가 아니면 내용이 "비밀 댓글입니다." 로 가려진다.
+        구조는 그대로 보인다.
+
+        댓글을 보려면 그 글을 읽을 수 있어야 한다. 비밀글의 댓글은 글과 같은 조건으로 보호된다.
+      parameters:
+        - $ref: "#/components/parameters/GuestPassword"
+      responses:
+        "200":
+          description: 트리
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/CommentNode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [댓글]
+      operationId: createComment
+      summary: 댓글 작성
+      description: |
+        `parent_id` 는 **같은 글의 댓글**이어야 한다. 다른 글의 댓글을 부모로 주면 422 다.
+        깊이는 부모의 깊이 + 1 로 서버가 계산한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentCreate" }
+      responses:
+        "201":
+          description: 작성됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Comment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /comments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CommentId"
+    patch:
+      tags: [댓글]
+      operationId: updateComment
+      summary: 댓글 수정
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentUpdate" }
+      responses:
+        "200":
+          description: 수정됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Comment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      tags: [댓글]
+      operationId: deleteComment
+      summary: 댓글 삭제
+      description: 소프트 삭제이며 글의 `comment_count` 를 함께 줄인다. 0 미만으로 내려가지 않는다.
+      parameters:
+        - $ref: "#/components/parameters/GuestPassword"
+      responses:
+        "204": { description: 삭제됨 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /uploads:
+    post:
+      tags: [첨부]
+      operationId: uploadAttachment
+      summary: 첨부 업로드
+      description: |
+        파일을 먼저 올리고, 돌려받은 **서명된 디스크립터**를 글 작성/수정의
+        `attachments` 에 그대로 넣는다. 서명이 유효하면 이 서버가 방금 받아들인
+        파일이라는 뜻이므로, 임시 업로드를 추적하는 테이블이 필요 없다.
+
+        디스크립터를 한 글자라도 고치면 글 저장이 422 로 거부된다.
+
+        어느 글에도 연결되지 않은 파일은 `POST /maintenance/gc` 로 정리한다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, board_key]
+              properties:
+                file: { type: string, format: binary }
+                board_key: { type: string, description: 첨부를 허용하는 게시판이어야 한다 }
+      responses:
+        "201":
+          description: 업로드됨
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/AttachmentDescriptor" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /posts/{id}/files/{index}:
+    parameters:
+      - $ref: "#/components/parameters/PostId"
+      - name: index
+        in: path
+        required: true
+        description: 글 상세의 `attachments[].index`
+        schema: { type: integer, minimum: 0 }
+    get:
+      tags: [첨부]
+      operationId: downloadAttachment
+      summary: 첨부 다운로드
+      description: |
+        파일은 문서 루트 밖에 저장되므로 URL 로 직접 접근할 수 없고, 반드시 이 경로로
+        받는다. 글을 읽을 권한을 그대로 검사한다.
+      parameters:
+        - $ref: "#/components/parameters/GuestPassword"
+      responses:
+        "200":
+          description: 파일 내용
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: 'attachment; filename="...", RFC 5987 형식을 함께 준다'
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /maintenance/gc:
+    post:
+      tags: [유지보수]
+      operationId: collectGarbage
+      summary: 고아 첨부 정리
+      description: |
+        어느 글에도 연결되지 않은 업로드 파일을 지운다. 전역 관리자만.
+        cron 이 보장되지 않는 저가 호스팅을 가정하므로 관리자가 직접 돌린다.
+        점으로 시작하는 파일(`.gitkeep` 등)은 건드리지 않는다.
+      responses:
+        "200":
+          description: 정리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      deleted: { type: integer, description: 지운 파일 수 }
+                      bytes: { type: integer, description: 회수한 바이트 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 호스트 앱이 공유 시크릿으로 발급한 HS256 JWT.
+
+  parameters:
+    BoardKey:
+      name: key
+      in: path
+      required: true
+      description: 게시판 키
+      schema: { type: string, pattern: "^[a-z0-9_-]+$", maxLength: 50 }
+      example: free
+    PostId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    CommentId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    GuestPassword:
+      name: password
+      in: query
+      required: false
+      description: 비회원 글·댓글의 소유를 증명한다. 본문으로 보내도 된다.
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: 로그인이 필요하다 (`UNAUTHORIZED`). 토큰이 없거나, 만료되었거나, 비회원 비밀번호가 틀렸다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: 로그인해도 안 된다 (`FORBIDDEN`). 권한이 모자라거나 비밀글이다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: 없다 (`NOT_FOUND`). 삭제된 글을 권한 없이 조회한 경우도 여기다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationFailed:
+      description: 입력값이 틀렸다 (`VALIDATION_FAILED`). `details` 에 필드별 사유가 모두 담긴다.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PayloadTooLarge:
+      description: 파일이 너무 크다 (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PAYLOAD_TOO_LARGE, INTERNAL]
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: { type: string }
+              description: 필드 이름 -> 사유. 없으면 빈 객체다.
+
+    PermissionLevel:
+      type: string
+      enum: [guest, member, admin]
+
+    Board:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        board_key: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        categories:
+          type: array
+          items: { type: string }
+        perm_read: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_write: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_comment: { $ref: "#/components/schemas/PermissionLevel" }
+        use_secret: { type: boolean }
+        use_file: { type: boolean }
+        use_category: { type: boolean }
+        per_page: { type: integer }
+        sort_order: { type: integer }
+        created_at: { type: string, example: "2026-08-26 01:02:03" }
+        managers:
+          type: array
+          items: { type: string }
+          description: |
+            **관리 권한이 있는 요청자에게만 나온다.** 그 외에는 이 키 자체가 없다.
+
+    BoardCreate:
+      type: object
+      required: [board_key, name]
+      properties:
+        board_key: { type: string, maxLength: 50, pattern: "^[a-z0-9_-]+$" }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        categories: { type: array, items: { type: string } }
+        managers: { type: array, items: { type: string }, description: 사용자 ID 목록 }
+        perm_read: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_write: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_comment: { $ref: "#/components/schemas/PermissionLevel" }
+        use_secret: { type: boolean, default: false }
+        use_file: { type: boolean, default: false }
+        use_category: { type: boolean, default: false }
+        per_page: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        sort_order: { type: integer, minimum: -9999, maximum: 9999, default: 0 }
+
+    BoardUpdate:
+      type: object
+      description: 보낸 필드만 바뀐다.
+      properties:
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        categories: { type: array, items: { type: string } }
+        category_renames:
+          type: object
+          additionalProperties: { type: string }
+          description: 옛 이름 -> 새 이름. `categories` 와 함께 보내야 한다.
+          example: { "질문": "문의" }
+        managers: { type: array, items: { type: string } }
+        perm_read: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_write: { $ref: "#/components/schemas/PermissionLevel" }
+        perm_comment: { $ref: "#/components/schemas/PermissionLevel" }
+        use_secret: { type: boolean }
+        use_file: { type: boolean }
+        use_category: { type: boolean }
+        per_page: { type: integer, minimum: 1, maximum: 100 }
+        sort_order: { type: integer, minimum: -9999, maximum: 9999 }
+
+    PostSummary:
+      type: object
+      description: 목록 항목. **`content` 가 없다.**
+      properties:
+        id: { type: integer, format: int64 }
+        category: { type: string, nullable: true }
+        title: { type: string }
+        author_id: { type: string, nullable: true, description: 비회원 글이면 null }
+        author_name: { type: string }
+        is_notice: { type: boolean }
+        is_secret: { type: boolean }
+        view_count: { type: integer }
+        comment_count: { type: integer }
+        file_count: { type: integer }
+        deleted: { type: boolean }
+        created_at: { type: string }
+
+    PostDetail:
+      allOf:
+        - $ref: "#/components/schemas/PostSummary"
+        - type: object
+          properties:
+            content: { type: string }
+            updated_at: { type: string }
+            attachments:
+              type: array
+              items: { $ref: "#/components/schemas/Attachment" }
+
+    PostPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PostSummary" }
+        notices:
+          type: array
+          description: 공지. `total` 에 포함되지 않는다.
+          items: { $ref: "#/components/schemas/PostSummary" }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer, description: 공지를 뺀 글 수 }
+        total_pages: { type: integer }
+
+    PostCreate:
+      type: object
+      required: [title, content]
+      properties:
+        title: { type: string, maxLength: 200 }
+        content: { type: string }
+        category: { type: string, maxLength: 50, description: 게시판의 `categories` 에 있는 값이어야 한다 }
+        is_secret: { type: boolean, default: false }
+        is_notice: { type: boolean, default: false, description: 관리자만 지정할 수 있다 }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/AttachmentDescriptor" }
+        author_name: { type: string, maxLength: 100, description: 비회원만. 토큰이 있으면 무시된다 }
+        password: { type: string, minLength: 4, description: 비회원만. 이후 수정·삭제의 소유 증명 }
+
+    PostUpdate:
+      type: object
+      description: 보낸 필드만 바뀐다.
+      properties:
+        title: { type: string, maxLength: 200 }
+        content: { type: string }
+        category: { type: string, maxLength: 50 }
+        is_secret: { type: boolean }
+        is_notice: { type: boolean, description: 관리자만 }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/AttachmentDescriptor" }
+        password: { type: string, description: 비회원 글의 소유 증명 }
+
+    Comment:
+      type: object
+      description: 작성·수정 응답. 트리 노드와 달리 `post_id` 가 있고 `children` 이 없다.
+      properties:
+        id: { type: integer, format: int64 }
+        post_id: { type: integer, format: int64 }
+        parent_id: { type: integer, format: int64, nullable: true }
+        depth: { type: integer }
+        content: { type: string }
+        author_id: { type: string, nullable: true }
+        author_name: { type: string }
+        is_secret: { type: boolean }
+        deleted: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+
+    CommentNode:
+      type: object
+      description: 트리 노드. 작성 응답과 달리 `post_id` 가 없고 `children` 이 있다.
+      properties:
+        id: { type: integer, format: int64 }
+        parent_id: { type: integer, format: int64, nullable: true }
+        depth: { type: integer }
+        content:
+          type: string
+          description: 삭제되었으면 "삭제된 댓글입니다.", 가려졌으면 "비밀 댓글입니다."
+        author_id: { type: string, nullable: true, description: 삭제된 댓글이면 null }
+        author_name: { type: string, nullable: true, description: 삭제된 댓글이면 null }
+        is_secret: { type: boolean }
+        deleted: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/CommentNode" }
+
+    CommentCreate:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        parent_id: { type: integer, format: int64, description: 같은 글의 댓글이어야 한다 }
+        is_secret: { type: boolean, default: false }
+        author_name: { type: string, maxLength: 100, description: 비회원만 }
+        password: { type: string, minLength: 4, description: 비회원만 }
+        post_password: { type: string, description: 비밀글에 댓글을 달 때 그 글의 비회원 비밀번호 }
+
+    CommentUpdate:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        is_secret: { type: boolean }
+        password: { type: string, description: 비회원 댓글의 소유 증명 }
+
+    Attachment:
+      type: object
+      description: 글 상세에 실려 나가는 첨부. 저장 경로와 서명은 노출되지 않는다.
+      properties:
+        index: { type: integer }
+        name: { type: string }
+        size: { type: integer }
+        mime: { type: string }
+        url: { type: string, example: /posts/12/files/0 }
+
+    AttachmentDescriptor:
+      type: object
+      description: |
+        업로드 응답. **받은 그대로** 글의 `attachments` 에 넣는다.
+        한 글자라도 고치면 서명 검증에 걸려 422 가 난다.
+      properties:
+        id: { type: string, description: 32자리 16진수 }
+        name: { type: string }
+        size: { type: integer }
+        mime: { type: string }
+        path: { type: string, description: 서버 내부 경로 }
+        sig: { type: string, description: HMAC-SHA256 서명 }
