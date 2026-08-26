@@ -16,6 +16,7 @@
 
 - **PHP 7.4 에서 동작해야 한다.** `enum`, `readonly`, 생성자 프로퍼티 승격, `match`, nullsafe 연산자(`?->`), 유니온 타입을 쓰지 않는다. 화살표 함수(`fn()`), 타입 프로퍼티, 스프레드, `??=` 는 7.4 에 있으므로 써도 된다.
 - **런타임 의존성 0.** `composer.json` 의 `require` 에는 `php` 만 있다. PHPUnit 은 `require-dev` 다. 배포물에 `vendor/` 가 포함되지 않는다.
+- **개발 머신의 PHP 는 8.4 이고 7.4 바이너리가 없다.** 따라서 테스트는 8.4 에서 돌지만 `src/` 와 `public/` 의 코드는 7.4 문법을 지켜야 한다. 7.4 파싱 여부는 Task 16 에서 도커로 한 번에 확인한다. PHPUnit 10.5 를 쓰는 것은 8.4 를 지원하면서 `@dataProvider` 애너테이션을 그대로 받기 때문이다.
 - **오토로딩은 `src/autoload.php` 하나로 한다.** Composer 오토로더는 `StandardBoard\` 를 매핑하지 않는다. 테스트도 배포물과 같은 오토로더를 쓴다.
 - **MySQL 5.7 을 지원한다.** 재귀 CTE(`WITH RECURSIVE`), `JSON` 컬럼 타입, JSON 함수(`JSON_EXTRACT` 등), 윈도 함수를 쓰지 않는다.
 - **SQL 은 세 DB 공통 문법으로만 쓴다.** 방언 차이는 `Dialect` 를 통해서만 표현한다. `LIMIT ? OFFSET ?` 는 공통이므로 그대로 쓴다.
@@ -31,16 +32,26 @@
 ```bash
 composer install                 # 최초 1회
 vendor/bin/phpunit               # SQLite 로만 실행 (기본)
+```
 
-# 세 DB 전부 검증
-TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=board_test;charset=utf8mb4' \
-TEST_MYSQL_USER=root TEST_MYSQL_PASS=secret \
-TEST_PGSQL_DSN='pgsql:host=127.0.0.1;dbname=board_test' \
-TEST_PGSQL_USER=postgres TEST_PGSQL_PASS=secret \
+세 DB 전부 검증. 이 머신에는 아래 값으로 테스트 DB 가 준비되어 있다.
+
+```bash
+TEST_MYSQL_DSN='mysql:host=127.0.0.1;port=3306;dbname=board_test;charset=utf8mb4' \
+TEST_MYSQL_USER=root TEST_MYSQL_PASS= \
+TEST_PGSQL_DSN='pgsql:host=127.0.0.1;port=5432;dbname=board_test' \
+TEST_PGSQL_USER=board_test TEST_PGSQL_PASS=board_test \
 vendor/bin/phpunit
 ```
 
-MySQL/PostgreSQL 환경변수가 없으면 그 DB 케이스는 조용히 건너뛴다. CI 가 없는 상태를 가정하므로 로컬에서 셋 다 켜고 한 번씩 돌리는 것이 릴리스 조건이다.
+편의를 위해 이 값들을 `.env.test` 같은 파일이 아니라 셸에서 직접 넘긴다. 설정 파일을 하나 더
+만들면 배포물에 들어갈 위험이 생긴다.
+
+MySQL/PostgreSQL 환경변수가 없으면 그 DB 케이스는 조용히 건너뛴다. CI 가 없는 상태를
+가정하므로 로컬에서 셋 다 한 번씩 돌리는 것이 릴리스 조건이다.
+
+이 머신의 MySQL 자리는 실제로는 MariaDB 다. 우리가 쓰는 SQL 범위에서는 동일하게 동작하지만,
+진짜 MySQL 5.7 에서의 검증은 아니라는 점을 알고 있어야 한다.
 
 ## File Structure
 
@@ -113,7 +124,7 @@ MySQL/PostgreSQL 환경변수가 없으면 그 DB 케이스는 조용히 건너�
         "php": ">=7.4"
     },
     "require-dev": {
-        "phpunit/phpunit": "^9.5"
+        "phpunit/phpunit": "^10.5"
     },
     "autoload-dev": {
         "psr-4": {
@@ -168,7 +179,7 @@ require __DIR__ . '/../src/autoload.php';
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
          colors="true"
-         cacheResultFile=".phpunit.cache/result.cache"
+         cacheDirectory=".phpunit.cache"
          failOnWarning="true"
          failOnRisky="true">
     <testsuites>
@@ -8822,7 +8833,20 @@ vendor/bin/phpunit                 # 세 DB 전부
 세 DB 로 전부 통과하는 것이 릴리스 조건이다.
 ````
 
-- [ ] **Step 2: 커밋한다**
+- [ ] **Step 2: PHP 7.4 문법 호환을 실제로 확인한다**
+
+개발 머신에는 7.4 바이너리가 없으므로 도커로 파싱만 확인한다. 이 프로젝트의 핵심 주장 중
+하나가 "7.4 이상이면 된다" 이므로 말로 두지 않고 한 번은 기계로 확인한다.
+
+```bash
+docker run --rm -v "$PWD":/app -w /app php:7.4-cli \
+  sh -c 'find src public -name "*.php" -print0 | xargs -0 -n1 php -l' | grep -v "No syntax errors" || echo "전부 통과"
+```
+
+Expected: 오류 줄이 하나도 없어야 한다. 걸리는 파일이 있으면 그 자리에서 7.4 문법으로 고친다.
+`tests/` 는 배포물이 아니므로 대상이 아니다.
+
+- [ ] **Step 3: 커밋한다**
 
 ```bash
 git add README.md
