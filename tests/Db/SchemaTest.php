@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace StandardBoard\Tests\Db;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use StandardBoard\Db\Connection;
 use StandardBoard\Db\Schema;
 use StandardBoard\Tests\Support\DatabaseTestCase;
 
 final class SchemaTest extends DatabaseTestCase
 {
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreatesAllThreeTables(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -24,7 +25,7 @@ final class SchemaTest extends DatabaseTestCase
         }
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testCreateIsIdempotent(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -36,7 +37,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertTrue($schema->exists());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDropRemovesEverything(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -47,7 +48,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertFalse($schema->exists());
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testAutoIncrementPrimaryKeyWorks(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -58,7 +59,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertGreaterThan((int) $first, (int) $second);
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testDatetimeColumnRoundTripsUtcString(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -69,7 +70,7 @@ final class SchemaTest extends DatabaseTestCase
         $this->assertSame('2026-08-26 01:02:03', substr((string) $row['created_at'], 0, 19));
     }
 
-    /** @dataProvider connectionProvider */
+    #[DataProvider('connectionProvider')]
     public function testBoardKeyIsUnique(array $config): void
     {
         $db = $this->freshDatabase($config);

@@ -14,7 +14,7 @@ use StandardBoard\Db\Schema;
  */
 abstract class DatabaseTestCase extends TestCase
 {
-    public function connectionProvider(): array
+    public static function connectionProvider(): array
     {
         $cases = [
             'sqlite' => [['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]],
