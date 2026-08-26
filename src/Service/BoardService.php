@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StandardBoard\Service;
 
 use StandardBoard\Auth\Acl;
+use StandardBoard\Db\Connection;
 use StandardBoard\Http\ApiError;
 use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Repository\CommentRepository;
@@ -15,6 +16,9 @@ final class BoardService
 {
     public const PERM_LEVELS = ['guest', 'member', 'admin'];
 
+    /** @var Connection */
+    private $db;
+
     /** @var BoardRepository */
     private $boards;
 
@@ -24,8 +28,13 @@ final class BoardService
     /** @var CommentRepository */
     private $comments;
 
-    public function __construct(BoardRepository $boards, PostRepository $posts, CommentRepository $comments)
-    {
+    public function __construct(
+        Connection $db,
+        BoardRepository $boards,
+        PostRepository $posts,
+        CommentRepository $comments
+    ) {
+        $this->db = $db;
         $this->boards = $boards;
         $this->posts = $posts;
         $this->comments = $comments;
@@ -94,11 +103,85 @@ final class BoardService
         $data = $this->validate($input, false);
         unset($data['board_key']);
 
-        if ($data !== []) {
-            $this->boards->update((int) $board['id'], $data);
+        $renames = $this->validateRenames($board, $data, $input);
+        $boardId = (int) $board['id'];
+
+        // 설정 변경과 글 이동은 한 덩어리다. 중간에 끊기면 어느 쪽 이름이
+        // 맞는지 알 수 없는 상태가 남는다.
+        $this->db->transaction(function () use ($boardId, $data, $renames): void {
+            if ($data !== []) {
+                $this->boards->update($boardId, $data);
+            }
+            foreach ($renames as $rename) {
+                $this->posts->renameCategory($boardId, $rename[0], $rename[1]);
+            }
+        });
+
+        return $this->present($this->boards->findById($boardId), $acl);
+    }
+
+    /**
+     * 분류 이름 변경을 확인한다.
+     *
+     * 서버가 옛 목록과 새 목록을 비교해 "이건 이름 변경이겠지" 하고 짐작하지
+     * 않는다. ["질문","잡담"] 이 ["문의","잡담"] 이 되었을 때, 질문을 문의로
+     * 고친 것인지 질문을 지우고 문의를 새로 만든 것인지 목록만 봐서는 알 수
+     * 없다. 짐작이 틀리면 남의 글이 조용히 다른 분류로 옮겨 간다.
+     * 그래서 옮길 뜻이 있을 때만 호출자가 명시적으로 짝을 보낸다.
+     *
+     * @return array<int, array{0: string, 1: string}> [옛 이름, 새 이름] 목록
+     */
+    private function validateRenames(array $board, array $data, array $input): array
+    {
+        if (!array_key_exists('category_renames', $input)) {
+            return [];
         }
 
-        return $this->present($this->boards->findById((int) $board['id']), $acl);
+        $raw = $input['category_renames'];
+        if (!is_array($raw)) {
+            throw ApiError::validation(['category_renames' => '옛 이름과 새 이름을 짝지은 객체여야 합니다.']);
+        }
+        if ($raw === []) {
+            return [];
+        }
+        if (!array_key_exists('categories', $data)) {
+            throw ApiError::validation(['category_renames' => '분류 목록(categories)과 함께 보내야 합니다.']);
+        }
+
+        $current = isset($board['categories']) && is_array($board['categories']) ? $board['categories'] : [];
+        $next = $data['categories'];
+
+        $renames = [];
+        foreach ($raw as $key => $value) {
+            $from = trim((string) $key);
+            $to = is_array($value) ? '' : trim((string) $value);
+
+            if ($from === '' || $to === '') {
+                throw ApiError::validation(['category_renames' => '옛 이름과 새 이름이 모두 있어야 합니다.']);
+            }
+            if ($from === $to) {
+                continue;
+            }
+            if (!in_array($from, $current, true)) {
+                throw ApiError::validation([
+                    'category_renames' => '지금 쓰고 있는 분류가 아닙니다: ' . $from,
+                ]);
+            }
+            if (in_array($from, $next, true)) {
+                throw ApiError::validation([
+                    'category_renames' => '이름을 바꾸려면 옛 이름이 새 목록에서 빠져야 합니다: ' . $from,
+                ]);
+            }
+            if (!in_array($to, $next, true)) {
+                throw ApiError::validation([
+                    'category_renames' => '새 이름이 분류 목록에 없습니다: ' . $to,
+                ]);
+            }
+
+            $renames[] = [$from, $to];
+        }
+
+        return $renames;
     }
 
     public function delete(Acl $acl, string $key): void

@@ -100,6 +100,9 @@ declare(strict_types=1);
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   .field input, .field select { color: var(--fg); }
+  .cat-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .cat-row input { flex: 1 1 auto; min-width: 0; }
+  .cat-row button { flex: 0 0 auto; }
   .muted { color: var(--muted); font-size: 13px; }
   .deleted { text-decoration: line-through; color: var(--muted); }
   .toast {
@@ -197,7 +200,10 @@ declare(strict_types=1);
         <label class="field">댓글 권한<select id="f-perm_comment"></select></label>
         <label class="field">페이지당 글 수<input id="f-per_page" type="number" min="1" max="100"></label>
         <label class="field">정렬 순서<input id="f-sort_order" type="number"></label>
-        <label class="field">분류 (쉼표 구분)<input id="f-categories"></label>
+        <div class="field">분류
+          <div id="f-categories"></div>
+          <button type="button" id="add-category">분류 추가</button>
+        </div>
         <label class="field">게시판 관리자 (쉼표 구분 user id)<input id="f-managers"></label>
         <label class="field">비밀글 사용<select id="f-use_secret"></select></label>
         <label class="field">첨부 사용<select id="f-use_file"></select></label>
@@ -310,6 +316,63 @@ declare(strict_types=1);
     row.appendChild(td);
     return td;
   }
+
+  /*
+   * 분류는 한 줄에 하나씩 편집한다. 쉼표로 나누던 방식은 두 가지가 걸렸다.
+   * 이름에 쉼표를 못 쓰고(조용히 둘로 쪼개진다), 어느 줄을 고쳤는지 알 수 없어
+   * 이름 변경인지 삭제 후 추가인지 구분할 수 없었다.
+   *
+   * 각 줄이 원래 값을 data-original 에 들고 있으므로, 서버에는 짐작이 아니라
+   * 실제로 고친 짝만 category_renames 로 보낸다.
+   */
+  function categoryRow(value) {
+    var row = document.createElement('div');
+    row.className = 'cat-row';
+
+    var input = document.createElement('input');
+    input.value = value;
+    input.setAttribute('data-original', value);
+    input.placeholder = '분류 이름';
+    row.appendChild(input);
+
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'danger';
+    remove.textContent = '\u00d7';
+    remove.title = '이 분류 지우기';
+    remove.setAttribute('aria-label', '이 분류 지우기');
+    remove.onclick = function () { row.remove(); };
+    row.appendChild(remove);
+
+    return row;
+  }
+
+  function renderCategories(list) {
+    var box = $('f-categories');
+    box.innerHTML = '';
+    (list || []).forEach(function (name) { box.appendChild(categoryRow(name)); });
+  }
+
+  /** @return {{categories: string[], renames: Object}} */
+  function collectCategories() {
+    var categories = [];
+    var renames = {};
+
+    Array.prototype.forEach.call($('f-categories').querySelectorAll('input'), function (input) {
+      var value = input.value.trim();
+      if (value === '') { return; }
+      if (categories.indexOf(value) === -1) { categories.push(value); }
+
+      var original = input.getAttribute('data-original') || '';
+      if (original !== '' && original !== value) { renames[original] = value; }
+    });
+
+    return { categories: categories, renames: renames };
+  }
+
+  $('add-category').onclick = function () {
+    $('f-categories').appendChild(categoryRow(''));
+  };
 
   function splitList(value) {
     return value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s !== ''; });
@@ -457,7 +520,7 @@ declare(strict_types=1);
       $('f-name').value = state.board.name;
       $('f-per_page').value = state.board.per_page;
       $('f-sort_order').value = state.board.sort_order;
-      $('f-categories').value = (state.board.categories || []).join(', ');
+      renderCategories(state.board.categories);
       $('f-managers').value = (state.board.managers || []).join(', ');
 
       loadPosts();
@@ -465,19 +528,24 @@ declare(strict_types=1);
   }
 
   $('save-board').onclick = function () {
-    api('PATCH', '/boards/' + state.board.board_key, {
+    var cats = collectCategories();
+    var payload = {
       name: $('f-name').value,
       perm_read: $('f-perm_read').value,
       perm_write: $('f-perm_write').value,
       perm_comment: $('f-perm_comment').value,
       per_page: Number($('f-per_page').value),
       sort_order: Number($('f-sort_order').value),
-      categories: splitList($('f-categories').value),
+      categories: cats.categories,
       managers: splitList($('f-managers').value),
       use_secret: $('f-use_secret').value === 'true',
       use_file: $('f-use_file').value === 'true',
       use_category: $('f-use_category').value === 'true'
-    }).then(function () {
+    };
+    // 고친 줄이 있을 때만 보낸다. 서버는 짝이 없으면 글을 옮기지 않는다.
+    if (Object.keys(cats.renames).length > 0) { payload.category_renames = cats.renames; }
+
+    api('PATCH', '/boards/' + state.board.board_key, payload).then(function () {
       toast('저장했습니다.');
       loadBoards();
       openBoard(state.board.board_key);

@@ -218,7 +218,7 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 | POST | `/auth/login` | 부트스트랩 관리자 로그인 |
 | GET | `/boards` | 게시판 목록 |
 | POST | `/boards` | 게시판 생성 (전역 관리자) |
-| GET/PATCH/DELETE | `/boards/{key}` | 게시판 조회/수정/삭제 |
+| GET/PATCH/DELETE | `/boards/{key}` | 게시판 조회/수정/삭제 (`category_renames` 로 분류 이름 변경) |
 | GET | `/boards/{key}/posts` | 글 목록 (`page`, `per_page`, `q`, `category`) |
 | POST | `/boards/{key}/posts` | 글 작성 |
 | GET/PATCH/DELETE | `/posts/{id}` | 글 조회/수정/삭제 |

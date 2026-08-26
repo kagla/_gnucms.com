@@ -131,7 +131,7 @@ final class App
     public function boardService(): BoardService
     {
         if ($this->boardService === null) {
-            $this->boardService = new BoardService($this->boards(), $this->posts(), $this->comments());
+            $this->boardService = new BoardService($this->db(), $this->boards(), $this->posts(), $this->comments());
         }
 
         return $this->boardService;

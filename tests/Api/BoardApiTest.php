@@ -169,6 +169,156 @@ final class BoardApiTest extends ApiTestCase
         $this->assertSame([], $app->comments()->findByPost($postId));
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testRenamingACategoryMovesExistingPosts(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+        $id = $this->postIn($app, 'free', '질문');
+
+        $response = $this->call($app, 'PATCH', '/boards/free', [
+            'categories'        => ['문의', '잡담'],
+            'category_renames'  => ['질문' => '문의'],
+        ], $this->adminToken($app));
+
+        $this->assertSame(200, $response->status());
+        $this->assertSame('문의', $this->call($app, 'GET', '/posts/' . $id)->payload()['data']['category']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRenamedCategoryPostRemainsEditable(array $config): void
+    {
+        // 이름을 바꾼 뒤에도 그 글을 원래 분류 그대로 저장할 수 있어야 한다.
+        // 전파가 없으면 여기서 422 가 나고 사용자는 이유를 알 수 없다.
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+        $id = $this->postIn($app, 'free', '질문');
+        $admin = $this->adminToken($app);
+
+        $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['문의', '잡담'],
+            'category_renames' => ['질문' => '문의'],
+        ], $admin);
+
+        $edit = $this->call($app, 'PATCH', '/posts/' . $id, ['category' => '문의'], $admin);
+
+        $this->assertSame(200, $edit->status());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRenameOnlyTouchesItsOwnBoard(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+        $this->categorizedBoard($app, 'other');
+        $mine = $this->postIn($app, 'free', '질문');
+        $theirs = $this->postIn($app, 'other', '질문');
+
+        $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['문의', '잡담'],
+            'category_renames' => ['질문' => '문의'],
+        ], $this->adminToken($app));
+
+        $this->assertSame('문의', $this->call($app, 'GET', '/posts/' . $mine)->payload()['data']['category']);
+        $this->assertSame('질문', $this->call($app, 'GET', '/posts/' . $theirs)->payload()['data']['category']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMergingTwoCategoriesIntoOne(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+        $a = $this->postIn($app, 'free', '질문');
+        $b = $this->postIn($app, 'free', '잡담');
+
+        $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['문의'],
+            'category_renames' => ['질문' => '문의', '잡담' => '문의'],
+        ], $this->adminToken($app));
+
+        $this->assertSame('문의', $this->call($app, 'GET', '/posts/' . $a)->payload()['data']['category']);
+        $this->assertSame('문의', $this->call($app, 'GET', '/posts/' . $b)->payload()['data']['category']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRenameFromAnUnknownCategoryIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+
+        $response = $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['문의', '잡담'],
+            'category_renames' => ['없던분류' => '문의'],
+        ], $this->adminToken($app));
+
+        $this->assertSame(422, $response->status());
+        $this->assertArrayHasKey('category_renames', (array) $response->payload()['error']['details']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRenameToACategoryThatIsNotOfferedIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+
+        $response = $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['문의', '잡담'],
+            'category_renames' => ['질문' => '엉뚱한곳'],
+        ], $this->adminToken($app));
+
+        $this->assertSame(422, $response->status());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testKeepingTheOldNameAliveIsNotARename(array $config): void
+    {
+        // 옛 이름이 새 목록에 그대로 남아 있으면 이름 변경이 아니다.
+        // 지웠는지 남겼는지 알 수 없는 채로 글을 옮기면 안 된다.
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+
+        $response = $this->call($app, 'PATCH', '/boards/free', [
+            'categories'       => ['질문', '문의'],
+            'category_renames' => ['질문' => '문의'],
+        ], $this->adminToken($app));
+
+        $this->assertSame(422, $response->status());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testWithoutARenameMapCategoriesAreSimplyReplaced(array $config): void
+    {
+        // 지금까지의 동작을 그대로 둔다. 서버가 알아서 짐작하지 않는다.
+        $app = $this->makeApp($config);
+        $this->categorizedBoard($app);
+        $id = $this->postIn($app, 'free', '질문');
+
+        $this->call($app, 'PATCH', '/boards/free', ['categories' => ['문의', '잡담']], $this->adminToken($app));
+
+        $this->assertSame('질문', $this->call($app, 'GET', '/posts/' . $id)->payload()['data']['category']);
+    }
+
+    private function categorizedBoard(App $app, string $key = 'free'): void
+    {
+        $this->call($app, 'POST', '/boards', [
+            'board_key'    => $key,
+            'name'         => '분류 게시판',
+            'use_category' => true,
+            'categories'   => ['질문', '잡담'],
+        ], $this->adminToken($app));
+    }
+
+    private function postIn(App $app, string $boardKey, string $category): int
+    {
+        $response = $this->call($app, 'POST', '/boards/' . $boardKey . '/posts', [
+            'title'    => $category . ' 글',
+            'content'  => '본문',
+            'category' => $category,
+        ], $this->tokenFor($app, 'user-1', '홍길동', false));
+
+        return (int) $response->payload()['data']['id'];
+    }
+
     private function createBoard(App $app): int
     {
         $response = $this->call($app, 'POST', '/boards', [

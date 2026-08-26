@@ -178,6 +178,23 @@ final class PostRepository
         return $paths;
     }
 
+    /**
+     * 게시판 안에서 분류 이름을 한꺼번에 바꾼다. 삭제된 글도 함께 바꾼다.
+     * 복구했을 때 혼자만 옛 이름으로 남아 있으면 안 되기 때문이다.
+     *
+     * updated_at 은 건드리지 않는다. 글 내용이 바뀐 것이 아니라
+     * 게시판 설정이 바뀐 것이다.
+     */
+    public function renameCategory(int $boardId, string $from, string $to): int
+    {
+        return $this->db->update(
+            'posts',
+            ['category' => $to],
+            'board_id = :board_id AND category = :from_category',
+            ['board_id' => $boardId, 'from_category' => $from]
+        );
+    }
+
     public function incrementViews(int $id): void
     {
         $this->db->execute(
