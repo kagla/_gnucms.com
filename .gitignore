@@ -18,3 +18,9 @@ composer.lock
 !/storage/logs/.gitkeep
 
 .DS_Store
+
+# SDD 진행 기록 (스크래치)
+/.superpowers/
+
+/.phpunit.cache/
+/phpunit.xml
