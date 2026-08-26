@@ -197,6 +197,9 @@ require __DIR__ . '/../src/autoload.php';
 /phpunit.xml
 ```
 
+`composer.lock` 은 무시하지 않는다. 개발 전용 의존성이라도 PHPUnit 패치 버전이 고정되어야
+다른 머신에서 같은 결과가 나온다.
+
 빈 디렉터리 유지:
 
 ```bash
@@ -455,8 +458,13 @@ use RuntimeException;
  */
 final class ApiError extends RuntimeException
 {
-    /** @var string */
-    private $code;
+    /**
+     * 이름이 $code 가 아닌 이유: Exception 이 이미 타입이 붙은 protected $code 를 갖고 있어
+     * 재선언하면 PHP 8 에서 치명적 오류가 난다. 공개 이름은 code() 그대로다.
+     *
+     * @var string
+     */
+    private $errorCode;
 
     /** @var int */
     private $status;
@@ -467,14 +475,14 @@ final class ApiError extends RuntimeException
     public function __construct(string $code, string $message, int $status, array $details = [])
     {
         parent::__construct($message);
-        $this->code = $code;
+        $this->errorCode = $code;
         $this->status = $status;
         $this->details = $details;
     }
 
     public function code(): string
     {
-        return $this->code;
+        return $this->errorCode;
     }
 
     public function status(): int
