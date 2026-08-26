@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 info:
-  title: apiboard (apiboard) API
+  title: apiboard API
   version: "1.0.0"
   description: |
     SQLite / MySQL / PostgreSQL 어디서나 동작하는 게시판 JSON API.
