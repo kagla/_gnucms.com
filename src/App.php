@@ -15,6 +15,7 @@ use StandardBoard\Repository\CommentRepository;
 use StandardBoard\Repository\PostRepository;
 use StandardBoard\Service\AuthService;
 use StandardBoard\Service\BoardService;
+use StandardBoard\Service\PostService;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -42,6 +43,9 @@ final class App
 
     /** @var BoardService|null */
     private $boardService = null;
+
+    /** @var PostService|null */
+    private $postService = null;
 
     public function __construct(array $config)
     {
@@ -123,6 +127,15 @@ final class App
         }
 
         return $this->boardService;
+    }
+
+    public function postService(): PostService
+    {
+        if ($this->postService === null) {
+            $this->postService = new PostService($this->boardService(), $this->posts());
+        }
+
+        return $this->postService;
     }
 
     public function aclFor(Request $request): Acl

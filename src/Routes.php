@@ -56,5 +56,51 @@ final class Routes
 
             return Response::json([], 204);
         });
+
+        $router->get('/boards/{key}/posts', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(
+                $app->postService()->listPosts($app->aclFor($request), $params['key'], $request->body() + $_GET)
+            );
+        });
+
+        $router->post('/boards/{key}/posts', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->create($app->aclFor($request), $params['key'], $request->body());
+
+            return Response::json(['data' => $post], 201);
+        });
+
+        $router->get('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $post = $app->postService()->get(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json(['data' => $post]);
+        });
+
+        $router->patch('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->update($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $post]);
+        });
+
+        $router->delete('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $app->postService()->delete(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json([], 204);
+        });
+
+        $router->post('/posts/{id}/restore', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->restore($app->aclFor($request), (int) $params['id']);
+
+            return Response::json(['data' => $post]);
+        });
     }
 }

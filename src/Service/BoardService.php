@@ -43,6 +43,12 @@ final class BoardService
         return $visible;
     }
 
+    /** 권한 검사 없이 원본 행을 돌려준다. 글/댓글이 소속 게시판을 찾을 때 쓴다. */
+    public function findBoardById(int $id): ?array
+    {
+        return $this->boards->findById($id);
+    }
+
     /** 원본 행을 돌려준다. 다른 서비스가 권한 판정에 쓴다. */
     public function getEntity(Acl $acl, string $key): array
     {

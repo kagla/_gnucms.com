@@ -5965,7 +5965,14 @@ final class PostApiTest extends ApiTestCase
 
         $asAdmin = $this->call($app, 'GET', '/boards/free/posts', ['include_deleted' => true], $admin)->payload();
         $this->assertSame(2, $asAdmin['total']);
-        $this->assertTrue($asAdmin['data'][0]['deleted']);
+        // 목록은 id 내림차순이므로 먼저 쓴 '지워질 글' 이 뒤에 온다. 위치가 아니라 제목으로 찾는다.
+        $deleted = array_values(array_filter(
+            $asAdmin['data'],
+            static function (array $row): bool {
+                return $row['title'] === '지워질 글';
+            }
+        ));
+        $this->assertTrue($deleted[0]['deleted']);
 
         $asMember = $this->call($app, 'GET', '/boards/free/posts', ['include_deleted' => true],
             $this->tokenFor($app, 'user-1', '홍길동', false))->payload();
