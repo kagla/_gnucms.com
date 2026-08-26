@@ -12,37 +12,150 @@ declare(strict_types=1);
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>표준 게시판 관리</title>
 <style>
-  :root { --line: #ddd; --muted: #666; --danger: #b00020; }
+  /*
+   * 테마는 토큰으로만 바꾼다. 밝은 값이 바탕이고, 어두운 값은
+   *   (a) 시스템이 어두울 때  (b) 사용자가 어둡게 골랐을 때
+   * 두 경우에 덮어쓴다. (a) 에 :not([data-theme="light"]) 를 붙여야
+   * 시스템이 어두워도 "밝게" 를 고른 사용자가 밝은 화면을 본다.
+   */
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --panel: #ffffff;
+    --line: #dddddd;
+    --muted: #666666;
+    --danger: #b00020;
+    --link: #0b57d0;
+    --field-bg: #ffffff;
+    --field-line: #cccccc;
+    --toast-bg: #333333;
+    --toast-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #16181c;
+      --fg: #e6e8ea;
+      --panel: #1c1f24;
+      --line: #2c3038;
+      --muted: #9aa1ab;
+      --danger: #ff7b8a;
+      --link: #7cb0ff;
+      --field-bg: #1c1f24;
+      --field-line: #3a4049;
+      --toast-bg: #2a2f36;
+      --toast-fg: #f2f4f6;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #16181c;
+    --fg: #e6e8ea;
+    --panel: #1c1f24;
+    --line: #2c3038;
+    --muted: #9aa1ab;
+    --danger: #ff7b8a;
+    --link: #7cb0ff;
+    --field-bg: #1c1f24;
+    --field-line: #3a4049;
+    --toast-bg: #2a2f36;
+    --toast-fg: #f2f4f6;
+  }
+
   * { box-sizing: border-box; }
-  body { font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  body {
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  header {
+    display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 17px; margin: 0; flex: 1 1 auto; }
   main { max-width: 1040px; margin: 24px auto; padding: 0 20px; }
   section { margin-bottom: 32px; }
   h2 { font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; font-size: 13px; }
-  input, select, textarea { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
-  button { padding: 5px 10px; font: inherit; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+  input, select, textarea {
+    padding: 6px 8px; border: 1px solid var(--field-line); border-radius: 4px;
+    font: inherit; background: var(--field-bg); color: var(--fg); max-width: 100%;
+  }
+  button {
+    padding: 5px 10px; font: inherit; cursor: pointer;
+    border: 1px solid var(--field-line); border-radius: 4px;
+    background: var(--panel); color: var(--fg);
+  }
   button.danger { color: var(--danger); border-color: var(--danger); }
-  button.link { border: 0; background: none; padding: 0; color: #0b57d0; text-decoration: underline; }
+  button.icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0; flex: 0 0 auto;
+  }
+  button.icon svg { width: 18px; height: 18px; display: block; }
+  button.link { border: 0; background: none; padding: 0; color: var(--link); text-decoration: underline; text-align: left; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-  .field input, .field select { color: #1a1a1a; }
+  .field input, .field select { color: var(--fg); }
   .muted { color: var(--muted); font-size: 13px; }
   .deleted { text-decoration: line-through; color: var(--muted); }
-  .toast { position: fixed; right: 20px; bottom: 20px; padding: 10px 16px; border-radius: 4px; color: #fff; background: #333; }
-  .toast.error { background: var(--danger); }
+  .toast {
+    position: fixed; right: 20px; bottom: 20px; max-width: calc(100vw - 40px);
+    padding: 10px 16px; border-radius: 4px; color: var(--toast-fg); background: var(--toast-bg);
+  }
+  .toast.error { background: var(--danger); color: #ffffff; }
   .hidden { display: none; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  /* 늘어나야 하는 것은 글자 입력란뿐이다. 체크박스까지 늘리면 네모가 줄줄이 늘어난다. */
+  .row input:not([type="checkbox"]):not([type="radio"]) { flex: 1 1 200px; min-width: 0; }
+  .row input[type="checkbox"], .row input[type="radio"] { flex: 0 0 auto; width: auto; margin: 0; }
+
+  /*
+   * 좁은 화면에서는 표를 카드로 바꾼다. 열이 6~7개라 가로 스크롤로는 못 읽는다.
+   * 머리글을 숨기는 대신 각 칸이 data-label 을 이름표로 달고 나온다.
+   */
+  @media (max-width: 720px) {
+    main { margin: 16px auto; padding: 0 12px; }
+    /* iOS 는 16px 미만 입력란에 자동 확대를 건다 */
+    input, select, textarea { font-size: 16px; }
+    .row input:not([type="checkbox"]):not([type="radio"]) { flex: 1 1 100%; }
+
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    tr {
+      border: 1px solid var(--line); border-radius: 8px;
+      padding: 8px 10px; margin-bottom: 10px; background: var(--panel);
+    }
+    td { border: 0; padding: 3px 0; display: flex; gap: 10px; align-items: baseline; }
+    td::before {
+      content: attr(data-label);
+      flex: 0 0 76px; color: var(--muted); font-size: 13px;
+    }
+    td:empty { display: none; }
+    td.actions { flex-wrap: wrap; padding-top: 8px; }
+    .toast { right: 12px; left: 12px; bottom: 12px; max-width: none; }
+  }
 </style>
+<script>
+  // 화면이 그려지기 전에 저장해 둔 테마를 붙인다.
+  // 본문 끝의 스크립트에서 하면 잠깐 다른 색이 번쩍인다.
+  try {
+    var savedTheme = localStorage.getItem('sb_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  } catch (e) { /* 시크릿 모드 */ }
+</script>
 </head>
 <body>
 
 <header>
   <h1>표준 게시판 관리</h1>
   <span id="who" class="muted"></span>
+  <button id="theme" class="icon" type="button" aria-label="어둡게 전환" title="어둡게 전환"></button>
   <button id="logout" class="hidden">로그아웃</button>
 </header>
 
@@ -188,10 +301,12 @@ declare(strict_types=1);
     });
   }
 
-  function cell(row, text, className) {
+  function cell(row, text, className, label) {
     var td = document.createElement('td');
     td.textContent = text;
     if (className) { td.className = className; }
+    // 좁은 화면에서 머리글 대신 붙는 이름표다.
+    if (label) { td.setAttribute('data-label', label); }
     row.appendChild(td);
     return td;
   }
@@ -199,6 +314,56 @@ declare(strict_types=1);
   function splitList(value) {
     return value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s !== ''; });
   }
+
+  // ---- 테마 ------------------------------------------------------------
+
+  // 밝게 <-> 어둡게 두 가지뿐이다. 처음 열었을 때만 운영체제 설정을 따르고,
+  // 한 번이라도 누르면 그 선택을 기억한다.
+  //
+  // 버튼에는 "지금 상태" 가 아니라 "누르면 되는 상태" 의 아이콘을 그린다.
+  // 버튼은 상태 표시등이 아니라 동작이기 때문이다. 아이콘만으로는 어느 쪽인지
+  // 헷갈릴 수 있으므로 title 과 aria-label 에 말로도 적는다.
+  var ICONS = {
+    // 달: 누르면 어두워진다
+    dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+      + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+    // 해: 누르면 밝아진다
+    light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+      + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<circle cx="12" cy="12" r="4"/>'
+      + '<path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4'
+      + 'M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>'
+  };
+  var LABELS = { dark: '어둡게 전환', light: '밝게 전환' };
+
+  var theme = 'light';
+
+  function applyTheme(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    var next = mode === 'dark' ? 'light' : 'dark';
+    var button = $('theme');
+    button.innerHTML = ICONS[next];
+    button.setAttribute('title', LABELS[next]);
+    button.setAttribute('aria-label', LABELS[next]);
+  }
+
+  try {
+    var storedTheme = localStorage.getItem('sb_theme');
+    theme = (storedTheme === 'dark' || storedTheme === 'light')
+      ? storedTheme
+      // 저장된 선택이 없으면 이번 한 번만 운영체제 설정을 따른다.
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  } catch (e) {
+    theme = 'light';
+  }
+  applyTheme(theme);
+
+  $('theme').onclick = function () {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('sb_theme', theme); } catch (e) { /* 시크릿 모드 */ }
+    applyTheme(theme);
+  };
 
   // ---- 로그인 ----------------------------------------------------------
 
@@ -238,14 +403,16 @@ declare(strict_types=1);
       tbody.innerHTML = '';
       state.boards.forEach(function (board) {
         var tr = document.createElement('tr');
-        cell(tr, board.board_key);
-        cell(tr, board.name);
-        cell(tr, board.perm_read + ' / ' + board.perm_write + ' / ' + board.perm_comment);
+        cell(tr, board.board_key, null, '키');
+        cell(tr, board.name, null, '이름');
+        cell(tr, board.perm_read + ' / ' + board.perm_write + ' / ' + board.perm_comment, null, '권한');
         cell(tr, [board.use_secret ? '비밀글' : '', board.use_file ? '첨부' : '', board.use_category ? '분류' : '']
-          .filter(Boolean).join(' ') || '-', 'muted');
-        cell(tr, (board.managers || []).join(', ') || '-', 'muted');
+          .filter(Boolean).join(' ') || '-', 'muted', '옵션');
+        cell(tr, (board.managers || []).join(', ') || '-', 'muted', '관리자');
 
         var td = document.createElement('td');
+        td.className = 'actions';
+        td.setAttribute('data-label', '작업');
         var manage = document.createElement('button');
         manage.textContent = '관리';
         manage.onclick = function () { openBoard(board.board_key); };
@@ -351,9 +518,10 @@ declare(strict_types=1);
 
   function postRow(post) {
     var tr = document.createElement('tr');
-    cell(tr, String(post.id));
+    cell(tr, String(post.id), null, '번호');
 
     var titleCell = document.createElement('td');
+    titleCell.setAttribute('data-label', '제목');
     var title = document.createElement('button');
     title.className = 'link' + (post.deleted ? ' deleted' : '');
     title.textContent = (post.is_notice ? '[공지] ' : '') + (post.is_secret ? '[비밀] ' : '') + post.title;
@@ -361,13 +529,14 @@ declare(strict_types=1);
     titleCell.appendChild(title);
     tr.appendChild(titleCell);
 
-    cell(tr, post.author_name);
-    cell(tr, String(post.comment_count));
-    cell(tr, String(post.view_count));
-    cell(tr, post.created_at, 'muted');
+    cell(tr, post.author_name, null, '작성자');
+    cell(tr, String(post.comment_count), null, '댓글');
+    cell(tr, String(post.view_count), null, '조회');
+    cell(tr, post.created_at, 'muted', '작성일');
 
     var actions = document.createElement('td');
-    actions.className = 'row';
+    actions.className = 'row actions';
+    actions.setAttribute('data-label', '작업');
 
     var notice = document.createElement('button');
     notice.textContent = post.is_notice ? '공지 해제' : '공지 지정';
@@ -438,14 +607,16 @@ declare(strict_types=1);
 
       rows.forEach(function (comment) {
         var tr = document.createElement('tr');
-        cell(tr, String(comment.id));
+        cell(tr, String(comment.id), null, '번호');
         cell(tr,
           new Array(comment.depth + 1).join('　') + (comment.depth > 0 ? '└ ' : '') + comment.content,
-          comment.deleted ? 'muted' : '');
-        cell(tr, comment.author_name || '-');
-        cell(tr, comment.created_at, 'muted');
+          comment.deleted ? 'muted' : '', '내용');
+        cell(tr, comment.author_name || '-', null, '작성자');
+        cell(tr, comment.created_at, 'muted', '작성일');
 
         var actions = document.createElement('td');
+        actions.className = 'actions';
+        actions.setAttribute('data-label', '작업');
         if (!comment.deleted) {
           var remove = document.createElement('button');
           remove.className = 'danger';
