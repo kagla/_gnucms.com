@@ -185,6 +185,23 @@ final class AttachmentApiTest extends ApiTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testGarbageCollectionKeepsDotFiles(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $dir = sys_get_temp_dir() . '/standard-board-test-uploads';
+        @mkdir($dir, 0775, true);
+        $keep = $dir . '/.gitkeep';
+        file_put_contents($keep, '');
+
+        $app->attachments()->collectGarbage($app->aclFor($this->authed($app, 'root', '관리자', true)));
+
+        // 배포물에 포함되는 자리표시자다. 업로드 파일은 항상 32자리 16진수라
+        // 점으로 시작하는 파일을 건너뛰어도 진짜 고아를 놓치지 않는다.
+        $this->assertFileExists($keep);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testGarbageCollectionRequiresGlobalAdmin(array $config): void
     {
         $app = $this->makeApp($config);

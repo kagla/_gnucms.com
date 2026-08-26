@@ -196,6 +196,11 @@ final class AttachmentService
             if (!$item->isFile()) {
                 continue;
             }
+            // 업로드 파일 이름은 항상 32자리 16진수다. 점으로 시작하는 파일은
+            // .gitkeep 같은 자리표시자이므로 건드리지 않는다.
+            if (strncmp($item->getFilename(), '.', 1) === 0) {
+                continue;
+            }
             $path = $item->getPathname();
             if (isset($referenced[$path])) {
                 continue;
