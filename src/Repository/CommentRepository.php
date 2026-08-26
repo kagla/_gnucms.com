@@ -85,6 +85,11 @@ final class CommentRepository
         $this->db->update('comments', ['deleted_at' => Clock::now()], 'id = :id', ['id' => $id]);
     }
 
+    public function deleteByBoard(int $boardId): void
+    {
+        $this->db->delete('comments', 'board_id = :board_id', ['board_id' => $boardId]);
+    }
+
     public function hasChildren(int $id): bool
     {
         $row = $this->db->selectOne(

@@ -145,6 +145,11 @@ final class PostRepository
         $this->db->update('posts', ['deleted_at' => null], 'id = :id', ['id' => $id]);
     }
 
+    public function deleteByBoard(int $boardId): void
+    {
+        $this->db->delete('posts', 'board_id = :board_id', ['board_id' => $boardId]);
+    }
+
     public function incrementViews(int $id): void
     {
         $this->db->execute(

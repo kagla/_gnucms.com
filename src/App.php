@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StandardBoard;
 
 use StandardBoard\Auth\Acl;
+use StandardBoard\Auth\TokenIssuer;
 use StandardBoard\Auth\TokenVerifier;
 use StandardBoard\Db\Connection;
 use StandardBoard\Http\Request;
@@ -12,6 +13,8 @@ use StandardBoard\Http\Router;
 use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Repository\CommentRepository;
 use StandardBoard\Repository\PostRepository;
+use StandardBoard\Service\AuthService;
+use StandardBoard\Service\BoardService;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -33,6 +36,12 @@ final class App
 
     /** @var CommentRepository|null */
     private $comments = null;
+
+    /** @var AuthService|null */
+    private $auth = null;
+
+    /** @var BoardService|null */
+    private $boardService = null;
 
     public function __construct(array $config)
     {
@@ -87,6 +96,33 @@ final class App
         }
 
         return $this->comments;
+    }
+
+    public function tokenIssuer(): TokenIssuer
+    {
+        return new TokenIssuer(
+            (string) $this->config('auth.secret', ''),
+            (int) $this->config('auth.ttl', 3600)
+        );
+    }
+
+    public function auth(): AuthService
+    {
+        if ($this->auth === null) {
+            $bootstrap = $this->config('bootstrap_admin');
+            $this->auth = new AuthService(is_array($bootstrap) ? $bootstrap : null, $this->tokenIssuer());
+        }
+
+        return $this->auth;
+    }
+
+    public function boardService(): BoardService
+    {
+        if ($this->boardService === null) {
+            $this->boardService = new BoardService($this->boards(), $this->posts(), $this->comments());
+        }
+
+        return $this->boardService;
     }
 
     public function aclFor(Request $request): Acl
