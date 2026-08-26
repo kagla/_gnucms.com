@@ -17,13 +17,149 @@ SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시�
    설치 뒤에 값을 바꾸고 싶으면 `.env` 를 쓴다. 아래 "설정" 을 참고한다.
 4. `admin.php` 로 들어가 게시판을 만든다.
 
-DSN 예시:
+DSN 을 어떻게 적는지는 아래 "데이터베이스" 에 DB 별로 정리해 두었다.
+
+## 데이터베이스
+
+셋 중 어느 것을 골라도 기능 차이는 없다. 같은 테스트 스위트가 세 DB 에서 모두 통과하는
+것이 릴리스 조건이다. 고르는 기준은 대체로 이렇다.
+
+| DB | 언제 |
+|---|---|
+| SQLite | 방문자가 많지 않고 설치를 가장 단순하게 하고 싶을 때. DB 서버가 필요 없다 |
+| MySQL / MariaDB | 공유 호스팅이 기본으로 주는 DB 일 때. 가장 흔한 선택 |
+| PostgreSQL | 이미 PostgreSQL 을 쓰고 있을 때 |
+
+먼저 PHP 에 해당 드라이버가 있는지 본다. 없으면 호스팅에 요청해야 한다.
+
+```bash
+php -m | grep pdo
+# pdo_sqlite / pdo_mysql / pdo_pgsql 중 쓸 것이 보여야 한다
+```
+
+설치가 끝난 뒤 어느 DB 로 붙었는지는 `/health` 가 알려 준다.
+
+```bash
+curl 'https://example.com/index.php?p=/health'
+# {"ok":true,"dialect":"mysql"}
+```
+
+테이블(`boards`, `posts`, `comments`)은 설치 마법사가 직접 만든다. 그래서 게시판이 쓸
+DB 계정에는 `CREATE TABLE` 과 `CREATE INDEX` 권한이 있어야 한다.
+
+### SQLite
+
+준비할 것이 없다. 파일이 없으면 설치할 때 만들어진다.
 
 ```
 sqlite:/home/user/board/storage/board.sqlite
-mysql:host=localhost;dbname=board;charset=utf8mb4
-pgsql:host=localhost;dbname=board
 ```
+
+- **절대경로로 적는다.** 상대경로는 실행 위치에 따라 다른 파일을 가리킨다.
+- 파일이 아니라 **그 디렉터리에 쓰기 권한**이 있어야 한다. SQLite 는 본 파일 외에
+  저널/WAL 파일을 같은 폴더에 만든다.
+- **DB 파일이 웹으로 접근 가능한 위치에 있으면 안 된다.** `storage/` 는 문서 루트
+  바깥이어야 한다. 주소만 알면 게시판 전체를 통째로 내려받을 수 있다.
+- 동시 쓰기는 한 번에 하나다. 잠겨 있으면 5초까지 기다린 뒤 실패한다
+  (`PRAGMA busy_timeout = 5000`). 글이 몰리는 게시판이면 MySQL 이나 PostgreSQL 을 쓴다.
+- 백업은 파일 복사다.
+
+### MySQL / MariaDB
+
+DB 와 계정을 먼저 만든다. 호스팅 패널에서 만들었다면 이 단계는 건너뛴다.
+
+```sql
+CREATE DATABASE board DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'board'@'localhost' IDENTIFIED BY '비밀번호';
+GRANT ALL PRIVILEGES ON board.* TO 'board'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+```
+mysql:host=127.0.0.1;port=3306;dbname=board;charset=utf8mb4
+```
+
+- **`charset=utf8mb4` 를 반드시 붙인다.** 빠뜨리면 서버 기본 문자셋을 따르는데, 오래된
+  서버는 그것이 `latin1` 이라 한글이 깨진다. 테이블 자체는 `utf8mb4_unicode_ci` 로 만든다.
+- **`host=localhost` 가 `[2002] No such file or directory` 로 실패하면** PHP 가 찾는
+  소켓 경로와 서버의 실제 소켓 경로가 다른 것이다. `localhost` 는 TCP 가 아니라 유닉스
+  소켓으로 붙기 때문에 생기는 일이며, 흔하다. 해결책은 둘 중 하나다.
+
+  ```bash
+  # 원인 확인: 두 값이 다르면 이 문제다
+  mysql -e "SHOW VARIABLES LIKE 'socket';"     # 서버의 실제 소켓
+  php -i | grep pdo_mysql.default_socket        # PHP 가 찾는 소켓
+  ```
+
+  ```
+  # 방법 1 (권장) — TCP 로 붙는다
+  mysql:host=127.0.0.1;port=3306;dbname=board;charset=utf8mb4
+
+  # 방법 2 — 소켓 경로를 직접 적는다
+  mysql:unix_socket=/run/mysqld/mysqld.sock;dbname=board;charset=utf8mb4
+  ```
+
+  `'board'@'localhost'` 로 만든 계정은 대개 `127.0.0.1` 로 붙어도 그대로 인증된다.
+  DB 가 다른 서버에 있다면 계정을 `'board'@'%'` 로 만들고 `host` 에 그 주소를 적는다.
+- **MySQL 5.7 을 지원 대상으로 설계했다.** 재귀 CTE, JSON 컬럼과 JSON 함수, 윈도 함수를
+  쓰지 않는다. 그보다 낮은 버전은 대상이 아니다.
+- 접속할 때마다 `sql_mode = STRICT_ALL_TABLES` 와 `time_zone = '+00:00'` 을 세션에
+  설정한다. 값이 잘려 들어가는 대신 오류가 나고, 시각은 항상 UTC 로 저장된다.
+
+### PostgreSQL
+
+```sql
+CREATE ROLE board LOGIN PASSWORD '비밀번호';
+CREATE DATABASE board OWNER board ENCODING 'UTF8';
+```
+
+```
+pgsql:host=127.0.0.1;port=5432;dbname=board
+```
+
+- **`OWNER` 를 게시판 계정으로 지정한다.** PostgreSQL 15 부터는 DB 소유자가 아닌 계정이
+  `public` 스키마에 테이블을 만들 수 없다. 소유자로 만들어 두면 이 문제가 없다.
+  이미 만들어진 DB 를 쓴다면 `GRANT CREATE ON SCHEMA public TO board;` 가 필요하다.
+- 비밀번호로 붙으려면 `pg_hba.conf` 의 `host` 줄이 `scram-sha-256` 또는 `md5` 여야 한다.
+  `peer` 만 열려 있으면 TCP 접속이 거부된다.
+- 접속할 때마다 `SET TIME ZONE 'UTC'` 를 실행한다. 기본키는 `BIGSERIAL` 이다.
+
+### DB 를 나중에 바꾸려면
+
+경우가 둘로 갈린다. **테이블이 이미 있는 DB 인지**가 갈림길이다.
+테이블(`boards`, `posts`, `comments`)을 만드는 것은 설치 마법사뿐이고, 평소 실행 중에는
+스키마를 만들지 않는다.
+
+**1. 테이블이 이미 있는 DB 로 옮길 때** — 접속 정보만 바뀌었거나, 덤프를 새 서버에
+옮겨 놓은 경우다. `.env` 만 고치면 끝이다. 재설치도, `config/config.php` 를 열 필요도 없다.
+
+```
+DB_DSN=pgsql:host=127.0.0.1;port=5432;dbname=board
+DB_USERNAME=board
+DB_PASSWORD=비밀번호
+```
+
+**2. 빈 새 DB 로 옮길 때** — `DB_DSN` 만 바꾸면 **깨진다.** 접속은 되지만 테이블이 없어서
+첫 요청부터 `relation "boards" does not exist` 같은 500 이 난다. 설치 마법사를 다시 한 번
+돌려야 하고, 순서가 중요하다.
+
+1. **먼저 `.env` 에 지금 쓰고 있는 `AUTH_SECRET` 을 옮겨 적는다.**
+   `config/config.php` 의 `auth.secret` 값이다. 이 단계를 건너뛰면 재설치가 새 시크릿을
+   만들어 버려서 호스트 앱이 이미 발급한 토큰이 전부 무효가 된다. `.env` 가
+   `config/config.php` 를 이기므로, 여기 적어 두면 재설치해도 시크릿이 유지된다.
+   부트스트랩 관리자를 계속 쓴다면 `BOOTSTRAP_ADMIN_ID` 와
+   `BOOTSTRAP_ADMIN_PASSWORD_HASH` 도 같이 옮긴다.
+2. `.env` 의 `DB_DSN` 을 비우고 `config/config.php` 를 지운다. 둘 다 지워야 설치 마법사가
+   "아직 설치되지 않았다" 고 판단한다.
+3. `public/install.php` 를 다시 올리고 새 DSN 으로 설치한다. 새 DB 에 테이블이 만들어진다.
+4. `public/install.php` 를 다시 지운다.
+
+기존 데이터는 어느 쪽이든 따라오지 않는다. 옮기려면 `mysqldump`, `pg_dump`, 또는 SQLite
+파일 복사 같은 DB 별 도구를 쓴다.
+
+> `/health` 는 어느 방언으로 붙었는지만 확인한다. **테이블이 있는지는 보지 않으므로**
+> 스키마가 비어 있어도 `{"ok":true}` 를 준다. 옮긴 뒤에는 `/boards` 를 한 번 호출해
+> 200 이 오는지로 확인한다.
 
 ## 설정
 
