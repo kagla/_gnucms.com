@@ -150,6 +150,34 @@ final class PostRepository
         $this->db->delete('posts', 'board_id = :board_id', ['board_id' => $boardId]);
     }
 
+    /**
+     * 모든 글이 참조하는 첨부 경로. 고아 파일 정리에 쓴다.
+     * MySQL 5.7 에 JSON 함수가 없으므로 SQL 로 걸러내지 않고 PHP 로 모은다.
+     *
+     * @return string[]
+     */
+    public function allAttachmentPaths(): array
+    {
+        $rows = $this->db->select(
+            'SELECT attachments FROM ' . $this->db->q('posts') . ' WHERE attachments IS NOT NULL'
+        );
+
+        $paths = [];
+        foreach ($rows as $row) {
+            $raw = (string) $row['attachments'];
+            if ($raw === '' || $raw === '[]') {
+                continue;
+            }
+            foreach (Json::decode($raw) as $file) {
+                if (isset($file['path'])) {
+                    $paths[] = (string) $file['path'];
+                }
+            }
+        }
+
+        return $paths;
+    }
+
     public function incrementViews(int $id): void
     {
         $this->db->execute(

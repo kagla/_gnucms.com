@@ -10,6 +10,7 @@ use StandardBoard\Db\Schema;
 use StandardBoard\Http\ApiError;
 use StandardBoard\Http\Request;
 use StandardBoard\Http\Response;
+use StandardBoard\Http\ResponseInterface;
 
 abstract class ApiTestCase extends DatabaseTestCase
 {
@@ -41,7 +42,7 @@ abstract class ApiTestCase extends DatabaseTestCase
     }
 
     /** ApiError 도 Response 로 변환해 돌려준다. 테스트가 상태 코드를 그대로 볼 수 있다. */
-    protected function call(App $app, string $method, string $path, array $body = [], ?string $token = null): Response
+    protected function call(App $app, string $method, string $path, array $body = [], ?string $token = null): ResponseInterface
     {
         $headers = $token === null ? [] : ['Authorization' => 'Bearer ' . $token];
         $request = new Request($method, $path, [], $body, $headers, []);

@@ -50,7 +50,7 @@ final class Router
         $this->add('DELETE', $pattern, $handler);
     }
 
-    public function dispatch(Request $request): Response
+    public function dispatch(Request $request): ResponseInterface
     {
         $path = $request->path();
         if ($path !== '/' && substr($path, -1) === '/') {

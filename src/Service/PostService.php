@@ -17,10 +17,18 @@ final class PostService
     /** @var PostRepository */
     private $posts;
 
+    /** @var AttachmentService|null 순환 의존을 피하려고 나중에 주입한다 */
+    private $attachments = null;
+
     public function __construct(BoardService $boards, PostRepository $posts)
     {
         $this->boards = $boards;
         $this->posts = $posts;
+    }
+
+    public function setAttachmentService(AttachmentService $attachments): void
+    {
+        $this->attachments = $attachments;
     }
 
     public function listPosts(Acl $acl, string $boardKey, array $query): array
@@ -131,6 +139,10 @@ final class PostService
             $data['is_notice'] = 1;
         }
 
+        if (array_key_exists('attachments', $input)) {
+            $data['attachments'] = $this->verifyAttachments($board, $input['attachments']);
+        }
+
         $v->check();
 
         $id = $this->posts->create($data);
@@ -166,6 +178,10 @@ final class PostService
         if (array_key_exists('is_notice', $input)) {
             $acl->assertAdminFor($board);
             $data['is_notice'] = $v->bool('is_notice', false) ? 1 : 0;
+        }
+
+        if (array_key_exists('attachments', $input)) {
+            $data['attachments'] = $this->verifyAttachments($board, $input['attachments']);
         }
 
         $v->check();
@@ -225,6 +241,26 @@ final class PostService
         }
 
         return $board;
+    }
+
+    private function verifyAttachments(array $board, $input): array
+    {
+        if (!is_array($input)) {
+            throw ApiError::validation(['attachments' => '배열이어야 합니다.']);
+        }
+        if ($input !== [] && (int) $board['use_file'] !== 1) {
+            throw ApiError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
+        }
+        if ($this->attachments === null) {
+            throw ApiError::internal('첨부 서비스가 연결되지 않았습니다.');
+        }
+
+        $verified = [];
+        foreach ($input as $descriptor) {
+            $verified[] = $this->attachments->verify(is_array($descriptor) ? $descriptor : []);
+        }
+
+        return $verified;
     }
 
     private function validateCategory(Validator $v, array $board, array $input): ?string

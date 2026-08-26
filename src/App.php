@@ -13,6 +13,7 @@ use StandardBoard\Http\Router;
 use StandardBoard\Repository\BoardRepository;
 use StandardBoard\Repository\CommentRepository;
 use StandardBoard\Repository\PostRepository;
+use StandardBoard\Service\AttachmentService;
 use StandardBoard\Service\AuthService;
 use StandardBoard\Service\BoardService;
 use StandardBoard\Service\CommentService;
@@ -50,6 +51,9 @@ final class App
 
     /** @var CommentService|null */
     private $commentService = null;
+
+    /** @var AttachmentService|null */
+    private $attachmentService = null;
 
     public function __construct(array $config)
     {
@@ -137,9 +141,27 @@ final class App
     {
         if ($this->postService === null) {
             $this->postService = new PostService($this->boardService(), $this->posts());
+            // attachments() 가 다시 postService() 를 부르므로 여기서 호출하면 무한 재귀가 된다.
+            // 첨부가 필요한 시점에 attachments() 가 setAttachmentService() 로 연결한다.
         }
 
         return $this->postService;
+    }
+
+    public function attachments(): AttachmentService
+    {
+        if ($this->attachmentService === null) {
+            $this->attachmentService = new AttachmentService(
+                $this->boardService(),
+                $this->postService(),
+                $this->posts(),
+                (array) $this->config('uploads', []),
+                (string) $this->config('auth.secret', '')
+            );
+            $this->postService()->setAttachmentService($this->attachmentService);
+        }
+
+        return $this->attachmentService;
     }
 
     public function commentService(): CommentService

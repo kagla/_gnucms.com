@@ -64,6 +64,7 @@ final class Routes
         });
 
         $router->post('/boards/{key}/posts', static function (Request $request, array $params) use ($app): Response {
+            $app->attachments();
             $post = $app->postService()->create($app->aclFor($request), $params['key'], $request->body());
 
             return Response::json(['data' => $post], 201);
@@ -81,6 +82,7 @@ final class Routes
         });
 
         $router->patch('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $app->attachments();
             $post = $app->postService()->update($app->aclFor($request), (int) $params['id'], $request->body());
 
             return Response::json(['data' => $post]);
@@ -134,6 +136,35 @@ final class Routes
             );
 
             return Response::json([], 204);
+        });
+
+        $router->post('/uploads', static function (Request $request, array $params) use ($app): Response {
+            $boardKey = (string) $request->input('board_key', '');
+            $files = $request->files();
+            if (!isset($files['file'])) {
+                throw \StandardBoard\Http\ApiError::validation(['file' => '파일이 없습니다.']);
+            }
+
+            return Response::json(['data' => $app->attachments()->upload(
+                $app->aclFor($request),
+                $boardKey,
+                $files['file']
+            )], 201);
+        });
+
+        $router->get('/posts/{id}/files/{index}', static function (Request $request, array $params) use ($app) {
+            $password = $request->input('password');
+
+            return $app->attachments()->download(
+                $app->aclFor($request),
+                (int) $params['id'],
+                (int) $params['index'],
+                $password === null ? null : (string) $password
+            );
+        });
+
+        $router->post('/maintenance/gc', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(['data' => $app->attachments()->collectGarbage($app->aclFor($request))]);
         });
     }
 }

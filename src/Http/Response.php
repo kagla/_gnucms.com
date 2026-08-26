@@ -6,7 +6,7 @@ namespace StandardBoard\Http;
 
 use StandardBoard\Support\Json;
 
-final class Response
+final class Response implements ResponseInterface
 {
     /** @var array */
     private $payload;
@@ -42,7 +42,7 @@ final class Response
         ], $error->status(), []);
     }
 
-    public function withHeaders(array $headers): self
+    public function withHeaders(array $headers): ResponseInterface
     {
         return new self($this->payload, $this->status, array_merge($this->headers, $headers));
     }
