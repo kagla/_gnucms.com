@@ -453,8 +453,11 @@ namespace StandardBoard\Http;
 use RuntimeException;
 
 /**
- * 클라이언트에게 그대로 보여줄 수 있는 오류. 이 예외가 아닌 모든 예외는
- * 프론트 컨트롤러에서 INTERNAL 로 변환되고 원문은 로그에만 남는다.
+ * 코드와 HTTP 상태를 갖는 도메인 예외.
+ *
+ * INTERNAL 을 뺀 다섯 코드의 메시지는 클라이언트에게 그대로 보여줘도 된다.
+ * INTERNAL 의 메시지에는 SQL 원문 같은 내부 사정이 담기므로 응답으로 나가지 않는다 —
+ * Response::fromError() 가 일반 문구로 바꾸고, 프론트 컨트롤러가 원문을 로그에 남긴다.
  */
 final class ApiError extends RuntimeException
 {
@@ -829,7 +832,12 @@ interface DialectInterface
     /** CREATE TABLE 뒤에 붙는 문자열. MySQL 만 엔진/문자셋이 필요하다. */
     public function tableSuffix(): string;
 
-    /** PostgreSQL 만 시퀀스 이름이 필요하다. */
+    /**
+     * PostgreSQL 만 시퀀스 이름이 필요하다.
+     *
+     * 시퀀스 이름을 `{테이블}_id_seq` 로 조립하므로 모든 테이블의 기본키 컬럼명이
+     * `id` 여야 한다. 이 프로젝트의 스키마는 그 관례를 지킨다.
+     */
     public function lastInsertId(PDO $pdo, string $table): string;
 
     /** 접속 직후 세션 설정. 시간대를 UTC 로 맞추는 것이 목적이다. */
@@ -4289,6 +4297,8 @@ final class Response
 
 `fromError()` 가 `INTERNAL` 일 때만 메시지를 감추는 이유: 나머지 다섯 코드는 전부 클라이언트가 알아야 고칠 수 있는 오류이므로 원문이 그대로 유용하다. `INTERNAL` 만 내부 사정을 담고 있다.
 
+감추는 것과 짝을 이루는 것이 로그다. `Connection` 은 DB 오류를 `ApiError::internal` 에 SQL 원문과 함께 담는데, 응답에서 그 문구가 지워지므로 로그에 남기지 않으면 단서가 통째로 사라진다. 그래서 프론트 컨트롤러는 `ApiError` 라도 코드가 `INTERNAL` 이면 로그에 남긴다. 나머지 다섯 코드는 클라이언트 잘못이므로 로그를 오염시키지 않는다.
+
 `src/Http/Cors.php`:
 
 ```php
@@ -4756,20 +4766,30 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'OPTIONS') {
     exit;
 }
 
+$logError = static function (Throwable $e) use ($config): void {
+    if (!isset($config['log']['file'])) {
+        return;
+    }
+    @error_log(
+        '[' . gmdate('Y-m-d H:i:s') . '] ' . get_class($e) . ': ' . $e->getMessage()
+            . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL,
+        3,
+        (string) $config['log']['file']
+    );
+};
+
 try {
     $app = new App($config);
     $response = $app->router()->dispatch(Request::fromGlobals());
 } catch (ApiError $e) {
+    // INTERNAL 의 메시지는 응답에서 일반 문구로 바뀐다. 로그에 남기지 않으면
+    // SQL 원문 같은 유일한 단서가 아무 데도 남지 않고 사라진다.
+    if ($e->code() === 'INTERNAL') {
+        $logError($e);
+    }
     $response = Response::fromError($e, $debug);
 } catch (Throwable $e) {
-    if (isset($config['log']['file'])) {
-        @error_log(
-            '[' . gmdate('Y-m-d H:i:s') . '] ' . get_class($e) . ': ' . $e->getMessage()
-                . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL,
-            3,
-            (string) $config['log']['file']
-        );
-    }
+    $logError($e);
     $response = Response::fromError(ApiError::internal($e->getMessage()), $debug);
 }
 
