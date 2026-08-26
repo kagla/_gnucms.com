@@ -92,10 +92,12 @@ DDL 에서 다음 세 자리만 방언별로 치환한다.
 | `{DATETIME}` | `TEXT` | `DATETIME` | `TIMESTAMP` |
 | `{TEXT}` | `TEXT` | `LONGTEXT` | `TEXT` |
 
-그 외 방언 차이는 두 가지뿐이다.
+그 외 방언 차이는 네 가지뿐이다.
 
 - 식별자 인용: SQLite/PG 는 `"x"`, MySQL 은 `` `x` ``
 - `lastInsertId()`: PG 만 시퀀스 이름이 필요하다 (`posts_id_seq`)
+- `CREATE TABLE` 뒤에 붙는 문자열: MySQL 만 엔진/문자셋이 필요하다 (`ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`)
+- 접속 직후 세션 설정: 시간대를 UTC 로 맞추고, MySQL 은 잘림을 오류로 만든다 (`STRICT_ALL_TABLES`)
 
 날짜는 항상 UTC `Y-m-d H:i:s` 문자열로 저장한다. 세 DB 모두 이 형식을 사전순 정렬해도
 시간순과 일치하므로 `ORDER BY created_at` 이 안전하다.
@@ -279,7 +281,7 @@ GET    /boards/{key}
 PATCH  /boards/{key}                설정 변경            (전역 관리자)
 DELETE /boards/{key}                                    (전역 관리자)
 
-GET    /boards/{key}/posts          ?page&per_page&q&category
+GET    /boards/{key}/posts          ?page&per_page&q&category&include_deleted
 POST   /boards/{key}/posts
 GET    /posts/{id}                  본문 + 첨부 목록
 PATCH  /posts/{id}
@@ -307,6 +309,11 @@ POST   /maintenance/gc              고아 첨부 정리      (전역 관리자)
 ```
 
 공지는 페이지와 무관하게 항상 목록 상단에 별도로 붙는다. `total` 에는 포함하지 않는다.
+
+목록은 기본적으로 삭제된 글을 뺀다. 관리자가 `include_deleted=1` 을 주면 포함하며, 항목에
+`deleted: true` 가 붙는다. 관리자 화면의 복구 기능이 이것에 의존한다 — 삭제한 글을 다시 볼
+방법이 없으면 복구 엔드포인트에 도달할 수단이 없다. 관리 권한이 없는 요청자가 이 값을 주면
+오류가 아니라 조용히 무시한다.
 
 검색 `q` 는 제목과 본문에 대한 `LIKE '%...%'` 다. MySQL `MATCH AGAINST` 나 PG `tsvector` 는
 이식되지 않고 저가 호스팅에서 인덱스를 만들 권한도 불확실하므로 쓰지 않는다. `%` 와 `_` 는 이스케이프한다.

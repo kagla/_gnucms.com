@@ -1,0 +1,8832 @@
+# 표준 게시판 (standard-board) 구현 계획
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** SQLite/MySQL/PostgreSQL 어디서나 동작하고, 저가형 공유 호스팅에 폴더째 올리면 도는, 무한 게시판·무한 댓글을 지원하는 JSON API 게시판과 그 관리자 화면을 만든다.
+
+**Architecture:** PDO 위에 얇은 래퍼를 두고 방언 차이는 `Dialect` 3종이 흡수한다. SQL 은 세 DB 공통 문법으로만 쓴다. 계층은 `Http -> Service -> Repository -> Connection` 이며 Repository 는 배열만 주고받고 Service 는 SQL 을 모른다. 인증은 호스트 앱이 발급한 HS256 JWT 를 검증만 하고, 게시판은 사용자 저장소를 갖지 않는다.
+
+**Tech Stack:** PHP 7.4+, PDO(sqlite/mysql/pgsql), PHPUnit 9 (개발 전용), vanilla JS (관리자 화면)
+
+**Spec:** `docs/superpowers/specs/2026-08-26-standard-board-design.md`
+
+## Global Constraints
+
+이 절의 제약은 **모든 태스크의 요구사항에 암묵적으로 포함된다.**
+
+- **PHP 7.4 에서 동작해야 한다.** `enum`, `readonly`, 생성자 프로퍼티 승격, `match`, nullsafe 연산자(`?->`), 유니온 타입을 쓰지 않는다. 화살표 함수(`fn()`), 타입 프로퍼티, 스프레드, `??=` 는 7.4 에 있으므로 써도 된다.
+- **런타임 의존성 0.** `composer.json` 의 `require` 에는 `php` 만 있다. PHPUnit 은 `require-dev` 다. 배포물에 `vendor/` 가 포함되지 않는다.
+- **오토로딩은 `src/autoload.php` 하나로 한다.** Composer 오토로더는 `StandardBoard\` 를 매핑하지 않는다. 테스트도 배포물과 같은 오토로더를 쓴다.
+- **MySQL 5.7 을 지원한다.** 재귀 CTE(`WITH RECURSIVE`), `JSON` 컬럼 타입, JSON 함수(`JSON_EXTRACT` 등), 윈도 함수를 쓰지 않는다.
+- **SQL 은 세 DB 공통 문법으로만 쓴다.** 방언 차이는 `Dialect` 를 통해서만 표현한다. `LIMIT ? OFFSET ?` 는 공통이므로 그대로 쓴다.
+- **모든 날짜는 UTC `Y-m-d H:i:s` 문자열이다.** 시각은 언제나 `StandardBoard\Support\Clock::now()` 로 얻는다. `date()`, `time()`, `new DateTime()` 을 직접 호출하지 않는다.
+- **모든 PHP 파일은 `declare(strict_types=1);` 로 시작한다.**
+- **네임스페이스는 `StandardBoard\`, 경로는 `src/` 아래 PSR-4 규칙을 따른다.**
+- **모든 오류 응답은 `{"error":{"code":"...","message":"...","details":{}}}` 형태다.** 코드는 `UNAUTHORIZED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404), `VALIDATION_FAILED`(422), `PAYLOAD_TOO_LARGE`(413), `INTERNAL`(500) 여섯 개뿐이다.
+- **`guest_password` 는 어떤 응답에도 포함되지 않는다.** Repository 의 기본 SELECT 컬럼 목록에서 제외한다.
+- **커밋 메시지는 한국어 본문, 영어 접두사(`feat:`, `test:`, `docs:`, `fix:`, `refactor:`)를 쓴다.**
+
+## 테스트 실행 방법
+
+```bash
+composer install                 # 최초 1회
+vendor/bin/phpunit               # SQLite 로만 실행 (기본)
+
+# 세 DB 전부 검증
+TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=board_test;charset=utf8mb4' \
+TEST_MYSQL_USER=root TEST_MYSQL_PASS=secret \
+TEST_PGSQL_DSN='pgsql:host=127.0.0.1;dbname=board_test' \
+TEST_PGSQL_USER=postgres TEST_PGSQL_PASS=secret \
+vendor/bin/phpunit
+```
+
+MySQL/PostgreSQL 환경변수가 없으면 그 DB 케이스는 조용히 건너뛴다. CI 가 없는 상태를 가정하므로 로컬에서 셋 다 켜고 한 번씩 돌리는 것이 릴리스 조건이다.
+
+## File Structure
+
+| 파일 | 책임 |
+|---|---|
+| `src/autoload.php` | PSR-4 오토로더. 배포물이 쓰는 유일한 오토로더 |
+| `src/Support/Clock.php` | UTC 시각 발급. 테스트에서 고정 가능 |
+| `src/Support/Json.php` | JSON 인코딩/디코딩 + 실패 시 예외 |
+| `src/Http/ApiError.php` | 도메인 전역 예외. code/status/details 를 갖는다 |
+| `src/Db/Dialect/DialectInterface.php` | 방언 계약 |
+| `src/Db/Dialect/{Sqlite,Mysql,Pgsql}Dialect.php` | 타입 치환자, 식별자 인용, lastInsertId, 접속 후 세션 설정 |
+| `src/Db/DialectFactory.php` | DSN 스킴 -> Dialect |
+| `src/Db/Connection.php` | PDO 래퍼. select/insert/update/execute/transaction |
+| `src/Db/Schema.php` | DDL 생성과 삭제 |
+| `src/Repository/BoardRepository.php` | boards CRUD. JSON 컬럼 인코딩/디코딩 |
+| `src/Repository/PostRepository.php` | posts CRUD, 페이징, 검색, 공지, 소프트 삭제 |
+| `src/Repository/CommentRepository.php` | comments CRUD |
+| `src/Comment/TreeBuilder.php` | 평면 행 목록 -> 중첩 트리. 재귀 없음 |
+| `src/Auth/Identity.php` | 요청자 신원 (sub, name, admin) |
+| `src/Auth/TokenIssuer.php` | HS256 JWT 발급 |
+| `src/Auth/TokenVerifier.php` | HS256 JWT 검증 -> Identity |
+| `src/Auth/Acl.php` | 권한 판정 5분기 |
+| `src/Http/Request.php` | 슈퍼글로벌 -> 값 객체 |
+| `src/Http/Response.php` | JSON 출력 |
+| `src/Http/Router.php` | 경로 패턴 매칭과 디스패치 |
+| `src/App.php` | 설정 -> 객체 그래프 조립 |
+| `src/Service/BoardService.php` | 게시판 업무 규칙 |
+| `src/Service/PostService.php` | 글 업무 규칙 |
+| `src/Service/CommentService.php` | 댓글 업무 규칙 |
+| `src/Service/AttachmentService.php` | 업로드 저장, 서명, 다운로드, 고아 정리 |
+| `src/Service/AuthService.php` | 부트스트랩 관리자 로그인 |
+| `src/Validation/Validator.php` | 필드 검증. 실패 시 VALIDATION_FAILED |
+| `public/index.php` | API 프론트 컨트롤러 |
+| `public/admin.php` | 관리자 화면 |
+| `public/install.php` | 설치 마법사 |
+| `config/config.sample.php` | 설정 샘플 |
+
+---
+
+### Task 1: 프로젝트 뼈대, 오토로더, Clock, ApiError
+
+**Files:**
+- Create: `composer.json`, `phpunit.xml.dist`, `src/autoload.php`, `tests/bootstrap.php`
+- Create: `src/Support/Clock.php`, `src/Support/Json.php`, `src/Http/ApiError.php`
+- Create: `config/config.sample.php`, `storage/uploads/.gitkeep`, `storage/logs/.gitkeep`
+- Modify: `.gitignore`
+- Test: `tests/Support/ClockTest.php`, `tests/Support/JsonTest.php`, `tests/Http/ApiErrorTest.php`
+
+**Interfaces:**
+- Consumes: 없음 (첫 태스크)
+- Produces:
+  - `StandardBoard\Support\Clock::now(): string` — UTC `Y-m-d H:i:s`
+  - `StandardBoard\Support\Clock::timestamp(): int`
+  - `StandardBoard\Support\Clock::freeze(string $utc): void` / `unfreeze(): void`
+  - `StandardBoard\Support\Json::encode($value): string` / `decode(string $json): array`
+  - `StandardBoard\Http\ApiError` — `__construct(string $code, string $message, int $status, array $details = [])`, `code(): string`, `status(): int`, `details(): array`
+  - `ApiError::unauthorized($m)`, `forbidden($m)`, `notFound($m)`, `validation(array $details)`, `tooLarge($m)`, `internal($m)`
+
+- [ ] **Step 1: 뼈대 파일을 만든다**
+
+`composer.json`:
+
+```json
+{
+    "name": "kagla/standard-board",
+    "description": "DB 무관 표준 게시판 API",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "StandardBoard\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
+```
+
+`autoload` 에 `StandardBoard\` 가 없는 것은 실수가 아니다. 배포물이 쓰는 `src/autoload.php` 로만 로드해야 그 파일이 깨졌을 때 테스트가 잡아낸다.
+
+`src/autoload.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'StandardBoard\\';
+    $length = strlen($prefix);
+    if (strncmp($class, $prefix, $length) !== 0) {
+        return;
+    }
+    $relative = substr($class, $length);
+    $path = __DIR__ . '/' . str_replace('\\', '/', $relative) . '.php';
+    if (is_file($path)) {
+        require $path;
+    }
+});
+```
+
+`tests/bootstrap.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../src/autoload.php';
+```
+
+`phpunit.xml.dist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheResultFile=".phpunit.cache/result.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="all">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
+```
+
+`.gitignore` 에 두 줄 추가:
+
+```
+/.phpunit.cache/
+/phpunit.xml
+```
+
+빈 디렉터리 유지:
+
+```bash
+mkdir -p storage/uploads storage/logs
+touch storage/uploads/.gitkeep storage/logs/.gitkeep
+composer install
+```
+
+- [ ] **Step 2: 실패하는 테스트를 쓴다**
+
+`tests/Support/ClockTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Support;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Support\Clock;
+
+final class ClockTest extends TestCase
+{
+    protected function tearDown(): void
+    {
+        Clock::unfreeze();
+    }
+
+    public function testNowReturnsSortableUtcFormat(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/',
+            Clock::now()
+        );
+    }
+
+    public function testNowIsUtcNotLocalTime(): void
+    {
+        $previous = date_default_timezone_get();
+        date_default_timezone_set('Asia/Seoul');
+        try {
+            $this->assertSame(gmdate('Y-m-d H:i'), substr(Clock::now(), 0, 16));
+        } finally {
+            date_default_timezone_set($previous);
+        }
+    }
+
+    public function testFreezeMakesTimeDeterministic(): void
+    {
+        Clock::freeze('2026-08-26 01:02:03');
+
+        $this->assertSame('2026-08-26 01:02:03', Clock::now());
+        $this->assertSame('2026-08-26 01:02:03', gmdate('Y-m-d H:i:s', Clock::timestamp()));
+    }
+
+    public function testUnfreezeRestoresRealTime(): void
+    {
+        Clock::freeze('2000-01-01 00:00:00');
+        Clock::unfreeze();
+
+        $this->assertNotSame('2000-01-01 00:00:00', Clock::now());
+    }
+}
+```
+
+`tests/Support/JsonTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Support;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Support\Json;
+
+final class JsonTest extends TestCase
+{
+    public function testEncodeKeepsKoreanUnescaped(): void
+    {
+        $this->assertSame('{"name":"홍길동"}', Json::encode(['name' => '홍길동']));
+    }
+
+    public function testEncodeKeepsSlashesUnescaped(): void
+    {
+        $this->assertSame('{"url":"/posts/1"}', Json::encode(['url' => '/posts/1']));
+    }
+
+    public function testDecodeReturnsArray(): void
+    {
+        $this->assertSame(['a' => 1], Json::decode('{"a":1}'));
+    }
+
+    public function testDecodeEmptyStringReturnsEmptyArray(): void
+    {
+        $this->assertSame([], Json::decode(''));
+    }
+
+    public function testDecodeInvalidJsonThrows(): void
+    {
+        $this->expectException(ApiError::class);
+        Json::decode('{not json');
+    }
+}
+```
+
+`tests/Http/ApiErrorTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Http;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Http\ApiError;
+
+final class ApiErrorTest extends TestCase
+{
+    public function testFactoriesCarryCodeAndStatus(): void
+    {
+        $this->assertSame(401, ApiError::unauthorized('로그인이 필요합니다.')->status());
+        $this->assertSame('UNAUTHORIZED', ApiError::unauthorized('x')->code());
+        $this->assertSame(403, ApiError::forbidden('x')->status());
+        $this->assertSame(404, ApiError::notFound('x')->status());
+        $this->assertSame(413, ApiError::tooLarge('x')->status());
+        $this->assertSame(500, ApiError::internal('x')->status());
+    }
+
+    public function testValidationCarriesFieldDetails(): void
+    {
+        $error = ApiError::validation(['title' => '필수 항목입니다.']);
+
+        $this->assertSame('VALIDATION_FAILED', $error->code());
+        $this->assertSame(422, $error->status());
+        $this->assertSame(['title' => '필수 항목입니다.'], $error->details());
+    }
+}
+```
+
+- [ ] **Step 3: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit`
+Expected: FAIL — `Class "StandardBoard\Support\Clock" not found` 등 3개 파일 모두 클래스 없음
+
+- [ ] **Step 4: 최소 구현을 쓴다**
+
+`src/Support/Clock.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Support;
+
+/**
+ * 모든 시각의 단일 출처. 저장 형식은 UTC 'Y-m-d H:i:s' 문자열이며,
+ * 세 DB 모두 이 형식을 사전순 정렬해도 시간순과 일치한다.
+ */
+final class Clock
+{
+    /** @var string|null 테스트에서 고정한 시각 */
+    private static $frozen = null;
+
+    public static function now(): string
+    {
+        if (self::$frozen !== null) {
+            return self::$frozen;
+        }
+
+        return gmdate('Y-m-d H:i:s');
+    }
+
+    public static function timestamp(): int
+    {
+        if (self::$frozen !== null) {
+            return (int) strtotime(self::$frozen . ' UTC');
+        }
+
+        return time();
+    }
+
+    public static function freeze(string $utc): void
+    {
+        self::$frozen = $utc;
+    }
+
+    public static function unfreeze(): void
+    {
+        self::$frozen = null;
+    }
+}
+```
+
+`src/Support/Json.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Support;
+
+use StandardBoard\Http\ApiError;
+
+final class Json
+{
+    /**
+     * @param mixed $value
+     */
+    public static function encode($value): string
+    {
+        $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw ApiError::internal('JSON 인코딩에 실패했습니다: ' . json_last_error_msg());
+        }
+
+        return $json;
+    }
+
+    public static function decode(string $json): array
+    {
+        if (trim($json) === '') {
+            return [];
+        }
+
+        $value = json_decode($json, true);
+        if (!is_array($value)) {
+            throw ApiError::validation(['body' => '올바른 JSON 이 아닙니다.']);
+        }
+
+        return $value;
+    }
+}
+```
+
+`src/Http/ApiError.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+use RuntimeException;
+
+/**
+ * 클라이언트에게 그대로 보여줄 수 있는 오류. 이 예외가 아닌 모든 예외는
+ * 프론트 컨트롤러에서 INTERNAL 로 변환되고 원문은 로그에만 남는다.
+ */
+final class ApiError extends RuntimeException
+{
+    /** @var string */
+    private $code;
+
+    /** @var int */
+    private $status;
+
+    /** @var array */
+    private $details;
+
+    public function __construct(string $code, string $message, int $status, array $details = [])
+    {
+        parent::__construct($message);
+        $this->code = $code;
+        $this->status = $status;
+        $this->details = $details;
+    }
+
+    public function code(): string
+    {
+        return $this->code;
+    }
+
+    public function status(): int
+    {
+        return $this->status;
+    }
+
+    public function details(): array
+    {
+        return $this->details;
+    }
+
+    public static function unauthorized(string $message): self
+    {
+        return new self('UNAUTHORIZED', $message, 401);
+    }
+
+    public static function forbidden(string $message): self
+    {
+        return new self('FORBIDDEN', $message, 403);
+    }
+
+    public static function notFound(string $message): self
+    {
+        return new self('NOT_FOUND', $message, 404);
+    }
+
+    public static function validation(array $details): self
+    {
+        return new self('VALIDATION_FAILED', '입력값을 확인해 주세요.', 422, $details);
+    }
+
+    public static function tooLarge(string $message): self
+    {
+        return new self('PAYLOAD_TOO_LARGE', $message, 413);
+    }
+
+    public static function internal(string $message): self
+    {
+        return new self('INTERNAL', $message, 500);
+    }
+}
+```
+
+- [ ] **Step 5: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit`
+Expected: PASS — `OK (12 tests, ...)`
+
+- [ ] **Step 6: 설정 샘플을 만든다**
+
+`config/config.sample.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    // DSN 은 sqlite: / mysql: / pgsql: 중 하나로 시작한다.
+    'db' => [
+        'dsn'      => 'sqlite:' . __DIR__ . '/../storage/board.sqlite',
+        'username' => null,
+        'password' => null,
+    ],
+
+    // 호스트 앱과 공유하는 시크릿. 32바이트 이상 임의 문자열.
+    'auth' => [
+        'secret' => 'CHANGE-ME-32-BYTES-OR-LONGER-RANDOM-STRING',
+        'ttl'    => 3600,
+        'leeway' => 60,
+    ],
+
+    // 호스트 앱을 붙인 뒤에는 null 로 두어 이 경로를 닫는다.
+    'bootstrap_admin' => [
+        'id'            => 'root',
+        'password_hash' => '',
+    ],
+
+    'uploads' => [
+        'dir'         => __DIR__ . '/../storage/uploads',
+        'max_bytes'   => 5 * 1024 * 1024,
+        'allowed_ext' => [
+            'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'txt',
+            'hwp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        ],
+    ],
+
+    'log' => [
+        'file' => __DIR__ . '/../storage/logs/error.log',
+    ],
+
+    // true 로 두면 오류 응답에 원문 메시지가 포함된다. 운영에서는 반드시 false.
+    'debug' => false,
+];
+```
+
+- [ ] **Step 7: 커밋한다**
+
+```bash
+git add composer.json composer.lock phpunit.xml.dist src tests config .gitignore storage
+git commit -m "feat: 프로젝트 뼈대와 Clock/Json/ApiError 기반 클래스
+
+배포물이 쓰는 오토로더로 테스트도 돌리도록 composer 오토로드에서
+StandardBoard 네임스페이스를 일부러 제외한다."
+```
+
+---
+
+### Task 2: 방언 계층과 Connection
+
+**Files:**
+- Create: `src/Db/Dialect/DialectInterface.php`, `src/Db/Dialect/SqliteDialect.php`, `src/Db/Dialect/MysqlDialect.php`, `src/Db/Dialect/PgsqlDialect.php`
+- Create: `src/Db/DialectFactory.php`, `src/Db/Connection.php`
+- Test: `tests/Db/DialectFactoryTest.php`, `tests/Db/ConnectionTest.php`
+
+**Interfaces:**
+- Consumes: `Clock`, `ApiError` (Task 1)
+- Produces:
+  - `DialectInterface::name(): string`, `quoteIdentifier(string $name): string`, `typeMap(): array`, `tableSuffix(): string`, `lastInsertId(\PDO $pdo, string $table): string`, `afterConnect(\PDO $pdo): void`
+  - `DialectFactory::fromDsn(string $dsn): DialectInterface`
+  - `Connection::create(array $dbConfig): Connection`
+  - `Connection::pdo(): \PDO`, `dialect(): DialectInterface`, `q(string $identifier): string`
+  - `Connection::select(string $sql, array $params = []): array`
+  - `Connection::selectOne(string $sql, array $params = []): ?array`
+  - `Connection::execute(string $sql, array $params = []): int`
+  - `Connection::insert(string $table, array $data): string`
+  - `Connection::update(string $table, array $data, string $where, array $whereParams = []): int`
+  - `Connection::delete(string $table, string $where, array $whereParams = []): int`
+  - `Connection::transaction(callable $fn)`
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Db/DialectFactoryTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Db;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Db\DialectFactory;
+use StandardBoard\Http\ApiError;
+
+final class DialectFactoryTest extends TestCase
+{
+    public function testResolvesSqlite(): void
+    {
+        $this->assertSame('sqlite', DialectFactory::fromDsn('sqlite::memory:')->name());
+    }
+
+    public function testResolvesMysql(): void
+    {
+        $this->assertSame('mysql', DialectFactory::fromDsn('mysql:host=localhost;dbname=b')->name());
+    }
+
+    public function testResolvesPgsql(): void
+    {
+        $this->assertSame('pgsql', DialectFactory::fromDsn('pgsql:host=localhost;dbname=b')->name());
+    }
+
+    public function testUnknownDriverThrows(): void
+    {
+        $this->expectException(ApiError::class);
+        DialectFactory::fromDsn('oracle:host=localhost');
+    }
+
+    public function testQuotingDiffersPerDialect(): void
+    {
+        $this->assertSame('"posts"', DialectFactory::fromDsn('sqlite::memory:')->quoteIdentifier('posts'));
+        $this->assertSame('`posts`', DialectFactory::fromDsn('mysql:host=h')->quoteIdentifier('posts'));
+        $this->assertSame('"posts"', DialectFactory::fromDsn('pgsql:host=h')->quoteIdentifier('posts'));
+    }
+
+    public function testEveryDialectDefinesAllTypePlaceholders(): void
+    {
+        foreach (['sqlite::memory:', 'mysql:host=h', 'pgsql:host=h'] as $dsn) {
+            $map = DialectFactory::fromDsn($dsn)->typeMap();
+            $this->assertArrayHasKey('{AUTO_PK}', $map, $dsn);
+            $this->assertArrayHasKey('{DATETIME}', $map, $dsn);
+            $this->assertArrayHasKey('{TEXT}', $map, $dsn);
+        }
+    }
+
+    public function testIdentifierWithQuoteCharacterIsRejected(): void
+    {
+        $this->expectException(ApiError::class);
+        DialectFactory::fromDsn('mysql:host=h')->quoteIdentifier('posts`; DROP TABLE posts; --');
+    }
+}
+```
+
+`tests/Db/ConnectionTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Db;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Db\Connection;
+use StandardBoard\Http\ApiError;
+
+final class ConnectionTest extends TestCase
+{
+    /** @var Connection */
+    private $db;
+
+    protected function setUp(): void
+    {
+        $this->db = Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]);
+        $types = $this->db->dialect()->typeMap();
+        $this->db->execute(
+            'CREATE TABLE widgets (id ' . $types['{AUTO_PK}'] . ', name VARCHAR(50) NOT NULL, qty INTEGER NOT NULL DEFAULT 0)'
+        );
+    }
+
+    public function testInsertReturnsGeneratedId(): void
+    {
+        $id = $this->db->insert('widgets', ['name' => '가', 'qty' => 1]);
+
+        $this->assertSame('1', $id);
+    }
+
+    public function testSelectOneReturnsAssociativeRow(): void
+    {
+        $this->db->insert('widgets', ['name' => '나', 'qty' => 7]);
+
+        $row = $this->db->selectOne('SELECT * FROM widgets WHERE name = ?', ['나']);
+
+        $this->assertSame('나', $row['name']);
+        $this->assertSame(7, (int) $row['qty']);
+    }
+
+    public function testSelectOneReturnsNullWhenMissing(): void
+    {
+        $this->assertNull($this->db->selectOne('SELECT * FROM widgets WHERE id = ?', [999]));
+    }
+
+    public function testNamedParametersWork(): void
+    {
+        $this->db->insert('widgets', ['name' => '다', 'qty' => 3]);
+
+        $row = $this->db->selectOne('SELECT * FROM widgets WHERE name = :name', ['name' => '다']);
+
+        $this->assertSame('다', $row['name']);
+    }
+
+    public function testUpdateReturnsAffectedRowCount(): void
+    {
+        $this->db->insert('widgets', ['name' => '라', 'qty' => 1]);
+        $this->db->insert('widgets', ['name' => '마', 'qty' => 1]);
+
+        $affected = $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
+
+        $this->assertSame(2, $affected);
+    }
+
+    public function testNullValuesRoundTrip(): void
+    {
+        $this->db->execute('ALTER TABLE widgets ADD COLUMN note VARCHAR(20) NULL');
+        $this->db->insert('widgets', ['name' => '바', 'qty' => 0, 'note' => null]);
+
+        $row = $this->db->selectOne('SELECT note FROM widgets WHERE name = ?', ['바']);
+
+        $this->assertNull($row['note']);
+    }
+
+    public function testTransactionCommitsOnSuccess(): void
+    {
+        $this->db->transaction(function (Connection $db): void {
+            $db->insert('widgets', ['name' => '사', 'qty' => 1]);
+        });
+
+        $this->assertNotNull($this->db->selectOne('SELECT id FROM widgets WHERE name = ?', ['사']));
+    }
+
+    public function testTransactionRollsBackOnException(): void
+    {
+        try {
+            $this->db->transaction(function (Connection $db): void {
+                $db->insert('widgets', ['name' => '아', 'qty' => 1]);
+                throw ApiError::internal('일부러 실패');
+            });
+            $this->fail('예외가 전파되어야 한다');
+        } catch (ApiError $e) {
+            // 기대한 경로
+        }
+
+        $this->assertNull($this->db->selectOne('SELECT id FROM widgets WHERE name = ?', ['아']));
+    }
+
+    public function testSyntaxErrorBecomesInternalApiError(): void
+    {
+        $this->expectException(ApiError::class);
+        $this->db->select('SELECT * FROM no_such_table');
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Db`
+Expected: FAIL — `Class "StandardBoard\Db\DialectFactory" not found`
+
+- [ ] **Step 3: 방언을 구현한다**
+
+`src/Db/Dialect/DialectInterface.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db\Dialect;
+
+use PDO;
+
+interface DialectInterface
+{
+    /** 'sqlite' | 'mysql' | 'pgsql' */
+    public function name(): string;
+
+    /** 식별자를 방언에 맞게 인용한다. 인용 문자가 섞인 이름은 거부한다. */
+    public function quoteIdentifier(string $name): string;
+
+    /** DDL 치환자 -> 실제 타입. 키는 {AUTO_PK}, {DATETIME}, {TEXT} */
+    public function typeMap(): array;
+
+    /** CREATE TABLE 뒤에 붙는 문자열. MySQL 만 엔진/문자셋이 필요하다. */
+    public function tableSuffix(): string;
+
+    /** PostgreSQL 만 시퀀스 이름이 필요하다. */
+    public function lastInsertId(PDO $pdo, string $table): string;
+
+    /** 접속 직후 세션 설정. 시간대를 UTC 로 맞추는 것이 목적이다. */
+    public function afterConnect(PDO $pdo): void;
+}
+```
+
+`src/Db/Dialect/SqliteDialect.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db\Dialect;
+
+use PDO;
+use StandardBoard\Http\ApiError;
+
+final class SqliteDialect implements DialectInterface
+{
+    public function name(): string
+    {
+        return 'sqlite';
+    }
+
+    public function quoteIdentifier(string $name): string
+    {
+        if (strpos($name, '"') !== false) {
+            throw ApiError::internal('식별자에 인용 문자를 쓸 수 없습니다: ' . $name);
+        }
+
+        return '"' . $name . '"';
+    }
+
+    public function typeMap(): array
+    {
+        return [
+            '{AUTO_PK}'  => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+            '{DATETIME}' => 'TEXT',
+            '{TEXT}'     => 'TEXT',
+        ];
+    }
+
+    public function tableSuffix(): string
+    {
+        return '';
+    }
+
+    public function lastInsertId(PDO $pdo, string $table): string
+    {
+        return (string) $pdo->lastInsertId();
+    }
+
+    public function afterConnect(PDO $pdo): void
+    {
+        // 공유 호스팅에서 동시 쓰기 시 즉시 실패하지 않도록 5초 대기한다.
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+    }
+}
+```
+
+`src/Db/Dialect/MysqlDialect.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db\Dialect;
+
+use PDO;
+use StandardBoard\Http\ApiError;
+
+final class MysqlDialect implements DialectInterface
+{
+    public function name(): string
+    {
+        return 'mysql';
+    }
+
+    public function quoteIdentifier(string $name): string
+    {
+        if (strpos($name, '`') !== false) {
+            throw ApiError::internal('식별자에 인용 문자를 쓸 수 없습니다: ' . $name);
+        }
+
+        return '`' . $name . '`';
+    }
+
+    public function typeMap(): array
+    {
+        return [
+            '{AUTO_PK}'  => 'BIGINT AUTO_INCREMENT PRIMARY KEY',
+            '{DATETIME}' => 'DATETIME',
+            '{TEXT}'     => 'LONGTEXT',
+        ];
+    }
+
+    public function tableSuffix(): string
+    {
+        return ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+    }
+
+    public function lastInsertId(PDO $pdo, string $table): string
+    {
+        return (string) $pdo->lastInsertId();
+    }
+
+    public function afterConnect(PDO $pdo): void
+    {
+        // 잘림을 오류로 만들고, 시간대를 UTC 로 고정한다.
+        $pdo->exec("SET SESSION sql_mode = 'STRICT_ALL_TABLES'");
+        $pdo->exec("SET SESSION time_zone = '+00:00'");
+    }
+}
+```
+
+`src/Db/Dialect/PgsqlDialect.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db\Dialect;
+
+use PDO;
+use StandardBoard\Http\ApiError;
+
+final class PgsqlDialect implements DialectInterface
+{
+    public function name(): string
+    {
+        return 'pgsql';
+    }
+
+    public function quoteIdentifier(string $name): string
+    {
+        if (strpos($name, '"') !== false) {
+            throw ApiError::internal('식별자에 인용 문자를 쓸 수 없습니다: ' . $name);
+        }
+
+        return '"' . $name . '"';
+    }
+
+    public function typeMap(): array
+    {
+        return [
+            '{AUTO_PK}'  => 'BIGSERIAL PRIMARY KEY',
+            '{DATETIME}' => 'TIMESTAMP',
+            '{TEXT}'     => 'TEXT',
+        ];
+    }
+
+    public function tableSuffix(): string
+    {
+        return '';
+    }
+
+    public function lastInsertId(PDO $pdo, string $table): string
+    {
+        return (string) $pdo->lastInsertId($table . '_id_seq');
+    }
+
+    public function afterConnect(PDO $pdo): void
+    {
+        $pdo->exec("SET TIME ZONE 'UTC'");
+    }
+}
+```
+
+`src/Db/DialectFactory.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db;
+
+use StandardBoard\Db\Dialect\DialectInterface;
+use StandardBoard\Db\Dialect\MysqlDialect;
+use StandardBoard\Db\Dialect\PgsqlDialect;
+use StandardBoard\Db\Dialect\SqliteDialect;
+use StandardBoard\Http\ApiError;
+
+final class DialectFactory
+{
+    public static function fromDsn(string $dsn): DialectInterface
+    {
+        $driver = strtolower(substr($dsn, 0, (int) strpos($dsn, ':')));
+
+        switch ($driver) {
+            case 'sqlite':
+                return new SqliteDialect();
+            case 'mysql':
+                return new MysqlDialect();
+            case 'pgsql':
+                return new PgsqlDialect();
+        }
+
+        throw ApiError::internal('지원하지 않는 DB 드라이버입니다: ' . $driver);
+    }
+}
+```
+
+- [ ] **Step 4: Connection 을 구현한다**
+
+`src/Db/Connection.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db;
+
+use PDO;
+use PDOException;
+use StandardBoard\Db\Dialect\DialectInterface;
+use StandardBoard\Http\ApiError;
+use Throwable;
+
+/**
+ * PDO 얇은 래퍼. 여기서 쓰는 SQL 은 세 DB 공통 문법이어야 하며,
+ * 방언 차이는 전부 DialectInterface 를 통해서만 표현한다.
+ */
+final class Connection
+{
+    /** @var PDO */
+    private $pdo;
+
+    /** @var DialectInterface */
+    private $dialect;
+
+    private function __construct(PDO $pdo, DialectInterface $dialect)
+    {
+        $this->pdo = $pdo;
+        $this->dialect = $dialect;
+    }
+
+    public static function create(array $dbConfig): self
+    {
+        $dsn = (string) ($dbConfig['dsn'] ?? '');
+        if ($dsn === '') {
+            throw ApiError::internal('db.dsn 설정이 비어 있습니다.');
+        }
+
+        $dialect = DialectFactory::fromDsn($dsn);
+
+        try {
+            $pdo = new PDO(
+                $dsn,
+                $dbConfig['username'] ?? null,
+                $dbConfig['password'] ?? null,
+                [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES   => false,
+                ]
+            );
+        } catch (PDOException $e) {
+            throw ApiError::internal('DB 접속에 실패했습니다: ' . $e->getMessage());
+        }
+
+        $dialect->afterConnect($pdo);
+
+        return new self($pdo, $dialect);
+    }
+
+    public function pdo(): PDO
+    {
+        return $this->pdo;
+    }
+
+    public function dialect(): DialectInterface
+    {
+        return $this->dialect;
+    }
+
+    public function q(string $identifier): string
+    {
+        return $this->dialect->quoteIdentifier($identifier);
+    }
+
+    public function select(string $sql, array $params = []): array
+    {
+        return $this->run($sql, $params)->fetchAll();
+    }
+
+    public function selectOne(string $sql, array $params = []): ?array
+    {
+        $row = $this->run($sql, $params)->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    public function execute(string $sql, array $params = []): int
+    {
+        return $this->run($sql, $params)->rowCount();
+    }
+
+    /** @return string 생성된 기본키 */
+    public function insert(string $table, array $data): string
+    {
+        $columns = array_keys($data);
+        $quoted = array_map([$this, 'q'], $columns);
+        $placeholders = array_map(static function (string $c): string {
+            return ':' . $c;
+        }, $columns);
+
+        $sql = 'INSERT INTO ' . $this->q($table)
+            . ' (' . implode(', ', $quoted) . ')'
+            . ' VALUES (' . implode(', ', $placeholders) . ')';
+
+        $this->run($sql, $data);
+
+        return $this->dialect->lastInsertId($this->pdo, $table);
+    }
+
+    public function update(string $table, array $data, string $where, array $whereParams = []): int
+    {
+        $assignments = [];
+        $params = [];
+        foreach ($data as $column => $value) {
+            $assignments[] = $this->q($column) . ' = :set_' . $column;
+            $params['set_' . $column] = $value;
+        }
+
+        $sql = 'UPDATE ' . $this->q($table)
+            . ' SET ' . implode(', ', $assignments)
+            . ' WHERE ' . $where;
+
+        return $this->execute($sql, array_merge($params, $whereParams));
+    }
+
+    public function delete(string $table, string $where, array $whereParams = []): int
+    {
+        return $this->execute('DELETE FROM ' . $this->q($table) . ' WHERE ' . $where, $whereParams);
+    }
+
+    /**
+     * @return mixed 콜백의 반환값
+     */
+    public function transaction(callable $fn)
+    {
+        if ($this->pdo->inTransaction()) {
+            return $fn($this);
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $result = $fn($this);
+            $this->pdo->commit();
+
+            return $result;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    private function run(string $sql, array $params): \PDOStatement
+    {
+        try {
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute($params === [] ? null : $params);
+
+            return $statement;
+        } catch (PDOException $e) {
+            throw ApiError::internal('쿼리 실행에 실패했습니다: ' . $e->getMessage() . ' | SQL: ' . $sql);
+        }
+    }
+}
+```
+
+`update()` 가 바인딩 이름에 `set_` 접두사를 붙이는 이유: `WHERE id = :id` 와 `SET title = :title` 이 같은 이름을 쓰면 조용히 충돌한다. 접두사가 그 충돌을 구조적으로 막는다.
+
+- [ ] **Step 5: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Db`
+Expected: PASS — 17 tests
+
+- [ ] **Step 6: 커밋한다**
+
+```bash
+git add src/Db tests/Db
+git commit -m "feat: 방언 계층과 PDO 래퍼
+
+방언 차이는 타입 치환자 3개, 식별자 인용, lastInsertId 시퀀스명,
+접속 후 세션 설정 네 가지로 한정한다."
+```
+
+---
+
+### Task 3: 스키마와 다중 DB 테스트 하니스
+
+**Files:**
+- Create: `src/Db/Schema.php`
+- Create: `tests/Support/DatabaseTestCase.php`
+- Test: `tests/Db/SchemaTest.php`
+
+**Interfaces:**
+- Consumes: `Connection`, `DialectInterface` (Task 2)
+- Produces:
+  - `Schema::__construct(Connection $db)`
+  - `Schema::create(): void` — 테이블 3개와 인덱스 생성 (이미 있으면 건너뜀)
+  - `Schema::drop(): void`
+  - `Schema::exists(): bool`
+  - `Schema::TABLES` — `['boards', 'posts', 'comments']`
+  - `StandardBoard\Tests\Support\DatabaseTestCase::connectionProvider(): array` — 사용 가능한 DB 별 설정
+  - `DatabaseTestCase::freshDatabase(array $config): Connection` — 스키마를 비우고 새로 만든 연결
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Support/DatabaseTestCase.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Support;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Db\Connection;
+use StandardBoard\Db\Schema;
+
+/**
+ * 데이터 제공자로 사용 가능한 DB 를 모두 돌린다. SQLite 는 항상 돌고,
+ * MySQL/PostgreSQL 은 환경변수가 있을 때만 추가된다.
+ */
+abstract class DatabaseTestCase extends TestCase
+{
+    public function connectionProvider(): array
+    {
+        $cases = [
+            'sqlite' => [['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]],
+        ];
+
+        $mysql = getenv('TEST_MYSQL_DSN');
+        if (is_string($mysql) && $mysql !== '') {
+            $cases['mysql'] = [[
+                'dsn'      => $mysql,
+                'username' => getenv('TEST_MYSQL_USER') ?: null,
+                'password' => getenv('TEST_MYSQL_PASS') ?: null,
+            ]];
+        }
+
+        $pgsql = getenv('TEST_PGSQL_DSN');
+        if (is_string($pgsql) && $pgsql !== '') {
+            $cases['pgsql'] = [[
+                'dsn'      => $pgsql,
+                'username' => getenv('TEST_PGSQL_USER') ?: null,
+                'password' => getenv('TEST_PGSQL_PASS') ?: null,
+            ]];
+        }
+
+        return $cases;
+    }
+
+    protected function freshDatabase(array $config): Connection
+    {
+        $db = Connection::create($config);
+        $schema = new Schema($db);
+        $schema->drop();
+        $schema->create();
+
+        return $db;
+    }
+}
+```
+
+`tests/Db/SchemaTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Db;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Db\Schema;
+use StandardBoard\Tests\Support\DatabaseTestCase;
+
+final class SchemaTest extends DatabaseTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testCreatesAllThreeTables(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+
+        foreach (Schema::TABLES as $table) {
+            $this->assertSame(
+                0,
+                (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table))['c'],
+                $table . ' 테이블이 비어 있는 채로 존재해야 한다'
+            );
+        }
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCreateIsIdempotent(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $schema = new Schema($db);
+
+        $schema->create();
+        $schema->create();
+
+        $this->assertTrue($schema->exists());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDropRemovesEverything(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $schema = new Schema($db);
+
+        $schema->drop();
+
+        $this->assertFalse($schema->exists());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testAutoIncrementPrimaryKeyWorks(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+
+        $first = $db->insert('boards', $this->boardRow('a'));
+        $second = $db->insert('boards', $this->boardRow('b'));
+
+        $this->assertGreaterThan((int) $first, (int) $second);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDatetimeColumnRoundTripsUtcString(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->insert('boards', $this->boardRow('c'));
+
+        $row = $db->selectOne('SELECT created_at FROM boards WHERE board_key = ?', ['c']);
+
+        $this->assertSame('2026-08-26 01:02:03', substr((string) $row['created_at'], 0, 19));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testBoardKeyIsUnique(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->insert('boards', $this->boardRow('dup'));
+
+        $this->expectException(\StandardBoard\Http\ApiError::class);
+        $db->insert('boards', $this->boardRow('dup'));
+    }
+
+    private function boardRow(string $key): array
+    {
+        return [
+            'board_key'    => $key,
+            'name'         => '게시판 ' . $key,
+            'description'  => null,
+            'categories'   => '[]',
+            'managers'     => '[]',
+            'perm_read'    => 'guest',
+            'perm_write'   => 'member',
+            'perm_comment' => 'member',
+            'use_secret'   => 0,
+            'use_file'     => 0,
+            'use_category' => 0,
+            'per_page'     => 20,
+            'sort_order'   => 0,
+            'created_at'   => '2026-08-26 01:02:03',
+            'updated_at'   => '2026-08-26 01:02:03',
+        ];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Db/SchemaTest.php`
+Expected: FAIL — `Class "StandardBoard\Db\Schema" not found`
+
+- [ ] **Step 3: Schema 를 구현한다**
+
+`src/Db/Schema.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Db;
+
+use StandardBoard\Http\ApiError;
+use Throwable;
+
+/**
+ * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고
+ * 나머지는 세 DB 공통 문법이다.
+ */
+final class Schema
+{
+    public const TABLES = ['boards', 'posts', 'comments'];
+
+    /** @var Connection */
+    private $db;
+
+    public function __construct(Connection $db)
+    {
+        $this->db = $db;
+    }
+
+    public function exists(): bool
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('boards'));
+
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    public function create(): void
+    {
+        if ($this->exists()) {
+            return;
+        }
+
+        foreach ($this->statements() as $sql) {
+            $this->db->execute($this->expand($sql));
+        }
+    }
+
+    public function drop(): void
+    {
+        foreach (array_reverse(self::TABLES) as $table) {
+            try {
+                $this->db->execute('DROP TABLE IF EXISTS ' . $this->db->q($table));
+            } catch (ApiError $e) {
+                // 이미 없는 경우는 성공으로 본다.
+            }
+        }
+    }
+
+    private function expand(string $sql): string
+    {
+        $map = $this->db->dialect()->typeMap();
+        $map['{SUFFIX}'] = $this->db->dialect()->tableSuffix();
+
+        return strtr($sql, $map);
+    }
+
+    /** @return string[] */
+    private function statements(): array
+    {
+        return [
+            'CREATE TABLE boards (
+                id            {AUTO_PK},
+                board_key     VARCHAR(50)  NOT NULL,
+                name          VARCHAR(100) NOT NULL,
+                description   {TEXT}       NULL,
+                categories    {TEXT}       NULL,
+                managers      {TEXT}       NULL,
+                perm_read     VARCHAR(10)  NOT NULL DEFAULT \'guest\',
+                perm_write    VARCHAR(10)  NOT NULL DEFAULT \'member\',
+                perm_comment  VARCHAR(10)  NOT NULL DEFAULT \'member\',
+                use_secret    SMALLINT     NOT NULL DEFAULT 0,
+                use_file      SMALLINT     NOT NULL DEFAULT 0,
+                use_category  SMALLINT     NOT NULL DEFAULT 0,
+                per_page      INTEGER      NOT NULL DEFAULT 20,
+                sort_order    INTEGER      NOT NULL DEFAULT 0,
+                created_at    {DATETIME}   NOT NULL,
+                updated_at    {DATETIME}   NOT NULL
+            ){SUFFIX}',
+
+            'CREATE UNIQUE INDEX ux_boards_key ON boards (board_key)',
+
+            'CREATE TABLE posts (
+                id             {AUTO_PK},
+                board_id       BIGINT       NOT NULL,
+                category       VARCHAR(50)  NULL,
+                title          VARCHAR(200) NOT NULL,
+                content        {TEXT}       NOT NULL,
+                author_id      VARCHAR(64)  NULL,
+                author_name    VARCHAR(100) NOT NULL,
+                guest_password VARCHAR(255) NULL,
+                is_notice      SMALLINT     NOT NULL DEFAULT 0,
+                is_secret      SMALLINT     NOT NULL DEFAULT 0,
+                view_count     INTEGER      NOT NULL DEFAULT 0,
+                comment_count  INTEGER      NOT NULL DEFAULT 0,
+                attachments    {TEXT}       NULL,
+                created_at     {DATETIME}   NOT NULL,
+                updated_at     {DATETIME}   NOT NULL,
+                deleted_at     {DATETIME}   NULL
+            ){SUFFIX}',
+
+            'CREATE INDEX ix_posts_list ON posts (board_id, deleted_at, is_notice, id)',
+            'CREATE INDEX ix_posts_category ON posts (board_id, category)',
+
+            'CREATE TABLE comments (
+                id             {AUTO_PK},
+                board_id       BIGINT       NOT NULL,
+                post_id        BIGINT       NOT NULL,
+                parent_id      BIGINT       NULL,
+                depth          SMALLINT     NOT NULL DEFAULT 0,
+                content        {TEXT}       NOT NULL,
+                author_id      VARCHAR(64)  NULL,
+                author_name    VARCHAR(100) NOT NULL,
+                guest_password VARCHAR(255) NULL,
+                is_secret      SMALLINT     NOT NULL DEFAULT 0,
+                created_at     {DATETIME}   NOT NULL,
+                updated_at     {DATETIME}   NOT NULL,
+                deleted_at     {DATETIME}   NULL
+            ){SUFFIX}',
+
+            'CREATE INDEX ix_comments_post ON comments (post_id, id)',
+        ];
+    }
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Db/SchemaTest.php`
+Expected: PASS — SQLite 만 있으면 6 tests, 세 DB 가 다 있으면 18 tests
+
+- [ ] **Step 5: MySQL 과 PostgreSQL 로도 돌려본다**
+
+Run:
+```bash
+TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=board_test;charset=utf8mb4' \
+TEST_MYSQL_USER=root TEST_MYSQL_PASS=secret \
+vendor/bin/phpunit tests/Db/SchemaTest.php
+```
+Expected: PASS — 케이스 수가 두 배로 늘어난다. 실패하면 DDL 의 방언 문제이므로 여기서 잡는다.
+
+- [ ] **Step 6: 커밋한다**
+
+```bash
+git add src/Db/Schema.php tests/Db/SchemaTest.php tests/Support/DatabaseTestCase.php
+git commit -m "feat: 스키마 생성과 다중 DB 테스트 하니스
+
+이식성 주장을 테스트로 증명하기 위해 DSN 을 데이터 제공자로 파라미터화한다."
+```
+
+---
+
+### Task 4: BoardRepository
+
+**Files:**
+- Create: `src/Repository/BoardRepository.php`
+- Test: `tests/Repository/BoardRepositoryTest.php`
+
+**Interfaces:**
+- Consumes: `Connection` (Task 2), `Schema` (Task 3), `Clock`, `Json` (Task 1)
+- Produces:
+  - `BoardRepository::__construct(Connection $db)`
+  - `findAll(): array` — `sort_order`, `id` 오름차순
+  - `findByKey(string $key): ?array`
+  - `findById(int $id): ?array`
+  - `create(array $data): int`
+  - `update(int $id, array $data): void`
+  - `delete(int $id): void`
+  - 반환되는 행에서 `categories`, `managers` 는 **PHP 배열**이다 (JSON 문자열이 아니다)
+  - `BoardRepository::DEFAULTS` — 게시판 기본값 배열
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Repository/BoardRepositoryTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Repository;
+
+use StandardBoard\Repository\BoardRepository;
+use StandardBoard\Support\Clock;
+use StandardBoard\Tests\Support\DatabaseTestCase;
+
+final class BoardRepositoryTest extends DatabaseTestCase
+{
+    protected function setUp(): void
+    {
+        Clock::freeze('2026-08-26 01:02:03');
+    }
+
+    protected function tearDown(): void
+    {
+        Clock::unfreeze();
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCreateAndFindByKey(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $repo->create(['board_key' => 'free', 'name' => '자유게시판']);
+
+        $board = $repo->findByKey('free');
+
+        $this->assertSame('자유게시판', $board['name']);
+        $this->assertSame('guest', $board['perm_read']);
+        $this->assertSame('member', $board['perm_write']);
+        $this->assertSame(20, (int) $board['per_page']);
+        $this->assertSame('2026-08-26 01:02:03', substr((string) $board['created_at'], 0, 19));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testJsonColumnsComeBackAsArrays(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $repo->create([
+            'board_key'  => 'qna',
+            'name'       => '질문',
+            'categories' => ['공지', '질문'],
+            'managers'   => ['user-1', 'user-2'],
+        ]);
+
+        $board = $repo->findByKey('qna');
+
+        $this->assertSame(['공지', '질문'], $board['categories']);
+        $this->assertSame(['user-1', 'user-2'], $board['managers']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testEmptyJsonColumnsBecomeEmptyArrays(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $repo->create(['board_key' => 'free', 'name' => '자유']);
+
+        $board = $repo->findByKey('free');
+
+        $this->assertSame([], $board['categories']);
+        $this->assertSame([], $board['managers']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindByKeyReturnsNullWhenMissing(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+
+        $this->assertNull($repo->findByKey('nope'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUpdateTouchesUpdatedAtAndKeepsOtherFields(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $id = $repo->create(['board_key' => 'free', 'name' => '자유']);
+
+        Clock::freeze('2026-08-27 10:00:00');
+        $repo->update($id, ['name' => '자유게시판', 'managers' => ['admin-1']]);
+
+        $board = $repo->findById($id);
+        $this->assertSame('자유게시판', $board['name']);
+        $this->assertSame(['admin-1'], $board['managers']);
+        $this->assertSame('free', $board['board_key']);
+        $this->assertSame('2026-08-27 10:00:00', substr((string) $board['updated_at'], 0, 19));
+        $this->assertSame('2026-08-26 01:02:03', substr((string) $board['created_at'], 0, 19));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindAllOrdersBySortOrderThenId(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $repo->create(['board_key' => 'c', 'name' => 'C', 'sort_order' => 2]);
+        $repo->create(['board_key' => 'a', 'name' => 'A', 'sort_order' => 1]);
+        $repo->create(['board_key' => 'b', 'name' => 'B', 'sort_order' => 1]);
+
+        $keys = array_column($repo->findAll(), 'board_key');
+
+        $this->assertSame(['a', 'b', 'c'], $keys);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDeleteRemovesRow(array $config): void
+    {
+        $repo = new BoardRepository($this->freshDatabase($config));
+        $id = $repo->create(['board_key' => 'temp', 'name' => '임시']);
+
+        $repo->delete($id);
+
+        $this->assertNull($repo->findById($id));
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Repository/BoardRepositoryTest.php`
+Expected: FAIL — `Class "StandardBoard\Repository\BoardRepository" not found`
+
+- [ ] **Step 3: 구현한다**
+
+`src/Repository/BoardRepository.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Repository;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Support\Clock;
+use StandardBoard\Support\Json;
+
+final class BoardRepository
+{
+    /** 게시판 생성 시 지정하지 않은 컬럼의 기본값 */
+    public const DEFAULTS = [
+        'description'  => null,
+        'categories'   => [],
+        'managers'     => [],
+        'perm_read'    => 'guest',
+        'perm_write'   => 'member',
+        'perm_comment' => 'member',
+        'use_secret'   => 0,
+        'use_file'     => 0,
+        'use_category' => 0,
+        'per_page'     => 20,
+        'sort_order'   => 0,
+    ];
+
+    /** JSON 문자열로 저장하고 배열로 돌려주는 컬럼 */
+    private const JSON_COLUMNS = ['categories', 'managers'];
+
+    /** @var Connection */
+    private $db;
+
+    public function __construct(Connection $db)
+    {
+        $this->db = $db;
+    }
+
+    public function findAll(): array
+    {
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->q('boards') . ' ORDER BY sort_order ASC, id ASC');
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
+    public function findByKey(string $key): ?array
+    {
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('boards') . ' WHERE board_key = ?', [$key]);
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    public function findById(int $id): ?array
+    {
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('boards') . ' WHERE id = ?', [$id]);
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    public function create(array $data): int
+    {
+        $now = Clock::now();
+        $row = array_merge(self::DEFAULTS, $data, ['created_at' => $now, 'updated_at' => $now]);
+
+        return (int) $this->db->insert('boards', $this->dehydrate($row));
+    }
+
+    public function update(int $id, array $data): void
+    {
+        unset($data['id'], $data['created_at']);
+        $data['updated_at'] = Clock::now();
+
+        $this->db->update('boards', $this->dehydrate($data), 'id = :id', ['id' => $id]);
+    }
+
+    public function delete(int $id): void
+    {
+        $this->db->delete('boards', 'id = :id', ['id' => $id]);
+    }
+
+    /** DB 행 -> PHP 값 (JSON 문자열을 배열로) */
+    private function hydrate(array $row): array
+    {
+        foreach (self::JSON_COLUMNS as $column) {
+            $raw = $row[$column];
+            $row[$column] = ($raw === null || $raw === '') ? [] : Json::decode((string) $raw);
+        }
+
+        foreach (['id', 'use_secret', 'use_file', 'use_category', 'per_page', 'sort_order'] as $column) {
+            $row[$column] = (int) $row[$column];
+        }
+
+        return $row;
+    }
+
+    /** PHP 값 -> DB 행 (배열을 JSON 문자열로) */
+    private function dehydrate(array $row): array
+    {
+        foreach (self::JSON_COLUMNS as $column) {
+            if (array_key_exists($column, $row) && is_array($row[$column])) {
+                $row[$column] = Json::encode(array_values($row[$column]));
+            }
+        }
+
+        return $row;
+    }
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Repository/BoardRepositoryTest.php`
+Expected: PASS — SQLite 만 7 tests
+
+- [ ] **Step 5: 커밋한다**
+
+```bash
+git add src/Repository/BoardRepository.php tests/Repository/BoardRepositoryTest.php
+git commit -m "feat: BoardRepository
+
+JSON 컬럼의 인코딩/디코딩을 리포지토리에 가둬 호출자는 배열만 다룬다."
+```
+
+---
+
+### Task 5: PostRepository
+
+**Files:**
+- Create: `src/Repository/PostRepository.php`
+- Test: `tests/Repository/PostRepositoryTest.php`
+
+**Interfaces:**
+- Consumes: `Connection`, `Clock`, `Json`
+- Produces:
+  - `PostRepository::__construct(Connection $db)`
+  - `find(int $id): ?array` — 삭제된 글도 반환한다. `guest_password` 는 포함하지 않는다
+  - `findWithSecret(int $id): ?array` — `guest_password` 포함. 권한 검사 전용
+  - `paginate(int $boardId, int $page, int $perPage, ?string $q = null, ?string $category = null, bool $includeDeleted = false): array` — `['rows' => [...], 'total' => int]`. 공지는 항상 제외. 삭제 글은 `$includeDeleted` 가 true 일 때만 포함
+  - `notices(int $boardId): array` — 삭제되지 않은 공지 전체, `id` 내림차순
+  - `create(array $data): int`
+  - `update(int $id, array $data): void`
+  - `softDelete(int $id): void`
+  - `restore(int $id): void`
+  - `incrementViews(int $id): void`
+  - `setNotice(int $id, bool $isNotice): void`
+  - `adjustCommentCount(int $id, int $delta): void`
+  - 반환 행의 `attachments` 는 **PHP 배열**이다
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Repository/PostRepositoryTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Repository;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Repository\BoardRepository;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Support\Clock;
+use StandardBoard\Tests\Support\DatabaseTestCase;
+
+final class PostRepositoryTest extends DatabaseTestCase
+{
+    protected function setUp(): void
+    {
+        Clock::freeze('2026-08-26 01:02:03');
+    }
+
+    protected function tearDown(): void
+    {
+        Clock::unfreeze();
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCreateAndFind(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create([
+            'board_id'    => $boardId,
+            'title'       => '첫 글',
+            'content'     => '본문',
+            'author_id'   => 'user-1',
+            'author_name' => '홍길동',
+        ]);
+
+        $post = $repo->find($id);
+
+        $this->assertSame('첫 글', $post['title']);
+        $this->assertSame(0, $post['view_count']);
+        $this->assertSame(0, $post['comment_count']);
+        $this->assertSame([], $post['attachments']);
+        $this->assertNull($post['deleted_at']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindNeverExposesGuestPassword(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create($this->guestPost($boardId, '비회원 글'));
+
+        $post = $repo->find($id);
+
+        $this->assertArrayNotHasKey('guest_password', $post);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindWithSecretExposesGuestPassword(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create($this->guestPost($boardId, '비회원 글'));
+
+        $post = $repo->findWithSecret($id);
+
+        $this->assertTrue(password_verify('1234', (string) $post['guest_password']));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testPaginateExcludesNoticesAndDeleted(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '일반 1'));
+        $noticeId = $repo->create($this->post($boardId, '공지'));
+        $repo->setNotice($noticeId, true);
+        $deletedId = $repo->create($this->post($boardId, '삭제됨'));
+        $repo->softDelete($deletedId);
+
+        $page = $repo->paginate($boardId, 1, 20);
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame(['일반 1'], array_column($page['rows'], 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testPaginateCanIncludeDeletedPosts(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '살아 있는 글'));
+        $deletedId = $repo->create($this->post($boardId, '삭제된 글'));
+        $repo->softDelete($deletedId);
+
+        $page = $repo->paginate($boardId, 1, 20, null, null, true);
+
+        $this->assertSame(2, $page['total']);
+        $this->assertSame(['삭제된 글', '살아 있는 글'], array_column($page['rows'], 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testPaginateOrdersByIdDescendingAndSlices(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        foreach (['1', '2', '3', '4', '5'] as $title) {
+            $repo->create($this->post($boardId, $title));
+        }
+
+        $page = $repo->paginate($boardId, 2, 2);
+
+        $this->assertSame(5, $page['total']);
+        $this->assertSame(['3', '2'], array_column($page['rows'], 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSearchMatchesTitleOrContent(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '사과 이야기'));
+        $repo->create(['board_id' => $boardId, 'title' => '무관', 'content' => '사과가 본문에 있다',
+                       'author_id' => 'u', 'author_name' => '가']);
+        $repo->create($this->post($boardId, '배 이야기'));
+
+        $page = $repo->paginate($boardId, 1, 20, '사과');
+
+        $this->assertSame(2, $page['total']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSearchTreatsPercentAsLiteral(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '할인 50% 행사'));
+        $repo->create($this->post($boardId, '아무 글'));
+
+        $page = $repo->paginate($boardId, 1, 20, '50%');
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame('할인 50% 행사', $page['rows'][0]['title']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSearchTreatsUnderscoreAsLiteral(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, 'a_b'));
+        $repo->create($this->post($boardId, 'axb'));
+
+        $page = $repo->paginate($boardId, 1, 20, 'a_b');
+
+        $this->assertSame(1, $page['total']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFilterByCategory(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '질문 글') + ['category' => '질문']);
+        $repo->create($this->post($boardId, '잡담 글') + ['category' => '잡담']);
+
+        $page = $repo->paginate($boardId, 1, 20, null, '질문');
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame('질문 글', $page['rows'][0]['title']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testNoticesAreReturnedSeparatelyNewestFirst(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $first = $repo->create($this->post($boardId, '공지 1'));
+        $second = $repo->create($this->post($boardId, '공지 2'));
+        $repo->setNotice($first, true);
+        $repo->setNotice($second, true);
+
+        $this->assertSame(['공지 2', '공지 1'], array_column($repo->notices($boardId), 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSoftDeleteAndRestore(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create($this->post($boardId, '글'));
+
+        $repo->softDelete($id);
+        $this->assertNotNull($repo->find($id)['deleted_at']);
+
+        $repo->restore($id);
+        $this->assertNull($repo->find($id)['deleted_at']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testIncrementViewsAndCommentCount(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create($this->post($boardId, '글'));
+
+        $repo->incrementViews($id);
+        $repo->incrementViews($id);
+        $repo->adjustCommentCount($id, 1);
+        $repo->adjustCommentCount($id, 1);
+        $repo->adjustCommentCount($id, -1);
+
+        $post = $repo->find($id);
+        $this->assertSame(2, $post['view_count']);
+        $this->assertSame(1, $post['comment_count']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testAttachmentsRoundTripAsArray(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $files = [['id' => 'abc', 'name' => '문서.pdf', 'size' => 10, 'mime' => 'application/pdf']];
+        $id = $repo->create($this->post($boardId, '글') + ['attachments' => $files]);
+
+        $this->assertSame($files, $repo->find($id)['attachments']);
+    }
+
+    /** @return array{0: PostRepository, 1: int} */
+    private function setUpBoard(array $config): array
+    {
+        $db = $this->freshDatabase($config);
+        $boardId = (new BoardRepository($db))->create(['board_key' => 'free', 'name' => '자유']);
+
+        return [new PostRepository($db), $boardId];
+    }
+
+    private function post(int $boardId, string $title): array
+    {
+        return [
+            'board_id'    => $boardId,
+            'title'       => $title,
+            'content'     => '본문',
+            'author_id'   => 'user-1',
+            'author_name' => '홍길동',
+        ];
+    }
+
+    private function guestPost(int $boardId, string $title): array
+    {
+        return [
+            'board_id'       => $boardId,
+            'title'          => $title,
+            'content'        => '본문',
+            'author_id'      => null,
+            'author_name'    => '손님',
+            'guest_password' => password_hash('1234', PASSWORD_DEFAULT),
+        ];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Repository/PostRepositoryTest.php`
+Expected: FAIL — `Class "StandardBoard\Repository\PostRepository" not found`
+
+- [ ] **Step 3: 구현한다**
+
+`src/Repository/PostRepository.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Repository;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Support\Clock;
+use StandardBoard\Support\Json;
+
+final class PostRepository
+{
+    /**
+     * 기본 조회 컬럼. guest_password 가 빠져 있는 것이 핵심이다.
+     * 이 목록에 없는 컬럼은 findWithSecret() 로만 얻을 수 있다.
+     */
+    private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name,'
+        . ' is_notice, is_secret, view_count, comment_count, attachments,'
+        . ' created_at, updated_at, deleted_at';
+
+    private const DEFAULTS = [
+        'category'       => null,
+        'author_id'      => null,
+        'guest_password' => null,
+        'is_notice'      => 0,
+        'is_secret'      => 0,
+        'view_count'     => 0,
+        'comment_count'  => 0,
+        'attachments'    => [],
+    ];
+
+    /** LIKE 검색의 이스케이프 문자. 백슬래시는 MySQL 문자열 리터럴에서 한 번 더 처리되므로 피한다. */
+    private const LIKE_ESCAPE = '!';
+
+    /** @var Connection */
+    private $db;
+
+    public function __construct(Connection $db)
+    {
+        $this->db = $db;
+    }
+
+    public function find(int $id): ?array
+    {
+        $row = $this->db->selectOne(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts') . ' WHERE id = ?',
+            [$id]
+        );
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    public function findWithSecret(int $id): ?array
+    {
+        $row = $this->db->selectOne(
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('posts') . ' WHERE id = ?',
+            [$id]
+        );
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    /** @return array{rows: array, total: int} */
+    public function paginate(
+        int $boardId,
+        int $page,
+        int $perPage,
+        ?string $q = null,
+        ?string $category = null,
+        bool $includeDeleted = false
+    ): array {
+        // 삭제 글 포함은 관리자 화면의 복구 목록을 위한 것이다.
+        // 서비스 계층에서 관리 권한을 확인한 뒤에만 true 로 넘어온다.
+        $where = $includeDeleted
+            ? 'board_id = :board_id AND is_notice = 0'
+            : 'board_id = :board_id AND deleted_at IS NULL AND is_notice = 0';
+        $params = ['board_id' => $boardId];
+
+        if ($q !== null && $q !== '') {
+            $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
+                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
+            $pattern = '%' . $this->escapeLike($q) . '%';
+            $params['q'] = $pattern;
+            $params['q2'] = $pattern;
+        }
+
+        if ($category !== null && $category !== '') {
+            $where .= ' AND category = :category';
+            $params['category'] = $category;
+        }
+
+        $total = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $this->db->q('posts') . ' WHERE ' . $where,
+            $params
+        )['c'];
+
+        $offset = max(0, ($page - 1) * $perPage);
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        );
+
+        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+    }
+
+    public function notices(int $boardId): array
+    {
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            . ' WHERE board_id = ? AND deleted_at IS NULL AND is_notice = 1 ORDER BY id DESC',
+            [$boardId]
+        );
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
+    public function create(array $data): int
+    {
+        $now = Clock::now();
+        $row = array_merge(self::DEFAULTS, $data, [
+            'created_at' => $now,
+            'updated_at' => $now,
+            'deleted_at' => null,
+        ]);
+
+        return (int) $this->db->insert('posts', $this->dehydrate($row));
+    }
+
+    public function update(int $id, array $data): void
+    {
+        unset($data['id'], $data['board_id'], $data['created_at']);
+        $data['updated_at'] = Clock::now();
+
+        $this->db->update('posts', $this->dehydrate($data), 'id = :id', ['id' => $id]);
+    }
+
+    public function softDelete(int $id): void
+    {
+        $this->db->update('posts', ['deleted_at' => Clock::now()], 'id = :id', ['id' => $id]);
+    }
+
+    public function restore(int $id): void
+    {
+        $this->db->update('posts', ['deleted_at' => null], 'id = :id', ['id' => $id]);
+    }
+
+    public function incrementViews(int $id): void
+    {
+        $this->db->execute(
+            'UPDATE ' . $this->db->q('posts') . ' SET view_count = view_count + 1 WHERE id = ?',
+            [$id]
+        );
+    }
+
+    public function setNotice(int $id, bool $isNotice): void
+    {
+        $this->db->update('posts', ['is_notice' => $isNotice ? 1 : 0], 'id = :id', ['id' => $id]);
+    }
+
+    public function adjustCommentCount(int $id, int $delta): void
+    {
+        // 0 미만으로 내려가지 않도록 GREATEST 대신 CASE 를 쓴다. 세 DB 공통 문법이다.
+        $this->db->execute(
+            'UPDATE ' . $this->db->q('posts')
+            . ' SET comment_count = CASE WHEN comment_count + ? < 0 THEN 0 ELSE comment_count + ? END'
+            . ' WHERE id = ?',
+            [$delta, $delta, $id]
+        );
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(
+            [self::LIKE_ESCAPE, '%', '_'],
+            [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
+            $value
+        );
+    }
+
+    private function hydrate(array $row): array
+    {
+        $raw = $row['attachments'];
+        $row['attachments'] = ($raw === null || $raw === '') ? [] : Json::decode((string) $raw);
+
+        foreach (['id', 'board_id', 'is_notice', 'is_secret', 'view_count', 'comment_count'] as $column) {
+            $row[$column] = (int) $row[$column];
+        }
+
+        return $row;
+    }
+
+    private function dehydrate(array $row): array
+    {
+        if (array_key_exists('attachments', $row) && is_array($row['attachments'])) {
+            $row['attachments'] = Json::encode(array_values($row['attachments']));
+        }
+
+        foreach (['is_notice', 'is_secret'] as $column) {
+            if (array_key_exists($column, $row)) {
+                $row[$column] = (int) (bool) $row[$column];
+            }
+        }
+
+        return $row;
+    }
+}
+```
+
+`is_notice`, `is_secret` 을 `dehydrate()` 에서 정수로 강제하는 이유: PostgreSQL 은 `SMALLINT` 컬럼에 PHP `true` 를 바인딩하면 타입 오류를 낸다. SQLite 는 조용히 받아준다. 이런 차이를 리포지토리 경계에서 흡수한다.
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Repository/PostRepositoryTest.php`
+Expected: PASS — SQLite 만 14 tests
+
+- [ ] **Step 5: 세 DB 로 돌린다**
+
+Run: 위 "테스트 실행 방법" 의 환경변수를 붙여 `vendor/bin/phpunit tests/Repository`
+Expected: PASS — 특히 `testSearchTreatsPercentAsLiteral` 이 세 DB 에서 모두 통과해야 한다. 여기가 이식성이 가장 잘 깨지는 지점이다.
+
+- [ ] **Step 6: 커밋한다**
+
+```bash
+git add src/Repository/PostRepository.php tests/Repository/PostRepositoryTest.php
+git commit -m "feat: PostRepository
+
+기본 조회 컬럼에서 guest_password 를 제외해 유출을 구조적으로 막는다.
+LIKE 이스케이프 문자로 백슬래시 대신 느낌표를 써 MySQL 리터럴 처리를 피한다."
+```
+
+---
+
+### Task 6: CommentRepository 와 트리 조립
+
+**Files:**
+- Create: `src/Repository/CommentRepository.php`, `src/Comment/TreeBuilder.php`
+- Test: `tests/Repository/CommentRepositoryTest.php`, `tests/Comment/TreeBuilderTest.php`
+
+**Interfaces:**
+- Consumes: `Connection`, `Clock`
+- Produces:
+  - `CommentRepository::__construct(Connection $db)`
+  - `findByPost(int $postId): array` — `id` 오름차순, 삭제된 것 포함, `guest_password` 제외
+  - `find(int $id): ?array`, `findWithSecret(int $id): ?array`
+  - `create(array $data): int` — `parent_id` 가 있으면 부모의 `depth + 1` 을 자동 계산
+  - `update(int $id, array $data): void`
+  - `softDelete(int $id): void`
+  - `hasChildren(int $id): bool`
+  - `TreeBuilder::build(array $rows): array` — 평면 목록을 중첩 트리로. 재귀를 쓰지 않는다
+
+- [ ] **Step 1: TreeBuilder 의 실패하는 테스트를 쓴다**
+
+`tests/Comment/TreeBuilderTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Comment;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Comment\TreeBuilder;
+
+final class TreeBuilderTest extends TestCase
+{
+    public function testEmptyInputGivesEmptyTree(): void
+    {
+        $this->assertSame([], TreeBuilder::build([]));
+    }
+
+    public function testFlatCommentsBecomeRoots(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0),
+            $this->row(2, null, 0),
+        ]);
+
+        $this->assertCount(2, $tree);
+        $this->assertSame([1, 2], array_column($tree, 'id'));
+        $this->assertSame([], $tree[0]['children']);
+    }
+
+    public function testChildrenNestUnderParent(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0),
+            $this->row(2, 1, 1),
+            $this->row(3, 1, 1),
+        ]);
+
+        $this->assertCount(1, $tree);
+        $this->assertSame([2, 3], array_column($tree[0]['children'], 'id'));
+    }
+
+    public function testSiblingsKeepIdAscendingOrder(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0),
+            $this->row(5, 1, 1),
+            $this->row(9, 1, 1),
+            $this->row(11, 1, 1),
+        ]);
+
+        $this->assertSame([5, 9, 11], array_column($tree[0]['children'], 'id'));
+    }
+
+    public function testDeepNestingHasNoDepthLimit(): void
+    {
+        $rows = [$this->row(1, null, 0)];
+        for ($i = 2; $i <= 500; $i++) {
+            $rows[] = $this->row($i, $i - 1, $i - 1);
+        }
+
+        $tree = TreeBuilder::build($rows);
+
+        $node = $tree[0];
+        $visited = 1;
+        while ($node['children'] !== []) {
+            $node = $node['children'][0];
+            $visited++;
+        }
+        $this->assertSame(500, $visited);
+    }
+
+    public function testDeletedLeafIsRemoved(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0),
+            $this->row(2, 1, 1, '2026-08-26 00:00:00'),
+        ]);
+
+        $this->assertSame([], $tree[0]['children']);
+    }
+
+    public function testDeletedNodeWithLivingChildBecomesPlaceholder(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0, '2026-08-26 00:00:00'),
+            $this->row(2, 1, 1),
+        ]);
+
+        $this->assertCount(1, $tree);
+        $this->assertTrue($tree[0]['deleted']);
+        $this->assertSame('삭제된 댓글입니다.', $tree[0]['content']);
+        $this->assertNull($tree[0]['author_name']);
+        $this->assertSame([2], array_column($tree[0]['children'], 'id'));
+    }
+
+    public function testDeletedNodeWhoseChildrenAreAllDeletedIsRemoved(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(1, null, 0, '2026-08-26 00:00:00'),
+            $this->row(2, 1, 1, '2026-08-26 00:00:00'),
+        ]);
+
+        $this->assertSame([], $tree);
+    }
+
+    public function testOrphanedRowIsDroppedNotPromoted(): void
+    {
+        $tree = TreeBuilder::build([
+            $this->row(2, 99, 1),
+        ]);
+
+        $this->assertSame([], $tree);
+    }
+
+    private function row(int $id, ?int $parentId, int $depth, ?string $deletedAt = null): array
+    {
+        return [
+            'id'          => $id,
+            'post_id'     => 1,
+            'parent_id'   => $parentId,
+            'depth'       => $depth,
+            'content'     => '댓글 ' . $id,
+            'author_id'   => 'user-' . $id,
+            'author_name' => '작성자 ' . $id,
+            'is_secret'   => 0,
+            'created_at'  => '2026-08-26 01:02:03',
+            'updated_at'  => '2026-08-26 01:02:03',
+            'deleted_at'  => $deletedAt,
+        ];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Comment/TreeBuilderTest.php`
+Expected: FAIL — `Class "StandardBoard\Comment\TreeBuilder" not found`
+
+- [ ] **Step 3: TreeBuilder 를 구현한다**
+
+`src/Comment/TreeBuilder.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Comment;
+
+/**
+ * 평면 댓글 목록을 중첩 트리로 만든다.
+ *
+ * 재귀를 쓰지 않는다. 자식은 부모보다 나중에 삽입되므로 id 가 항상 부모보다 크다.
+ * 따라서 id 내림차순으로 한 번 훑으면 어떤 노드에 도달하는 시점에 그 자식들은
+ * 이미 완성되어 있다. 깊이에 상관없이 스택이 자라지 않는다.
+ */
+final class TreeBuilder
+{
+    public const DELETED_PLACEHOLDER = '삭제된 댓글입니다.';
+
+    /**
+     * @param array $rows id 오름차순으로 정렬된 댓글 행 목록
+     */
+    public static function build(array $rows): array
+    {
+        /** @var array<int, array> $pending 부모 id -> 완성된 자식 노드 목록(역순) */
+        $pending = [];
+        $ids = [];
+        foreach ($rows as $row) {
+            $ids[(int) $row['id']] = true;
+        }
+
+        foreach (array_reverse($rows) as $row) {
+            $id = (int) $row['id'];
+
+            $children = isset($pending[$id]) ? array_reverse($pending[$id]) : [];
+            unset($pending[$id]);
+
+            $isDeleted = $row['deleted_at'] !== null;
+            if ($isDeleted && $children === []) {
+                // 자식 없는 삭제 댓글은 아예 보이지 않는다.
+                continue;
+            }
+
+            $node = $isDeleted ? self::placeholder($row) : self::visible($row);
+            $node['children'] = $children;
+
+            $parentId = $row['parent_id'] === null ? 0 : (int) $row['parent_id'];
+            if ($parentId !== 0 && !isset($ids[$parentId])) {
+                // 부모가 목록에 없는 고아 행은 버린다. 루트로 승격시키면
+                // 다른 글의 댓글이 섞여 보일 수 있다.
+                continue;
+            }
+
+            $pending[$parentId][] = $node;
+        }
+
+        return isset($pending[0]) ? array_reverse($pending[0]) : [];
+    }
+
+    private static function visible(array $row): array
+    {
+        return [
+            'id'          => (int) $row['id'],
+            'parent_id'   => $row['parent_id'] === null ? null : (int) $row['parent_id'],
+            'depth'       => (int) $row['depth'],
+            'content'     => (string) $row['content'],
+            'author_id'   => $row['author_id'],
+            'author_name' => (string) $row['author_name'],
+            'is_secret'   => (bool) $row['is_secret'],
+            'deleted'     => false,
+            'created_at'  => (string) $row['created_at'],
+            'updated_at'  => (string) $row['updated_at'],
+        ];
+    }
+
+    private static function placeholder(array $row): array
+    {
+        return [
+            'id'          => (int) $row['id'],
+            'parent_id'   => $row['parent_id'] === null ? null : (int) $row['parent_id'],
+            'depth'       => (int) $row['depth'],
+            'content'     => self::DELETED_PLACEHOLDER,
+            'author_id'   => null,
+            'author_name' => null,
+            'is_secret'   => false,
+            'deleted'     => true,
+            'created_at'  => (string) $row['created_at'],
+            'updated_at'  => (string) $row['updated_at'],
+        ];
+    }
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Comment/TreeBuilderTest.php`
+Expected: PASS — 9 tests
+
+- [ ] **Step 5: CommentRepository 의 실패하는 테스트를 쓴다**
+
+`tests/Repository/CommentRepositoryTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Repository;
+
+use StandardBoard\Repository\BoardRepository;
+use StandardBoard\Repository\CommentRepository;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Support\Clock;
+use StandardBoard\Tests\Support\DatabaseTestCase;
+
+final class CommentRepositoryTest extends DatabaseTestCase
+{
+    protected function setUp(): void
+    {
+        Clock::freeze('2026-08-26 01:02:03');
+    }
+
+    protected function tearDown(): void
+    {
+        Clock::unfreeze();
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testRootCommentHasDepthZero(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $id = $repo->create($this->comment($boardId, $postId, null, '루트'));
+
+        $this->assertSame(0, $repo->find($id)['depth']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDepthIsDerivedFromParent(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $root = $repo->create($this->comment($boardId, $postId, null, '루트'));
+        $child = $repo->create($this->comment($boardId, $postId, $root, '자식'));
+        $grandChild = $repo->create($this->comment($boardId, $postId, $child, '손자'));
+
+        $this->assertSame(1, $repo->find($child)['depth']);
+        $this->assertSame(2, $repo->find($grandChild)['depth']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindByPostReturnsIdAscendingIncludingDeleted(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $a = $repo->create($this->comment($boardId, $postId, null, 'a'));
+        $b = $repo->create($this->comment($boardId, $postId, null, 'b'));
+        $repo->softDelete($a);
+
+        $rows = $repo->findByPost($postId);
+
+        $this->assertSame([$a, $b], array_column($rows, 'id'));
+        $this->assertNotNull($rows[0]['deleted_at']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFindByPostNeverExposesGuestPassword(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $repo->create($this->comment($boardId, $postId, null, '비회원') + [
+            'author_id'      => null,
+            'guest_password' => password_hash('1234', PASSWORD_DEFAULT),
+        ]);
+
+        $this->assertArrayNotHasKey('guest_password', $repo->findByPost($postId)[0]);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testHasChildren(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $root = $repo->create($this->comment($boardId, $postId, null, '루트'));
+        $leaf = $repo->create($this->comment($boardId, $postId, $root, '자식'));
+
+        $this->assertTrue($repo->hasChildren($root));
+        $this->assertFalse($repo->hasChildren($leaf));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUpdateTouchesUpdatedAt(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $id = $repo->create($this->comment($boardId, $postId, null, '원본'));
+
+        Clock::freeze('2026-08-27 09:00:00');
+        $repo->update($id, ['content' => '수정본']);
+
+        $row = $repo->find($id);
+        $this->assertSame('수정본', $row['content']);
+        $this->assertSame('2026-08-27 09:00:00', substr((string) $row['updated_at'], 0, 19));
+    }
+
+    /** @return array{0: CommentRepository, 1: int, 2: int} */
+    private function setUpPost(array $config): array
+    {
+        $db = $this->freshDatabase($config);
+        $boardId = (new BoardRepository($db))->create(['board_key' => 'free', 'name' => '자유']);
+        $postId = (new PostRepository($db))->create([
+            'board_id'    => $boardId,
+            'title'       => '글',
+            'content'     => '본문',
+            'author_id'   => 'user-1',
+            'author_name' => '홍길동',
+        ]);
+
+        return [new CommentRepository($db), $postId, $boardId];
+    }
+
+    private function comment(int $boardId, int $postId, ?int $parentId, string $content): array
+    {
+        return [
+            'board_id'    => $boardId,
+            'post_id'     => $postId,
+            'parent_id'   => $parentId,
+            'content'     => $content,
+            'author_id'   => 'user-1',
+            'author_name' => '홍길동',
+        ];
+    }
+}
+```
+
+- [ ] **Step 6: CommentRepository 를 구현한다**
+
+`src/Repository/CommentRepository.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Repository;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Support\Clock;
+
+final class CommentRepository
+{
+    private const COLUMNS = 'id, board_id, post_id, parent_id, depth, content, author_id, author_name,'
+        . ' is_secret, created_at, updated_at, deleted_at';
+
+    private const DEFAULTS = [
+        'parent_id'      => null,
+        'author_id'      => null,
+        'guest_password' => null,
+        'is_secret'      => 0,
+    ];
+
+    /** @var Connection */
+    private $db;
+
+    public function __construct(Connection $db)
+    {
+        $this->db = $db;
+    }
+
+    public function findByPost(int $postId): array
+    {
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments')
+            . ' WHERE post_id = ? ORDER BY id ASC',
+            [$postId]
+        );
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
+    public function find(int $id): ?array
+    {
+        $row = $this->db->selectOne(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            [$id]
+        );
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    public function findWithSecret(int $id): ?array
+    {
+        $row = $this->db->selectOne(
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            [$id]
+        );
+
+        return $row === null ? null : $this->hydrate($row);
+    }
+
+    public function create(array $data): int
+    {
+        $row = array_merge(self::DEFAULTS, $data);
+        $row['depth'] = $this->depthFor($row['parent_id'] === null ? null : (int) $row['parent_id']);
+
+        $now = Clock::now();
+        $row['created_at'] = $now;
+        $row['updated_at'] = $now;
+        $row['deleted_at'] = null;
+        $row['is_secret'] = (int) (bool) $row['is_secret'];
+
+        return (int) $this->db->insert('comments', $row);
+    }
+
+    public function update(int $id, array $data): void
+    {
+        unset($data['id'], $data['board_id'], $data['post_id'], $data['parent_id'], $data['depth'], $data['created_at']);
+        $data['updated_at'] = Clock::now();
+
+        $this->db->update('comments', $data, 'id = :id', ['id' => $id]);
+    }
+
+    public function softDelete(int $id): void
+    {
+        $this->db->update('comments', ['deleted_at' => Clock::now()], 'id = :id', ['id' => $id]);
+    }
+
+    public function hasChildren(int $id): bool
+    {
+        $row = $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE parent_id = ?',
+            [$id]
+        );
+
+        return (int) $row['c'] > 0;
+    }
+
+    private function depthFor(?int $parentId): int
+    {
+        if ($parentId === null) {
+            return 0;
+        }
+
+        $row = $this->db->selectOne(
+            'SELECT depth FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            [$parentId]
+        );
+
+        return $row === null ? 0 : (int) $row['depth'] + 1;
+    }
+
+    private function hydrate(array $row): array
+    {
+        foreach (['id', 'board_id', 'post_id', 'depth', 'is_secret'] as $column) {
+            $row[$column] = (int) $row[$column];
+        }
+        $row['parent_id'] = $row['parent_id'] === null ? null : (int) $row['parent_id'];
+
+        return $row;
+    }
+}
+```
+
+- [ ] **Step 7: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Repository tests/Comment`
+Expected: PASS
+
+- [ ] **Step 8: 커밋한다**
+
+```bash
+git add src/Repository/CommentRepository.php src/Comment tests/Repository/CommentRepositoryTest.php tests/Comment
+git commit -m "feat: CommentRepository 와 재귀 없는 트리 조립
+
+자식 id 가 부모보다 항상 크다는 성질을 이용해 id 내림차순 한 번의 순회로
+트리를 만든다. 깊이에 상관없이 스택이 자라지 않는다."
+```
+
+---
+
+### Task 7: HS256 토큰 발급과 검증
+
+**Files:**
+- Create: `src/Support/Base64Url.php`, `src/Auth/Identity.php`, `src/Auth/TokenIssuer.php`, `src/Auth/TokenVerifier.php`
+- Test: `tests/Auth/TokenTest.php`
+
+**Interfaces:**
+- Consumes: `Clock`, `Json`, `ApiError` (Task 1)
+- Produces:
+  - `Base64Url::encode(string $raw): string` / `decode(string $encoded): string`
+  - `Identity::guest(): Identity`
+  - `Identity::user(string $sub, string $name, bool $admin): Identity`
+  - `Identity::sub(): ?string`, `name(): ?string`, `isAdmin(): bool`, `isGuest(): bool`
+  - `TokenIssuer::__construct(string $secret, int $ttl)`
+  - `TokenIssuer::issue(string $sub, string $name, bool $admin): string`
+  - `TokenVerifier::__construct(string $secret, int $leeway)`
+  - `TokenVerifier::verify(?string $jwt): Identity` — `null` 또는 빈 문자열이면 `Identity::guest()`
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Auth/TokenTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Auth;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Auth\TokenIssuer;
+use StandardBoard\Auth\TokenVerifier;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Support\Base64Url;
+use StandardBoard\Support\Clock;
+use StandardBoard\Support\Json;
+
+final class TokenTest extends TestCase
+{
+    private const SECRET = 'test-secret-that-is-long-enough-32b';
+
+    protected function setUp(): void
+    {
+        Clock::freeze('2026-08-26 01:02:03');
+    }
+
+    protected function tearDown(): void
+    {
+        Clock::unfreeze();
+    }
+
+    public function testRoundTripPreservesClaims(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('user-123', '홍길동', true);
+
+        $identity = (new TokenVerifier(self::SECRET, 60))->verify($token);
+
+        $this->assertSame('user-123', $identity->sub());
+        $this->assertSame('홍길동', $identity->name());
+        $this->assertTrue($identity->isAdmin());
+        $this->assertFalse($identity->isGuest());
+    }
+
+    public function testTokenHasThreeSegments(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', false);
+
+        $this->assertCount(3, explode('.', $token));
+    }
+
+    public function testMissingTokenGivesGuestIdentity(): void
+    {
+        $identity = (new TokenVerifier(self::SECRET, 60))->verify(null);
+
+        $this->assertTrue($identity->isGuest());
+        $this->assertNull($identity->sub());
+        $this->assertFalse($identity->isAdmin());
+    }
+
+    public function testEmptyStringGivesGuestIdentity(): void
+    {
+        $this->assertTrue((new TokenVerifier(self::SECRET, 60))->verify('')->isGuest());
+    }
+
+    public function testWrongSecretIsRejected(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', true);
+
+        $this->expectException(ApiError::class);
+        $this->expectExceptionMessage('토큰 서명이 올바르지 않습니다.');
+        (new TokenVerifier('another-secret-entirely-different!!', 60))->verify($token);
+    }
+
+    public function testTamperedPayloadIsRejected(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', false);
+        [$header, $payload, $signature] = explode('.', $token);
+
+        $claims = Json::decode(Base64Url::decode($payload));
+        $claims['admin'] = true;
+        $forged = $header . '.' . Base64Url::encode(Json::encode($claims)) . '.' . $signature;
+
+        $this->expectException(ApiError::class);
+        (new TokenVerifier(self::SECRET, 60))->verify($forged);
+    }
+
+    public function testExpiredTokenIsRejected(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', false);
+
+        Clock::freeze('2026-08-26 02:03:04');
+
+        $this->expectException(ApiError::class);
+        $this->expectExceptionMessage('토큰이 만료되었습니다.');
+        (new TokenVerifier(self::SECRET, 60))->verify($token);
+    }
+
+    public function testExpiryWithinLeewayIsAccepted(): void
+    {
+        $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', false);
+
+        // 만료 30초 뒤. 허용 오차 60초 안이므로 통과해야 한다.
+        Clock::freeze('2026-08-26 02:02:33');
+
+        $this->assertSame('u', (new TokenVerifier(self::SECRET, 60))->verify($token)->sub());
+    }
+
+    public function testMalformedTokenIsRejected(): void
+    {
+        $this->expectException(ApiError::class);
+        (new TokenVerifier(self::SECRET, 60))->verify('not-a-token');
+    }
+
+    public function testUnsupportedAlgorithmIsRejected(): void
+    {
+        $header = Base64Url::encode(Json::encode(['typ' => 'JWT', 'alg' => 'none']));
+        $payload = Base64Url::encode(Json::encode(['sub' => 'u', 'name' => 'n', 'admin' => true, 'exp' => 99999999999]));
+
+        $this->expectException(ApiError::class);
+        (new TokenVerifier(self::SECRET, 60))->verify($header . '.' . $payload . '.');
+    }
+
+    public function testTokenWithoutExpiryIsRejected(): void
+    {
+        $header = Base64Url::encode(Json::encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = Base64Url::encode(Json::encode(['sub' => 'u', 'name' => 'n', 'admin' => false]));
+        $signature = Base64Url::encode(hash_hmac('sha256', $header . '.' . $payload, self::SECRET, true));
+
+        $this->expectException(ApiError::class);
+        $this->expectExceptionMessage('토큰에 만료 시각이 없습니다.');
+        (new TokenVerifier(self::SECRET, 60))->verify($header . '.' . $payload . '.' . $signature);
+    }
+
+    public function testAdminClaimDefaultsToFalseWhenAbsent(): void
+    {
+        $header = Base64Url::encode(Json::encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = Base64Url::encode(Json::encode(['sub' => 'u', 'name' => 'n', 'exp' => Clock::timestamp() + 60]));
+        $signature = Base64Url::encode(hash_hmac('sha256', $header . '.' . $payload, self::SECRET, true));
+
+        $identity = (new TokenVerifier(self::SECRET, 60))->verify($header . '.' . $payload . '.' . $signature);
+
+        $this->assertFalse($identity->isAdmin());
+    }
+
+    public function testBase64UrlHasNoPaddingOrUnsafeCharacters(): void
+    {
+        $encoded = Base64Url::encode("\xfb\xff\xfe binary");
+
+        $this->assertSame(0, preg_match('/[+\/=]/', $encoded));
+        $this->assertSame("\xfb\xff\xfe binary", Base64Url::decode($encoded));
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Auth/TokenTest.php`
+Expected: FAIL — `Class "StandardBoard\Auth\TokenIssuer" not found`
+
+- [ ] **Step 3: 구현한다**
+
+`src/Support/Base64Url.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Support;
+
+final class Base64Url
+{
+    public static function encode(string $raw): string
+    {
+        return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
+    }
+
+    public static function decode(string $encoded): string
+    {
+        $padded = str_pad(strtr($encoded, '-_', '+/'), (int) (ceil(strlen($encoded) / 4) * 4), '=');
+        $decoded = base64_decode($padded, true);
+
+        return $decoded === false ? '' : $decoded;
+    }
+}
+```
+
+`src/Auth/Identity.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Auth;
+
+/**
+ * 요청자의 신원. 게시판은 사용자 저장소를 갖지 않으므로 이 값은
+ * 전적으로 호스트 앱이 서명한 주장에서 온다.
+ */
+final class Identity
+{
+    /** @var string|null */
+    private $sub;
+
+    /** @var string|null */
+    private $name;
+
+    /** @var bool */
+    private $admin;
+
+    private function __construct(?string $sub, ?string $name, bool $admin)
+    {
+        $this->sub = $sub;
+        $this->name = $name;
+        $this->admin = $admin;
+    }
+
+    public static function guest(): self
+    {
+        return new self(null, null, false);
+    }
+
+    public static function user(string $sub, string $name, bool $admin): self
+    {
+        return new self($sub, $name, $admin);
+    }
+
+    public function sub(): ?string
+    {
+        return $this->sub;
+    }
+
+    public function name(): ?string
+    {
+        return $this->name;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->admin;
+    }
+
+    public function isGuest(): bool
+    {
+        return $this->sub === null;
+    }
+}
+```
+
+`src/Auth/TokenIssuer.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Auth;
+
+use StandardBoard\Support\Base64Url;
+use StandardBoard\Support\Clock;
+use StandardBoard\Support\Json;
+
+final class TokenIssuer
+{
+    /** @var string */
+    private $secret;
+
+    /** @var int */
+    private $ttl;
+
+    public function __construct(string $secret, int $ttl)
+    {
+        $this->secret = $secret;
+        $this->ttl = $ttl;
+    }
+
+    public function issue(string $sub, string $name, bool $admin): string
+    {
+        $issuedAt = Clock::timestamp();
+
+        $header = Base64Url::encode(Json::encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = Base64Url::encode(Json::encode([
+            'sub'   => $sub,
+            'name'  => $name,
+            'admin' => $admin,
+            'iat'   => $issuedAt,
+            'exp'   => $issuedAt + $this->ttl,
+        ]));
+
+        $signature = Base64Url::encode(
+            hash_hmac('sha256', $header . '.' . $payload, $this->secret, true)
+        );
+
+        return $header . '.' . $payload . '.' . $signature;
+    }
+}
+```
+
+`src/Auth/TokenVerifier.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Auth;
+
+use StandardBoard\Http\ApiError;
+use StandardBoard\Support\Base64Url;
+use StandardBoard\Support\Clock;
+use StandardBoard\Support\Json;
+
+final class TokenVerifier
+{
+    /** @var string */
+    private $secret;
+
+    /** @var int */
+    private $leeway;
+
+    public function __construct(string $secret, int $leeway)
+    {
+        $this->secret = $secret;
+        $this->leeway = $leeway;
+    }
+
+    public function verify(?string $jwt): Identity
+    {
+        if ($jwt === null || trim($jwt) === '') {
+            return Identity::guest();
+        }
+
+        $parts = explode('.', $jwt);
+        if (count($parts) !== 3) {
+            throw ApiError::unauthorized('토큰 형식이 올바르지 않습니다.');
+        }
+        [$header, $payload, $signature] = $parts;
+
+        $decodedHeader = Json::decode(Base64Url::decode($header));
+        if (($decodedHeader['alg'] ?? '') !== 'HS256') {
+            throw ApiError::unauthorized('지원하지 않는 토큰 알고리즘입니다.');
+        }
+
+        $expected = Base64Url::encode(hash_hmac('sha256', $header . '.' . $payload, $this->secret, true));
+        if (!hash_equals($expected, $signature)) {
+            throw ApiError::unauthorized('토큰 서명이 올바르지 않습니다.');
+        }
+
+        $claims = Json::decode(Base64Url::decode($payload));
+
+        if (!isset($claims['exp'])) {
+            throw ApiError::unauthorized('토큰에 만료 시각이 없습니다.');
+        }
+        if (Clock::timestamp() > ((int) $claims['exp'] + $this->leeway)) {
+            throw ApiError::unauthorized('토큰이 만료되었습니다.');
+        }
+
+        $sub = (string) ($claims['sub'] ?? '');
+        if ($sub === '') {
+            throw ApiError::unauthorized('토큰에 사용자 식별자가 없습니다.');
+        }
+
+        return Identity::user($sub, (string) ($claims['name'] ?? $sub), (bool) ($claims['admin'] ?? false));
+    }
+}
+```
+
+서명을 먼저 검증하고 그다음에 페이로드를 해석하는 순서가 중요하다. 반대로 하면 검증되지 않은 데이터로 분기하게 된다.
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Auth/TokenTest.php`
+Expected: PASS — 13 tests
+
+- [ ] **Step 5: 커밋한다**
+
+```bash
+git add src/Auth src/Support/Base64Url.php tests/Auth
+git commit -m "feat: HS256 토큰 발급과 검증
+
+서명 검증을 페이로드 해석보다 먼저 한다. alg=none 과 만료 없는 토큰을 거부한다."
+```
+
+---
+
+### Task 8: 권한 판정 (Acl)
+
+**Files:**
+- Create: `src/Auth/Acl.php`
+- Test: `tests/Auth/AclTest.php`
+
+**Interfaces:**
+- Consumes: `Identity` (Task 7), `ApiError` (Task 1)
+- Produces:
+  - `Acl::__construct(Identity $identity)`
+  - `identity(): Identity`
+  - `isGlobalAdmin(): bool`
+  - `isBoardManager(array $board): bool`
+  - `isAdminFor(array $board): bool` — 전역 관리자이거나 그 게시판의 관리자
+  - `canRead(array $board): bool`, `canWrite(array $board): bool`, `canComment(array $board): bool`
+  - `owns(array $resource, ?string $password): bool` — `$resource` 는 `guest_password` 를 포함해야 한다
+  - `canModify(array $board, array $resource, ?string $password): bool`
+  - `assertGlobalAdmin(): void`, `assertAdminFor(array $board): void`, `assertCanRead(array $board): void`, `assertCanWrite(array $board): void`, `assertCanComment(array $board): void`, `assertCanModify(array $board, array $resource, ?string $password): void`
+  - assert 계열은 게스트면 `UNAUTHORIZED`(401), 로그인했는데 권한이 없으면 `FORBIDDEN`(403) 을 던진다
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Auth/AclTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Auth;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Auth\Acl;
+use StandardBoard\Auth\Identity;
+use StandardBoard\Http\ApiError;
+
+final class AclTest extends TestCase
+{
+    public function testGlobalAdminPassesEverything(): void
+    {
+        $acl = new Acl(Identity::user('root', '관리자', true));
+        $board = $this->board(['perm_read' => 'admin', 'perm_write' => 'admin', 'perm_comment' => 'admin']);
+
+        $this->assertTrue($acl->isGlobalAdmin());
+        $this->assertTrue($acl->isAdminFor($board));
+        $this->assertTrue($acl->canRead($board));
+        $this->assertTrue($acl->canWrite($board));
+        $this->assertTrue($acl->canComment($board));
+    }
+
+    public function testBoardManagerIsAdminForThatBoardOnly(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '운영자', false));
+        $managed = $this->board(['managers' => ['user-1']]);
+        $other = $this->board(['managers' => ['user-9']]);
+
+        $this->assertTrue($acl->isBoardManager($managed));
+        $this->assertTrue($acl->isAdminFor($managed));
+        $this->assertFalse($acl->isAdminFor($other));
+    }
+
+    public function testBoardManagerIsNotGlobalAdmin(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '운영자', false));
+
+        $this->assertFalse($acl->isGlobalAdmin());
+        $this->expectException(ApiError::class);
+        $acl->assertGlobalAdmin();
+    }
+
+    public function testGuestCanReadGuestBoard(): void
+    {
+        $acl = new Acl(Identity::guest());
+
+        $this->assertTrue($acl->canRead($this->board(['perm_read' => 'guest'])));
+    }
+
+    public function testGuestCannotReadMemberBoard(): void
+    {
+        $acl = new Acl(Identity::guest());
+
+        $this->assertFalse($acl->canRead($this->board(['perm_read' => 'member'])));
+    }
+
+    public function testMemberCanWriteMemberBoardButNotAdminBoard(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '회원', false));
+
+        $this->assertTrue($acl->canWrite($this->board(['perm_write' => 'member'])));
+        $this->assertFalse($acl->canWrite($this->board(['perm_write' => 'admin'])));
+    }
+
+    public function testGuestCanWriteGuestBoard(): void
+    {
+        $acl = new Acl(Identity::guest());
+
+        $this->assertTrue($acl->canWrite($this->board(['perm_write' => 'guest'])));
+    }
+
+    public function testOwnsMatchesAuthorId(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '회원', false));
+
+        $this->assertTrue($acl->owns($this->resource('user-1'), null));
+        $this->assertFalse($acl->owns($this->resource('user-2'), null));
+    }
+
+    public function testGuestNeverOwnsMemberResource(): void
+    {
+        $acl = new Acl(Identity::guest());
+
+        $this->assertFalse($acl->owns($this->resource('user-1'), null));
+    }
+
+    public function testOwnsGuestResourceWithCorrectPassword(): void
+    {
+        $acl = new Acl(Identity::guest());
+        $resource = $this->guestResource('1234');
+
+        $this->assertTrue($acl->owns($resource, '1234'));
+        $this->assertFalse($acl->owns($resource, '9999'));
+        $this->assertFalse($acl->owns($resource, null));
+    }
+
+    public function testLoggedInUserCanAlsoProveGuestResourceWithPassword(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '회원', false));
+
+        $this->assertTrue($acl->owns($this->guestResource('1234'), '1234'));
+    }
+
+    public function testCanModifyForOwnerManagerAndStranger(): void
+    {
+        $board = $this->board(['managers' => ['mgr-1']]);
+        $resource = $this->resource('user-1');
+
+        $this->assertTrue((new Acl(Identity::user('user-1', '본인', false)))->canModify($board, $resource, null));
+        $this->assertTrue((new Acl(Identity::user('mgr-1', '운영자', false)))->canModify($board, $resource, null));
+        $this->assertTrue((new Acl(Identity::user('root', '관리자', true)))->canModify($board, $resource, null));
+        $this->assertFalse((new Acl(Identity::user('user-2', '남', false)))->canModify($board, $resource, null));
+    }
+
+    public function testAssertGivesUnauthorizedForGuestAndForbiddenForMember(): void
+    {
+        $board = $this->board(['perm_write' => 'admin']);
+
+        try {
+            (new Acl(Identity::guest()))->assertCanWrite($board);
+            $this->fail('게스트는 401 이어야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(401, $e->status());
+        }
+
+        try {
+            (new Acl(Identity::user('user-1', '회원', false)))->assertCanWrite($board);
+            $this->fail('회원은 403 이어야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(403, $e->status());
+        }
+    }
+
+    public function testUnknownPermissionLevelDeniesEveryone(): void
+    {
+        $acl = new Acl(Identity::user('user-1', '회원', false));
+
+        $this->assertFalse($acl->canRead($this->board(['perm_read' => 'nonsense'])));
+    }
+
+    private function board(array $overrides = []): array
+    {
+        return array_merge([
+            'id'           => 1,
+            'board_key'    => 'free',
+            'managers'     => [],
+            'perm_read'    => 'guest',
+            'perm_write'   => 'member',
+            'perm_comment' => 'member',
+        ], $overrides);
+    }
+
+    private function resource(string $authorId): array
+    {
+        return ['author_id' => $authorId, 'guest_password' => null];
+    }
+
+    private function guestResource(string $password): array
+    {
+        return ['author_id' => null, 'guest_password' => password_hash($password, PASSWORD_DEFAULT)];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Auth/AclTest.php`
+Expected: FAIL — `Class "StandardBoard\Auth\Acl" not found`
+
+- [ ] **Step 3: 구현한다**
+
+`src/Auth/Acl.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Auth;
+
+use StandardBoard\Http\ApiError;
+
+/**
+ * 권한 판정의 단일 출처. 판정 순서는 다음과 같고 위에서부터 단락 평가한다.
+ *
+ *   1. 전역 관리자        -> 전부 허용
+ *   2. 게시판 관리자      -> 그 게시판의 글/댓글에 한해 관리 권한
+ *   3. 본인 (author_id)   -> 자기 글/댓글
+ *   4. 비회원 본인 (비번) -> 3번과 같은 권한, 소유 증명 수단만 다르다
+ *   5. 그 외              -> 게시판의 perm_* 설정
+ */
+final class Acl
+{
+    /** @var Identity */
+    private $identity;
+
+    public function __construct(Identity $identity)
+    {
+        $this->identity = $identity;
+    }
+
+    public function identity(): Identity
+    {
+        return $this->identity;
+    }
+
+    public function isGlobalAdmin(): bool
+    {
+        return $this->identity->isAdmin();
+    }
+
+    public function isBoardManager(array $board): bool
+    {
+        $sub = $this->identity->sub();
+        if ($sub === null) {
+            return false;
+        }
+
+        $managers = isset($board['managers']) && is_array($board['managers']) ? $board['managers'] : [];
+
+        return in_array($sub, $managers, true);
+    }
+
+    public function isAdminFor(array $board): bool
+    {
+        return $this->isGlobalAdmin() || $this->isBoardManager($board);
+    }
+
+    public function canRead(array $board): bool
+    {
+        return $this->allows($board, (string) $board['perm_read']);
+    }
+
+    public function canWrite(array $board): bool
+    {
+        return $this->allows($board, (string) $board['perm_write']);
+    }
+
+    public function canComment(array $board): bool
+    {
+        return $this->allows($board, (string) $board['perm_comment']);
+    }
+
+    /**
+     * @param array $resource guest_password 를 포함한 글/댓글 행
+     */
+    public function owns(array $resource, ?string $password): bool
+    {
+        $authorId = $resource['author_id'] ?? null;
+
+        if ($authorId !== null) {
+            $sub = $this->identity->sub();
+
+            return $sub !== null && hash_equals((string) $authorId, $sub);
+        }
+
+        $hash = $resource['guest_password'] ?? null;
+        if ($hash === null || $password === null || $password === '') {
+            return false;
+        }
+
+        return password_verify($password, (string) $hash);
+    }
+
+    public function canModify(array $board, array $resource, ?string $password): bool
+    {
+        return $this->isAdminFor($board) || $this->owns($resource, $password);
+    }
+
+    public function assertGlobalAdmin(): void
+    {
+        $this->deny($this->isGlobalAdmin(), '전역 관리자만 할 수 있습니다.');
+    }
+
+    public function assertAdminFor(array $board): void
+    {
+        $this->deny($this->isAdminFor($board), '이 게시판의 관리자만 할 수 있습니다.');
+    }
+
+    public function assertCanRead(array $board): void
+    {
+        $this->deny($this->canRead($board), '이 게시판을 읽을 권한이 없습니다.');
+    }
+
+    public function assertCanWrite(array $board): void
+    {
+        $this->deny($this->canWrite($board), '이 게시판에 글을 쓸 권한이 없습니다.');
+    }
+
+    public function assertCanComment(array $board): void
+    {
+        $this->deny($this->canComment($board), '이 게시판에 댓글을 쓸 권한이 없습니다.');
+    }
+
+    public function assertCanModify(array $board, array $resource, ?string $password): void
+    {
+        $this->deny($this->canModify($board, $resource, $password), '수정하거나 삭제할 권한이 없습니다.');
+    }
+
+    private function allows(array $board, string $level): bool
+    {
+        switch ($level) {
+            case 'guest':
+                return true;
+            case 'member':
+                return !$this->identity->isGuest() || $this->isGlobalAdmin();
+            case 'admin':
+                return $this->isAdminFor($board);
+        }
+
+        // 알 수 없는 값은 가장 안전한 쪽으로 해석한다.
+        return false;
+    }
+
+    /**
+     * 게스트에게는 401 을, 신원이 확인된 사용자에게는 403 을 준다.
+     * 401 은 "로그인하면 될 수도 있다", 403 은 "로그인해도 안 된다" 는 뜻이다.
+     */
+    private function deny(bool $allowed, string $message): void
+    {
+        if ($allowed) {
+            return;
+        }
+
+        throw $this->identity->isGuest()
+            ? ApiError::unauthorized('로그인이 필요합니다.')
+            : ApiError::forbidden($message);
+    }
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Auth`
+Expected: PASS — 27 tests
+
+- [ ] **Step 5: 커밋한다**
+
+```bash
+git add src/Auth/Acl.php tests/Auth/AclTest.php
+git commit -m "feat: 권한 판정 Acl
+
+본인 확인과 비회원 비밀번호 확인이 같은 자리를 차지한다. 소유 증명 수단만 다르고
+그 뒤의 권한은 동일하다."
+```
+
+---
+
+### Task 9: HTTP 계층, 검증기, 프론트 컨트롤러
+
+**Files:**
+- Create: `src/Http/Request.php`, `src/Http/Response.php`, `src/Http/Router.php`, `src/Http/Cors.php`
+- Create: `src/Validation/Validator.php`, `src/App.php`, `src/Routes.php`
+- Create: `public/index.php`, `public/.htaccess`
+- Modify: `config/config.sample.php` (`cors` 항목 추가)
+- Modify: `docs/superpowers/specs/2026-08-26-standard-board-design.md` (CORS 절 추가)
+- Test: `tests/Http/RouterTest.php`, `tests/Http/RequestTest.php`, `tests/Validation/ValidatorTest.php`
+
+**설계 보충 — CORS:** 스펙 작성 시 빠진 항목이다. 브라우저가 호스트 앱 도메인에서 게시판 API 를 직접 호출하므로 교차 출처 요청이 되고, `Authorization` 헤더 때문에 프리플라이트(`OPTIONS`)가 발생한다. 허용 출처는 설정에 화이트리스트로 둔다. `*` 는 허용하지 않는다 — 토큰을 헤더로 받는 API 에서 모든 출처를 허용할 이유가 없다.
+
+**Interfaces:**
+- Consumes: 전 태스크 전부
+- Produces:
+  - `Request::fromGlobals(): Request`
+  - `Request::__construct(string $method, string $path, array $query, array $body, array $headers, array $files)`
+  - `method(): string`, `path(): string`, `query(string $key, $default = null)`, `body(): array`, `input(string $key, $default = null)`, `header(string $name): ?string`, `bearerToken(): ?string`, `files(): array`
+  - `Response::json(array $data, int $status = 200): Response`
+  - `Response::fromError(ApiError $e, bool $debug): Response`
+  - `Response::status(): int`, `payload(): array`, `headers(): array`, `withHeaders(array $h): Response`, `send(): void`
+  - `Router::add(string $method, string $pattern, callable $handler): void` (+ `get/post/patch/delete`)
+  - `Router::dispatch(Request $request): Response` — 핸들러 시그니처는 `function (Request $r, array $params): Response`
+  - `Cors::headersFor(?string $origin, array $allowedOrigins): array`
+  - `Validator::__construct(array $data)`, `requiredString`, `optionalString`, `requiredPassword`, `optionalPassword`, `bool`, `int`, `inList`, `check`
+  - `App::__construct(array $config)` 및 접근자 `db()`, `boards()`, `posts()`, `comments()`, `config(string $path, $default = null)`, `aclFor(Request $r): Acl`, `router(): Router`
+  - `Routes::register(Router $router, App $app): void` — 이후 태스크가 여기에 경로를 추가한다
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Http/RouterTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Http;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Http\Request;
+use StandardBoard\Http\Response;
+use StandardBoard\Http\Router;
+
+final class RouterTest extends TestCase
+{
+    public function testMatchesStaticPath(): void
+    {
+        $router = new Router();
+        $router->get('/boards', static function (Request $r, array $p): Response {
+            return Response::json(['ok' => true]);
+        });
+
+        $response = $router->dispatch($this->request('GET', '/boards'));
+
+        $this->assertSame(200, $response->status());
+        $this->assertSame(['ok' => true], $response->payload());
+    }
+
+    public function testExtractsNamedParameters(): void
+    {
+        $router = new Router();
+        $router->get('/boards/{key}/posts', static function (Request $r, array $p): Response {
+            return Response::json(['key' => $p['key']]);
+        });
+
+        $response = $router->dispatch($this->request('GET', '/boards/free/posts'));
+
+        $this->assertSame(['key' => 'free'], $response->payload());
+    }
+
+    public function testExtractsMultipleParameters(): void
+    {
+        $router = new Router();
+        $router->get('/posts/{id}/files/{index}', static function (Request $r, array $p): Response {
+            return Response::json($p);
+        });
+
+        $response = $router->dispatch($this->request('GET', '/posts/12/files/0'));
+
+        $this->assertSame(['id' => '12', 'index' => '0'], $response->payload());
+    }
+
+    public function testTrailingSlashIsIgnored(): void
+    {
+        $router = new Router();
+        $router->get('/boards', static function (Request $r, array $p): Response {
+            return Response::json(['ok' => true]);
+        });
+
+        $this->assertSame(200, $router->dispatch($this->request('GET', '/boards/'))->status());
+    }
+
+    public function testParameterDoesNotMatchAcrossSlash(): void
+    {
+        $router = new Router();
+        $router->get('/boards/{key}', static function (Request $r, array $p): Response {
+            return Response::json($p);
+        });
+
+        $this->expectException(ApiError::class);
+        $router->dispatch($this->request('GET', '/boards/free/posts'));
+    }
+
+    public function testUnknownPathThrowsNotFound(): void
+    {
+        $router = new Router();
+
+        try {
+            $router->dispatch($this->request('GET', '/nope'));
+            $this->fail('NOT_FOUND 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(404, $e->status());
+        }
+    }
+
+    public function testKnownPathWithWrongMethodThrowsNotFound(): void
+    {
+        $router = new Router();
+        $router->get('/boards', static function (Request $r, array $p): Response {
+            return Response::json([]);
+        });
+
+        try {
+            $router->dispatch($this->request('DELETE', '/boards'));
+            $this->fail('NOT_FOUND 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(404, $e->status());
+        }
+    }
+
+    private function request(string $method, string $path): Request
+    {
+        return new Request($method, $path, [], [], [], []);
+    }
+}
+```
+
+`tests/Http/RequestTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Http;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Http\Cors;
+use StandardBoard\Http\Request;
+
+final class RequestTest extends TestCase
+{
+    public function testBearerTokenIsExtracted(): void
+    {
+        $request = new Request('GET', '/', [], [], ['Authorization' => 'Bearer abc.def.ghi'], []);
+
+        $this->assertSame('abc.def.ghi', $request->bearerToken());
+    }
+
+    public function testBearerPrefixIsCaseInsensitive(): void
+    {
+        $request = new Request('GET', '/', [], [], ['Authorization' => 'bearer abc'], []);
+
+        $this->assertSame('abc', $request->bearerToken());
+    }
+
+    public function testMissingAuthorizationGivesNull(): void
+    {
+        $this->assertNull((new Request('GET', '/', [], [], [], []))->bearerToken());
+    }
+
+    public function testNonBearerSchemeGivesNull(): void
+    {
+        $request = new Request('GET', '/', [], [], ['Authorization' => 'Basic xyz'], []);
+
+        $this->assertNull($request->bearerToken());
+    }
+
+    public function testInputPrefersBodyOverQuery(): void
+    {
+        $request = new Request('POST', '/', ['a' => 'query'], ['a' => 'body'], [], []);
+
+        $this->assertSame('body', $request->input('a'));
+    }
+
+    public function testInputFallsBackToQuery(): void
+    {
+        $request = new Request('POST', '/', ['a' => 'query'], [], [], []);
+
+        $this->assertSame('query', $request->input('a'));
+    }
+
+    public function testCorsAllowsListedOriginOnly(): void
+    {
+        $allowed = ['https://app.example.com'];
+
+        $headers = Cors::headersFor('https://app.example.com', $allowed);
+        $this->assertSame('https://app.example.com', $headers['Access-Control-Allow-Origin']);
+        $this->assertSame('Origin', $headers['Vary']);
+
+        $this->assertSame([], Cors::headersFor('https://evil.example.com', $allowed));
+        $this->assertSame([], Cors::headersFor(null, $allowed));
+    }
+
+    public function testCorsWildcardIsNeverEmitted(): void
+    {
+        $headers = Cors::headersFor('https://a.example.com', ['*']);
+
+        $this->assertSame([], $headers);
+    }
+}
+```
+
+`tests/Validation/ValidatorTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Validation;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Validation\Validator;
+
+final class ValidatorTest extends TestCase
+{
+    public function testRequiredStringPasses(): void
+    {
+        $v = new Validator(['title' => '  제목  ']);
+
+        $this->assertSame('제목', $v->requiredString('title', 200));
+        $v->check();
+    }
+
+    public function testMissingRequiredFieldCollectsError(): void
+    {
+        $v = new Validator([]);
+        $v->requiredString('title', 200);
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(422, $e->status());
+            $this->assertSame(['title' => '필수 항목입니다.'], $e->details());
+        }
+    }
+
+    public function testAllErrorsAreReportedTogether(): void
+    {
+        $v = new Validator(['title' => str_repeat('가', 201)]);
+        $v->requiredString('title', 200);
+        $v->requiredString('content');
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(['title', 'content'], array_keys($e->details()));
+        }
+    }
+
+    public function testLengthIsCountedInCharactersNotBytes(): void
+    {
+        $v = new Validator(['title' => str_repeat('가', 200)]);
+        $v->requiredString('title', 200);
+
+        $v->check();
+        $this->addToAssertionCount(1);
+    }
+
+    public function testOptionalStringReturnsDefaultWhenAbsent(): void
+    {
+        $v = new Validator([]);
+
+        $this->assertNull($v->optionalString('category', 50));
+        $v->check();
+    }
+
+    public function testEmptyStringCountsAsAbsentForOptional(): void
+    {
+        $v = new Validator(['category' => '   ']);
+
+        $this->assertNull($v->optionalString('category', 50));
+    }
+
+    public function testPasswordMinimumLength(): void
+    {
+        $v = new Validator(['password' => '123']);
+        $v->requiredPassword('password');
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(['password' => '4자 이상이어야 합니다.'], $e->details());
+        }
+    }
+
+    public function testIntClampsToRange(): void
+    {
+        $v = new Validator(['per_page' => '500']);
+
+        $this->assertSame(100, $v->int('per_page', 20, 1, 100));
+        $this->assertSame(20, (new Validator([]))->int('per_page', 20, 1, 100));
+        $this->assertSame(1, (new Validator(['page' => '0']))->int('page', 1, 1, 9999));
+    }
+
+    public function testBoolAcceptsCommonTruthyForms(): void
+    {
+        foreach ([true, 'true', '1', 1] as $truthy) {
+            $this->assertTrue((new Validator(['x' => $truthy]))->bool('x', false), var_export($truthy, true));
+        }
+        foreach ([false, 'false', '0', 0] as $falsy) {
+            $this->assertFalse((new Validator(['x' => $falsy]))->bool('x', true), var_export($falsy, true));
+        }
+        $this->assertTrue((new Validator([]))->bool('x', true));
+    }
+
+    public function testInListRejectsUnknownValue(): void
+    {
+        $v = new Validator(['perm_read' => 'nonsense']);
+        $v->inList('perm_read', ['guest', 'member', 'admin'], 'guest');
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertArrayHasKey('perm_read', $e->details());
+        }
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Http tests/Validation`
+Expected: FAIL — `Class "StandardBoard\Http\Router" not found` (`ApiErrorTest` 는 이미 통과 상태)
+
+- [ ] **Step 3: HTTP 계층을 구현한다**
+
+`src/Http/Request.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+use StandardBoard\Support\Json;
+
+final class Request
+{
+    /** @var string */
+    private $method;
+
+    /** @var string */
+    private $path;
+
+    /** @var array */
+    private $query;
+
+    /** @var array */
+    private $body;
+
+    /** @var array 헤더 이름은 소문자로 정규화해 보관한다 */
+    private $headers;
+
+    /** @var array */
+    private $files;
+
+    public function __construct(string $method, string $path, array $query, array $body, array $headers, array $files)
+    {
+        $this->method = strtoupper($method);
+        $this->path = $path;
+        $this->query = $query;
+        $this->body = $body;
+        $this->files = $files;
+
+        $this->headers = [];
+        foreach ($headers as $name => $value) {
+            $this->headers[strtolower((string) $name)] = (string) $value;
+        }
+    }
+
+    public static function fromGlobals(): self
+    {
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
+        // mod_rewrite 가 없는 호스팅을 위해 ?p= 폴백을 지원한다.
+        $path = (string) ($_SERVER['PATH_INFO'] ?? '');
+        if ($path === '') {
+            $path = (string) ($_GET['p'] ?? '/');
+        }
+        if ($path === '' || $path[0] !== '/') {
+            $path = '/' . $path;
+        }
+
+        $raw = (string) file_get_contents('php://input');
+        $contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
+        $body = [];
+        if (stripos($contentType, 'application/json') !== false) {
+            $body = Json::decode($raw);
+        } elseif ($_POST !== []) {
+            $body = $_POST;
+        }
+
+        return new self($method, $path, $_GET, $body, self::readHeaders(), $_FILES);
+    }
+
+    public function method(): string
+    {
+        return $this->method;
+    }
+
+    public function path(): string
+    {
+        return $this->path;
+    }
+
+    /** @return mixed */
+    public function query(string $key, $default = null)
+    {
+        return $this->query[$key] ?? $default;
+    }
+
+    public function body(): array
+    {
+        return $this->body;
+    }
+
+    /** 본문을 먼저 보고 없으면 쿼리스트링을 본다. */
+    public function input(string $key, $default = null)
+    {
+        if (array_key_exists($key, $this->body)) {
+            return $this->body[$key];
+        }
+
+        return $this->query[$key] ?? $default;
+    }
+
+    public function header(string $name): ?string
+    {
+        return $this->headers[strtolower($name)] ?? null;
+    }
+
+    public function bearerToken(): ?string
+    {
+        $value = $this->header('Authorization');
+        if ($value === null || stripos($value, 'bearer ') !== 0) {
+            return null;
+        }
+
+        $token = trim(substr($value, 7));
+
+        return $token === '' ? null : $token;
+    }
+
+    public function files(): array
+    {
+        return $this->files;
+    }
+
+    private static function readHeaders(): array
+    {
+        $headers = [];
+        foreach ($_SERVER as $key => $value) {
+            if (strncmp((string) $key, 'HTTP_', 5) === 0) {
+                $name = str_replace('_', '-', substr((string) $key, 5));
+                $headers[$name] = $value;
+            }
+        }
+
+        // 일부 공유 호스팅(CGI)은 Authorization 을 HTTP_ 로 넘기지 않는다.
+        if (!isset($headers['AUTHORIZATION'])) {
+            $fallback = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? null);
+            if ($fallback !== null) {
+                $headers['AUTHORIZATION'] = $fallback;
+            }
+        }
+
+        return $headers;
+    }
+}
+```
+
+`src/Http/Response.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+use StandardBoard\Support\Json;
+
+final class Response
+{
+    /** @var array */
+    private $payload;
+
+    /** @var int */
+    private $status;
+
+    /** @var array */
+    private $headers;
+
+    private function __construct(array $payload, int $status, array $headers)
+    {
+        $this->payload = $payload;
+        $this->status = $status;
+        $this->headers = $headers;
+    }
+
+    public static function json(array $payload, int $status = 200): self
+    {
+        return new self($payload, $status, []);
+    }
+
+    public static function fromError(ApiError $error, bool $debug): self
+    {
+        return new self([
+            'error' => [
+                'code'    => $error->code(),
+                'message' => $debug || $error->code() !== 'INTERNAL'
+                    ? $error->getMessage()
+                    : '서버 오류가 발생했습니다.',
+                'details' => (object) $error->details(),
+            ],
+        ], $error->status(), []);
+    }
+
+    public function withHeaders(array $headers): self
+    {
+        return new self($this->payload, $this->status, array_merge($this->headers, $headers));
+    }
+
+    public function status(): int
+    {
+        return $this->status;
+    }
+
+    public function payload(): array
+    {
+        return $this->payload;
+    }
+
+    public function headers(): array
+    {
+        return $this->headers;
+    }
+
+    public function send(): void
+    {
+        http_response_code($this->status);
+        header('Content-Type: application/json; charset=utf-8');
+        foreach ($this->headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+
+        echo Json::encode($this->payload);
+    }
+}
+```
+
+`fromError()` 가 `INTERNAL` 일 때만 메시지를 감추는 이유: 나머지 다섯 코드는 전부 클라이언트가 알아야 고칠 수 있는 오류이므로 원문이 그대로 유용하다. `INTERNAL` 만 내부 사정을 담고 있다.
+
+`src/Http/Cors.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+final class Cors
+{
+    /**
+     * 화이트리스트에 정확히 일치하는 출처에만 헤더를 준다.
+     * 와일드카드는 지원하지 않는다. 토큰을 헤더로 받는 API 에서
+     * 모든 출처를 허용할 이유가 없다.
+     */
+    public static function headersFor(?string $origin, array $allowedOrigins): array
+    {
+        if ($origin === null || $origin === '') {
+            return [];
+        }
+        if (!in_array($origin, $allowedOrigins, true)) {
+            return [];
+        }
+
+        return [
+            'Access-Control-Allow-Origin'  => $origin,
+            'Access-Control-Allow-Methods' => 'GET, POST, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Authorization, Content-Type',
+            'Access-Control-Max-Age'       => '600',
+            'Vary'                         => 'Origin',
+        ];
+    }
+}
+```
+
+`src/Http/Router.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+final class Router
+{
+    /** @var array<int, array{method: string, regex: string, names: string[], handler: callable}> */
+    private $routes = [];
+
+    public function add(string $method, string $pattern, callable $handler): void
+    {
+        $names = [];
+        $regex = preg_replace_callback(
+            '/\{([a-z_][a-z0-9_]*)\}/i',
+            static function (array $m) use (&$names): string {
+                $names[] = $m[1];
+
+                return '([^/]+)';
+            },
+            str_replace('/', '\/', $pattern)
+        );
+
+        $this->routes[] = [
+            'method'  => strtoupper($method),
+            'regex'   => '/^' . $regex . '$/',
+            'names'   => $names,
+            'handler' => $handler,
+        ];
+    }
+
+    public function get(string $pattern, callable $handler): void
+    {
+        $this->add('GET', $pattern, $handler);
+    }
+
+    public function post(string $pattern, callable $handler): void
+    {
+        $this->add('POST', $pattern, $handler);
+    }
+
+    public function patch(string $pattern, callable $handler): void
+    {
+        $this->add('PATCH', $pattern, $handler);
+    }
+
+    public function delete(string $pattern, callable $handler): void
+    {
+        $this->add('DELETE', $pattern, $handler);
+    }
+
+    public function dispatch(Request $request): Response
+    {
+        $path = $request->path();
+        if ($path !== '/' && substr($path, -1) === '/') {
+            $path = rtrim($path, '/');
+        }
+
+        foreach ($this->routes as $route) {
+            if ($route['method'] !== $request->method()) {
+                continue;
+            }
+            if (preg_match($route['regex'], $path, $matches) !== 1) {
+                continue;
+            }
+
+            array_shift($matches);
+            $params = [];
+            foreach ($route['names'] as $index => $name) {
+                $params[$name] = rawurldecode($matches[$index]);
+            }
+
+            return $route['handler']($request, $params);
+        }
+
+        throw ApiError::notFound('요청한 경로를 찾을 수 없습니다: ' . $request->method() . ' ' . $path);
+    }
+}
+```
+
+메서드가 다른 경우에도 405 가 아니라 404 를 주는 것은 의도적이다. 405 는 "이 경로는 있지만 이 메서드는 안 된다" 는 정보를 흘리는데, 이 API 에서 그 정보가 클라이언트에게 도움이 되지 않는다.
+
+- [ ] **Step 4: Validator 를 구현한다**
+
+`src/Validation/Validator.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Validation;
+
+use StandardBoard\Http\ApiError;
+
+/**
+ * 오류를 모았다가 check() 에서 한 번에 던진다. 필드 하나 고칠 때마다
+ * 왕복하게 만들지 않기 위해서다.
+ */
+final class Validator
+{
+    public const PASSWORD_MIN = 4;
+
+    /** @var array */
+    private $data;
+
+    /** @var array<string, string> */
+    private $errors = [];
+
+    public function __construct(array $data)
+    {
+        $this->data = $data;
+    }
+
+    public function requiredString(string $field, int $max = 0): string
+    {
+        $value = trim((string) ($this->data[$field] ?? ''));
+
+        if ($value === '') {
+            $this->errors[$field] = '필수 항목입니다.';
+
+            return '';
+        }
+        if ($max > 0 && mb_strlen($value) > $max) {
+            $this->errors[$field] = $max . '자를 넘을 수 없습니다.';
+
+            return '';
+        }
+
+        return $value;
+    }
+
+    public function optionalString(string $field, int $max = 0, ?string $default = null): ?string
+    {
+        if (!array_key_exists($field, $this->data)) {
+            return $default;
+        }
+
+        $value = trim((string) $this->data[$field]);
+        if ($value === '') {
+            return $default;
+        }
+        if ($max > 0 && mb_strlen($value) > $max) {
+            $this->errors[$field] = $max . '자를 넘을 수 없습니다.';
+
+            return $default;
+        }
+
+        return $value;
+    }
+
+    public function requiredPassword(string $field): string
+    {
+        $value = (string) ($this->data[$field] ?? '');
+
+        if ($value === '') {
+            $this->errors[$field] = '필수 항목입니다.';
+
+            return '';
+        }
+        if (mb_strlen($value) < self::PASSWORD_MIN) {
+            $this->errors[$field] = self::PASSWORD_MIN . '자 이상이어야 합니다.';
+
+            return '';
+        }
+
+        return $value;
+    }
+
+    public function optionalPassword(string $field): ?string
+    {
+        $value = (string) ($this->data[$field] ?? '');
+
+        return $value === '' ? null : $value;
+    }
+
+    public function bool(string $field, bool $default): bool
+    {
+        if (!array_key_exists($field, $this->data)) {
+            return $default;
+        }
+
+        $value = $this->data[$field];
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    public function int(string $field, int $default, int $min, int $max): int
+    {
+        if (!array_key_exists($field, $this->data) || $this->data[$field] === '') {
+            return $default;
+        }
+
+        $value = (int) $this->data[$field];
+
+        return max($min, min($max, $value));
+    }
+
+    public function inList(string $field, array $allowed, string $default): string
+    {
+        if (!array_key_exists($field, $this->data)) {
+            return $default;
+        }
+
+        $value = (string) $this->data[$field];
+        if (!in_array($value, $allowed, true)) {
+            $this->errors[$field] = implode(', ', $allowed) . ' 중 하나여야 합니다.';
+
+            return $default;
+        }
+
+        return $value;
+    }
+
+    public function fail(string $field, string $message): void
+    {
+        $this->errors[$field] = $message;
+    }
+
+    public function check(): void
+    {
+        if ($this->errors !== []) {
+            throw ApiError::validation($this->errors);
+        }
+    }
+}
+```
+
+- [ ] **Step 5: App 과 Routes 를 만든다**
+
+`src/App.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard;
+
+use StandardBoard\Auth\Acl;
+use StandardBoard\Auth\TokenVerifier;
+use StandardBoard\Db\Connection;
+use StandardBoard\Http\Request;
+use StandardBoard\Http\Router;
+use StandardBoard\Repository\BoardRepository;
+use StandardBoard\Repository\CommentRepository;
+use StandardBoard\Repository\PostRepository;
+
+/**
+ * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
+ * 객체 수가 열 개 남짓이고 런타임 의존성을 0 으로 유지해야 하기 때문이다.
+ */
+final class App
+{
+    /** @var array */
+    private $config;
+
+    /** @var Connection|null */
+    private $db = null;
+
+    /** @var BoardRepository|null */
+    private $boards = null;
+
+    /** @var PostRepository|null */
+    private $posts = null;
+
+    /** @var CommentRepository|null */
+    private $comments = null;
+
+    public function __construct(array $config)
+    {
+        $this->config = $config;
+    }
+
+    /** 점 표기 경로로 설정을 읽는다. 예: config('auth.secret') */
+    public function config(string $path, $default = null)
+    {
+        $node = $this->config;
+        foreach (explode('.', $path) as $segment) {
+            if (!is_array($node) || !array_key_exists($segment, $node)) {
+                return $default;
+            }
+            $node = $node[$segment];
+        }
+
+        return $node;
+    }
+
+    public function db(): Connection
+    {
+        if ($this->db === null) {
+            $this->db = Connection::create((array) $this->config('db', []));
+        }
+
+        return $this->db;
+    }
+
+    public function boards(): BoardRepository
+    {
+        if ($this->boards === null) {
+            $this->boards = new BoardRepository($this->db());
+        }
+
+        return $this->boards;
+    }
+
+    public function posts(): PostRepository
+    {
+        if ($this->posts === null) {
+            $this->posts = new PostRepository($this->db());
+        }
+
+        return $this->posts;
+    }
+
+    public function comments(): CommentRepository
+    {
+        if ($this->comments === null) {
+            $this->comments = new CommentRepository($this->db());
+        }
+
+        return $this->comments;
+    }
+
+    public function aclFor(Request $request): Acl
+    {
+        $verifier = new TokenVerifier(
+            (string) $this->config('auth.secret', ''),
+            (int) $this->config('auth.leeway', 60)
+        );
+
+        return new Acl($verifier->verify($request->bearerToken()));
+    }
+
+    public function router(): Router
+    {
+        $router = new Router();
+        Routes::register($router, $this);
+
+        return $router;
+    }
+}
+```
+
+`src/Routes.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard;
+
+use StandardBoard\Http\Request;
+use StandardBoard\Http\Response;
+use StandardBoard\Http\Router;
+
+/**
+ * 경로 등록의 단일 지점. 이후 태스크가 여기에 자기 경로를 추가한다.
+ */
+final class Routes
+{
+    public static function register(Router $router, App $app): void
+    {
+        $router->get('/health', static function (Request $request, array $params) use ($app): Response {
+            return Response::json([
+                'ok'      => true,
+                'dialect' => $app->db()->dialect()->name(),
+            ]);
+        });
+    }
+}
+```
+
+- [ ] **Step 6: 프론트 컨트롤러를 만든다**
+
+`public/index.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use StandardBoard\App;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Http\Cors;
+use StandardBoard\Http\Request;
+use StandardBoard\Http\Response;
+
+// display_errors 가 켜진 호스팅에서도 경고문이 JSON 앞에 섞이지 않게 한다.
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+ob_start();
+
+require __DIR__ . '/../src/autoload.php';
+
+$configFile = __DIR__ . '/../config/config.php';
+if (!is_file($configFile)) {
+    ob_end_clean();
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo '{"error":{"code":"INTERNAL","message":"설치가 필요합니다. install.php 를 실행하세요.","details":{}}}';
+    exit;
+}
+
+/** @var array $config */
+$config = require $configFile;
+$debug = (bool) ($config['debug'] ?? false);
+
+$corsHeaders = Cors::headersFor(
+    $_SERVER['HTTP_ORIGIN'] ?? null,
+    (array) ($config['cors']['allowed_origins'] ?? [])
+);
+
+// 프리플라이트는 라우팅 이전에 끝낸다.
+if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'OPTIONS') {
+    ob_end_clean();
+    http_response_code($corsHeaders === [] ? 403 : 204);
+    foreach ($corsHeaders as $name => $value) {
+        header($name . ': ' . $value);
+    }
+    exit;
+}
+
+try {
+    $app = new App($config);
+    $response = $app->router()->dispatch(Request::fromGlobals());
+} catch (ApiError $e) {
+    $response = Response::fromError($e, $debug);
+} catch (Throwable $e) {
+    if (isset($config['log']['file'])) {
+        @error_log(
+            '[' . gmdate('Y-m-d H:i:s') . '] ' . get_class($e) . ': ' . $e->getMessage()
+                . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL,
+            3,
+            (string) $config['log']['file']
+        );
+    }
+    $response = Response::fromError(ApiError::internal($e->getMessage()), $debug);
+}
+
+// 핸들러가 실수로 출력한 것이 있어도 버린다. 응답은 JSON 하나뿐이어야 한다.
+ob_end_clean();
+$response->withHeaders($corsHeaders)->send();
+```
+
+`public/.htaccess`:
+
+```apache
+# mod_rewrite 가 있으면 깨끗한 경로를, 없으면 ?p= 폴백을 쓴다.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Authorization 헤더가 CGI 모드에서 사라지는 것을 막는다.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php/$1 [QSA,L]
+</IfModule>
+```
+
+- [ ] **Step 7: 설정 샘플과 스펙에 CORS 를 반영한다**
+
+`config/config.sample.php` 의 `'log'` 항목 위에 추가:
+
+```php
+    // 브라우저가 직접 호출하는 호스트 앱의 출처를 정확히 적는다.
+    // 와일드카드는 지원하지 않는다.
+    'cors' => [
+        'allowed_origins' => [
+            // 'https://app.example.com',
+        ],
+    ],
+```
+
+스펙 `docs/superpowers/specs/2026-08-26-standard-board-design.md` 의 5장 끝에 추가:
+
+```markdown
+### 5.1 CORS
+
+브라우저가 호스트 앱 도메인에서 게시판 API 를 직접 호출하므로 교차 출처 요청이 되고,
+`Authorization` 헤더 때문에 프리플라이트(`OPTIONS`)가 발생한다. 허용 출처는
+`config.cors.allowed_origins` 에 정확히 일치하는 문자열로 화이트리스트한다.
+와일드카드(`*`)는 지원하지 않는다 — 토큰을 헤더로 받는 API 에서 모든 출처를 허용할 이유가 없다.
+허용되지 않은 출처의 프리플라이트에는 403 을 준다.
+```
+
+- [ ] **Step 8: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit`
+Expected: PASS — 전체 스위트
+
+- [ ] **Step 9: 실제로 떠 있는지 확인한다**
+
+```bash
+cp config/config.sample.php config/config.php
+php -S 127.0.0.1:8080 -t public &
+sleep 1
+curl -s 'http://127.0.0.1:8080/index.php?p=/health'
+```
+Expected: `{"ok":true,"dialect":"sqlite"}` — 최초 실행이라 `storage/board.sqlite` 는 아직 스키마가 없지만 `/health` 는 방언 이름만 보므로 통과한다. 확인 후 서버를 종료한다.
+
+- [ ] **Step 10: 커밋한다**
+
+```bash
+git add src/Http src/Validation src/App.php src/Routes.php public config/config.sample.php docs
+git commit -m "feat: HTTP 계층, 검증기, 프론트 컨트롤러
+
+브라우저가 API 를 직접 호출하는 구조라 CORS 화이트리스트를 추가한다.
+스펙에 빠져 있던 항목이라 스펙 문서에도 반영한다."
+```
+
+---
+
+### Task 10: 로그인과 게시판 API
+
+**Files:**
+- Create: `src/Service/AuthService.php`, `src/Service/BoardService.php`
+- Create: `tests/Support/ApiTestCase.php`
+- Modify: `src/Routes.php` (경로 추가), `src/App.php` (서비스 접근자 추가)
+- Modify: `src/Repository/PostRepository.php`, `src/Repository/CommentRepository.php` (`deleteByBoard` 추가)
+- Test: `tests/Api/AuthApiTest.php`, `tests/Api/BoardApiTest.php`
+
+**Interfaces:**
+- Consumes: `App`, `Acl`, `BoardRepository`, `TokenIssuer`, `Validator`, `Router`, `Request`, `Response`
+- Produces:
+  - `AuthService::__construct(array $bootstrapAdmin, TokenIssuer $issuer)`
+  - `AuthService::login(string $id, string $password): string` — 토큰 문자열
+  - `BoardService::__construct(BoardRepository $boards, PostRepository $posts, CommentRepository $comments)`
+  - `BoardService::listBoards(Acl $acl): array`
+  - `BoardService::get(Acl $acl, string $key): array` — 표현용 배열
+  - `BoardService::getEntity(Acl $acl, string $key): array` — 원본 행. 다른 서비스가 쓴다
+  - `BoardService::create(Acl $acl, array $input): array`
+  - `BoardService::update(Acl $acl, string $key, array $input): array`
+  - `BoardService::delete(Acl $acl, string $key): void`
+  - `BoardService::present(array $board, Acl $acl): array`
+  - `PostRepository::deleteByBoard(int $boardId): void`
+  - `CommentRepository::deleteByBoard(int $boardId): void`
+  - `App::auth(): AuthService`, `App::boardService(): BoardService`
+  - `StandardBoard\Tests\Support\ApiTestCase::makeApp(array $dbConfig): App`
+  - `ApiTestCase::call(App $app, string $method, string $path, array $body = [], ?string $token = null): Response`
+  - `ApiTestCase::tokenFor(App $app, string $sub, string $name, bool $admin): string`
+
+- [ ] **Step 1: API 테스트 하니스를 만든다**
+
+`tests/Support/ApiTestCase.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Support;
+
+use StandardBoard\App;
+use StandardBoard\Auth\TokenIssuer;
+use StandardBoard\Db\Schema;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Http\Request;
+use StandardBoard\Http\Response;
+
+abstract class ApiTestCase extends DatabaseTestCase
+{
+    protected const SECRET = 'api-test-secret-that-is-long-enough';
+
+    protected function makeApp(array $dbConfig): App
+    {
+        $app = new App([
+            'db'   => $dbConfig,
+            'auth' => ['secret' => self::SECRET, 'ttl' => 3600, 'leeway' => 60],
+            'bootstrap_admin' => [
+                'id'            => 'root',
+                'password_hash' => password_hash('rootpass', PASSWORD_DEFAULT),
+            ],
+            'uploads' => [
+                'dir'         => sys_get_temp_dir() . '/standard-board-test-uploads',
+                'max_bytes'   => 1024 * 1024,
+                'allowed_ext' => ['txt', 'png', 'pdf'],
+            ],
+            'cors'  => ['allowed_origins' => []],
+            'debug' => true,
+        ]);
+
+        $schema = new Schema($app->db());
+        $schema->drop();
+        $schema->create();
+
+        return $app;
+    }
+
+    /** ApiError 도 Response 로 변환해 돌려준다. 테스트가 상태 코드를 그대로 볼 수 있다. */
+    protected function call(App $app, string $method, string $path, array $body = [], ?string $token = null): Response
+    {
+        $headers = $token === null ? [] : ['Authorization' => 'Bearer ' . $token];
+        $request = new Request($method, $path, [], $body, $headers, []);
+
+        try {
+            return $app->router()->dispatch($request);
+        } catch (ApiError $e) {
+            return Response::fromError($e, true);
+        }
+    }
+
+    protected function tokenFor(App $app, string $sub, string $name, bool $admin): string
+    {
+        return (new TokenIssuer(self::SECRET, 3600))->issue($sub, $name, $admin);
+    }
+
+    protected function adminToken(App $app): string
+    {
+        return $this->tokenFor($app, 'root', '관리자', true);
+    }
+}
+```
+
+- [ ] **Step 2: 실패하는 테스트를 쓴다**
+
+`tests/Api/AuthApiTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Api;
+
+use StandardBoard\Auth\TokenVerifier;
+use StandardBoard\Tests\Support\ApiTestCase;
+
+final class AuthApiTest extends ApiTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testLoginReturnsAdminToken(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/auth/login', ['id' => 'root', 'password' => 'rootpass']);
+
+        $this->assertSame(200, $response->status());
+        $identity = (new TokenVerifier(self::SECRET, 60))->verify($response->payload()['token']);
+        $this->assertTrue($identity->isAdmin());
+        $this->assertSame('root', $identity->sub());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testWrongPasswordIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/auth/login', ['id' => 'root', 'password' => 'nope']);
+
+        $this->assertSame(401, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testWrongIdIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/auth/login', ['id' => 'someone', 'password' => 'rootpass']);
+
+        $this->assertSame(401, $response->status());
+    }
+}
+```
+
+`tests/Api/BoardApiTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Api;
+
+use StandardBoard\App;
+use StandardBoard\Tests\Support\ApiTestCase;
+
+final class BoardApiTest extends ApiTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testAdminCreatesBoard(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/boards', [
+            'board_key'  => 'free',
+            'name'       => '자유게시판',
+            'categories' => ['잡담', '질문'],
+        ], $this->adminToken($app));
+
+        $this->assertSame(201, $response->status());
+        $this->assertSame('free', $response->payload()['data']['board_key']);
+        $this->assertSame(['잡담', '질문'], $response->payload()['data']['categories']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestCannotCreateBoard(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/boards', ['board_key' => 'free', 'name' => '자유']);
+
+        $this->assertSame(401, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testMemberCannotCreateBoard(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $token = $this->tokenFor($app, 'user-1', '회원', false);
+
+        $response = $this->call($app, 'POST', '/boards', ['board_key' => 'free', 'name' => '자유'], $token);
+
+        $this->assertSame(403, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testBoardKeyIsValidated(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $response = $this->call($app, 'POST', '/boards', [
+            'board_key' => '자유 게시판',
+            'name'      => '자유',
+        ], $this->adminToken($app));
+
+        $this->assertSame(422, $response->status());
+        $this->assertArrayHasKey('board_key', (array) $response->payload()['error']['details']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDuplicateBoardKeyIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->createBoard($app);
+
+        $response = $this->call($app, 'POST', '/boards', [
+            'board_key' => 'free',
+            'name'      => '중복',
+        ], $this->adminToken($app));
+
+        $this->assertSame(422, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testListHidesBoardsTheCallerCannotRead(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $admin = $this->adminToken($app);
+        $this->call($app, 'POST', '/boards', ['board_key' => 'open', 'name' => '공개'], $admin);
+        $this->call($app, 'POST', '/boards', ['board_key' => 'secret', 'name' => '비공개', 'perm_read' => 'admin'], $admin);
+
+        $guestKeys = array_column($this->call($app, 'GET', '/boards')->payload()['data'], 'board_key');
+        $adminKeys = array_column($this->call($app, 'GET', '/boards', [], $admin)->payload()['data'], 'board_key');
+
+        $this->assertSame(['open'], $guestKeys);
+        $this->assertSame(['open', 'secret'], $adminKeys);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testManagersAreHiddenFromNonAdmins(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->call($app, 'POST', '/boards', [
+            'board_key' => 'free',
+            'name'      => '자유',
+            'managers'  => ['mgr-1'],
+        ], $this->adminToken($app));
+
+        $guestView = $this->call($app, 'GET', '/boards/free')->payload()['data'];
+        $adminView = $this->call($app, 'GET', '/boards/free', [], $this->adminToken($app))->payload()['data'];
+
+        $this->assertArrayNotHasKey('managers', $guestView);
+        $this->assertSame(['mgr-1'], $adminView['managers']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testBoardManagerSeesManagersButCannotChangeSettings(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->call($app, 'POST', '/boards', [
+            'board_key' => 'free',
+            'name'      => '자유',
+            'managers'  => ['mgr-1'],
+        ], $this->adminToken($app));
+        $managerToken = $this->tokenFor($app, 'mgr-1', '운영자', false);
+
+        $view = $this->call($app, 'GET', '/boards/free', [], $managerToken)->payload()['data'];
+        $this->assertSame(['mgr-1'], $view['managers']);
+
+        $update = $this->call($app, 'PATCH', '/boards/free', ['name' => '바뀐 이름'], $managerToken);
+        $this->assertSame(403, $update->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUpdateChangesOnlyGivenFields(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->createBoard($app);
+
+        $response = $this->call($app, 'PATCH', '/boards/free', ['name' => '새 이름'], $this->adminToken($app));
+
+        $this->assertSame(200, $response->status());
+        $this->assertSame('새 이름', $response->payload()['data']['name']);
+        $this->assertSame('free', $response->payload()['data']['board_key']);
+        $this->assertSame(20, $response->payload()['data']['per_page']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUnknownBoardGives404(array $config): void
+    {
+        $app = $this->makeApp($config);
+
+        $this->assertSame(404, $this->call($app, 'GET', '/boards/nope')->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDeleteRemovesBoardAndItsContent(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $boardId = $this->createBoard($app);
+        $postId = $app->posts()->create([
+            'board_id' => $boardId, 'title' => '글', 'content' => '본문',
+            'author_id' => 'u', 'author_name' => '가',
+        ]);
+        $app->comments()->create([
+            'board_id' => $boardId, 'post_id' => $postId, 'parent_id' => null,
+            'content' => '댓글', 'author_id' => 'u', 'author_name' => '가',
+        ]);
+
+        $response = $this->call($app, 'DELETE', '/boards/free', [], $this->adminToken($app));
+
+        $this->assertSame(204, $response->status());
+        $this->assertNull($app->boards()->findByKey('free'));
+        $this->assertNull($app->posts()->find($postId));
+        $this->assertSame([], $app->comments()->findByPost($postId));
+    }
+
+    private function createBoard(App $app): int
+    {
+        $response = $this->call($app, 'POST', '/boards', [
+            'board_key' => 'free',
+            'name'      => '자유게시판',
+        ], $this->adminToken($app));
+
+        return (int) $response->payload()['data']['id'];
+    }
+}
+```
+
+- [ ] **Step 3: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api`
+Expected: FAIL — `/auth/login` 과 `/boards` 경로가 없어 전부 404
+
+- [ ] **Step 4: AuthService 를 구현한다**
+
+`src/Service/AuthService.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Service;
+
+use StandardBoard\Auth\TokenIssuer;
+use StandardBoard\Http\ApiError;
+
+/**
+ * 호스트 앱이 없을 때를 위한 진입점. 호스트를 붙인 뒤에는 설정에서
+ * bootstrap_admin 을 null 로 두어 이 경로를 닫는다.
+ *
+ * 관리자 진입점이 두 개가 되는 것이 아니다. 진입점은 서명된 토큰 하나이고
+ * 그 토큰을 만드는 방법이 두 가지일 뿐이다.
+ */
+final class AuthService
+{
+    /** @var array|null */
+    private $bootstrapAdmin;
+
+    /** @var TokenIssuer */
+    private $issuer;
+
+    public function __construct(?array $bootstrapAdmin, TokenIssuer $issuer)
+    {
+        $this->bootstrapAdmin = $bootstrapAdmin;
+        $this->issuer = $issuer;
+    }
+
+    public function login(string $id, string $password): string
+    {
+        $configuredId = (string) ($this->bootstrapAdmin['id'] ?? '');
+        $configuredHash = (string) ($this->bootstrapAdmin['password_hash'] ?? '');
+
+        if ($configuredId === '' || $configuredHash === '') {
+            throw ApiError::unauthorized('부트스트랩 관리자가 비활성화되어 있습니다.');
+        }
+
+        // 아이디가 틀려도 해시 검증을 수행해 응답 시간으로 아이디 존재 여부가
+        // 드러나지 않게 한다.
+        $idMatches = hash_equals($configuredId, $id);
+        $passwordMatches = password_verify($password, $configuredHash);
+
+        if (!$idMatches || !$passwordMatches) {
+            throw ApiError::unauthorized('아이디 또는 비밀번호가 올바르지 않습니다.');
+        }
+
+        return $this->issuer->issue($configuredId, '관리자', true);
+    }
+}
+```
+
+- [ ] **Step 5: BoardService 를 구현한다**
+
+`src/Service/BoardService.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Service;
+
+use StandardBoard\Auth\Acl;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Repository\BoardRepository;
+use StandardBoard\Repository\CommentRepository;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Validation\Validator;
+
+final class BoardService
+{
+    public const PERM_LEVELS = ['guest', 'member', 'admin'];
+
+    /** @var BoardRepository */
+    private $boards;
+
+    /** @var PostRepository */
+    private $posts;
+
+    /** @var CommentRepository */
+    private $comments;
+
+    public function __construct(BoardRepository $boards, PostRepository $posts, CommentRepository $comments)
+    {
+        $this->boards = $boards;
+        $this->posts = $posts;
+        $this->comments = $comments;
+    }
+
+    public function listBoards(Acl $acl): array
+    {
+        $visible = [];
+        foreach ($this->boards->findAll() as $board) {
+            if ($acl->canRead($board)) {
+                $visible[] = $this->present($board, $acl);
+            }
+        }
+
+        return $visible;
+    }
+
+    /** 원본 행을 돌려준다. 다른 서비스가 권한 판정에 쓴다. */
+    public function getEntity(Acl $acl, string $key): array
+    {
+        $board = $this->boards->findByKey($key);
+        if ($board === null) {
+            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+        }
+        $acl->assertCanRead($board);
+
+        return $board;
+    }
+
+    public function get(Acl $acl, string $key): array
+    {
+        return $this->present($this->getEntity($acl, $key), $acl);
+    }
+
+    public function create(Acl $acl, array $input): array
+    {
+        $acl->assertGlobalAdmin();
+
+        $data = $this->validate($input, true);
+
+        if ($this->boards->findByKey($data['board_key']) !== null) {
+            throw ApiError::validation(['board_key' => '이미 사용 중인 게시판 키입니다.']);
+        }
+
+        $id = $this->boards->create($data);
+
+        return $this->present($this->boards->findById($id), $acl);
+    }
+
+    public function update(Acl $acl, string $key, array $input): array
+    {
+        $acl->assertGlobalAdmin();
+
+        $board = $this->boards->findByKey($key);
+        if ($board === null) {
+            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+        }
+
+        // 부분 수정이므로 요청에 담긴 필드만 검증하고 반영한다.
+        $data = $this->validate($input, false);
+        unset($data['board_key']);
+
+        if ($data !== []) {
+            $this->boards->update((int) $board['id'], $data);
+        }
+
+        return $this->present($this->boards->findById((int) $board['id']), $acl);
+    }
+
+    public function delete(Acl $acl, string $key): void
+    {
+        $acl->assertGlobalAdmin();
+
+        $board = $this->boards->findByKey($key);
+        if ($board === null) {
+            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+        }
+
+        $boardId = (int) $board['id'];
+        $this->comments->deleteByBoard($boardId);
+        $this->posts->deleteByBoard($boardId);
+        $this->boards->delete($boardId);
+    }
+
+    public function present(array $board, Acl $acl): array
+    {
+        $view = [
+            'id'           => (int) $board['id'],
+            'board_key'    => $board['board_key'],
+            'name'         => $board['name'],
+            'description'  => $board['description'],
+            'categories'   => $board['categories'],
+            'perm_read'    => $board['perm_read'],
+            'perm_write'   => $board['perm_write'],
+            'perm_comment' => $board['perm_comment'],
+            'use_secret'   => (bool) $board['use_secret'],
+            'use_file'     => (bool) $board['use_file'],
+            'use_category' => (bool) $board['use_category'],
+            'per_page'     => (int) $board['per_page'],
+            'sort_order'   => (int) $board['sort_order'],
+            'created_at'   => $board['created_at'],
+        ];
+
+        // 관리자 목록은 운영 정보다. 관리 권한이 있는 사람에게만 보인다.
+        if ($acl->isAdminFor($board)) {
+            $view['managers'] = $board['managers'];
+        }
+
+        return $view;
+    }
+
+    /**
+     * @param bool $isCreate true 면 필수 항목을 요구하고, false 면 주어진 필드만 검증한다.
+     */
+    private function validate(array $input, bool $isCreate): array
+    {
+        $v = new Validator($input);
+        $data = [];
+
+        if ($isCreate) {
+            $key = $v->requiredString('board_key', 50);
+            if ($key !== '' && preg_match('/^[a-z0-9_-]+$/', $key) !== 1) {
+                $v->fail('board_key', '소문자, 숫자, 밑줄, 하이픈만 쓸 수 있습니다.');
+            }
+            $data['board_key'] = $key;
+            $data['name'] = $v->requiredString('name', 100);
+        } else {
+            if (array_key_exists('name', $input)) {
+                $data['name'] = $v->requiredString('name', 100);
+            }
+        }
+
+        if (array_key_exists('description', $input)) {
+            $data['description'] = $v->optionalString('description', 2000);
+        }
+        foreach (['perm_read' => 'guest', 'perm_write' => 'member', 'perm_comment' => 'member'] as $field => $default) {
+            if ($isCreate || array_key_exists($field, $input)) {
+                $data[$field] = $v->inList($field, self::PERM_LEVELS, $default);
+            }
+        }
+        foreach (['use_secret', 'use_file', 'use_category'] as $field) {
+            if ($isCreate || array_key_exists($field, $input)) {
+                $data[$field] = $v->bool($field, false) ? 1 : 0;
+            }
+        }
+        if ($isCreate || array_key_exists('per_page', $input)) {
+            $data['per_page'] = $v->int('per_page', 20, 1, 100);
+        }
+        if ($isCreate || array_key_exists('sort_order', $input)) {
+            $data['sort_order'] = $v->int('sort_order', 0, -9999, 9999);
+        }
+
+        foreach (['categories', 'managers'] as $field) {
+            if ($isCreate || array_key_exists($field, $input)) {
+                $data[$field] = $this->stringList($v, $input, $field);
+            }
+        }
+
+        $v->check();
+
+        return $data;
+    }
+
+    private function stringList(Validator $v, array $input, string $field): array
+    {
+        $value = $input[$field] ?? [];
+        if (!is_array($value)) {
+            $v->fail($field, '배열이어야 합니다.');
+
+            return [];
+        }
+
+        $result = [];
+        foreach ($value as $item) {
+            $item = trim((string) $item);
+            if ($item !== '' && !in_array($item, $result, true)) {
+                $result[] = $item;
+            }
+        }
+
+        return $result;
+    }
+}
+```
+
+- [ ] **Step 6: 리포지토리에 게시판 단위 삭제를 추가한다**
+
+`src/Repository/PostRepository.php` 의 `restore()` 아래에 추가:
+
+```php
+    public function deleteByBoard(int $boardId): void
+    {
+        $this->db->delete('posts', 'board_id = :board_id', ['board_id' => $boardId]);
+    }
+```
+
+`src/Repository/CommentRepository.php` 의 `softDelete()` 아래에 추가:
+
+```php
+    public function deleteByBoard(int $boardId): void
+    {
+        $this->db->delete('comments', 'board_id = :board_id', ['board_id' => $boardId]);
+    }
+```
+
+- [ ] **Step 7: App 에 서비스 접근자를 추가한다**
+
+`src/App.php` 의 `use` 목록에 추가:
+
+```php
+use StandardBoard\Auth\TokenIssuer;
+use StandardBoard\Service\AuthService;
+use StandardBoard\Service\BoardService;
+```
+
+프로퍼티에 추가:
+
+```php
+    /** @var AuthService|null */
+    private $auth = null;
+
+    /** @var BoardService|null */
+    private $boardService = null;
+```
+
+`aclFor()` 위에 메서드 추가:
+
+```php
+    public function tokenIssuer(): TokenIssuer
+    {
+        return new TokenIssuer(
+            (string) $this->config('auth.secret', ''),
+            (int) $this->config('auth.ttl', 3600)
+        );
+    }
+
+    public function auth(): AuthService
+    {
+        if ($this->auth === null) {
+            $bootstrap = $this->config('bootstrap_admin');
+            $this->auth = new AuthService(is_array($bootstrap) ? $bootstrap : null, $this->tokenIssuer());
+        }
+
+        return $this->auth;
+    }
+
+    public function boardService(): BoardService
+    {
+        if ($this->boardService === null) {
+            $this->boardService = new BoardService($this->boards(), $this->posts(), $this->comments());
+        }
+
+        return $this->boardService;
+    }
+```
+
+- [ ] **Step 8: 경로를 등록한다**
+
+`src/Routes.php` 의 `register()` 안, `/health` 아래에 추가:
+
+```php
+        $router->post('/auth/login', static function (Request $request, array $params) use ($app): Response {
+            $v = new \StandardBoard\Validation\Validator($request->body());
+            $id = $v->requiredString('id', 64);
+            $password = $v->requiredString('password', 255);
+            $v->check();
+
+            return Response::json(['token' => $app->auth()->login($id, $password)]);
+        });
+
+        $router->get('/boards', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(['data' => $app->boardService()->listBoards($app->aclFor($request))]);
+        });
+
+        $router->post('/boards', static function (Request $request, array $params) use ($app): Response {
+            $board = $app->boardService()->create($app->aclFor($request), $request->body());
+
+            return Response::json(['data' => $board], 201);
+        });
+
+        $router->get('/boards/{key}', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(['data' => $app->boardService()->get($app->aclFor($request), $params['key'])]);
+        });
+
+        $router->patch('/boards/{key}', static function (Request $request, array $params) use ($app): Response {
+            $board = $app->boardService()->update($app->aclFor($request), $params['key'], $request->body());
+
+            return Response::json(['data' => $board]);
+        });
+
+        $router->delete('/boards/{key}', static function (Request $request, array $params) use ($app): Response {
+            $app->boardService()->delete($app->aclFor($request), $params['key']);
+
+            return Response::json([], 204);
+        });
+```
+
+- [ ] **Step 9: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api`
+Expected: PASS — SQLite 만 14 tests
+
+- [ ] **Step 10: 커밋한다**
+
+```bash
+git add src/Service src/App.php src/Routes.php src/Repository tests/Api tests/Support/ApiTestCase.php
+git commit -m "feat: 로그인과 게시판 API
+
+관리자 목록은 관리 권한이 있는 사람에게만 노출한다.
+게시판 삭제는 그 게시판의 글과 댓글을 함께 지운다."
+```
+
+---
+
+### Task 11: 글 API
+
+**Files:**
+- Create: `src/Service/PostService.php`
+- Modify: `src/App.php` (`postService()` 추가), `src/Routes.php` (경로 추가)
+- Test: `tests/Api/PostApiTest.php`
+
+**Interfaces:**
+- Consumes: `BoardService`(Task 10), `PostRepository`(Task 5), `Acl`(Task 8), `Validator`(Task 9)
+- Produces:
+  - `PostService::__construct(BoardService $boards, PostRepository $posts)`
+  - `listPosts(Acl $acl, string $boardKey, array $query): array` — `['data','notices','page','per_page','total','total_pages']`. `$query['include_deleted']` 가 참이고 요청자가 그 게시판의 관리자면 삭제 글도 포함한다
+  - `get(Acl $acl, int $id, ?string $password): array`
+  - `create(Acl $acl, string $boardKey, array $input): array`
+  - `update(Acl $acl, int $id, array $input): array`
+  - `delete(Acl $acl, int $id, ?string $password): void`
+  - `restore(Acl $acl, int $id): array`
+  - `loadForRead(Acl $acl, int $id, ?string $password): array` — `['post' => 행, 'board' => 행]`. CommentService 가 쓴다
+  - `App::postService(): PostService`
+
+**규칙:**
+- 목록에는 삭제 글과 공지가 빠지고, 공지는 `notices` 로 따로 나가며 `total` 에 포함되지 않는다.
+- 목록 항목에는 `content` 가 없다. 본문은 상세 조회로만 나간다.
+- 비밀글은 목록에 제목까지만 보이고, 상세는 작성자·비회원 본인·관리자만 볼 수 있다.
+- `is_notice` 는 관리자만 지정할 수 있다. 비관리자가 보내면 403.
+- 삭제된 글은 관리자에게만 보인다. 그 외에는 404.
+- 목록은 기본적으로 삭제 글을 뺀다. 관리자가 `include_deleted=1` 을 주면 포함한다. 관리자 화면의 복구 기능이 이것에 의존한다. 관리자가 아닌데 이 값을 주면 조용히 무시한다.
+- 조회수는 상세 조회 때 오르며, 요청자가 작성자 본인이면 오르지 않는다.
+- 토큰이 있으면 `author_name` 은 토큰의 `name` 으로 강제한다. 사칭을 막기 위해서다.
+- 비회원 글은 `author_name` 과 `password`(4자 이상)를 요구한다.
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Api/PostApiTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Api;
+
+use StandardBoard\App;
+use StandardBoard\Tests\Support\ApiTestCase;
+
+final class PostApiTest extends ApiTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testMemberCreatesPost(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title'   => '첫 글',
+            'content' => '본문입니다',
+        ], $token);
+
+        $this->assertSame(201, $response->status());
+        $this->assertSame('첫 글', $response->payload()['data']['title']);
+        $this->assertSame('홍길동', $response->payload()['data']['author_name']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testAuthorNameIsForcedFromTokenNotRequest(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title'       => '사칭 시도',
+            'content'     => '본문',
+            'author_name' => '관리자',
+        ], $token);
+
+        $this->assertSame('홍길동', $response->payload()['data']['author_name']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestCannotWriteToMemberBoard(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', ['title' => '글', 'content' => '본문']);
+
+        $this->assertSame(401, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestWritesWithNameAndPassword(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['perm_write' => 'guest']);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title'       => '비회원 글',
+            'content'     => '본문',
+            'author_name' => '손님',
+            'password'    => '1234',
+        ]);
+
+        $this->assertSame(201, $response->status());
+        $this->assertSame('손님', $response->payload()['data']['author_name']);
+        $this->assertNull($response->payload()['data']['author_id']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestPostRequiresPasswordOfAtLeastFourCharacters(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['perm_write' => 'guest']);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '글', 'content' => '본문', 'author_name' => '손님', 'password' => '12',
+        ]);
+
+        $this->assertSame(422, $response->status());
+        $this->assertArrayHasKey('password', (array) $response->payload()['error']['details']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestEditsOwnPostWithPassword(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['perm_write' => 'guest']);
+        $id = $this->guestPost($app);
+
+        $ok = $this->call($app, 'PATCH', '/posts/' . $id, ['title' => '수정됨', 'password' => '1234']);
+        $this->assertSame(200, $ok->status());
+        $this->assertSame('수정됨', $ok->payload()['data']['title']);
+
+        $bad = $this->call($app, 'PATCH', '/posts/' . $id, ['title' => '탈취', 'password' => '9999']);
+        $this->assertSame(401, $bad->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testStrangerCannotEditAnothersPost(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+
+        $response = $this->call($app, 'PATCH', '/posts/' . $id, ['title' => '탈취'],
+            $this->tokenFor($app, 'user-2', '남', false));
+
+        $this->assertSame(403, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testBoardManagerCanEditAndDeleteOthersPost(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['managers' => ['mgr-1']]);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+        $manager = $this->tokenFor($app, 'mgr-1', '운영자', false);
+
+        $this->assertSame(200, $this->call($app, 'PATCH', '/posts/' . $id, ['title' => '정리됨'], $manager)->status());
+        $this->assertSame(204, $this->call($app, 'DELETE', '/posts/' . $id, [], $manager)->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testOnlyAdminCanSetNotice(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+
+        $denied = $this->call($app, 'PATCH', '/posts/' . $id, ['is_notice' => true],
+            $this->tokenFor($app, 'user-1', '홍길동', false));
+        $this->assertSame(403, $denied->status());
+
+        $allowed = $this->call($app, 'PATCH', '/posts/' . $id, ['is_notice' => true], $this->adminToken($app));
+        $this->assertSame(200, $allowed->status());
+        $this->assertTrue($allowed->payload()['data']['is_notice']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testNoticesComeSeparatelyAndAreExcludedFromTotal(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $this->memberPost($app, 'user-1', '홍길동', '일반 글');
+        $noticeId = $this->memberPost($app, 'user-1', '홍길동', '공지 글');
+        $this->call($app, 'PATCH', '/posts/' . $noticeId, ['is_notice' => true], $this->adminToken($app));
+
+        $page = $this->call($app, 'GET', '/boards/free/posts')->payload();
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame(['일반 글'], array_column($page['data'], 'title'));
+        $this->assertSame(['공지 글'], array_column($page['notices'], 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testListItemsHaveNoContent(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $this->memberPost($app, 'user-1', '홍길동');
+
+        $item = $this->call($app, 'GET', '/boards/free/posts')->payload()['data'][0];
+
+        $this->assertArrayNotHasKey('content', $item);
+        $this->assertArrayHasKey('comment_count', $item);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testPaginationMetadata(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        for ($i = 1; $i <= 5; $i++) {
+            $this->memberPost($app, 'user-1', '홍길동', '글 ' . $i);
+        }
+
+        $page = $this->call($app, 'GET', '/boards/free/posts', ['page' => 2, 'per_page' => 2])->payload();
+
+        $this->assertSame(5, $page['total']);
+        $this->assertSame(2, $page['page']);
+        $this->assertSame(2, $page['per_page']);
+        $this->assertSame(3, $page['total_pages']);
+        $this->assertSame(['글 3', '글 2'], array_column($page['data'], 'title'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testViewCountIncrementsForOthersButNotForAuthor(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $other = $this->tokenFor($app, 'user-2', '남', false);
+
+        $this->call($app, 'GET', '/posts/' . $id, [], $author);
+        $this->assertSame(0, $this->call($app, 'GET', '/posts/' . $id, [], $author)->payload()['data']['view_count']);
+
+        $this->call($app, 'GET', '/posts/' . $id, [], $other);
+        $this->assertSame(1, $this->call($app, 'GET', '/posts/' . $id, [], $author)->payload()['data']['view_count']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSecretPostIsHiddenFromStrangersButVisibleToAuthorAndAdmin(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['use_secret' => true]);
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $id = (int) $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '비밀', 'content' => '민감한 내용', 'is_secret' => true,
+        ], $author)->payload()['data']['id'];
+
+        $this->assertSame(403, $this->call($app, 'GET', '/posts/' . $id, [],
+            $this->tokenFor($app, 'user-2', '남', false))->status());
+        $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id, [], $author)->status());
+        $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id, [], $this->adminToken($app))->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSecretFlagRejectedWhenBoardDoesNotAllowIt(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['use_secret' => false]);
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '비밀', 'content' => '본문', 'is_secret' => true,
+        ], $this->tokenFor($app, 'user-1', '홍길동', false));
+
+        $this->assertSame(422, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCategoryMustBeOneOfBoardCategories(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['use_category' => true, 'categories' => ['질문', '잡담']]);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+
+        $ok = $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '글', 'content' => '본문', 'category' => '질문'], $token);
+        $this->assertSame(201, $ok->status());
+
+        $bad = $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '글', 'content' => '본문', 'category' => '없는분류'], $token);
+        $this->assertSame(422, $bad->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDeletedPostIsInvisibleToOthersAndRestorableByAdmin(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+        $admin = $this->adminToken($app);
+        $this->call($app, 'DELETE', '/posts/' . $id, [], $admin);
+
+        $this->assertSame(404, $this->call($app, 'GET', '/posts/' . $id)->status());
+        $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id, [], $admin)->status());
+
+        $restored = $this->call($app, 'POST', '/posts/' . $id . '/restore', [], $admin);
+        $this->assertSame(200, $restored->status());
+        $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $id)->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testIncludeDeletedIsHonoredForAdminsAndIgnoredForOthers(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동', '지워질 글');
+        $this->memberPost($app, 'user-1', '홍길동', '남을 글');
+        $admin = $this->adminToken($app);
+        $this->call($app, 'DELETE', '/posts/' . $id, [], $admin);
+
+        $asAdmin = $this->call($app, 'GET', '/boards/free/posts', ['include_deleted' => true], $admin)->payload();
+        $this->assertSame(2, $asAdmin['total']);
+        $this->assertTrue($asAdmin['data'][0]['deleted']);
+
+        $asMember = $this->call($app, 'GET', '/boards/free/posts', ['include_deleted' => true],
+            $this->tokenFor($app, 'user-1', '홍길동', false))->payload();
+        $this->assertSame(1, $asMember['total']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testNonAdminCannotRestore(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $id = $this->memberPost($app, 'user-1', '홍길동');
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $this->call($app, 'DELETE', '/posts/' . $id, [], $author);
+
+        $this->assertSame(403, $this->call($app, 'POST', '/posts/' . $id . '/restore', [], $author)->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSearchFindsByTitle(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $this->memberPost($app, 'user-1', '홍길동', '사과 이야기');
+        $this->memberPost($app, 'user-1', '홍길동', '배 이야기');
+
+        $page = $this->call($app, 'GET', '/boards/free/posts', ['q' => '사과'])->payload();
+
+        $this->assertSame(1, $page['total']);
+    }
+
+    private function board(App $app, array $overrides = []): void
+    {
+        $this->call($app, 'POST', '/boards', array_merge([
+            'board_key' => 'free',
+            'name'      => '자유게시판',
+        ], $overrides), $this->adminToken($app));
+    }
+
+    private function memberPost(App $app, string $sub, string $name, string $title = '글'): int
+    {
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => $title, 'content' => '본문',
+        ], $this->tokenFor($app, $sub, $name, false));
+
+        return (int) $response->payload()['data']['id'];
+    }
+
+    private function guestPost(App $app): int
+    {
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '비회원 글', 'content' => '본문', 'author_name' => '손님', 'password' => '1234',
+        ]);
+
+        return (int) $response->payload()['data']['id'];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api/PostApiTest.php`
+Expected: FAIL — 글 경로가 없어 404
+
+- [ ] **Step 3: PostService 를 구현한다**
+
+`src/Service/PostService.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Service;
+
+use StandardBoard\Auth\Acl;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Validation\Validator;
+
+final class PostService
+{
+    /** @var BoardService */
+    private $boards;
+
+    /** @var PostRepository */
+    private $posts;
+
+    public function __construct(BoardService $boards, PostRepository $posts)
+    {
+        $this->boards = $boards;
+        $this->posts = $posts;
+    }
+
+    public function listPosts(Acl $acl, string $boardKey, array $query): array
+    {
+        $board = $this->boards->getEntity($acl, $boardKey);
+
+        $v = new Validator($query);
+        $page = $v->int('page', 1, 1, 100000);
+        $perPage = $v->int('per_page', (int) $board['per_page'], 1, 100);
+        $q = $v->optionalString('q', 100);
+        $category = $v->optionalString('category', 50);
+        $includeDeleted = $v->bool('include_deleted', false);
+        $v->check();
+
+        // 관리 권한이 없으면 조용히 무시한다. 오류로 만들 이유가 없다.
+        $includeDeleted = $includeDeleted && $acl->isAdminFor($board);
+
+        $result = $this->posts->paginate((int) $board['id'], $page, $perPage, $q, $category, $includeDeleted);
+
+        $summaries = [];
+        foreach ($result['rows'] as $row) {
+            $summaries[] = $this->summary($row);
+        }
+
+        $notices = [];
+        foreach ($this->posts->notices((int) $board['id']) as $row) {
+            $notices[] = $this->summary($row);
+        }
+
+        return [
+            'data'        => $summaries,
+            'notices'     => $notices,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total'       => $result['total'],
+            'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+        ];
+    }
+
+    /** @return array{post: array, board: array} */
+    public function loadForRead(Acl $acl, int $id, ?string $password): array
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null) {
+            throw ApiError::notFound('글을 찾을 수 없습니다.');
+        }
+
+        $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
+
+        if ($post['deleted_at'] !== null && !$acl->isAdminFor($board)) {
+            throw ApiError::notFound('글을 찾을 수 없습니다.');
+        }
+
+        if ((int) $post['is_secret'] === 1 && !$acl->canModify($board, $post, $password)) {
+            throw ApiError::forbidden('비밀글입니다.');
+        }
+
+        return ['post' => $post, 'board' => $board];
+    }
+
+    public function get(Acl $acl, int $id, ?string $password): array
+    {
+        $loaded = $this->loadForRead($acl, $id, $password);
+        $post = $loaded['post'];
+
+        $sub = $acl->identity()->sub();
+        $isAuthor = $sub !== null && $post['author_id'] !== null && (string) $post['author_id'] === $sub;
+        if (!$isAuthor) {
+            $this->posts->incrementViews($id);
+            $post = $this->posts->findWithSecret($id);
+        }
+
+        return $this->detail($post);
+    }
+
+    public function create(Acl $acl, string $boardKey, array $input): array
+    {
+        $board = $this->boards->getEntity($acl, $boardKey);
+        $acl->assertCanWrite($board);
+
+        $v = new Validator($input);
+        $data = [
+            'board_id' => (int) $board['id'],
+            'title'    => $v->requiredString('title', 200),
+            'content'  => $v->requiredString('content'),
+        ];
+
+        $identity = $acl->identity();
+        if ($identity->isGuest()) {
+            // 비회원 글: author_id 는 NULL 이고 비밀번호가 소유 증명 수단이 된다.
+            $data['author_id'] = null;
+            $data['author_name'] = $v->requiredString('author_name', 100);
+            $password = $v->requiredPassword('password');
+            $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
+        } else {
+            // 로그인 사용자는 요청의 author_name 을 무시한다. 사칭 방지.
+            $data['author_id'] = $identity->sub();
+            $data['author_name'] = (string) $identity->name();
+            $data['guest_password'] = null;
+        }
+
+        $data['category'] = $this->validateCategory($v, $board, $input);
+        $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
+        $data['is_notice'] = 0;
+
+        if (array_key_exists('is_notice', $input) && $v->bool('is_notice', false)) {
+            $acl->assertAdminFor($board);
+            $data['is_notice'] = 1;
+        }
+
+        $v->check();
+
+        $id = $this->posts->create($data);
+
+        return $this->detail($this->posts->findWithSecret($id));
+    }
+
+    public function update(Acl $acl, int $id, array $input): array
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null) {
+            throw ApiError::notFound('글을 찾을 수 없습니다.');
+        }
+        $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
+
+        $v = new Validator($input);
+        $password = $v->optionalPassword('password');
+        $acl->assertCanModify($board, $post, $password);
+
+        $data = [];
+        if (array_key_exists('title', $input)) {
+            $data['title'] = $v->requiredString('title', 200);
+        }
+        if (array_key_exists('content', $input)) {
+            $data['content'] = $v->requiredString('content');
+        }
+        if (array_key_exists('category', $input)) {
+            $data['category'] = $this->validateCategory($v, $board, $input);
+        }
+        if (array_key_exists('is_secret', $input)) {
+            $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
+        }
+        if (array_key_exists('is_notice', $input)) {
+            $acl->assertAdminFor($board);
+            $data['is_notice'] = $v->bool('is_notice', false) ? 1 : 0;
+        }
+
+        $v->check();
+
+        if ($data !== []) {
+            $this->posts->update($id, $data);
+        }
+
+        return $this->detail($this->posts->findWithSecret($id));
+    }
+
+    public function delete(Acl $acl, int $id, ?string $password): void
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null) {
+            throw ApiError::notFound('글을 찾을 수 없습니다.');
+        }
+        $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
+
+        $acl->assertCanModify($board, $post, $password);
+
+        $this->posts->softDelete($id);
+    }
+
+    public function restore(Acl $acl, int $id): array
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null) {
+            throw ApiError::notFound('글을 찾을 수 없습니다.');
+        }
+        $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
+
+        $acl->assertAdminFor($board);
+        $this->posts->restore($id);
+
+        return $this->detail($this->posts->findWithSecret($id));
+    }
+
+    private function boardKeyOf(array $post): string
+    {
+        $board = $this->boardsRepositoryLookup((int) $post['board_id']);
+
+        return (string) $board['board_key'];
+    }
+
+    private function boardsRepositoryLookup(int $boardId): array
+    {
+        $board = $this->boards->findBoardById($boardId);
+        if ($board === null) {
+            throw ApiError::notFound('게시판을 찾을 수 없습니다.');
+        }
+
+        return $board;
+    }
+
+    private function validateCategory(Validator $v, array $board, array $input): ?string
+    {
+        $category = $v->optionalString('category', 50);
+        if ($category === null) {
+            return null;
+        }
+        if ((int) $board['use_category'] !== 1) {
+            $v->fail('category', '이 게시판은 분류를 쓰지 않습니다.');
+
+            return null;
+        }
+        if (!in_array($category, $board['categories'], true)) {
+            $v->fail('category', '게시판에 없는 분류입니다.');
+
+            return null;
+        }
+
+        return $category;
+    }
+
+    private function validateSecret(Validator $v, array $board, bool $requested): bool
+    {
+        if ($requested && (int) $board['use_secret'] !== 1) {
+            $v->fail('is_secret', '이 게시판은 비밀글을 쓰지 않습니다.');
+
+            return false;
+        }
+
+        return $requested;
+    }
+
+    private function summary(array $row): array
+    {
+        return [
+            'id'            => (int) $row['id'],
+            'category'      => $row['category'],
+            'title'         => $row['title'],
+            'author_id'     => $row['author_id'],
+            'author_name'   => $row['author_name'],
+            'is_notice'     => (bool) $row['is_notice'],
+            'is_secret'     => (bool) $row['is_secret'],
+            'view_count'    => (int) $row['view_count'],
+            'comment_count' => (int) $row['comment_count'],
+            'file_count'    => count($row['attachments']),
+            'deleted'       => $row['deleted_at'] !== null,
+            'created_at'    => $row['created_at'],
+        ];
+    }
+
+    private function detail(array $row): array
+    {
+        $view = $this->summary($row);
+        $view['content'] = $row['content'];
+        $view['updated_at'] = $row['updated_at'];
+        $view['attachments'] = [];
+        foreach ($row['attachments'] as $index => $file) {
+            $view['attachments'][] = [
+                'index' => $index,
+                'name'  => $file['name'] ?? '',
+                'size'  => (int) ($file['size'] ?? 0),
+                'mime'  => $file['mime'] ?? 'application/octet-stream',
+                'url'   => '/posts/' . (int) $row['id'] . '/files/' . $index,
+            ];
+        }
+
+        return $view;
+    }
+}
+```
+
+- [ ] **Step 4: BoardService 에 id 조회를 추가한다**
+
+`src/Service/BoardService.php` 의 `getEntity()` 위에 추가:
+
+```php
+    /** 권한 검사 없이 원본 행을 돌려준다. 글/댓글이 소속 게시판을 찾을 때 쓴다. */
+    public function findBoardById(int $id): ?array
+    {
+        return $this->boards->findById($id);
+    }
+```
+
+- [ ] **Step 5: App 과 경로를 추가한다**
+
+`src/App.php` 에 `use StandardBoard\Service\PostService;` 를 추가하고, 프로퍼티와 접근자를 넣는다:
+
+```php
+    /** @var PostService|null */
+    private $postService = null;
+
+    public function postService(): PostService
+    {
+        if ($this->postService === null) {
+            $this->postService = new PostService($this->boardService(), $this->posts());
+        }
+
+        return $this->postService;
+    }
+```
+
+`src/Routes.php` 에 추가:
+
+```php
+        $router->get('/boards/{key}/posts', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(
+                $app->postService()->listPosts($app->aclFor($request), $params['key'], $request->body() + $_GET)
+            );
+        });
+
+        $router->post('/boards/{key}/posts', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->create($app->aclFor($request), $params['key'], $request->body());
+
+            return Response::json(['data' => $post], 201);
+        });
+
+        $router->get('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $post = $app->postService()->get(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json(['data' => $post]);
+        });
+
+        $router->patch('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->update($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $post]);
+        });
+
+        $router->delete('/posts/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $app->postService()->delete(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json([], 204);
+        });
+
+        $router->post('/posts/{id}/restore', static function (Request $request, array $params) use ($app): Response {
+            $post = $app->postService()->restore($app->aclFor($request), (int) $params['id']);
+
+            return Response::json(['data' => $post]);
+        });
+```
+
+목록 경로가 `$request->body() + $_GET` 를 넘기는 이유: 목록 필터는 보통 쿼리스트링으로 오지만, 관리자 화면처럼 JSON 본문으로 보내는 클라이언트도 있다. 둘 다 받되 본문을 우선한다.
+
+- [ ] **Step 6: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api/PostApiTest.php`
+Expected: PASS — SQLite 만 19 tests
+
+- [ ] **Step 7: 커밋한다**
+
+```bash
+git add src/Service/PostService.php src/Service/BoardService.php src/App.php src/Routes.php tests/Api/PostApiTest.php
+git commit -m "feat: 글 API
+
+토큰이 있으면 author_name 을 토큰 값으로 강제해 게시판 안 사칭을 막는다.
+비회원 글은 author_id NULL + 비밀번호로 소유를 증명한다."
+```
+
+---
+
+### Task 12: 댓글 API
+
+**Files:**
+- Create: `src/Service/CommentService.php`
+- Modify: `src/App.php`, `src/Routes.php`
+- Test: `tests/Api/CommentApiTest.php`
+
+**Interfaces:**
+- Consumes: `PostService::loadForRead()`(Task 11), `CommentRepository`(Task 6), `TreeBuilder`(Task 6)
+- Produces:
+  - `CommentService::__construct(PostService $posts, PostRepository $postRepo, CommentRepository $comments)`
+  - `listComments(Acl $acl, int $postId, ?string $password): array` — 중첩 트리
+  - `create(Acl $acl, int $postId, array $input): array`
+  - `update(Acl $acl, int $id, array $input): array`
+  - `delete(Acl $acl, int $id, ?string $password): void`
+  - `App::commentService(): CommentService`
+
+**규칙:**
+- 댓글 목록을 보려면 그 글을 읽을 수 있어야 한다. 비밀글의 댓글은 글과 같은 조건으로 보호된다.
+- `parent_id` 는 같은 글의 댓글이어야 한다. 다른 글의 댓글을 부모로 지정하면 422.
+- 비밀 댓글은 작성자, 원글 작성자, 관리자만 내용을 본다. 나머지에게는 내용이 가려진 채 구조만 보인다.
+- 삭제는 소프트 삭제이며 `comment_count` 를 함께 줄인다. 0 미만으로 내려가지 않는다.
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Api/CommentApiTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Api;
+
+use StandardBoard\App;
+use StandardBoard\Tests\Support\ApiTestCase;
+
+final class CommentApiTest extends ApiTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testCreateRootComment(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+
+        $response = $this->call($app, 'POST', '/posts/' . $postId . '/comments',
+            ['content' => '첫 댓글'], $this->tokenFor($app, 'user-2', '댓글러', false));
+
+        $this->assertSame(201, $response->status());
+        $this->assertSame('첫 댓글', $response->payload()['data']['content']);
+        $this->assertSame(0, $response->payload()['data']['depth']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testRepliesNestWithoutDepthLimit(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $token = $this->tokenFor($app, 'user-2', '댓글러', false);
+
+        $parentId = null;
+        for ($i = 1; $i <= 30; $i++) {
+            $body = ['content' => '댓글 ' . $i];
+            if ($parentId !== null) {
+                $body['parent_id'] = $parentId;
+            }
+            $parentId = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', $body, $token)
+                ->payload()['data']['id'];
+        }
+
+        $tree = $this->call($app, 'GET', '/posts/' . $postId . '/comments')->payload()['data'];
+
+        $node = $tree[0];
+        $depth = 0;
+        while ($node['children'] !== []) {
+            $node = $node['children'][0];
+            $depth++;
+        }
+        $this->assertSame(29, $depth);
+        $this->assertSame('댓글 30', $node['content']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCommentCountTracksCreateAndDelete(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $token = $this->tokenFor($app, 'user-2', '댓글러', false);
+
+        $a = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', ['content' => 'a'], $token)
+            ->payload()['data']['id'];
+        $this->call($app, 'POST', '/posts/' . $postId . '/comments', ['content' => 'b'], $token);
+
+        $this->assertSame(2, $this->call($app, 'GET', '/posts/' . $postId)->payload()['data']['comment_count']);
+
+        $this->call($app, 'DELETE', '/comments/' . $a, [], $token);
+
+        $this->assertSame(1, $this->call($app, 'GET', '/posts/' . $postId)->payload()['data']['comment_count']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDeletedCommentWithReplyBecomesPlaceholder(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $token = $this->tokenFor($app, 'user-2', '댓글러', false);
+
+        $parent = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', ['content' => '부모'], $token)
+            ->payload()['data']['id'];
+        $this->call($app, 'POST', '/posts/' . $postId . '/comments',
+            ['content' => '자식', 'parent_id' => $parent], $token);
+
+        $this->call($app, 'DELETE', '/comments/' . $parent, [], $token);
+
+        $tree = $this->call($app, 'GET', '/posts/' . $postId . '/comments')->payload()['data'];
+        $this->assertTrue($tree[0]['deleted']);
+        $this->assertSame('삭제된 댓글입니다.', $tree[0]['content']);
+        $this->assertSame('자식', $tree[0]['children'][0]['content']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDeletedLeafCommentDisappears(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $token = $this->tokenFor($app, 'user-2', '댓글러', false);
+        $id = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', ['content' => '외톨이'], $token)
+            ->payload()['data']['id'];
+
+        $this->call($app, 'DELETE', '/comments/' . $id, [], $token);
+
+        $this->assertSame([], $this->call($app, 'GET', '/posts/' . $postId . '/comments')->payload()['data']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestCommentUsesPasswordForOwnership(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config, ['perm_comment' => 'guest']);
+
+        $id = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', [
+            'content' => '비회원 댓글', 'author_name' => '손님', 'password' => '1234',
+        ])->payload()['data']['id'];
+
+        $this->assertSame(401, $this->call($app, 'DELETE', '/comments/' . $id, ['password' => '9999'])->status());
+        $this->assertSame(204, $this->call($app, 'DELETE', '/comments/' . $id, ['password' => '1234'])->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testParentFromAnotherPostIsRejected(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $token = $this->tokenFor($app, 'user-2', '댓글러', false);
+        $otherPostId = (int) $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '다른 글', 'content' => '본문'], $token)->payload()['data']['id'];
+        $foreignComment = (int) $this->call($app, 'POST', '/posts/' . $otherPostId . '/comments',
+            ['content' => '남의 글 댓글'], $token)->payload()['data']['id'];
+
+        $response = $this->call($app, 'POST', '/posts/' . $postId . '/comments',
+            ['content' => '끼워넣기', 'parent_id' => $foreignComment], $token);
+
+        $this->assertSame(422, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testSecretCommentIsMaskedForStrangers(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config);
+        $writer = $this->tokenFor($app, 'user-2', '댓글러', false);
+        $this->call($app, 'POST', '/posts/' . $postId . '/comments',
+            ['content' => '비밀 내용', 'is_secret' => true], $writer);
+
+        $stranger = $this->tokenFor($app, 'user-9', '남', false);
+        $masked = $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $stranger)->payload()['data'][0];
+        $this->assertSame('비밀 댓글입니다.', $masked['content']);
+
+        $own = $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $writer)->payload()['data'][0];
+        $this->assertSame('비밀 내용', $own['content']);
+
+        // 원글 작성자도 볼 수 있다.
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $byAuthor = $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $author)->payload()['data'][0];
+        $this->assertSame('비밀 내용', $byAuthor['content']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testCommentsOnSecretPostRequirePermission(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->call($app, 'POST', '/boards', [
+            'board_key' => 'free', 'name' => '자유', 'use_secret' => true,
+        ], $this->adminToken($app));
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $postId = (int) $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '비밀', 'content' => '본문', 'is_secret' => true], $author)->payload()['data']['id'];
+
+        $stranger = $this->tokenFor($app, 'user-9', '남', false);
+
+        $this->assertSame(403, $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $stranger)->status());
+        $this->assertSame(200, $this->call($app, 'GET', '/posts/' . $postId . '/comments', [], $author)->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testBoardManagerCanDeleteAnyComment(array $config): void
+    {
+        [$app, $postId] = $this->setUpPost($config, ['managers' => ['mgr-1']]);
+        $id = (int) $this->call($app, 'POST', '/posts/' . $postId . '/comments', ['content' => '댓글'],
+            $this->tokenFor($app, 'user-2', '댓글러', false))->payload()['data']['id'];
+
+        $response = $this->call($app, 'DELETE', '/comments/' . $id, [],
+            $this->tokenFor($app, 'mgr-1', '운영자', false));
+
+        $this->assertSame(204, $response->status());
+    }
+
+    /** @return array{0: App, 1: int} */
+    private function setUpPost(array $config, array $boardOverrides = []): array
+    {
+        $app = $this->makeApp($config);
+        $this->call($app, 'POST', '/boards', array_merge([
+            'board_key' => 'free', 'name' => '자유게시판',
+        ], $boardOverrides), $this->adminToken($app));
+
+        $postId = (int) $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '글', 'content' => '본문'],
+            $this->tokenFor($app, 'user-1', '홍길동', false))->payload()['data']['id'];
+
+        return [$app, $postId];
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api/CommentApiTest.php`
+Expected: FAIL — 댓글 경로가 없어 404
+
+- [ ] **Step 3: CommentService 를 구현한다**
+
+`src/Service/CommentService.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Service;
+
+use StandardBoard\Auth\Acl;
+use StandardBoard\Comment\TreeBuilder;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Repository\CommentRepository;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Validation\Validator;
+
+final class CommentService
+{
+    public const SECRET_PLACEHOLDER = '비밀 댓글입니다.';
+
+    /** @var PostService */
+    private $postService;
+
+    /** @var PostRepository */
+    private $postRepo;
+
+    /** @var CommentRepository */
+    private $comments;
+
+    public function __construct(PostService $postService, PostRepository $postRepo, CommentRepository $comments)
+    {
+        $this->postService = $postService;
+        $this->postRepo = $postRepo;
+        $this->comments = $comments;
+    }
+
+    public function listComments(Acl $acl, int $postId, ?string $password): array
+    {
+        $loaded = $this->postService->loadForRead($acl, $postId, $password);
+
+        $rows = $this->comments->findByPost($postId);
+        $rows = $this->maskSecrets($rows, $acl, $loaded['post'], $loaded['board']);
+
+        return TreeBuilder::build($rows);
+    }
+
+    public function create(Acl $acl, int $postId, array $input): array
+    {
+        $loaded = $this->postService->loadForRead($acl, $postId, $input['post_password'] ?? null);
+        $post = $loaded['post'];
+        $board = $loaded['board'];
+
+        $acl->assertCanComment($board);
+
+        if ($post['deleted_at'] !== null) {
+            throw ApiError::forbidden('삭제된 글에는 댓글을 쓸 수 없습니다.');
+        }
+
+        $v = new Validator($input);
+        $data = [
+            'board_id' => (int) $post['board_id'],
+            'post_id'  => $postId,
+            'content'  => $v->requiredString('content'),
+        ];
+
+        $parentId = $v->int('parent_id', 0, 0, PHP_INT_MAX);
+        if ($parentId > 0) {
+            $parent = $this->comments->find($parentId);
+            if ($parent === null || (int) $parent['post_id'] !== $postId) {
+                $v->fail('parent_id', '이 글의 댓글이 아닙니다.');
+            }
+            $data['parent_id'] = $parentId;
+        } else {
+            $data['parent_id'] = null;
+        }
+
+        $identity = $acl->identity();
+        if ($identity->isGuest()) {
+            $data['author_id'] = null;
+            $data['author_name'] = $v->requiredString('author_name', 100);
+            $password = $v->requiredPassword('password');
+            $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
+        } else {
+            $data['author_id'] = $identity->sub();
+            $data['author_name'] = (string) $identity->name();
+            $data['guest_password'] = null;
+        }
+
+        $data['is_secret'] = $v->bool('is_secret', false) ? 1 : 0;
+
+        $v->check();
+
+        $id = $this->comments->create($data);
+        $this->postRepo->adjustCommentCount($postId, 1);
+
+        return $this->present($this->comments->find($id));
+    }
+
+    public function update(Acl $acl, int $id, array $input): array
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['deleted_at'] !== null) {
+            throw ApiError::notFound('댓글을 찾을 수 없습니다.');
+        }
+        $board = $this->boardOf($comment);
+
+        $v = new Validator($input);
+        $password = $v->optionalPassword('password');
+        $acl->assertCanModify($board, $comment, $password);
+
+        $data = ['content' => $v->requiredString('content')];
+        if (array_key_exists('is_secret', $input)) {
+            $data['is_secret'] = $v->bool('is_secret', false) ? 1 : 0;
+        }
+        $v->check();
+
+        $this->comments->update($id, $data);
+
+        return $this->present($this->comments->find($id));
+    }
+
+    public function delete(Acl $acl, int $id, ?string $password): void
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['deleted_at'] !== null) {
+            throw ApiError::notFound('댓글을 찾을 수 없습니다.');
+        }
+        $board = $this->boardOf($comment);
+
+        $acl->assertCanModify($board, $comment, $password);
+
+        $this->comments->softDelete($id);
+        $this->postRepo->adjustCommentCount((int) $comment['post_id'], -1);
+    }
+
+    private function boardOf(array $comment): array
+    {
+        $board = $this->postService->boardById((int) $comment['board_id']);
+        if ($board === null) {
+            throw ApiError::notFound('게시판을 찾을 수 없습니다.');
+        }
+
+        return $board;
+    }
+
+    /**
+     * 비밀 댓글의 내용을 트리 조립 전에 가린다. 트리를 만든 뒤 순회하는 것보다
+     * 단순하고, 구조(누가 누구에게 달았는지)는 그대로 남는다.
+     */
+    private function maskSecrets(array $rows, Acl $acl, array $post, array $board): array
+    {
+        $sub = $acl->identity()->sub();
+        $isPostAuthor = $sub !== null && $post['author_id'] !== null && (string) $post['author_id'] === $sub;
+        $isAdmin = $acl->isAdminFor($board);
+
+        foreach ($rows as $index => $row) {
+            if ((int) $row['is_secret'] !== 1) {
+                continue;
+            }
+            $isOwn = $sub !== null && $row['author_id'] !== null && (string) $row['author_id'] === $sub;
+            if ($isOwn || $isPostAuthor || $isAdmin) {
+                continue;
+            }
+            $rows[$index]['content'] = self::SECRET_PLACEHOLDER;
+        }
+
+        return $rows;
+    }
+
+    private function present(array $row): array
+    {
+        return [
+            'id'          => (int) $row['id'],
+            'post_id'     => (int) $row['post_id'],
+            'parent_id'   => $row['parent_id'],
+            'depth'       => (int) $row['depth'],
+            'content'     => $row['content'],
+            'author_id'   => $row['author_id'],
+            'author_name' => $row['author_name'],
+            'is_secret'   => (bool) $row['is_secret'],
+            'deleted'     => $row['deleted_at'] !== null,
+            'created_at'  => $row['created_at'],
+            'updated_at'  => $row['updated_at'],
+        ];
+    }
+}
+```
+
+- [ ] **Step 4: PostService 에 게시판 조회 통로를 추가한다**
+
+`src/Service/PostService.php` 의 `boardKeyOf()` 아래에 추가:
+
+```php
+    /** 댓글 서비스가 소속 게시판을 찾을 때 쓴다. */
+    public function boardById(int $boardId): ?array
+    {
+        return $this->boards->findBoardById($boardId);
+    }
+```
+
+- [ ] **Step 5: App 과 경로를 추가한다**
+
+`src/App.php` 에 `use StandardBoard\Service\CommentService;` 를 추가하고:
+
+```php
+    /** @var CommentService|null */
+    private $commentService = null;
+
+    public function commentService(): CommentService
+    {
+        if ($this->commentService === null) {
+            $this->commentService = new CommentService($this->postService(), $this->posts(), $this->comments());
+        }
+
+        return $this->commentService;
+    }
+```
+
+`src/Routes.php` 에 추가:
+
+```php
+        $router->get('/posts/{id}/comments', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+
+            return Response::json(['data' => $app->commentService()->listComments(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            )]);
+        });
+
+        $router->post('/posts/{id}/comments', static function (Request $request, array $params) use ($app): Response {
+            $comment = $app->commentService()->create($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $comment], 201);
+        });
+
+        $router->patch('/comments/{id}', static function (Request $request, array $params) use ($app): Response {
+            $comment = $app->commentService()->update($app->aclFor($request), (int) $params['id'], $request->body());
+
+            return Response::json(['data' => $comment]);
+        });
+
+        $router->delete('/comments/{id}', static function (Request $request, array $params) use ($app): Response {
+            $password = $request->input('password');
+            $app->commentService()->delete(
+                $app->aclFor($request),
+                (int) $params['id'],
+                $password === null ? null : (string) $password
+            );
+
+            return Response::json([], 204);
+        });
+```
+
+- [ ] **Step 6: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api`
+Expected: PASS — SQLite 만 42 tests
+
+- [ ] **Step 7: 세 DB 로 전체 스위트를 돌린다**
+
+Run: 환경변수를 붙여 `vendor/bin/phpunit`
+Expected: PASS — 세 DB 전부
+
+- [ ] **Step 8: 커밋한다**
+
+```bash
+git add src/Service src/App.php src/Routes.php tests/Api/CommentApiTest.php
+git commit -m "feat: 댓글 API
+
+비밀 댓글은 트리 조립 전에 내용만 가린다. 구조는 남기고 내용만 감춘다."
+```
+
+---
+
+### Task 13: 첨부파일
+
+**Files:**
+- Create: `src/Http/ResponseInterface.php`, `src/Http/FileResponse.php`, `src/Service/AttachmentService.php`
+- Modify: `src/Http/Response.php` (인터페이스 구현), `src/Http/Router.php` (반환 타입), `tests/Support/ApiTestCase.php` (반환 타입)
+- Modify: `src/Service/PostService.php` (첨부 수용), `src/App.php`, `src/Routes.php`
+- Test: `tests/Api/AttachmentApiTest.php`
+
+**Interfaces:**
+- Consumes: `PostService`, `BoardService`, `Acl`, `Validator`
+- Produces:
+  - `ResponseInterface::status(): int`, `send(): void`, `withHeaders(array $headers): ResponseInterface`
+  - `FileResponse::__construct(string $path, string $downloadName, string $mime)`
+  - `AttachmentService::__construct(BoardService $boards, PostService $posts, PostRepository $postRepo, array $config, string $secret)`
+  - `AttachmentService::upload(Acl $acl, string $boardKey, array $file): array` — 서명된 디스크립터
+  - `AttachmentService::verify(array $descriptor): array` — 서명 검증 후 저장용 배열(서명 제거). 실패 시 422
+  - `AttachmentService::download(Acl $acl, int $postId, int $index, ?string $password): FileResponse`
+  - `AttachmentService::collectGarbage(Acl $acl): array` — `['deleted' => int, 'bytes' => int]`
+  - `PostService::create()` / `update()` 가 `attachments` 입력을 받는다
+  - `App::attachments(): AttachmentService`
+
+**저장 규칙:**
+- 파일은 `storage/uploads/YYYY/MM/<32자리 16진수>` 로 저장한다. 확장자를 붙이지 않는다.
+- 문서 루트 밖이므로 URL 로 직접 접근할 수 없다. nginx 호스팅에서 `.htaccess` 가 통하지 않는 문제를 구조로 해결한다.
+- 원본 파일명, 크기, MIME 은 디스크립터에 담아 `posts.attachments` JSON 으로 보관한다.
+- 임시 업로드를 추적하는 테이블을 만들지 않는다. 서명이 유효하면 이 서버가 방금 받아들인 파일이라는 뜻이다.
+
+- [ ] **Step 1: 응답 인터페이스를 도입한다 (기존 테스트는 계속 통과해야 한다)**
+
+`src/Http/ResponseInterface.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+interface ResponseInterface
+{
+    public function status(): int;
+
+    public function withHeaders(array $headers): ResponseInterface;
+
+    public function send(): void;
+}
+```
+
+`src/Http/Response.php` 의 클래스 선언을 바꾼다:
+
+```php
+final class Response implements ResponseInterface
+```
+
+그리고 `withHeaders()` 의 반환 타입을 바꾼다:
+
+```php
+    public function withHeaders(array $headers): ResponseInterface
+    {
+        return new self($this->payload, $this->status, array_merge($this->headers, $headers));
+    }
+```
+
+`src/Http/Router.php` 의 `dispatch()` 반환 타입을 바꾼다:
+
+```php
+    public function dispatch(Request $request): ResponseInterface
+```
+
+`tests/Support/ApiTestCase.php` 의 `call()` 반환 타입을 바꾸고 `use StandardBoard\Http\ResponseInterface;` 를 추가한다:
+
+```php
+    protected function call(App $app, string $method, string $path, array $body = [], ?string $token = null): ResponseInterface
+```
+
+Run: `vendor/bin/phpunit`
+Expected: PASS — 순수 리팩터링이므로 기존 테스트가 그대로 통과해야 한다.
+
+- [ ] **Step 2: 실패하는 테스트를 쓴다**
+
+`tests/Api/AttachmentApiTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Api;
+
+use StandardBoard\App;
+use StandardBoard\Http\FileResponse;
+use StandardBoard\Http\Request;
+use StandardBoard\Tests\Support\ApiTestCase;
+
+final class AttachmentApiTest extends ApiTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testUploadReturnsSignedDescriptor(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+
+        $descriptor = $app->attachments()->upload(
+            $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+            'free',
+            $this->fakeUpload('메모.txt', '안녕하세요')
+        );
+
+        $this->assertSame('메모.txt', $descriptor['name']);
+        $this->assertNotSame('', $descriptor['sig']);
+        $this->assertFileExists($descriptor['path']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDisallowedExtensionIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+
+        $this->expectException(\StandardBoard\Http\ApiError::class);
+        $app->attachments()->upload(
+            $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+            'free',
+            $this->fakeUpload('shell.php', '<?php echo 1;')
+        );
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testOversizedFileIsRejectedWith413(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+
+        try {
+            $app->attachments()->upload(
+                $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+                'free',
+                $this->fakeUpload('큰파일.txt', str_repeat('x', 1024 * 1024 + 1))
+            );
+            $this->fail('413 이 나와야 한다');
+        } catch (\StandardBoard\Http\ApiError $e) {
+            $this->assertSame(413, $e->status());
+        }
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testTamperedDescriptorIsRejected(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $descriptor = $app->attachments()->upload(
+            $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+            'free',
+            $this->fakeUpload('메모.txt', '내용')
+        );
+        $descriptor['name'] = '조작된이름.txt';
+
+        $response = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '글', 'content' => '본문', 'attachments' => [$descriptor],
+        ], $token);
+
+        $this->assertSame(422, $response->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testAttachmentSurvivesPostCreationAndIsDownloadable(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $descriptor = $app->attachments()->upload(
+            $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+            'free',
+            $this->fakeUpload('메모.txt', '안녕하세요')
+        );
+
+        $created = $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '글', 'content' => '본문', 'attachments' => [$descriptor],
+        ], $token);
+
+        $this->assertSame(201, $created->status());
+        $files = $created->payload()['data']['attachments'];
+        $this->assertCount(1, $files);
+        $this->assertSame('메모.txt', $files[0]['name']);
+        $this->assertArrayNotHasKey('sig', $files[0]);
+        $this->assertArrayNotHasKey('path', $files[0]);
+
+        $postId = (int) $created->payload()['data']['id'];
+        $download = $this->call($app, 'GET', '/posts/' . $postId . '/files/0');
+
+        $this->assertInstanceOf(FileResponse::class, $download);
+        $this->assertSame(200, $download->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testDownloadOfSecretPostIsDeniedToStrangers(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['use_secret' => true]);
+        $author = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $descriptor = $app->attachments()->upload(
+            $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+            'free',
+            $this->fakeUpload('비밀.txt', '민감')
+        );
+        $postId = (int) $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '비밀', 'content' => '본문', 'is_secret' => true, 'attachments' => [$descriptor],
+        ], $author)->payload()['data']['id'];
+
+        $denied = $this->call($app, 'GET', '/posts/' . $postId . '/files/0', [],
+            $this->tokenFor($app, 'user-9', '남', false));
+
+        $this->assertSame(403, $denied->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUnknownFileIndexGives404(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $postId = (int) $this->call($app, 'POST', '/boards/free/posts',
+            ['title' => '글', 'content' => '본문'], $token)->payload()['data']['id'];
+
+        $this->assertSame(404, $this->call($app, 'GET', '/posts/' . $postId . '/files/7')->status());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUploadDeniedWhenBoardDoesNotAllowFiles(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app, ['use_file' => false]);
+
+        try {
+            $app->attachments()->upload(
+                $app->aclFor($this->authed($app, 'user-1', '홍길동')),
+                'free',
+                $this->fakeUpload('메모.txt', '내용')
+            );
+            $this->fail('거부되어야 한다');
+        } catch (\StandardBoard\Http\ApiError $e) {
+            $this->assertSame(422, $e->status());
+        }
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGarbageCollectionRemovesUnreferencedFilesOnly(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+        $token = $this->tokenFor($app, 'user-1', '홍길동', false);
+        $acl = $app->aclFor($this->authed($app, 'user-1', '홍길동'));
+
+        $used = $app->attachments()->upload($acl, 'free', $this->fakeUpload('쓰는파일.txt', '내용'));
+        $orphan = $app->attachments()->upload($acl, 'free', $this->fakeUpload('버려진파일.txt', '내용'));
+
+        $this->call($app, 'POST', '/boards/free/posts', [
+            'title' => '글', 'content' => '본문', 'attachments' => [$used],
+        ], $token);
+
+        $result = $app->attachments()->collectGarbage($app->aclFor($this->authed($app, 'root', '관리자', true)));
+
+        $this->assertSame(1, $result['deleted']);
+        $this->assertFileExists($used['path']);
+        $this->assertFileDoesNotExist($orphan['path']);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGarbageCollectionRequiresGlobalAdmin(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->board($app);
+
+        $response = $this->call($app, 'POST', '/maintenance/gc', [],
+            $this->tokenFor($app, 'user-1', '회원', false));
+
+        $this->assertSame(403, $response->status());
+    }
+
+    protected function tearDown(): void
+    {
+        $dir = sys_get_temp_dir() . '/standard-board-test-uploads';
+        if (is_dir($dir)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $item) {
+                $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+            }
+            @rmdir($dir);
+        }
+    }
+
+    private function board(App $app, array $overrides = []): void
+    {
+        $this->call($app, 'POST', '/boards', array_merge([
+            'board_key' => 'free', 'name' => '자유게시판', 'use_file' => true,
+        ], $overrides), $this->adminToken($app));
+    }
+
+    private function authed(App $app, string $sub, string $name, bool $admin = false): Request
+    {
+        return new Request('POST', '/uploads', [], [], [
+            'Authorization' => 'Bearer ' . $this->tokenFor($app, $sub, $name, $admin),
+        ], []);
+    }
+
+    /** $_FILES 한 항목과 같은 모양을 만든다. */
+    private function fakeUpload(string $name, string $contents): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'sbtest');
+        file_put_contents($tmp, $contents);
+
+        return [
+            'name'     => $name,
+            'type'     => 'text/plain',
+            'tmp_name' => $tmp,
+            'error'    => UPLOAD_ERR_OK,
+            'size'     => strlen($contents),
+        ];
+    }
+}
+```
+
+- [ ] **Step 3: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Api/AttachmentApiTest.php`
+Expected: FAIL — `Call to undefined method StandardBoard\App::attachments()`
+
+- [ ] **Step 4: FileResponse 를 만든다**
+
+`src/Http/FileResponse.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Http;
+
+final class FileResponse implements ResponseInterface
+{
+    /** @var string */
+    private $path;
+
+    /** @var string */
+    private $downloadName;
+
+    /** @var string */
+    private $mime;
+
+    /** @var array */
+    private $headers;
+
+    public function __construct(string $path, string $downloadName, string $mime, array $headers = [])
+    {
+        $this->path = $path;
+        $this->downloadName = $downloadName;
+        $this->mime = $mime;
+        $this->headers = $headers;
+    }
+
+    public function status(): int
+    {
+        return 200;
+    }
+
+    public function withHeaders(array $headers): ResponseInterface
+    {
+        return new self($this->path, $this->downloadName, $this->mime, array_merge($this->headers, $headers));
+    }
+
+    public function send(): void
+    {
+        http_response_code(200);
+        header('Content-Type: ' . $this->mime);
+        header('Content-Length: ' . (string) filesize($this->path));
+        header('X-Content-Type-Options: nosniff');
+
+        // 한글 파일명을 위해 RFC 5987 형식을 함께 준다.
+        $ascii = preg_replace('/[^\x20-\x7e]/', '_', $this->downloadName);
+        header(
+            'Content-Disposition: attachment; filename="' . str_replace('"', '', (string) $ascii) . '";'
+            . " filename*=UTF-8''" . rawurlencode($this->downloadName)
+        );
+
+        foreach ($this->headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+
+        readfile($this->path);
+    }
+}
+```
+
+- [ ] **Step 5: AttachmentService 를 구현한다**
+
+`src/Service/AttachmentService.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Service;
+
+use StandardBoard\Auth\Acl;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Http\FileResponse;
+use StandardBoard\Repository\PostRepository;
+use StandardBoard\Support\Clock;
+
+final class AttachmentService
+{
+    /** @var BoardService */
+    private $boards;
+
+    /** @var PostService */
+    private $posts;
+
+    /** @var PostRepository */
+    private $postRepo;
+
+    /** @var array */
+    private $config;
+
+    /** @var string */
+    private $secret;
+
+    public function __construct(
+        BoardService $boards,
+        PostService $posts,
+        PostRepository $postRepo,
+        array $config,
+        string $secret
+    ) {
+        $this->boards = $boards;
+        $this->posts = $posts;
+        $this->postRepo = $postRepo;
+        $this->config = $config;
+        $this->secret = $secret;
+    }
+
+    /**
+     * @param array $file $_FILES 의 한 항목
+     * @return array 서명된 디스크립터
+     */
+    public function upload(Acl $acl, string $boardKey, array $file): array
+    {
+        $board = $this->boards->getEntity($acl, $boardKey);
+        $acl->assertCanWrite($board);
+
+        if ((int) $board['use_file'] !== 1) {
+            throw ApiError::validation(['file' => '이 게시판은 첨부를 쓰지 않습니다.']);
+        }
+
+        $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+            throw ApiError::tooLarge('파일이 너무 큽니다.');
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            throw ApiError::validation(['file' => '파일 업로드에 실패했습니다.']);
+        }
+
+        $originalName = trim((string) ($file['name'] ?? ''));
+        if ($originalName === '') {
+            throw ApiError::validation(['file' => '파일 이름이 없습니다.']);
+        }
+
+        $size = (int) ($file['size'] ?? 0);
+        $maxBytes = (int) ($this->config['max_bytes'] ?? 5242880);
+        if ($size > $maxBytes) {
+            throw ApiError::tooLarge('파일은 ' . $maxBytes . ' 바이트를 넘을 수 없습니다.');
+        }
+
+        $extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+        $allowed = (array) ($this->config['allowed_ext'] ?? []);
+        if ($extension === '' || !in_array($extension, $allowed, true)) {
+            throw ApiError::validation(['file' => '허용되지 않은 확장자입니다: ' . $extension]);
+        }
+
+        $relative = substr(Clock::now(), 0, 4) . '/' . substr(Clock::now(), 5, 2);
+        $directory = rtrim((string) $this->config['dir'], '/') . '/' . $relative;
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw ApiError::internal('업로드 디렉터리를 만들 수 없습니다: ' . $directory);
+        }
+
+        $id = bin2hex(random_bytes(16));
+        $path = $directory . '/' . $id;
+
+        // 테스트에서는 진짜 업로드가 아니므로 move_uploaded_file 이 실패한다.
+        $moved = is_uploaded_file((string) $file['tmp_name'])
+            ? move_uploaded_file((string) $file['tmp_name'], $path)
+            : rename((string) $file['tmp_name'], $path);
+
+        if ($moved !== true) {
+            throw ApiError::internal('파일을 저장하지 못했습니다.');
+        }
+
+        $descriptor = [
+            'id'   => $id,
+            'name' => $originalName,
+            'size' => $size,
+            'mime' => $this->detectMime($path, (string) ($file['type'] ?? '')),
+            'path' => $path,
+        ];
+        $descriptor['sig'] = $this->sign($descriptor);
+
+        return $descriptor;
+    }
+
+    /**
+     * 서명이 유효하면 이 서버가 방금 받아들인 파일이라는 뜻이다.
+     * 임시 업로드를 추적하는 테이블이 필요 없는 이유다.
+     */
+    public function verify(array $descriptor): array
+    {
+        $signature = (string) ($descriptor['sig'] ?? '');
+        unset($descriptor['sig']);
+
+        $expectedKeys = ['id', 'name', 'size', 'mime', 'path'];
+        foreach ($expectedKeys as $key) {
+            if (!array_key_exists($key, $descriptor)) {
+                throw ApiError::validation(['attachments' => '첨부 정보가 올바르지 않습니다.']);
+            }
+        }
+
+        $normalized = [
+            'id'   => (string) $descriptor['id'],
+            'name' => (string) $descriptor['name'],
+            'size' => (int) $descriptor['size'],
+            'mime' => (string) $descriptor['mime'],
+            'path' => (string) $descriptor['path'],
+        ];
+
+        if (!hash_equals($this->sign($normalized), $signature)) {
+            throw ApiError::validation(['attachments' => '첨부 서명이 올바르지 않습니다.']);
+        }
+        if (!is_file($normalized['path'])) {
+            throw ApiError::validation(['attachments' => '업로드된 파일을 찾을 수 없습니다.']);
+        }
+
+        return $normalized;
+    }
+
+    public function download(Acl $acl, int $postId, int $index, ?string $password): FileResponse
+    {
+        $loaded = $this->posts->loadForRead($acl, $postId, $password);
+        $files = $loaded['post']['attachments'];
+
+        if (!isset($files[$index])) {
+            throw ApiError::notFound('첨부를 찾을 수 없습니다.');
+        }
+
+        $file = $files[$index];
+        $path = (string) ($file['path'] ?? '');
+        if ($path === '' || !is_file($path)) {
+            throw ApiError::notFound('첨부 파일이 서버에 없습니다.');
+        }
+
+        return new FileResponse(
+            $path,
+            (string) ($file['name'] ?? 'download'),
+            (string) ($file['mime'] ?? 'application/octet-stream')
+        );
+    }
+
+    /**
+     * 어떤 글에도 연결되지 않은 파일을 지운다. cron 이 보장되지 않는
+     * 저가 호스팅을 가정하므로 관리자가 화면에서 직접 돌린다.
+     *
+     * MySQL 5.7 에 JSON 함수가 없으므로 SQL 로 참조를 훑을 수 없다.
+     * 모든 글의 attachments 를 PHP 로 모은다. 글 수가 아주 많은 게시판에서는
+     * 시간이 걸릴 수 있고, 그때는 배치로 나누는 것이 다음 단계다.
+     */
+    public function collectGarbage(Acl $acl): array
+    {
+        $acl->assertGlobalAdmin();
+
+        $referenced = [];
+        foreach ($this->postRepo->allAttachmentPaths() as $path) {
+            $referenced[$path] = true;
+        }
+
+        $root = rtrim((string) $this->config['dir'], '/');
+        if (!is_dir($root)) {
+            return ['deleted' => 0, 'bytes' => 0];
+        }
+
+        $deleted = 0;
+        $bytes = 0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $item) {
+            if (!$item->isFile()) {
+                continue;
+            }
+            $path = $item->getPathname();
+            if (isset($referenced[$path])) {
+                continue;
+            }
+            $size = (int) $item->getSize();
+            if (@unlink($path)) {
+                $deleted++;
+                $bytes += $size;
+            }
+        }
+
+        return ['deleted' => $deleted, 'bytes' => $bytes];
+    }
+
+    private function sign(array $descriptor): string
+    {
+        $canonical = implode('|', [
+            $descriptor['id'],
+            $descriptor['name'],
+            (string) $descriptor['size'],
+            $descriptor['mime'],
+            $descriptor['path'],
+        ]);
+
+        return hash_hmac('sha256', $canonical, $this->secret);
+    }
+
+    private function detectMime(string $path, string $reported): string
+    {
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = finfo_file($finfo, $path);
+                finfo_close($finfo);
+                if (is_string($detected) && $detected !== '') {
+                    return $detected;
+                }
+            }
+        }
+
+        return $reported !== '' ? $reported : 'application/octet-stream';
+    }
+}
+```
+
+- [ ] **Step 6: PostRepository 에 첨부 경로 수집을 추가한다**
+
+`src/Repository/PostRepository.php` 의 `deleteByBoard()` 아래에 추가:
+
+```php
+    /**
+     * 모든 글이 참조하는 첨부 경로. 고아 파일 정리에 쓴다.
+     * MySQL 5.7 에 JSON 함수가 없으므로 SQL 로 걸러내지 않고 PHP 로 모은다.
+     *
+     * @return string[]
+     */
+    public function allAttachmentPaths(): array
+    {
+        $rows = $this->db->select(
+            'SELECT attachments FROM ' . $this->db->q('posts') . ' WHERE attachments IS NOT NULL'
+        );
+
+        $paths = [];
+        foreach ($rows as $row) {
+            $raw = (string) $row['attachments'];
+            if ($raw === '' || $raw === '[]') {
+                continue;
+            }
+            foreach (Json::decode($raw) as $file) {
+                if (isset($file['path'])) {
+                    $paths[] = (string) $file['path'];
+                }
+            }
+        }
+
+        return $paths;
+    }
+```
+
+- [ ] **Step 7: PostService 가 첨부를 받도록 고친다**
+
+`src/Service/PostService.php` 에 첨부 서비스를 주입한다. 생성자를 바꾼다:
+
+```php
+    /** @var AttachmentService|null 순환 의존을 피하려고 나중에 주입한다 */
+    private $attachments = null;
+
+    public function setAttachmentService(AttachmentService $attachments): void
+    {
+        $this->attachments = $attachments;
+    }
+```
+
+`create()` 의 `$v->check();` 바로 위에 추가:
+
+```php
+        if (array_key_exists('attachments', $input)) {
+            $data['attachments'] = $this->verifyAttachments($board, $input['attachments']);
+        }
+```
+
+`update()` 의 `$v->check();` 바로 위에 추가:
+
+```php
+        if (array_key_exists('attachments', $input)) {
+            $data['attachments'] = $this->verifyAttachments($board, $input['attachments']);
+        }
+```
+
+그리고 private 메서드를 추가한다:
+
+```php
+    private function verifyAttachments(array $board, $input): array
+    {
+        if (!is_array($input)) {
+            throw ApiError::validation(['attachments' => '배열이어야 합니다.']);
+        }
+        if ($input !== [] && (int) $board['use_file'] !== 1) {
+            throw ApiError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
+        }
+        if ($this->attachments === null) {
+            throw ApiError::internal('첨부 서비스가 연결되지 않았습니다.');
+        }
+
+        $verified = [];
+        foreach ($input as $descriptor) {
+            $verified[] = $this->attachments->verify(is_array($descriptor) ? $descriptor : []);
+        }
+
+        return $verified;
+    }
+```
+
+`use StandardBoard\Service\AttachmentService;` 는 같은 네임스페이스이므로 필요 없다.
+
+- [ ] **Step 8: App 과 경로를 추가한다**
+
+`src/App.php` 에 `use StandardBoard\Service\AttachmentService;` 를 추가하고:
+
+```php
+    /** @var AttachmentService|null */
+    private $attachmentService = null;
+
+    public function attachments(): AttachmentService
+    {
+        if ($this->attachmentService === null) {
+            $this->attachmentService = new AttachmentService(
+                $this->boardService(),
+                $this->postService(),
+                $this->posts(),
+                (array) $this->config('uploads', []),
+                (string) $this->config('auth.secret', '')
+            );
+            $this->postService()->setAttachmentService($this->attachmentService);
+        }
+
+        return $this->attachmentService;
+    }
+```
+
+`postService()` 안에서도 첨부 서비스를 연결해야 한다. `postService()` 의 본문을 다음으로 바꾼다:
+
+```php
+    public function postService(): PostService
+    {
+        if ($this->postService === null) {
+            $this->postService = new PostService($this->boardService(), $this->posts());
+            // attachments() 가 다시 postService() 를 부르므로 여기서 호출하면 무한 재귀가 된다.
+            // 첨부가 필요한 시점에 attachments() 가 setAttachmentService() 로 연결한다.
+        }
+
+        return $this->postService;
+    }
+```
+
+그리고 `src/Routes.php` 의 글 생성/수정 경로에서 `$app->attachments();` 를 먼저 호출해 연결을 보장한다. 다음 경로들을 추가하고, 기존 `POST /boards/{key}/posts` 와 `PATCH /posts/{id}` 핸들러 첫 줄에 `$app->attachments();` 를 넣는다:
+
+```php
+        $router->post('/uploads', static function (Request $request, array $params) use ($app): Response {
+            $boardKey = (string) $request->input('board_key', '');
+            $files = $request->files();
+            if (!isset($files['file'])) {
+                throw \StandardBoard\Http\ApiError::validation(['file' => '파일이 없습니다.']);
+            }
+
+            return Response::json(['data' => $app->attachments()->upload(
+                $app->aclFor($request),
+                $boardKey,
+                $files['file']
+            )], 201);
+        });
+
+        $router->get('/posts/{id}/files/{index}', static function (Request $request, array $params) use ($app) {
+            $password = $request->input('password');
+
+            return $app->attachments()->download(
+                $app->aclFor($request),
+                (int) $params['id'],
+                (int) $params['index'],
+                $password === null ? null : (string) $password
+            );
+        });
+
+        $router->post('/maintenance/gc', static function (Request $request, array $params) use ($app): Response {
+            return Response::json(['data' => $app->attachments()->collectGarbage($app->aclFor($request))]);
+        });
+```
+
+- [ ] **Step 9: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit`
+Expected: PASS — 전체 스위트
+
+- [ ] **Step 10: 커밋한다**
+
+```bash
+git add src public tests
+git commit -m "feat: 첨부파일 업로드, 다운로드, 고아 정리
+
+파일은 문서 루트 밖에 저장하고 권한 검사를 거쳐 스트리밍한다.
+서명된 디스크립터를 써서 임시 업로드 추적 테이블을 없앤다."
+```
+
+---
+
+### Task 14: 설치 마법사
+
+**Files:**
+- Create: `src/Install/Installer.php`, `public/install.php`
+- Test: `tests/Install/InstallerTest.php`
+
+**Interfaces:**
+- Consumes: `Connection`, `Schema`, `Validator`, `ApiError`
+- Produces:
+  - `Installer::__construct(string $configPath, string $storageDir)`
+  - `Installer::isInstalled(): bool`
+  - `Installer::run(array $input): array` — `['dialect' => string, 'config_path' => string]`
+  - 입력: `dsn`, `db_username`, `db_password`, `admin_id`, `admin_password`, `cors_origins`(줄바꿈 구분 문자열)
+
+**규칙:**
+- 이미 `config.php` 가 있으면 실행을 거부한다 (`FORBIDDEN`). 설치 화면이 영구적인 뒷문이 되면 안 된다.
+- JWT 시크릿은 `random_bytes(32)` 로 자동 생성한다. 사람이 고르게 두지 않는다.
+- 관리자 비밀번호는 8자 이상을 요구한다. 이 계정은 전권이라 글 비밀번호(4자)보다 엄격하다.
+- 설정 파일은 0640 으로 쓴다.
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/Install/InstallerTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Tests\Install;
+
+use PHPUnit\Framework\TestCase;
+use StandardBoard\Db\Connection;
+use StandardBoard\Db\Schema;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Install\Installer;
+
+final class InstallerTest extends TestCase
+{
+    /** @var string */
+    private $workDir;
+
+    protected function setUp(): void
+    {
+        $this->workDir = sys_get_temp_dir() . '/standard-board-install-' . bin2hex(random_bytes(4));
+        mkdir($this->workDir . '/config', 0775, true);
+        mkdir($this->workDir . '/storage', 0775, true);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (['config/config.php', 'storage/board.sqlite'] as $file) {
+            @unlink($this->workDir . '/' . $file);
+        }
+        @rmdir($this->workDir . '/config');
+        @rmdir($this->workDir . '/storage/uploads');
+        @rmdir($this->workDir . '/storage/logs');
+        @rmdir($this->workDir . '/storage');
+        @rmdir($this->workDir);
+    }
+
+    public function testNotInstalledInitially(): void
+    {
+        $this->assertFalse($this->installer()->isInstalled());
+    }
+
+    public function testRunCreatesSchemaAndConfig(): void
+    {
+        $result = $this->installer()->run($this->input());
+
+        $this->assertSame('sqlite', $result['dialect']);
+        $this->assertFileExists($this->configPath());
+        $this->assertTrue($this->installer()->isInstalled());
+
+        $config = require $this->configPath();
+        $db = Connection::create($config['db']);
+        $this->assertTrue((new Schema($db))->exists());
+    }
+
+    public function testGeneratedConfigHasStrongSecretAndHashedPassword(): void
+    {
+        $this->installer()->run($this->input());
+        $config = require $this->configPath();
+
+        $this->assertGreaterThanOrEqual(43, strlen($config['auth']['secret']));
+        $this->assertTrue(password_verify('supersecret1', $config['bootstrap_admin']['password_hash']));
+        $this->assertSame('root', $config['bootstrap_admin']['id']);
+        $this->assertFalse($config['debug']);
+    }
+
+    public function testCorsOriginsAreParsedLineByLine(): void
+    {
+        $this->installer()->run($this->input([
+            'cors_origins' => "https://a.example.com\n  \nhttps://b.example.com  ",
+        ]));
+        $config = require $this->configPath();
+
+        $this->assertSame(['https://a.example.com', 'https://b.example.com'], $config['cors']['allowed_origins']);
+    }
+
+    public function testSecondRunIsRefused(): void
+    {
+        $this->installer()->run($this->input());
+
+        try {
+            $this->installer()->run($this->input());
+            $this->fail('두 번째 설치는 거부되어야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(403, $e->status());
+        }
+    }
+
+    public function testShortAdminPasswordIsRejected(): void
+    {
+        try {
+            $this->installer()->run($this->input(['admin_password' => 'short']));
+            $this->fail('422 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(422, $e->status());
+            $this->assertArrayHasKey('admin_password', $e->details());
+        }
+    }
+
+    public function testUnsupportedDriverIsRejected(): void
+    {
+        try {
+            $this->installer()->run($this->input(['dsn' => 'oracle:host=localhost']));
+            $this->fail('422 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(422, $e->status());
+            $this->assertArrayHasKey('dsn', $e->details());
+        }
+    }
+
+    public function testUnreachableDatabaseIsReportedOnTheDsnField(): void
+    {
+        try {
+            $this->installer()->run($this->input([
+                'dsn' => 'mysql:host=127.0.0.1;port=1;dbname=nope',
+            ]));
+            $this->fail('422 가 나와야 한다');
+        } catch (ApiError $e) {
+            $this->assertSame(422, $e->status());
+            $this->assertArrayHasKey('dsn', $e->details());
+        }
+    }
+
+    private function installer(): Installer
+    {
+        return new Installer($this->configPath(), $this->workDir . '/storage');
+    }
+
+    private function configPath(): string
+    {
+        return $this->workDir . '/config/config.php';
+    }
+
+    private function input(array $overrides = []): array
+    {
+        return array_merge([
+            'dsn'            => 'sqlite:' . $this->workDir . '/storage/board.sqlite',
+            'db_username'    => '',
+            'db_password'    => '',
+            'admin_id'       => 'root',
+            'admin_password' => 'supersecret1',
+            'cors_origins'   => '',
+        ], $overrides);
+    }
+}
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Install`
+Expected: FAIL — `Class "StandardBoard\Install\Installer" not found`
+
+- [ ] **Step 3: Installer 를 구현한다**
+
+`src/Install/Installer.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace StandardBoard\Install;
+
+use StandardBoard\Db\Connection;
+use StandardBoard\Db\DialectFactory;
+use StandardBoard\Db\Schema;
+use StandardBoard\Http\ApiError;
+use StandardBoard\Support\Base64Url;
+use StandardBoard\Validation\Validator;
+use Throwable;
+
+final class Installer
+{
+    public const ADMIN_PASSWORD_MIN = 8;
+
+    /** @var string */
+    private $configPath;
+
+    /** @var string */
+    private $storageDir;
+
+    public function __construct(string $configPath, string $storageDir)
+    {
+        $this->configPath = $configPath;
+        $this->storageDir = rtrim($storageDir, '/');
+    }
+
+    public function isInstalled(): bool
+    {
+        return is_file($this->configPath);
+    }
+
+    /** @return array{dialect: string, config_path: string} */
+    public function run(array $input): array
+    {
+        if ($this->isInstalled()) {
+            throw ApiError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
+        }
+
+        $v = new Validator($input);
+        $dsn = $v->requiredString('dsn', 500);
+        $adminId = $v->requiredString('admin_id', 64);
+        $adminPassword = (string) ($input['admin_password'] ?? '');
+        if (mb_strlen($adminPassword) < self::ADMIN_PASSWORD_MIN) {
+            $v->fail('admin_password', self::ADMIN_PASSWORD_MIN . '자 이상이어야 합니다.');
+        }
+        $v->check();
+
+        if (strpos($dsn, ':') === false) {
+            throw ApiError::validation(['dsn' => 'DSN 형식이 올바르지 않습니다.']);
+        }
+
+        try {
+            DialectFactory::fromDsn($dsn);
+        } catch (ApiError $e) {
+            throw ApiError::validation(['dsn' => $e->getMessage()]);
+        }
+
+        $dbConfig = [
+            'dsn'      => $dsn,
+            'username' => ((string) ($input['db_username'] ?? '')) ?: null,
+            'password' => ((string) ($input['db_password'] ?? '')) ?: null,
+        ];
+
+        try {
+            $db = Connection::create($dbConfig);
+            (new Schema($db))->create();
+        } catch (Throwable $e) {
+            throw ApiError::validation(['dsn' => 'DB 에 연결하거나 테이블을 만들지 못했습니다: ' . $e->getMessage()]);
+        }
+
+        $this->ensureStorageDirectories();
+
+        $config = [
+            'db'   => $dbConfig,
+            'auth' => [
+                'secret' => Base64Url::encode(random_bytes(32)),
+                'ttl'    => 3600,
+                'leeway' => 60,
+            ],
+            'bootstrap_admin' => [
+                'id'            => $adminId,
+                'password_hash' => password_hash($adminPassword, PASSWORD_DEFAULT),
+            ],
+            'uploads' => [
+                'dir'         => $this->storageDir . '/uploads',
+                'max_bytes'   => 5 * 1024 * 1024,
+                'allowed_ext' => [
+                    'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'txt',
+                    'hwp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+                ],
+            ],
+            'cors' => [
+                'allowed_origins' => $this->parseOrigins((string) ($input['cors_origins'] ?? '')),
+            ],
+            'log' => [
+                'file' => $this->storageDir . '/logs/error.log',
+            ],
+            'debug' => false,
+        ];
+
+        $php = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n";
+
+        if (file_put_contents($this->configPath, $php, LOCK_EX) === false) {
+            throw ApiError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
+        }
+        @chmod($this->configPath, 0640);
+
+        return [
+            'dialect'     => $db->dialect()->name(),
+            'config_path' => $this->configPath,
+        ];
+    }
+
+    /** @return string[] */
+    private function parseOrigins(string $raw): array
+    {
+        $origins = [];
+        foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
+            $line = trim((string) $line);
+            if ($line !== '' && !in_array($line, $origins, true)) {
+                $origins[] = $line;
+            }
+        }
+
+        return $origins;
+    }
+
+    private function ensureStorageDirectories(): void
+    {
+        foreach ([$this->storageDir . '/uploads', $this->storageDir . '/logs'] as $directory) {
+            if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+                throw ApiError::internal('디렉터리를 만들 수 없습니다: ' . $directory);
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `vendor/bin/phpunit tests/Install`
+Expected: PASS — 8 tests
+
+- [ ] **Step 5: 설치 화면을 만든다**
+
+`public/install.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../src/autoload.php';
+
+use StandardBoard\Http\ApiError;
+use StandardBoard\Install\Installer;
+
+$installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
+
+$done = null;
+$errors = [];
+$input = [
+    'dsn'          => 'sqlite:' . realpath(__DIR__ . '/..') . '/storage/board.sqlite',
+    'db_username'  => '',
+    'admin_id'     => 'root',
+    'cors_origins' => '',
+];
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $input = array_merge($input, $_POST);
+    try {
+        $done = $installer->run($_POST);
+    } catch (ApiError $e) {
+        $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
+    }
+}
+
+$installed = $installer->isInstalled();
+
+function h(?string $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+?>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>표준 게시판 설치</title>
+<style>
+  body { font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 22px; }
+  label { display: block; margin-top: 16px; font-weight: 600; }
+  input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; box-sizing: border-box; }
+  .hint { color: #666; font-weight: 400; font-size: 13px; }
+  .error { color: #b00020; font-size: 13px; margin-top: 4px; }
+  .done { background: #e7f6ea; border: 1px solid #46a15a; padding: 16px; border-radius: 4px; }
+  button { margin-top: 24px; padding: 10px 20px; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>표준 게시판 설치</h1>
+
+<?php if ($done !== null): ?>
+  <div class="done">
+    <p><strong>설치가 끝났습니다.</strong> 사용 중인 DB: <?= h($done['dialect']) ?></p>
+    <p><strong>지금 <code>public/install.php</code> 를 삭제하세요.</strong> 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>
+    <p><a href="admin.php">관리자 화면으로 이동</a></p>
+  </div>
+<?php elseif ($installed): ?>
+  <p>이미 설치되어 있습니다. 다시 설치하려면 <code>config/config.php</code> 를 지우세요.</p>
+<?php else: ?>
+  <?php if (isset($errors['_'])): ?><p class="error"><?= h($errors['_']) ?></p><?php endif; ?>
+  <form method="post">
+    <label>DB DSN
+      <span class="hint">예) sqlite:/절대경로/board.sqlite · mysql:host=localhost;dbname=board;charset=utf8mb4 · pgsql:host=localhost;dbname=board</span>
+      <input name="dsn" value="<?= h($input['dsn']) ?>" required>
+    </label>
+    <?php if (isset($errors['dsn'])): ?><p class="error"><?= h($errors['dsn']) ?></p><?php endif; ?>
+
+    <label>DB 사용자 <span class="hint">SQLite 면 비워 둡니다</span>
+      <input name="db_username" value="<?= h($input['db_username']) ?>">
+    </label>
+    <label>DB 비밀번호
+      <input name="db_password" type="password" value="">
+    </label>
+
+    <label>관리자 아이디
+      <input name="admin_id" value="<?= h($input['admin_id']) ?>" required>
+    </label>
+    <label>관리자 비밀번호 <span class="hint">8자 이상</span>
+      <input name="admin_password" type="password" required>
+    </label>
+    <?php if (isset($errors['admin_password'])): ?><p class="error"><?= h($errors['admin_password']) ?></p><?php endif; ?>
+
+    <label>허용할 출처 (CORS) <span class="hint">호스트 앱 주소를 한 줄에 하나씩. 없으면 비워 둡니다</span>
+      <textarea name="cors_origins" rows="3"><?= h($input['cors_origins']) ?></textarea>
+    </label>
+
+    <button type="submit">설치</button>
+  </form>
+<?php endif; ?>
+</body>
+</html>
+```
+
+- [ ] **Step 6: 실제로 설치해 본다**
+
+```bash
+rm -f config/config.php storage/board.sqlite
+php -S 127.0.0.1:8080 -t public &
+sleep 1
+curl -s -X POST http://127.0.0.1:8080/install.php \
+  --data-urlencode "dsn=sqlite:$(pwd)/storage/board.sqlite" \
+  --data-urlencode 'admin_id=root' \
+  --data-urlencode 'admin_password=supersecret1' | grep -o '설치가 끝났습니다'
+curl -s 'http://127.0.0.1:8080/index.php?p=/health'
+curl -s -X POST 'http://127.0.0.1:8080/index.php?p=/auth/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"root","password":"supersecret1"}'
+```
+Expected: `설치가 끝났습니다` → `{"ok":true,"dialect":"sqlite"}` → `{"token":"eyJ..."}`. 확인 후 서버를 종료한다.
+
+- [ ] **Step 7: 커밋한다**
+
+```bash
+git add src/Install public/install.php tests/Install
+git commit -m "feat: 웹 설치 마법사
+
+CLI 가 없는 저가 호스팅을 가정한다. JWT 시크릿은 사람이 고르게 두지 않고
+random_bytes 로 만든다. 이미 설치된 상태에서는 실행을 거부한다."
+```
+
+---
+
+### Task 15: 관리자 화면
+
+**Files:**
+- Create: `public/admin.php`
+- Test: 수동 검증 (아래 Step 2). 브라우저 UI 이므로 PHPUnit 대상이 아니다
+
+**Interfaces:**
+- Consumes: 모든 API 경로 (Task 10~13). 새 서버 코드는 없다
+- Produces: 브라우저에서 쓰는 관리 화면
+
+**담기는 것:**
+- 로그인 — 부트스트랩 관리자 계정, 또는 호스트가 발급한 토큰 붙여넣기
+- 게시판 관리 — 목록, 생성, 설정 변경, 삭제
+- 게시판 관리자 지정 — `managers` 에 사용자 ID 추가/제거
+- 글 관리 — 게시판별 목록, 검색, 삭제, 복구(삭제된 글 보기), 공지 지정/해제
+- 댓글 관리 — 글별 댓글 트리 조회와 삭제
+- 유지보수 — 고아 첨부 정리
+
+이 화면이 API 의 첫 실사용 클라이언트다. 화면이 동작한다는 것이 곧 API 설계가 쓸 만하다는 검증이 된다.
+
+- [ ] **Step 1: 관리자 화면을 만든다**
+
+`public/admin.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+// 이 파일은 서버 로직을 갖지 않는다. API 를 호출하는 정적 화면일 뿐이다.
+// PHP 파일로 두는 것은 설치 위치와 무관하게 index.php 를 상대경로로 찾기 위해서다.
+?>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>표준 게시판 관리</title>
+<style>
+  :root { --line: #ddd; --muted: #666; --danger: #b00020; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  main { max-width: 1040px; margin: 24px auto; padding: 0 20px; }
+  section { margin-bottom: 32px; }
+  h2 { font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  input, select, textarea { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+  button { padding: 5px 10px; font: inherit; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button.link { border: 0; background: none; padding: 0; color: #0b57d0; text-decoration: underline; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .field input, .field select { color: #1a1a1a; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .deleted { text-decoration: line-through; color: var(--muted); }
+  .toast { position: fixed; right: 20px; bottom: 20px; padding: 10px 16px; border-radius: 4px; color: #fff; background: #333; }
+  .toast.error { background: var(--danger); }
+  .hidden { display: none; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>표준 게시판 관리</h1>
+  <span id="who" class="muted"></span>
+  <button id="logout" class="hidden">로그아웃</button>
+</header>
+
+<main>
+  <section id="login-view">
+    <h2>로그인</h2>
+    <div class="row">
+      <input id="login-id" placeholder="관리자 아이디" autocomplete="username">
+      <input id="login-password" type="password" placeholder="비밀번호" autocomplete="current-password">
+      <button id="login-btn">로그인</button>
+    </div>
+    <p class="muted">호스트 앱이 발급한 토큰이 있다면 아래에 붙여 넣어도 됩니다.</p>
+    <div class="row">
+      <input id="login-token" placeholder="eyJ..." style="flex:1">
+      <button id="token-btn">토큰으로 시작</button>
+    </div>
+  </section>
+
+  <div id="admin-view" class="hidden">
+    <section>
+      <h2>게시판</h2>
+      <table>
+        <thead><tr><th>키</th><th>이름</th><th>권한(읽기/쓰기/댓글)</th><th>옵션</th><th>관리자</th><th></th></tr></thead>
+        <tbody id="board-rows"></tbody>
+      </table>
+      <p class="row" style="margin-top:12px">
+        <input id="new-key" placeholder="board_key (영소문자/숫자/_/-)">
+        <input id="new-name" placeholder="게시판 이름">
+        <button id="create-board">게시판 만들기</button>
+      </p>
+    </section>
+
+    <section id="board-detail" class="hidden">
+      <h2>게시판 설정 — <span id="detail-name"></span></h2>
+      <div class="grid">
+        <label class="field">이름<input id="f-name"></label>
+        <label class="field">읽기 권한<select id="f-perm_read"></select></label>
+        <label class="field">쓰기 권한<select id="f-perm_write"></select></label>
+        <label class="field">댓글 권한<select id="f-perm_comment"></select></label>
+        <label class="field">페이지당 글 수<input id="f-per_page" type="number" min="1" max="100"></label>
+        <label class="field">정렬 순서<input id="f-sort_order" type="number"></label>
+        <label class="field">분류 (쉼표 구분)<input id="f-categories"></label>
+        <label class="field">게시판 관리자 (쉼표 구분 user id)<input id="f-managers"></label>
+        <label class="field">비밀글 사용<select id="f-use_secret"></select></label>
+        <label class="field">첨부 사용<select id="f-use_file"></select></label>
+        <label class="field">분류 사용<select id="f-use_category"></select></label>
+      </div>
+      <p class="row" style="margin-top:12px">
+        <button id="save-board">설정 저장</button>
+        <button id="delete-board" class="danger">게시판 삭제 (글·댓글 함께 삭제)</button>
+      </p>
+    </section>
+
+    <section id="post-section" class="hidden">
+      <h2>글 — <span id="post-board-name"></span></h2>
+      <div class="row">
+        <input id="post-q" placeholder="검색어">
+        <button id="post-search">검색</button>
+        <label class="row" style="gap:4px"><input id="show-deleted" type="checkbox"> 삭제된 글 보기</label>
+        <span id="post-meta" class="muted"></span>
+      </div>
+      <table style="margin-top:10px">
+        <thead><tr><th>번호</th><th>제목</th><th>작성자</th><th>댓글</th><th>조회</th><th>작성일</th><th></th></tr></thead>
+        <tbody id="post-rows"></tbody>
+      </table>
+      <p class="row"><button id="prev-page">이전</button><button id="next-page">다음</button></p>
+    </section>
+
+    <section id="comment-section" class="hidden">
+      <h2>댓글 — <span id="comment-post-title"></span> <button id="close-comments" class="link">닫기</button></h2>
+      <table>
+        <thead><tr><th>번호</th><th>내용</th><th>작성자</th><th>작성일</th><th></th></tr></thead>
+        <tbody id="comment-rows"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>유지보수</h2>
+      <p class="row">
+        <button id="gc">고아 첨부 정리</button>
+        <span class="muted">어떤 글에도 연결되지 않은 업로드 파일을 지웁니다.</span>
+      </p>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // mod_rewrite 유무와 무관하게 동작하도록 쿼리스트링 라우팅을 쓴다.
+  var API = 'index.php?p=';
+  var PERMS = ['guest', 'member', 'admin'];
+
+  var state = { token: null, boards: [], board: null, page: 1, q: '', showDeleted: false, totalPages: 1 };
+
+  function $(id) { return document.getElementById(id); }
+
+  function toast(message, isError) {
+    var el = document.createElement('div');
+    el.className = 'toast' + (isError ? ' error' : '');
+    el.textContent = message;
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, 3000);
+  }
+
+  function url(path, query) {
+    return API + encodeURIComponent(path).replace(/%2F/g, '/') + (query || '');
+  }
+
+  function api(method, path, body, query) {
+    var options = { method: method, headers: {} };
+    if (state.token) { options.headers['Authorization'] = 'Bearer ' + state.token; }
+    if (body !== undefined && body !== null) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
+    }
+    return fetch(url(path, query), options).then(function (response) {
+      if (response.status === 204) { return {}; }
+      return response.json().then(function (payload) {
+        if (!response.ok) {
+          var error = (payload && payload.error) || {};
+          var keys = error.details ? Object.keys(error.details) : [];
+          var detail = keys.length
+            ? ' (' + keys.map(function (k) { return k + ': ' + error.details[k]; }).join(', ') + ')'
+            : '';
+          throw new Error((error.message || '요청 실패') + detail);
+        }
+        return payload;
+      });
+    });
+  }
+
+  function fail(e) { toast(e.message, true); }
+
+  function fillSelect(el, values, labels) {
+    el.innerHTML = '';
+    values.forEach(function (value, i) {
+      var option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = labels ? labels[i] : String(value);
+      el.appendChild(option);
+    });
+  }
+
+  function cell(row, text, className) {
+    var td = document.createElement('td');
+    td.textContent = text;
+    if (className) { td.className = className; }
+    row.appendChild(td);
+    return td;
+  }
+
+  function splitList(value) {
+    return value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s !== ''; });
+  }
+
+  // ---- 로그인 ----------------------------------------------------------
+
+  function startSession(token) {
+    state.token = token;
+    try { sessionStorage.setItem('sb_token', token); } catch (e) { /* 시크릿 모드 */ }
+    $('login-view').classList.add('hidden');
+    $('admin-view').classList.remove('hidden');
+    $('logout').classList.remove('hidden');
+    $('who').textContent = '로그인됨';
+    loadBoards();
+  }
+
+  $('login-btn').onclick = function () {
+    api('POST', '/auth/login', { id: $('login-id').value, password: $('login-password').value })
+      .then(function (payload) { startSession(payload.token); })
+      .catch(fail);
+  };
+
+  $('token-btn').onclick = function () {
+    var token = $('login-token').value.trim();
+    if (token) { startSession(token); }
+  };
+
+  $('logout').onclick = function () {
+    state.token = null;
+    try { sessionStorage.removeItem('sb_token'); } catch (e) { /* 무시 */ }
+    location.reload();
+  };
+
+  // ---- 게시판 ----------------------------------------------------------
+
+  function loadBoards() {
+    api('GET', '/boards').then(function (payload) {
+      state.boards = payload.data;
+      var tbody = $('board-rows');
+      tbody.innerHTML = '';
+      state.boards.forEach(function (board) {
+        var tr = document.createElement('tr');
+        cell(tr, board.board_key);
+        cell(tr, board.name);
+        cell(tr, board.perm_read + ' / ' + board.perm_write + ' / ' + board.perm_comment);
+        cell(tr, [board.use_secret ? '비밀글' : '', board.use_file ? '첨부' : '', board.use_category ? '분류' : '']
+          .filter(Boolean).join(' ') || '-', 'muted');
+        cell(tr, (board.managers || []).join(', ') || '-', 'muted');
+
+        var td = document.createElement('td');
+        var manage = document.createElement('button');
+        manage.textContent = '관리';
+        manage.onclick = function () { openBoard(board.board_key); };
+        td.appendChild(manage);
+        tr.appendChild(td);
+
+        tbody.appendChild(tr);
+      });
+    }).catch(fail);
+  }
+
+  $('create-board').onclick = function () {
+    api('POST', '/boards', { board_key: $('new-key').value.trim(), name: $('new-name').value.trim() })
+      .then(function () {
+        $('new-key').value = '';
+        $('new-name').value = '';
+        toast('게시판을 만들었습니다.');
+        loadBoards();
+      }).catch(fail);
+  };
+
+  function openBoard(key) {
+    api('GET', '/boards/' + key).then(function (payload) {
+      state.board = payload.data;
+      state.page = 1;
+      state.q = '';
+      $('post-q').value = '';
+      $('board-detail').classList.remove('hidden');
+      $('post-section').classList.remove('hidden');
+      $('comment-section').classList.add('hidden');
+      $('detail-name').textContent = state.board.name;
+      $('post-board-name').textContent = state.board.name;
+
+      ['perm_read', 'perm_write', 'perm_comment'].forEach(function (field) {
+        fillSelect($('f-' + field), PERMS);
+        $('f-' + field).value = state.board[field];
+      });
+      ['use_secret', 'use_file', 'use_category'].forEach(function (field) {
+        fillSelect($('f-' + field), ['false', 'true'], ['사용 안 함', '사용']);
+        $('f-' + field).value = state.board[field] ? 'true' : 'false';
+      });
+      $('f-name').value = state.board.name;
+      $('f-per_page').value = state.board.per_page;
+      $('f-sort_order').value = state.board.sort_order;
+      $('f-categories').value = (state.board.categories || []).join(', ');
+      $('f-managers').value = (state.board.managers || []).join(', ');
+
+      loadPosts();
+    }).catch(fail);
+  }
+
+  $('save-board').onclick = function () {
+    api('PATCH', '/boards/' + state.board.board_key, {
+      name: $('f-name').value,
+      perm_read: $('f-perm_read').value,
+      perm_write: $('f-perm_write').value,
+      perm_comment: $('f-perm_comment').value,
+      per_page: Number($('f-per_page').value),
+      sort_order: Number($('f-sort_order').value),
+      categories: splitList($('f-categories').value),
+      managers: splitList($('f-managers').value),
+      use_secret: $('f-use_secret').value === 'true',
+      use_file: $('f-use_file').value === 'true',
+      use_category: $('f-use_category').value === 'true'
+    }).then(function () {
+      toast('저장했습니다.');
+      loadBoards();
+      openBoard(state.board.board_key);
+    }).catch(fail);
+  };
+
+  $('delete-board').onclick = function () {
+    if (!confirm('게시판 "' + state.board.name + '" 과 그 안의 글·댓글을 모두 지웁니다. 계속할까요?')) { return; }
+    api('DELETE', '/boards/' + state.board.board_key).then(function () {
+      toast('삭제했습니다.');
+      state.board = null;
+      $('board-detail').classList.add('hidden');
+      $('post-section').classList.add('hidden');
+      $('comment-section').classList.add('hidden');
+      loadBoards();
+    }).catch(fail);
+  };
+
+  // ---- 글 --------------------------------------------------------------
+
+  function loadPosts() {
+    var query = '&page=' + state.page + '&per_page=20';
+    if (state.q) { query += '&q=' + encodeURIComponent(state.q); }
+    if (state.showDeleted) { query += '&include_deleted=1'; }
+
+    api('GET', '/boards/' + state.board.board_key + '/posts', null, query).then(function (payload) {
+      state.totalPages = payload.total_pages;
+      $('post-meta').textContent =
+        '전체 ' + payload.total + '개 · ' + state.page + '/' + Math.max(1, payload.total_pages) + ' 쪽';
+
+      var tbody = $('post-rows');
+      tbody.innerHTML = '';
+      payload.notices.concat(payload.data).forEach(function (post) {
+        tbody.appendChild(postRow(post));
+      });
+    }).catch(fail);
+  }
+
+  function postRow(post) {
+    var tr = document.createElement('tr');
+    cell(tr, String(post.id));
+
+    var titleCell = document.createElement('td');
+    var title = document.createElement('button');
+    title.className = 'link' + (post.deleted ? ' deleted' : '');
+    title.textContent = (post.is_notice ? '[공지] ' : '') + (post.is_secret ? '[비밀] ' : '') + post.title;
+    title.onclick = function () { openComments(post); };
+    titleCell.appendChild(title);
+    tr.appendChild(titleCell);
+
+    cell(tr, post.author_name);
+    cell(tr, String(post.comment_count));
+    cell(tr, String(post.view_count));
+    cell(tr, post.created_at, 'muted');
+
+    var actions = document.createElement('td');
+    actions.className = 'row';
+
+    var notice = document.createElement('button');
+    notice.textContent = post.is_notice ? '공지 해제' : '공지 지정';
+    notice.onclick = function () {
+      api('PATCH', '/posts/' + post.id, { is_notice: !post.is_notice })
+        .then(loadPosts).catch(fail);
+    };
+    actions.appendChild(notice);
+
+    if (post.deleted) {
+      var restore = document.createElement('button');
+      restore.textContent = '복구';
+      restore.onclick = function () {
+        api('POST', '/posts/' + post.id + '/restore').then(function () {
+          toast('복구했습니다.');
+          loadPosts();
+        }).catch(fail);
+      };
+      actions.appendChild(restore);
+    } else {
+      var remove = document.createElement('button');
+      remove.className = 'danger';
+      remove.textContent = '삭제';
+      remove.onclick = function () {
+        api('DELETE', '/posts/' + post.id).then(function () {
+          toast('삭제했습니다. "삭제된 글 보기" 에서 복구할 수 있습니다.');
+          loadPosts();
+        }).catch(fail);
+      };
+      actions.appendChild(remove);
+    }
+
+    tr.appendChild(actions);
+    return tr;
+  }
+
+  $('post-search').onclick = function () { state.q = $('post-q').value.trim(); state.page = 1; loadPosts(); };
+  $('show-deleted').onchange = function () { state.showDeleted = this.checked; state.page = 1; loadPosts(); };
+  $('prev-page').onclick = function () { if (state.page > 1) { state.page--; loadPosts(); } };
+  $('next-page').onclick = function () { if (state.page < state.totalPages) { state.page++; loadPosts(); } };
+
+  // ---- 댓글 ------------------------------------------------------------
+
+  function flatten(nodes, out) {
+    // 트리를 그대로 그리되 표에 넣기 위해 깊이 정보를 유지한 채 펼친다.
+    nodes.forEach(function (node) {
+      out.push(node);
+      if (node.children && node.children.length) { flatten(node.children, out); }
+    });
+    return out;
+  }
+
+  function openComments(post) {
+    api('GET', '/posts/' + post.id + '/comments').then(function (payload) {
+      $('comment-section').classList.remove('hidden');
+      $('comment-post-title').textContent = post.title;
+
+      var tbody = $('comment-rows');
+      tbody.innerHTML = '';
+      var rows = flatten(payload.data, []);
+      if (rows.length === 0) {
+        var empty = document.createElement('tr');
+        cell(empty, '');
+        cell(empty, '댓글이 없습니다.', 'muted');
+        tbody.appendChild(empty);
+        return;
+      }
+
+      rows.forEach(function (comment) {
+        var tr = document.createElement('tr');
+        cell(tr, String(comment.id));
+        cell(tr,
+          new Array(comment.depth + 1).join('　') + (comment.depth > 0 ? '└ ' : '') + comment.content,
+          comment.deleted ? 'muted' : '');
+        cell(tr, comment.author_name || '-');
+        cell(tr, comment.created_at, 'muted');
+
+        var actions = document.createElement('td');
+        if (!comment.deleted) {
+          var remove = document.createElement('button');
+          remove.className = 'danger';
+          remove.textContent = '삭제';
+          remove.onclick = function () {
+            api('DELETE', '/comments/' + comment.id).then(function () {
+              toast('댓글을 삭제했습니다.');
+              openComments(post);
+              loadPosts();
+            }).catch(fail);
+          };
+          actions.appendChild(remove);
+        }
+        tr.appendChild(actions);
+        tbody.appendChild(tr);
+      });
+    }).catch(fail);
+  }
+
+  $('close-comments').onclick = function () { $('comment-section').classList.add('hidden'); };
+
+  // ---- 유지보수 --------------------------------------------------------
+
+  $('gc').onclick = function () {
+    api('POST', '/maintenance/gc').then(function (payload) {
+      toast('파일 ' + payload.data.deleted + '개 (' + payload.data.bytes + ' 바이트) 를 정리했습니다.');
+    }).catch(fail);
+  };
+
+  // ---- 시작 ------------------------------------------------------------
+
+  var saved = null;
+  try { saved = sessionStorage.getItem('sb_token'); } catch (e) { /* 무시 */ }
+  if (saved) { startSession(saved); }
+})();
+</script>
+</body>
+</html>
+```
+
+댓글 표에서 `flatten()` 만 재귀를 쓴다. 서버의 `TreeBuilder` 와 달리 여기서는 이미 만들어진
+트리를 그리기만 하고, 브라우저가 감당하지 못할 깊이면 애초에 화면에 그릴 수 없으므로
+재귀로 두는 편이 읽기 쉽다.
+
+- [ ] **Step 2: 브라우저에서 손으로 확인한다**
+
+```bash
+php -S 127.0.0.1:8080 -t public &
+sleep 1
+echo 'http://127.0.0.1:8080/admin.php 를 브라우저로 연다'
+```
+
+다음을 차례로 확인한다. 하나라도 안 되면 그 자리에서 고친다.
+
+1. `root` / 설치할 때 정한 비밀번호로 로그인된다.
+2. `board_key` 에 `free`, 이름에 `자유게시판` 을 넣으면 게시판이 만들어진다.
+3. "관리" 를 눌러 설정 화면이 열린다. 첨부 사용을 "사용" 으로, 분류에 `질문, 잡담` 을,
+   게시판 관리자에 `mgr-1` 을 넣고 저장하면 게시판 목록에 반영된다.
+4. 다른 탭에서 글과 대댓글을 넣는다.
+
+```bash
+TOKEN=$(curl -s -X POST 'http://127.0.0.1:8080/index.php?p=/auth/login' \
+  -H 'Content-Type: application/json' -d '{"id":"root","password":"supersecret1"}' \
+  | sed 's/.*"token":"\([^"]*\)".*/\1/')
+
+POST_ID=$(curl -s -X POST 'http://127.0.0.1:8080/index.php?p=/boards/free/posts' \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"테스트 글","content":"본문"}' | sed 's/.*"id":\([0-9]*\).*/\1/')
+
+C1=$(curl -s -X POST "http://127.0.0.1:8080/index.php?p=/posts/$POST_ID/comments" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"content":"첫 댓글"}' | sed 's/.*"id":\([0-9]*\).*/\1/')
+
+curl -s -X POST "http://127.0.0.1:8080/index.php?p=/posts/$POST_ID/comments" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"content\":\"대댓글\",\"parent_id\":$C1}" > /dev/null
+```
+
+5. 글 목록에 "테스트 글" 이 보이고 댓글 수가 2 로 나온다.
+6. 제목을 클릭하면 댓글 표가 열리고 대댓글이 `└` 로 한 단 들여쓰여 보인다.
+7. 대댓글의 "삭제" 를 누르면 표에서 사라지고 글의 댓글 수가 1 로 준다.
+8. 첫 댓글의 "삭제" 를 누르면 (자식이 이미 지워졌으므로) 표에서 사라진다.
+9. "공지 지정" 을 누르면 제목에 `[공지]` 가 붙고 목록 맨 위로 올라간다.
+10. 글의 "삭제" 를 누르면 목록에서 사라진다. **"삭제된 글 보기" 를 켜면 취소선과 함께 다시
+    나타나고, "복구" 를 누르면 되살아난다.**
+11. "고아 첨부 정리" 가 오류 없이 실행된다.
+12. 로그아웃하면 로그인 화면으로 돌아가고, 새로고침해도 로그인 상태가 복원되지 않는다.
+
+확인 후 서버를 종료한다.
+
+- [ ] **Step 3: 커밋한다**
+
+```bash
+git add public/admin.php
+git commit -m "feat: 관리자 화면
+
+빌드 도구 없이 단일 HTML + vanilla JS. API 를 그대로 호출하므로
+이 화면이 동작한다는 것이 API 설계의 검증이 된다."
+```
+
+---
+
+### Task 16: 연동 문서
+
+**Files:**
+- Create: `README.md`
+- Test: 없음 (문서)
+
+호스트 앱이 토큰을 어떻게 발급하는지 적어 두지 않으면 이 게시판은 붙일 수 없다. 인증을 호스트에 위임한 설계의 필연적인 짝이다.
+
+- [ ] **Step 1: README 를 쓴다**
+
+`README.md`:
+
+````markdown
+# 표준 게시판 (standard-board)
+
+SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시판. PHP 7.4 이상이면 되고
+런타임 의존성이 없다. 저가형 공유 호스팅에 폴더째 올리면 동작한다.
+
+- 게시판을 몇 개 만들든 테이블은 `boards`, `posts`, `comments` 세 개뿐이다
+- 댓글 깊이에 제한이 없다
+- 인증은 호스트 앱이 소유한다. 게시판은 서명된 토큰을 검증만 한다
+
+## 설치
+
+1. 파일 전체를 올린다. 문서 루트는 `public/` 을 가리키게 한다.
+   문서 루트를 바꿀 수 없는 호스팅이라면 `public/` 안의 내용을 루트에 두고 나머지 폴더를
+   그 위 디렉터리에 둔다. `storage/` 가 웹으로 접근 가능한 위치에 있으면 안 된다.
+2. 브라우저로 `install.php` 를 연다. DSN 과 관리자 계정을 입력한다.
+3. **설치가 끝나면 `public/install.php` 를 지운다.**
+4. `admin.php` 로 들어가 게시판을 만든다.
+
+DSN 예시:
+
+```
+sqlite:/home/user/board/storage/board.sqlite
+mysql:host=localhost;dbname=board;charset=utf8mb4
+pgsql:host=localhost;dbname=board
+```
+
+## 호스트 앱 연동
+
+게시판은 사용자 저장소를 갖지 않는다. 호스트 앱이 공유 시크릿으로 HS256 JWT 를 발급하고,
+게시판은 서명을 검증해 그 주장을 그대로 믿는다.
+
+`config/config.php` 의 `auth.secret` 을 호스트 앱과 공유한 뒤, 로그인한 사용자에게 이런
+토큰을 만들어 준다.
+
+```php
+function issueBoardToken(string $userId, string $displayName, bool $isAdmin): string
+{
+    $secret = 'config.php 의 auth.secret 과 같은 값';
+
+    $header = ['typ' => 'JWT', 'alg' => 'HS256'];
+    $payload = [
+        'sub'   => $userId,        // 게시판의 author_id 가 된다
+        'name'  => $displayName,   // 글쓴이 이름으로 강제된다
+        'admin' => $isAdmin,       // true 면 전역 관리자
+        'iat'   => time(),
+        'exp'   => time() + 3600,
+    ];
+
+    $encode = static function (array $data): string {
+        return rtrim(strtr(base64_encode(json_encode($data, JSON_UNESCAPED_UNICODE)), '+/', '-_'), '=');
+    };
+
+    $signingInput = $encode($header) . '.' . $encode($payload);
+    $signature = rtrim(strtr(base64_encode(hash_hmac('sha256', $signingInput, $secret, true)), '+/', '-_'), '=');
+
+    return $signingInput . '.' . $signature;
+}
+```
+
+브라우저는 이 토큰을 `Authorization: Bearer <토큰>` 헤더에 담아 게시판 API 를 직접 호출한다.
+호스트 앱 도메인이 게시판 도메인과 다르면 `config.cors.allowed_origins` 에 호스트 앱 주소를
+정확히 적어야 한다.
+
+## 관리자
+
+권한 판정 순서는 다음과 같다.
+
+1. 토큰의 `admin` 이 `true` → **전역 관리자**. 게시판 생성/삭제 포함 전권
+2. 토큰의 `sub` 가 게시판의 `managers` 에 있음 → **게시판 관리자**. 그 게시판의 글·댓글만
+3. 글의 `author_id` 가 토큰의 `sub` 와 같음 → **본인**
+4. 비회원 글이고 비밀번호가 맞음 → **비회원 본인**. 3번과 같은 권한
+5. 그 외 → 게시판의 `perm_read` / `perm_write` / `perm_comment` 설정
+
+호스트 앱이 아직 없다면 `config.php` 의 `bootstrap_admin` 계정으로 `admin.php` 에 로그인해
+전역 관리자 토큰을 발급받는다. 호스트를 붙인 뒤에는 `bootstrap_admin` 을 `null` 로 두어
+이 경로를 닫는다.
+
+## API
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| POST | `/auth/login` | 부트스트랩 관리자 로그인 |
+| GET | `/boards` | 게시판 목록 |
+| POST | `/boards` | 게시판 생성 (전역 관리자) |
+| GET/PATCH/DELETE | `/boards/{key}` | 게시판 조회/수정/삭제 |
+| GET | `/boards/{key}/posts` | 글 목록 (`page`, `per_page`, `q`, `category`) |
+| POST | `/boards/{key}/posts` | 글 작성 |
+| GET/PATCH/DELETE | `/posts/{id}` | 글 조회/수정/삭제 |
+| POST | `/posts/{id}/restore` | 삭제된 글 복구 (관리자) |
+| GET | `/posts/{id}/files/{index}` | 첨부 다운로드 |
+| GET/POST | `/posts/{id}/comments` | 댓글 트리 조회 / 작성 |
+| PATCH/DELETE | `/comments/{id}` | 댓글 수정/삭제 |
+| POST | `/uploads` | 첨부 업로드 |
+| POST | `/maintenance/gc` | 고아 첨부 정리 (전역 관리자) |
+
+`mod_rewrite` 가 없는 호스팅에서는 `index.php?p=/boards/free/posts` 형태로 호출한다.
+
+## 개발
+
+```bash
+composer install
+vendor/bin/phpunit                 # SQLite 로 실행
+
+TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=board_test;charset=utf8mb4' \
+TEST_MYSQL_USER=root TEST_MYSQL_PASS=secret \
+TEST_PGSQL_DSN='pgsql:host=127.0.0.1;dbname=board_test' \
+TEST_PGSQL_USER=postgres TEST_PGSQL_PASS=secret \
+vendor/bin/phpunit                 # 세 DB 전부
+```
+
+세 DB 로 전부 통과하는 것이 릴리스 조건이다.
+````
+
+- [ ] **Step 2: 커밋한다**
+
+```bash
+git add README.md
+git commit -m "docs: 설치, 호스트 앱 연동, API 요약
+
+인증을 호스트에 위임한 이상 토큰 발급 방법을 적어 두지 않으면 붙일 수 없다."
+```
