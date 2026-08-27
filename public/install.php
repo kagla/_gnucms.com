@@ -58,7 +58,7 @@ function h(?string $value): string
   <div class="done">
     <p><strong>설치가 끝났습니다.</strong> 사용 중인 DB: <?= h($done['dialect']) ?></p>
     <p><strong>지금 <code>public/install.php</code> 를 삭제하세요.</strong> 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>
-    <p><a href="admin.php">관리자 화면으로 이동</a></p>
+    <p><a href="./">사이트로 이동</a></p>
   </div>
 <?php elseif ($installed): ?>
   <p>이미 설치되어 있습니다. 다시 설치하려면 <code>config/config.php</code> 를 지우세요.</p>
