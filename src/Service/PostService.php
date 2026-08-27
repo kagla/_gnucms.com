@@ -37,7 +37,10 @@ final class PostService
 
         $v = new Validator($query);
         $page = $v->int('page', 1, 1, 100000);
-        $perPage = $v->int('per_page', (int) $board['per_page'], 1, 100);
+        // per_page 최솟값을 너무 낮게 두면 total_pages 가 글 수만큼 커진다. 목록
+        // 화면의 페이지 번호는 그 값만큼 링크를 그리므로, 값이 작을수록 요청 하나로
+        // 만들어지는 링크 수가 늘어난다 (예: per_page=1 인 대형 게시판).
+        $perPage = $v->int('per_page', (int) $board['per_page'], 10, 100);
         $q = $v->optionalString('q', 100);
         $category = $v->optionalString('category', 50);
         $includeDeleted = $v->bool('include_deleted', false);

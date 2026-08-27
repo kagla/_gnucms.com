@@ -82,4 +82,30 @@ final class PostListTest extends WebTestCase
 
         self::assertSame(401, $response->getStatusCode());
     }
+
+    /**
+     * per_page 는 호출자가 정할 수 있고 (예전 하한은 1), total_pages 는 글 수만큼
+     * 커질 수 있다. 예전 페이지네이션 템플릿은 1..total_pages 전체를 그렸으므로,
+     * per_page=1 인 대형 게시판에서는 글 하나마다 링크 하나가 생겼다 — 공유 호스팅에서
+     * 메모리 한도로 죽을 수 있는 크기다. 지금은 현재 페이지 앞뒤 창(5개)만 그려야 한다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testLargeTotalPagesRendersBoundedPagerLinks(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판', 'per_page' => 1]);
+        for ($i = 1; $i <= 40; $i++) {
+            $app->postService()->create($acl, 'free', ['title' => '글 ' . $i, 'content' => '내용 ' . $i]);
+        }
+
+        $body = $this->body($this->get($app, '/b/free'));
+
+        // total_pages 는 40 이지만, 창(앞뒤 5개) + 첫/끝 페이지만 링크가 되어야 한다.
+        // 예전처럼 1..total_pages 를 통째로 그렸다면 "?page=" 가 40번 가까이 나온다.
+        $pageLinks = substr_count($body, '?page=');
+        self::assertGreaterThan(0, $pageLinks);
+        self::assertLessThanOrEqual(13, $pageLinks);
+    }
 }

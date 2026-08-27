@@ -1,4 +1,8 @@
 {% extends "layout.html.twig" %}
+{% import _self as pager %}
+{% macro pageLink(board, query, p, label) %}
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}?page={{ p }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}">{{ label|default(p) }}</a>
+{% endmacro %}
 {% block title %}{{ board.name }}{% endblock %}
 {% block body %}
   <p class="muted"><a href="{{ url_for('boards.index') }}">게시판</a></p>
@@ -48,14 +52,27 @@
     </table>
 
     {% if list.total_pages > 1 %}
+      {# 페이지 수가 글 수만큼 커질 수 있어 전부 그리지 않는다. 현재 페이지 앞뒤로
+         5개씩만 보여주고, 그 창 밖에 첫/끝 페이지가 있으면 따로 링크를 단다. #}
+      {% set window = 5 %}
+      {% set start = max(1, list.page - window) %}
+      {% set end = min(list.total_pages, list.page + window) %}
       <p>
-        {% for p in 1..list.total_pages %}
+        {% if start > 1 %}
+          {{ pager.pageLink(board, query, 1) }}
+          {% if start > 2 %}<span class="muted">…</span>{% endif %}
+        {% endif %}
+        {% for p in start..end %}
           {% if p == list.page %}
             <strong>{{ p }}</strong>
           {% else %}
-            <a href="{{ url_for('posts.index', {'key': board.board_key}) }}?page={{ p }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}">{{ p }}</a>
+            {{ pager.pageLink(board, query, p) }}
           {% endif %}
         {% endfor %}
+        {% if end < list.total_pages %}
+          {% if end < list.total_pages - 1 %}<span class="muted">…</span>{% endif %}
+          {{ pager.pageLink(board, query, list.total_pages) }}
+        {% endif %}
       </p>
     {% endif %}
   {% endif %}
