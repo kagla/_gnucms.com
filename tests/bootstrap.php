@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/autoload.php';
 
 // 어떤 DB 로 돌고 있는지 한 줄로 알린다. 환경변수가 없으면 MySQL/PostgreSQL 케이스가
 // 조용히 빠지는데, 그러면 초록불 "OK" 가 "세 DB 통과" 인지 "SQLite 만 통과" 인지
