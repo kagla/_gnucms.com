@@ -1,0 +1,62 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ board.name }}{% endblock %}
+{% block body %}
+  <p class="muted"><a href="{{ url_for('boards.index') }}">게시판</a></p>
+  <h1>{{ board.name }}</h1>
+  {% if board.description %}<p class="muted">{{ board.description }}</p>{% endif %}
+
+  <form method="get" action="{{ url_for('posts.index', {'key': board.board_key}) }}">
+    {% if board.use_category and board.categories is not empty %}
+      <select name="category">
+        <option value="">전체 분류</option>
+        {% for name in board.categories %}
+          <option value="{{ name }}"{% if query.category == name %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    <input type="search" name="q" value="{{ query.q }}" placeholder="검색어">
+    <button type="submit">검색</button>
+  </form>
+
+  {% if list.data is empty and list.notices is empty %}
+    <p class="empty">글이 없습니다.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          {% if board.use_category %}<th>분류</th>{% endif %}
+          <th>제목</th><th>글쓴이</th><th>날짜</th><th>조회</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for post in list.notices|merge(list.data) %}
+        <tr>
+          {% if board.use_category %}<td class="muted">{{ post.category }}</td>{% endif %}
+          <td>
+            {% if post.is_notice %}<strong>공지</strong> {% endif %}
+            {% if post.is_secret %}🔒 {% endif %}
+            <a href="{{ base_path() }}/p/{{ post.id }}">{{ post.title }}</a>
+            {% if post.comment_count > 0 %}<span class="muted">[{{ post.comment_count }}]</span>{% endif %}
+            {% if post.file_count > 0 %}<span class="muted">📎</span>{% endif %}
+          </td>
+          <td class="muted">{{ post.author_name }}</td>
+          <td class="muted">{{ post.created_at }}</td>
+          <td class="muted">{{ post.view_count }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if list.total_pages > 1 %}
+      <p>
+        {% for p in 1..list.total_pages %}
+          {% if p == list.page %}
+            <strong>{{ p }}</strong>
+          {% else %}
+            <a href="{{ url_for('posts.index', {'key': board.board_key}) }}?page={{ p }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}">{{ p }}</a>
+          {% endif %}
+        {% endfor %}
+      </p>
+    {% endif %}
+  {% endif %}
+{% endblock %}

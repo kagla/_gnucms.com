@@ -6,6 +6,7 @@ namespace ApiBoard\Web;
 
 use ApiBoard\App;
 use ApiBoard\Web\Controller\BoardController;
+use ApiBoard\Web\Controller\PostController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -25,5 +26,6 @@ final class Routes
         });
 
         $slim->get('/', [new BoardController($app), 'index'])->setName('boards.index');
+        $slim->get('/b/{key}', [new PostController($app), 'index'])->setName('posts.index');
     }
 }

@@ -10,7 +10,7 @@
       <tbody>
       {% for board in boards %}
         <tr>
-          <td><a href="{{ base_path() }}/b/{{ board.board_key }}">{{ board.name }}</a></td>
+          <td><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a></td>
           <td class="muted">{{ board.description }}</td>
         </tr>
       {% endfor %}
