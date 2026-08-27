@@ -27,7 +27,16 @@ final class Validator
 
     public function requiredString(string $field, int $max = 0): string
     {
-        $value = trim((string) ($this->data[$field] ?? ''));
+        $raw = $this->data[$field] ?? '';
+        if (!is_scalar($raw)) {
+            // ?title[]=x 처럼 배열로 오면 (string) 캐스팅이 경고를 낸다. 문자열이
+            // 아니라는 것 자체가 이미 검증 실패다.
+            $this->errors[$field] = '문자열이어야 합니다.';
+
+            return '';
+        }
+
+        $value = trim((string) $raw);
 
         if ($value === '') {
             $this->errors[$field] = '필수 항목입니다.';
@@ -49,7 +58,15 @@ final class Validator
             return $default;
         }
 
-        $value = trim((string) $this->data[$field]);
+        $raw = $this->data[$field];
+        if (!is_scalar($raw)) {
+            // requiredString() 과 같은 이유. ?q[]=x 같은 배열은 검증 실패로 처리한다.
+            $this->errors[$field] = '문자열이어야 합니다.';
+
+            return $default;
+        }
+
+        $value = trim((string) $raw);
         if ($value === '') {
             return $default;
         }

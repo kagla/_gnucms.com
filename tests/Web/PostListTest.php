@@ -59,6 +59,47 @@ final class PostListTest extends WebTestCase
         self::assertStringNotContainsString('글 제목 1', $body);
     }
 
+    /**
+     * PostRepository::paginate() 는 평범한 LIKE 로 검색한다. MySQL 과 (아스키 범위에서는)
+     * SQLite 에서는 대소문자를 가리지 않지만, PostgreSQL 의 LIKE 는 대소문자를 가린다.
+     * 지금까지의 검색 테스트는 대소문자 구분이 없는 한글이라 이 차이를 드러내지 못했다.
+     *
+     * 이 테스트는 SQLite 와 MySQL 에서는 통과한다. PostgreSQL 로 돌리면 실패할 것으로
+     * 예상한다 — 그게 이 테스트의 목적이다. pgsql 에서 이 테스트가 실패하면 버그가
+     * 아니라 여기서 미리 표시해 둔 실제 동작 차이이니, 테스트를 고치지 말고 ILIKE 로
+     * 바꾸는 등 PostRepository 를 고쳐야 한다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testSearchIsCaseInsensitiveForAsciiTitles(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $app->postService()->create($acl, 'free', ['title' => 'Hello World', 'content' => '내용']);
+
+        $body = $this->body($this->get($app, '/b/free', ['q' => 'hello']));
+
+        self::assertStringContainsString('Hello World', $body);
+    }
+
+    /**
+     * ?q[]=x 처럼 배열로 온 검색어는 Validator 가 "Array to string conversion"
+     * 경고 없이 검증 실패(422)로 처리해야 한다. failOnWarning="true" 라서 경고가
+     * 나면 이 테스트 자체가 실패로 끝난다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testArrayQueryParameterFailsValidationInsteadOfCrashing(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->seed($app, 1);
+
+        $response = $this->get($app, '/b/free', ['q' => ['x']]);
+
+        self::assertSame(422, $response->getStatusCode());
+    }
+
     /** @dataProvider connectionProvider */
     public function testUnknownBoardRendersNotFoundPage(array $dbConfig): void
     {

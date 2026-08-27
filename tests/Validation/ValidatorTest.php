@@ -115,4 +115,36 @@ final class ValidatorTest extends TestCase
             $this->assertArrayHasKey('perm_read', $e->details());
         }
     }
+
+    /**
+     * ?q[]=x 처럼 배열로 온 값을 (string) 으로 캐스팅하면 "Array to string
+     * conversion" 경고가 난다. phpunit.xml.dist 의 failOnWarning="true" 때문에
+     * 이 경고 하나가 테스트를 실패시킨다 — 배열은 검증 실패로 처리해야 한다.
+     */
+    public function testRequiredStringRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['title' => ['x']]);
+        $v->requiredString('title', 200);
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (DomainError $e) {
+            $this->assertArrayHasKey('title', $e->details());
+        }
+    }
+
+    /** @see testRequiredStringRejectsArrayValueWithoutWarning */
+    public function testOptionalStringRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['q' => ['x']]);
+        $v->optionalString('q', 100);
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (DomainError $e) {
+            $this->assertArrayHasKey('q', $e->details());
+        }
+    }
 }
