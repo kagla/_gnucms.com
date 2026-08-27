@@ -339,26 +339,39 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 
 ## 15. 이름
 
-**`justboard` 로 바꾼다.** `apiboard` 는 API 가 사라진 뒤로 맞지 않는다.
+**`aboard` 로 바꾼다.** `apiboard` 는 API 가 사라진 뒤로 맞지 않는다.
 
-구현 방식이 아니라 쓰임을 가리키는 이름을 골랐다. `crud-board` 를 쓰지 않는 이유는 두
-가지다. `crud` 는 영어에서 "때·오물" 을 뜻하는 실제 단어라 약어를 파싱하지 못하는 사람에게
-그대로 읽히고, CRUD 는 개발자 내부 용어라 구현 패턴을 이름에 박게 된다. `apiboard` 가
-맞지 않게 된 것과 같은 이유다.
+`aboard` 는 "올라탄, 탑승한" 을 뜻하는 영어 단어이고(`All aboard!`, `Welcome aboard`),
+그 안에 `a board` 를 품고 있다. 사람이 올라타는 곳이라는 뜻과 게시판이라는 뜻이 한 단어에
+겹친다. 6글자로 후보 중 가장 짧으면서 뜻이 비어 있지 않은 유일한 이름이었다.
 
-확인한 것: Packagist 에 `justboard` 이름의 PHP 패키지가 없고 `kagla/justboard` 가 비어
-있다. GitHub 에 같은 이름의 개인 저장소가 몇 개 있으나 모두 습작 수준이고, 저장소 이름은
-계정별 네임스페이스라 충돌하지 않는다.
+**알고 감수하는 약점:** 영어권에서 `abroad`(해외)와 철자를 혼동하기 쉽다. 주 사용자층이
+국내라 감수한다. 흔한 단어라 검색이 어려운 것도 같은 이유로 감수한다.
+
+버린 후보와 이유를 남긴다. 같은 논의를 다시 하지 않기 위해서다.
+
+| 후보 | 버린 이유 |
+|---|---|
+| `crud-board` | `crud` 는 영어에서 "때·오물" 을 뜻하는 실제 단어다. 그리고 CRUD 는 구현 패턴이지 제품이 아니다 |
+| `cru-board` | 약어를 잘라 뜻이 사라졌다. Delete 가 없는 것으로 오독된다 |
+| `custom-board` | `custom` 은 "주문 제작된" 이지 "고쳐 쓰는" 이 아니다. 그 뜻은 `customizable` 이고 이름으로 쓰기엔 길다. 무엇보다 이 게시판은 안 고치고 쓰는 물건이다 |
+| `aiboard` | 이 설계에 AI 기능이 하나도 없다. 지키지 못할 약속을 이름에 넣지 않는다 |
+| `101board` | **PHP 네임스페이스는 숫자로 시작할 수 없다**(`namespace 101Board;` 는 Parse error). 패키지 이름과 네임스페이스가 갈라진다. 어순도 관례(`Board 101`)와 반대라 뜻이 안 산다 |
+| `zeroboard` | 제로보드는 한국 PHP 게시판의 이름이다. 같은 계보에서 다시 쓸 수 없다 |
+| `justboard` | 제품을 가장 정확히 설명하지만 9자로 길다. 짧은 이름을 우선했다 |
+
+확인한 것: `kagla/aboard` 가 Packagist 에 비어 있고, `aboard` 라는 이름의 PHP 패키지가
+없다. GitHub 저장소 이름은 계정별 네임스페이스라 충돌하지 않는다.
 
 바꿀 것은 다음과 같고 **6단계에서 한 번에** 바꾼다. 중간에 하면 충돌만 는다.
 
 | 대상 | 현재 | 이후 |
 |---|---|---|
-| 네임스페이스 | `ApiBoard\` | `JustBoard\` |
-| 테스트 네임스페이스 | `ApiBoard\Tests\` | `JustBoard\Tests\` |
-| Composer 패키지 | `kagla/apiboard` | `kagla/justboard` |
-| SQLite 기본 파일 | `storage/board.sqlite` | 그대로 |
-| 업로드 임시 디렉터리 | `apiboard-test-uploads` | `justboard-test-uploads` |
+| 네임스페이스 | `ApiBoard\` | `Aboard\` |
+| 테스트 네임스페이스 | `ApiBoard\Tests\` | `Aboard\Tests\` |
+| Composer 패키지 | `kagla/apiboard` | `kagla/aboard` |
+| 업로드 임시 디렉터리 | `apiboard-test-uploads` | `aboard-test-uploads` |
 | 설정 키 | `auth.secret` | `security.secret` (첨부 서명 전용이 되었다) |
-| 문서·화면 문구 | apiboard | justboard |
+| SQLite 기본 파일 | `storage/board.sqlite` | 그대로 |
+| 문서·화면 문구 | apiboard | aboard |
 | 도메인 | `apiboard.gnuboard.net` | 운영자가 정한다 |

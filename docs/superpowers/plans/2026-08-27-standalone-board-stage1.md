@@ -19,7 +19,7 @@
 - **같은 테스트 스위트가 SQLite·MySQL·PostgreSQL 에서 모두 통과하는 것이 완료 조건이다.** `TEST_MYSQL_DSN`, `TEST_PGSQL_DSN` 이 없으면 SQLite 만 돌고, `tests/bootstrap.php` 가 그 사실을 STDERR 에 알린다.
 - **Controller 는 Service 만 호출하고, Service 는 HTTP·세션·Twig 를 모른다.**
 - 주석·화면 문구·커밋 메시지는 한국어로 쓴다. 커밋 접두사는 기존 관례(`feat:`, `fix:`, `refactor:`, `docs:`, `test:`)를 따른다.
-- 네임스페이스는 `ApiBoard` 를 그대로 둔다. 개명(`justboard` / `JustBoard\`)은 6단계에서 한 번에 한다. 이 단계에서 만드는 파일도 `ApiBoard\` 로 쓴다.
+- 네임스페이스는 `ApiBoard` 를 그대로 둔다. 개명(`aboard` / `Aboard\`)은 6단계에서 한 번에 한다. 이 단계에서 만드는 파일도 `ApiBoard\` 로 쓴다.
 - 이 단계에서는 로그인이 없다. 모든 요청은 게스트(`Identity::guest()`)로 처리한다.
 
 ---
