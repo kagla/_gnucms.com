@@ -268,13 +268,15 @@ Expected: PASS (3 tests)
 
 `ApiError` 는 `use` 문, 타입힌트(`catch (ApiError $e)`), 정적 호출(`ApiError::notFound`) 세 형태로만 나타난다. 단어 경계로 치환하면 안전하다.
 
+`public/install.php` 도 이 예외를 쓴다. 치환 범위에 `public` 을 반드시 넣는다.
+
 ```bash
-FILES=$(grep -rl '\bApiError\b' src tests | grep -v 'src/Http/ApiError.php' | grep -v 'tests/Http/ApiErrorTest.php')
+FILES=$(grep -rl '\bApiError\b' src tests public | grep -v 'src/Http/ApiError.php' | grep -v 'tests/Http/ApiErrorTest.php')
 echo "$FILES"
 for f in $FILES; do
   sed -i 's/use ApiBoard\\Http\\ApiError;/use ApiBoard\\Error\\DomainError;/g; s/\bApiError\b/DomainError/g' "$f"
 done
-grep -rn '\bApiError\b' src tests | grep -v 'src/Http/ApiError.php' | grep -v 'tests/Http/ApiErrorTest.php'
+grep -rn '\bApiError\b' src tests public | grep -v 'src/Http/ApiError.php' | grep -v 'tests/Http/ApiErrorTest.php'
 ```
 
 Expected: 마지막 `grep` 이 아무것도 출력하지 않는다(종료 코드 1).
@@ -301,41 +303,19 @@ git commit -m "refactor: ApiError 를 Error\\DomainError 로 옮겨 도메인의
 
 ### Task 3: 첨부 다운로드의 반환을 HTTP 에서 떼어낸다
 
-`AttachmentService::download()` 만이 `Http\FileResponse` 를 돌려주며 도메인에 남은 마지막 HTTP 의존이다. 서술자 배열을 돌려주게 바꾸고, 실제 전송은 Task 5 이후 Web 계층이 맡는다.
+`AttachmentService::download()` 만이 `Http\FileResponse` 를 돌려주며 도메인에 남은 마지막 HTTP 의존이다. 서술자 배열을 돌려주게 바꾸고, 파일을 실제로 내보내는 일은 Task 7 의 Web 계층이 맡는다.
+
+이것은 기존 테스트가 덮고 있는 순수 리팩터링이다. 새 테스트를 여기서 쓰지 않는다 — 지금 쓸 자리인 `tests/Api/AttachmentApiTest.php` 는 Task 4 에서 파일째 사라진다. 살아남는 테스트는 Task 7 에서 `tests/Web/AttachmentDownloadTest.php` 로 쓴다.
 
 **Files:**
 - Modify: `src/Service/AttachmentService.php:146-166`
-- Modify: `tests/Api/AttachmentApiTest.php` (이 태스크에서는 깨지지 않게만 고친다. Task 4 에서 파일째 삭제된다)
+- Modify: `src/Routes.php` (Task 4 에서 사라지지만 그때까지 돌아야 한다)
 
 **Interfaces:**
 - Consumes: Task 2 의 `ApiBoard\Error\DomainError`
 - Produces: `AttachmentService::download(Acl $acl, int $postId, int $index, ?string $password): array` — `['path' => string, 'name' => string, 'mime' => string]`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
-
-`tests/Api/AttachmentApiTest.php` 에 다음 테스트를 추가한다.
-
-```php
-    public function testDownloadReturnsDescriptorArray(): void
-    {
-        $app = $this->makeApp(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]);
-        $descriptor = $this->seedPostWithAttachment($app);
-
-        self::assertIsArray($descriptor);
-        self::assertArrayHasKey('path', $descriptor);
-        self::assertArrayHasKey('name', $descriptor);
-        self::assertArrayHasKey('mime', $descriptor);
-    }
-```
-
-`seedPostWithAttachment()` 는 이 파일에 이미 있는 업로드·글작성 헬퍼를 재사용해 글을 만든 뒤 `$app->attachments()->download($acl, $postId, 0, null)` 의 반환값을 돌려주도록 파일 안에 작성한다. 기존 테스트가 쓰는 헬퍼 이름을 먼저 읽고 맞춘다.
-
-- [ ] **Step 2: 실패를 확인한다**
-
-Run: `vendor/bin/phpunit tests/Api/AttachmentApiTest.php --filter testDownloadReturnsDescriptorArray`
-Expected: FAIL — 반환값이 `ApiBoard\Http\FileResponse` 객체라 `assertIsArray` 가 깨진다.
-
-- [ ] **Step 3: 반환을 서술자로 바꾼다**
+- [ ] **Step 1: 반환을 서술자로 바꿔 기존 테스트를 깨뜨린다**
 
 `src/Service/AttachmentService.php` 에서 `use ApiBoard\Http\FileResponse;` 를 지우고, `download()` 를 다음으로 바꾼다.
 
@@ -369,9 +349,12 @@ Expected: FAIL — 반환값이 `ApiBoard\Http\FileResponse` 객체라 `assertIs
     }
 ```
 
-- [ ] **Step 4: 호출부를 고친다**
+- [ ] **Step 2: 실패를 확인한다**
 
-`src/Routes.php` 의 첨부 다운로드 라우트가 `download()` 의 반환을 그대로 응답으로 쓰고 있다. 이 라우트는 Task 4 에서 파일째 사라지므로, 여기서는 테스트가 돌 수 있게만 고친다.
+Run: `vendor/bin/phpunit tests/Api/AttachmentApiTest.php`
+Expected: FAIL — `src/Routes.php` 의 다운로드 라우트가 `ResponseInterface` 를 기대하는데 배열을 받는다. `testAttachmentSurvivesPostCreationAndIsDownloadable` 과 `testDownloadOfSecretPostIsDeniedToStrangers` 가 깨진다.
+
+- [ ] **Step 3: 호출부를 고친다**
 
 ```bash
 grep -n 'download' src/Routes.php
@@ -387,12 +370,12 @@ grep -n 'download' src/Routes.php
 
 `src/Routes.php` 상단에 `use ApiBoard\Http\FileResponse;` 를 추가한다.
 
-- [ ] **Step 5: 전체 테스트가 통과하는지 확인한다**
+- [ ] **Step 4: 전체 테스트가 통과하는지 확인한다**
 
 Run: `vendor/bin/phpunit`
 Expected: PASS
 
-- [ ] **Step 6: 커밋**
+- [ ] **Step 5: 커밋**
 
 ```bash
 git add -A
@@ -406,7 +389,7 @@ git commit -m "refactor: 첨부 다운로드가 FileResponse 대신 서술자를
 이 태스크가 끝나면 JSON API 는 사라지고 `/health` 한 화면이 Slim + Twig 위에서 뜬다.
 
 **Files:**
-- Delete: `src/Http/` (전체), `src/Routes.php`, `src/Auth/TokenIssuer.php`, `src/Auth/TokenVerifier.php`, `src/Service/AuthService.php`, `public/docs.php`, `docs/openapi.yaml`, `tests/Api/`, `tests/Http/`, `tests/Docs/`, `tests/Auth/TokenTest.php`, `tests/Support/ApiTestCase.php`
+- Delete: `src/Http/` (전체), `src/Routes.php`, `src/Auth/TokenIssuer.php`, `src/Auth/TokenVerifier.php`, `src/Service/AuthService.php`, `public/admin.php`, `public/docs.php`, `docs/openapi.yaml`, `tests/Api/`, `tests/Http/`, `tests/Docs/`, `tests/Auth/TokenTest.php`, `tests/Support/ApiTestCase.php`
 - Modify: `src/App.php`
 - Create: `src/Web/Kernel.php`, `src/Web/Routes.php`, `src/Web/Middleware/ErrorPageMiddleware.php`
 - Create: `templates/layout.html.twig`, `templates/error.html.twig`, `templates/health.html.twig`
@@ -540,9 +523,13 @@ Expected: FAIL — `Class "ApiBoard\Web\Kernel" not found`
 
 ```bash
 git rm -r --quiet src/Http src/Routes.php src/Auth/TokenIssuer.php src/Auth/TokenVerifier.php \
-  src/Service/AuthService.php public/docs.php docs/openapi.yaml \
+  src/Service/AuthService.php public/admin.php public/docs.php docs/openapi.yaml \
   tests/Api tests/Http tests/Docs tests/Auth/TokenTest.php tests/Support/ApiTestCase.php
 ```
+
+`public/admin.php` 도 함께 지운다. 이 파일은 fetch 로 JSON API 를 부르는 정적 화면이라, API 가 사라지면 모든 동작이 실패하는 784줄이 남는다. 고장난 화면을 남겨 두는 것이 지우는 것보다 나쁘다. 살릴 가치가 있는 테마 토큰(밝음/어둠 CSS 변수)은 Step 7 의 `templates/layout.html.twig` 로 이미 옮겨진다. 관리자 화면은 5단계에서 서버 렌더링으로 새로 만든다.
+
+`tests/Support/ApiTestCase.php` 를 참조하는 것은 `tests/Api/` 뿐이므로 함께 지워도 남는 테스트에 영향이 없다.
 
 - [ ] **Step 4: App 에서 사라진 것들을 떼어낸다**
 
@@ -1581,12 +1568,94 @@ Create `templates/posts/show.html.twig`:
 
 `templates/posts/index.html.twig` 의 제목 링크를 `{{ url_for('posts.show', {'id': post.id}) }}` 로 되돌린다.
 
-- [ ] **Step 7: 테스트가 통과하는지 확인한다**
+- [ ] **Step 7: 첨부 다운로드 테스트를 쓴다**
+
+Task 3 에서 미뤄 둔 테스트다. 업로드 헬퍼는 지워진 `tests/Api/AttachmentApiTest.php` 에 있던 것과 같은 모양이다.
+
+Create `tests/Web/AttachmentDownloadTest.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace ApiBoard\Tests\Web;
+
+use ApiBoard\Tests\Support\WebTestCase;
+
+final class AttachmentDownloadTest extends WebTestCase
+{
+    /** @dataProvider connectionProvider */
+    public function testAttachmentIsDownloadable(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'free',
+            'name'      => '자유게시판',
+            'use_file'  => true,
+        ]);
+
+        $descriptor = $app->attachments()->upload($acl, 'free', $this->fakeUpload('메모.txt', '안녕하세요'));
+        $post = $app->postService()->create($acl, 'free', [
+            'title'       => '글',
+            'content'     => '본문',
+            'attachments' => [$descriptor],
+        ]);
+
+        $response = $this->get($app, '/p/' . $post['id'] . '/files/0');
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('안녕하세요', $this->body($response));
+        self::assertStringContainsString('attachment;', $response->getHeaderLine('Content-Disposition'));
+        // 한글 파일명은 RFC 5987 형식으로만 온전히 전달된다.
+        self::assertStringContainsString("filename*=UTF-8''" . rawurlencode('메모.txt'), $response->getHeaderLine('Content-Disposition'));
+        self::assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testUnknownIndexRendersNotFoundPage(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $post = $app->postService()->create($acl, 'free', ['title' => '글', 'content' => '본문']);
+
+        self::assertSame(404, $this->get($app, '/p/' . $post['id'] . '/files/7')->getStatusCode());
+    }
+
+    protected function tearDown(): void
+    {
+        $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+
+        parent::tearDown();
+    }
+
+    private function fakeUpload(string $name, string $contents): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'sbtest');
+        file_put_contents($tmp, $contents);
+
+        return [
+            'name'     => $name,
+            'type'     => 'text/plain',
+            'tmp_name' => $tmp,
+            'error'    => UPLOAD_ERR_OK,
+            'size'     => strlen($contents),
+        ];
+    }
+}
+```
+
+- [ ] **Step 8: 테스트가 통과하는지 확인한다**
 
 Run: `vendor/bin/phpunit`
 Expected: PASS (전체)
 
-- [ ] **Step 8: 세 DB 에서 모두 통과하는지 확인한다**
+- [ ] **Step 9: 세 DB 에서 모두 통과하는지 확인한다**
 
 MySQL 과 PostgreSQL 접속 정보를 넣고 다시 돌린다.
 
@@ -1600,7 +1669,7 @@ vendor/bin/phpunit
 
 Expected: 첫 줄에 `테스트 대상 DB: sqlite, mysql, pgsql` 이 뜨고 `<-- 일부 DB 를 건너뜁니다` 가 없어야 한다. 전부 PASS.
 
-- [ ] **Step 9: 실제 서버에서 두 경로가 모두 도는지 확인한다**
+- [ ] **Step 10: 실제 서버에서 두 경로가 모두 도는지 확인한다**
 
 ```bash
 php -S 127.0.0.1:8080 -t public
@@ -1613,7 +1682,7 @@ php -S 127.0.0.1:8080 -t public
 
 내장 서버는 `.htaccess` 를 읽지 않으므로 첫 주소가 404 면 `public/index.php` 의 `$basePath` 계산이 잘못된 것이다.
 
-- [ ] **Step 10: 커밋**
+- [ ] **Step 11: 커밋**
 
 ```bash
 git add -A
