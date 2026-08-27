@@ -106,7 +106,7 @@ final class ConnectionTest extends TestCase
         $this->assertNull($this->db->selectOne('SELECT id FROM widgets WHERE name = ?', ['아']));
     }
 
-    public function testSyntaxErrorBecomesInternalApiError(): void
+    public function testSyntaxErrorBecomesInternalDomainError(): void
     {
         $this->expectException(DomainError::class);
         $this->db->select('SELECT * FROM no_such_table');

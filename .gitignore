@@ -5,7 +5,7 @@
 /storage/uploads/*
 !/storage/uploads/.gitkeep
 
-# 개발 전용 의존성 (배포물에는 포함되지 않는다)
+# 배포물에는 vendor/ 를 포함해 올리지만, 저장소에는 커밋하지 않는다
 /vendor/
 
 # 로컬 테스트 DB
