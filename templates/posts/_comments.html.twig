@@ -1,0 +1,15 @@
+<ul>
+{% for comment in nodes %}
+  <li>
+    <p class="muted">
+      {{ comment.deleted ? '' : comment.author_name }}
+      <span>{{ comment.created_at }}</span>
+      {% if comment.is_secret %}🔒{% endif %}
+    </p>
+    <p>{{ comment.content|nl2br }}</p>
+    {% if comment.children is not empty %}
+      {% include 'posts/_comments.html.twig' with {'nodes': comment.children} only %}
+    {% endif %}
+  </li>
+{% endfor %}
+</ul>

@@ -1,0 +1,29 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block body %}
+  <h1>{{ post.title }}</h1>
+  <p class="muted">
+    {{ post.author_name }} · {{ post.created_at }} · 조회 {{ post.view_count }}
+  </p>
+
+  <article>{{ post.content|nl2br }}</article>
+
+  {% if post.attachments is not empty %}
+    <h2>첨부</h2>
+    <ul>
+    {% for file in post.attachments %}
+      <li>
+        <a href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">{{ file.name }}</a>
+        <span class="muted">{{ file.size }} bytes</span>
+      </li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>댓글 {{ post.comment_count }}</h2>
+  {% if comments is empty %}
+    <p class="empty">댓글이 없습니다.</p>
+  {% else %}
+    {% include 'posts/_comments.html.twig' with {'nodes': comments} only %}
+  {% endif %}
+{% endblock %}

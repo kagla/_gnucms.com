@@ -35,7 +35,7 @@
           <td>
             {% if post.is_notice %}<strong>공지</strong> {% endif %}
             {% if post.is_secret %}🔒 {% endif %}
-            <a href="{{ base_path() }}/p/{{ post.id }}">{{ post.title }}</a>
+            <a href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }}</a>
             {% if post.comment_count > 0 %}<span class="muted">[{{ post.comment_count }}]</span>{% endif %}
             {% if post.file_count > 0 %}<span class="muted">📎</span>{% endif %}
           </td>

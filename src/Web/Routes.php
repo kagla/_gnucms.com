@@ -6,6 +6,7 @@ namespace ApiBoard\Web;
 
 use ApiBoard\App;
 use ApiBoard\Web\Controller\BoardController;
+use ApiBoard\Web\Controller\FileController;
 use ApiBoard\Web\Controller\PostController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,5 +28,8 @@ final class Routes
 
         $slim->get('/', [new BoardController($app), 'index'])->setName('boards.index');
         $slim->get('/b/{key}', [new PostController($app), 'index'])->setName('posts.index');
+        $slim->get('/p/{id:[0-9]+}', [new PostController($app), 'show'])->setName('posts.show');
+        $slim->get('/p/{id:[0-9]+}/files/{index:[0-9]+}', [new FileController($app), 'download'])
+            ->setName('files.download');
     }
 }
