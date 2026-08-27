@@ -6,6 +6,7 @@ namespace ApiBoard\Web;
 
 use ApiBoard\App;
 use ApiBoard\Web\Middleware\ErrorPageMiddleware;
+use ApiBoard\Web\Middleware\HtmlContentTypeMiddleware;
 use Slim\App as SlimApp;
 use Slim\Factory\AppFactory;
 use Slim\Views\Twig;
@@ -37,6 +38,7 @@ final class Kernel
             $slim->getRouteCollector()->getRouteParser(),
             $basePath
         ));
+        $slim->add(new HtmlContentTypeMiddleware());
 
         Routes::register($slim, $app);
 

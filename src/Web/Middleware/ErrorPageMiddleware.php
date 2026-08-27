@@ -117,7 +117,7 @@ final class ErrorPageMiddleware implements MiddlewareInterface
 
     private function render(int $status, string $title, string $message): ResponseInterface
     {
-        $response = (new Response())->withStatus($status)->withHeader('Content-Type', 'text/html; charset=utf-8');
+        $response = (new Response())->withStatus($status);
 
         return $this->twig->render($response, 'error.html.twig', [
             'title'   => $title,

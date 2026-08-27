@@ -18,8 +18,6 @@ final class Routes
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($app): ResponseInterface {
-            $response = $response->withHeader('Content-Type', 'text/html; charset=utf-8');
-
             return Twig::fromRequest($request)->render($response, 'health.html.twig', [
                 'dialect' => $app->db()->dialect()->name(),
             ]);

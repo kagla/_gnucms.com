@@ -6,7 +6,7 @@ namespace ApiBoard\Tests\Web;
 
 use PHPUnit\Framework\TestCase;
 
-class EntryPointTest extends TestCase
+final class EntryPointTest extends TestCase
 {
     /**
      * 진입점 스크립트들이 fatal error 를 일으키지 않는지 확인한다.
