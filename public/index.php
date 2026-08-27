@@ -29,12 +29,12 @@ $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
 $basePath = BasePath::resolve($scriptName, $requestUri);
 
 // rewrite 가 없는 호스팅에서 사람이 가장 먼저 입력할 만한 주소가 바로 뒤에 아무것도
-// 붙지 않은 "/index.php" 다. 기준 경로를 자른 나머지가 빈 문자열이면 라우트 "/" 와
-// 맞지 않으므로(=/index.php/ 만 맞는다) 슬래시를 붙여 다시 보낸다.
-$uriPath = (string) (parse_url($requestUri, PHP_URL_PATH) ?? '/');
-if (substr($uriPath, 0, strlen($basePath)) === $basePath && substr($uriPath, strlen($basePath)) === '') {
-    $query = parse_url($requestUri, PHP_URL_QUERY);
-    header('Location: ' . $basePath . '/' . ($query !== null && $query !== '' ? '?' . $query : ''), true, 302);
+// 붙지 않은 "/index.php" 다. 그 경우 라우트 "/" 와 맞지 않으므로(=/index.php/ 만
+// 맞는다) 슬래시를 붙여 다시 보낸다. 결정 로직은 BasePath::redirectTarget() 에
+// 뽑아 두고 표로 테스트한다 (tests/Web/BasePathTest.php).
+$redirectTarget = BasePath::redirectTarget($scriptName, $requestUri);
+if ($redirectTarget !== null) {
+    header('Location: ' . $redirectTarget, true, 302);
     exit;
 }
 
