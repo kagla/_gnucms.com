@@ -100,6 +100,24 @@ final class PostListTest extends WebTestCase
         self::assertSame(422, $response->getStatusCode());
     }
 
+    /**
+     * ?include_deleted[]=x 처럼 배열로 온 값은 Validator::bool() 이 (string) 캐스팅
+     * 하면서 "Array to string conversion" 경고를 냈었다. bool() 은 원래도 인식하지
+     * 못하는 문자열이면 조용히 기본값으로 떨어지므로(예: "nonsense" -> false), 배열도
+     * 검증 실패가 아니라 그와 같은 방식으로 기본값 처리되어 200 이어야 한다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testArrayIncludeDeletedQueryParameterDoesNotCrash(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->seed($app, 1);
+
+        $response = $this->get($app, '/b/free', ['include_deleted' => ['x']]);
+
+        self::assertSame(200, $response->getStatusCode());
+    }
+
     /** @dataProvider connectionProvider */
     public function testUnknownBoardRendersNotFoundPage(array $dbConfig): void
     {

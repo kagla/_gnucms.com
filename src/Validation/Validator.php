@@ -81,7 +81,15 @@ final class Validator
 
     public function requiredPassword(string $field): string
     {
-        $value = (string) ($this->data[$field] ?? '');
+        $raw = $this->data[$field] ?? '';
+        if (!is_scalar($raw)) {
+            // requiredString() 과 같은 이유. 배열은 검증 실패로 처리한다.
+            $this->errors[$field] = '필수 항목입니다.';
+
+            return '';
+        }
+
+        $value = (string) $raw;
 
         if ($value === '') {
             $this->errors[$field] = '필수 항목입니다.';
@@ -99,7 +107,13 @@ final class Validator
 
     public function optionalPassword(string $field): ?string
     {
-        $value = (string) ($this->data[$field] ?? '');
+        $raw = $this->data[$field] ?? '';
+        if (!is_scalar($raw)) {
+            // requiredPassword() 와 같은 이유. 배열은 값이 없는 것으로 취급한다.
+            return null;
+        }
+
+        $value = (string) $raw;
 
         return $value === '' ? null : $value;
     }
@@ -113,6 +127,12 @@ final class Validator
         $value = $this->data[$field];
         if (is_bool($value)) {
             return $value;
+        }
+        if (!is_scalar($value)) {
+            // ?include_deleted[]=x 처럼 배열로 오면 (string) 캐스팅이 경고를 낸다.
+            // bool() 은 원래도 인식 못 하는 값이면 truthy 목록에 없으므로 false 로
+            // 떨어진다(예: "nonsense" -> false, $default 와 무관). 배열도 같은 방식이다.
+            return false;
         }
 
         return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
@@ -135,7 +155,15 @@ final class Validator
             return $default;
         }
 
-        $value = (string) $this->data[$field];
+        $raw = $this->data[$field];
+        if (!is_scalar($raw)) {
+            // requiredString() 과 같은 이유. 배열은 허용 목록에 없으므로 검증 실패다.
+            $this->errors[$field] = implode(', ', $allowed) . ' 중 하나여야 합니다.';
+
+            return $default;
+        }
+
+        $value = (string) $raw;
         if (!in_array($value, $allowed, true)) {
             $this->errors[$field] = implode(', ', $allowed) . ' 중 하나여야 합니다.';
 

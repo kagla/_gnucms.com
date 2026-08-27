@@ -147,4 +147,55 @@ final class ValidatorTest extends TestCase
             $this->assertArrayHasKey('q', $e->details());
         }
     }
+
+    /**
+     * bool() 도 requiredString()/optionalString() 과 같은 이유로 배열 입력에
+     * 경고를 낸다: ?include_deleted[]=x 가 (string) 캐스팅을 거치면서
+     * "Array to string conversion" 경고가 나고, failOnWarning="true" 때문에
+     * 테스트가 실패한다. 배열은 기본값으로 처리해야 한다.
+     */
+    public function testBoolRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['include_deleted' => ['x']]);
+
+        $this->assertFalse($v->bool('include_deleted', false));
+        $v->check();
+    }
+
+    /** @see testBoolRejectsArrayValueWithoutWarning */
+    public function testRequiredPasswordRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['password' => ['x']]);
+        $v->requiredPassword('password');
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (DomainError $e) {
+            $this->assertArrayHasKey('password', $e->details());
+        }
+    }
+
+    /** @see testBoolRejectsArrayValueWithoutWarning */
+    public function testOptionalPasswordRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['password' => ['x']]);
+
+        $this->assertNull($v->optionalPassword('password'));
+        $v->check();
+    }
+
+    /** @see testBoolRejectsArrayValueWithoutWarning */
+    public function testInListRejectsArrayValueWithoutWarning(): void
+    {
+        $v = new Validator(['perm_read' => ['x']]);
+        $v->inList('perm_read', ['guest', 'member', 'admin'], 'guest');
+
+        try {
+            $v->check();
+            $this->fail('VALIDATION_FAILED 가 나와야 한다');
+        } catch (DomainError $e) {
+            $this->assertArrayHasKey('perm_read', $e->details());
+        }
+    }
 }
