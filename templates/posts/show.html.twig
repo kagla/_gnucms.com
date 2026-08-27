@@ -1,6 +1,11 @@
 {% extends "layout.html.twig" %}
 {% block title %}{{ post.title }}{% endblock %}
 {% block body %}
+  <p class="muted">
+    <a href="{{ url_for('boards.index') }}">게시판</a>
+    &rsaquo;
+    <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a>
+  </p>
   <h1>{{ post.title }}</h1>
   <p class="muted">
     {{ post.author_name }} · {{ post.created_at }} · 조회 {{ post.view_count }}
