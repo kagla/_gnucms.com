@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Web;
 
 use ApiBoard\App;
+use ApiBoard\Web\Controller\BoardController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -22,5 +23,7 @@ final class Routes
                 'dialect' => $app->db()->dialect()->name(),
             ]);
         });
+
+        $slim->get('/', [new BoardController($app), 'index'])->setName('boards.index');
     }
 }
