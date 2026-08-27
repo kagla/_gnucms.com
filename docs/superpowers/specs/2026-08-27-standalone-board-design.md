@@ -337,7 +337,28 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 애플 로그인은 다른 프로바이더와 키 관리 방식이 달라(비밀키 파일 + JWT 서명) 어댑터
 하나로 끝나지 않는다. `ProviderInterface` 는 나중에 추가할 수 있는 모양으로 둔다.
 
-## 15. 미결
+## 15. 이름
 
-**이름.** `apiboard` 는 더 이상 맞지 않는다. 나머지 설계가 확정된 뒤 마지막에 한 번에
-바꾼다. 네임스페이스, 문서, 설정 키를 동시에 바꿔야 하므로 중간에 하면 충돌만 는다.
+**`justboard` 로 바꾼다.** `apiboard` 는 API 가 사라진 뒤로 맞지 않는다.
+
+구현 방식이 아니라 쓰임을 가리키는 이름을 골랐다. `crud-board` 를 쓰지 않는 이유는 두
+가지다. `crud` 는 영어에서 "때·오물" 을 뜻하는 실제 단어라 약어를 파싱하지 못하는 사람에게
+그대로 읽히고, CRUD 는 개발자 내부 용어라 구현 패턴을 이름에 박게 된다. `apiboard` 가
+맞지 않게 된 것과 같은 이유다.
+
+확인한 것: Packagist 에 `justboard` 이름의 PHP 패키지가 없고 `kagla/justboard` 가 비어
+있다. GitHub 에 같은 이름의 개인 저장소가 몇 개 있으나 모두 습작 수준이고, 저장소 이름은
+계정별 네임스페이스라 충돌하지 않는다.
+
+바꿀 것은 다음과 같고 **6단계에서 한 번에** 바꾼다. 중간에 하면 충돌만 는다.
+
+| 대상 | 현재 | 이후 |
+|---|---|---|
+| 네임스페이스 | `ApiBoard\` | `JustBoard\` |
+| 테스트 네임스페이스 | `ApiBoard\Tests\` | `JustBoard\Tests\` |
+| Composer 패키지 | `kagla/apiboard` | `kagla/justboard` |
+| SQLite 기본 파일 | `storage/board.sqlite` | 그대로 |
+| 업로드 임시 디렉터리 | `apiboard-test-uploads` | `justboard-test-uploads` |
+| 설정 키 | `auth.secret` | `security.secret` (첨부 서명 전용이 되었다) |
+| 문서·화면 문구 | apiboard | justboard |
+| 도메인 | `apiboard.gnuboard.net` | 운영자가 정한다 |
