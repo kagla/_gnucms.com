@@ -363,6 +363,25 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 확인한 것: `kagla/aboard` 가 Packagist 에 비어 있고, `aboard` 라는 이름의 PHP 패키지가
 없다. GitHub 저장소 이름은 계정별 네임스페이스라 충돌하지 않는다.
 
+### 15.1 도메인
+
+`aboard.gnuboard.net` 을 쓴다. 짧은 최상위 도메인은 전부 임자가 있다.
+
+| 도메인 | 상태 |
+|---|---|
+| `aboard.com` | 등록됨. 파킹 |
+| `aboard.net` | 등록됨(1997년, Easyspace). 네임서버 응답 없이 잠들어 있다 |
+| `aboard.org` | 등록됨. Afternic 매물 |
+| `aboard.io` | 등록됨. 파킹 |
+| `aboard.app` | 등록됨. Afternic 매물 |
+| `aboard.dev` | 등록됨 |
+| `aboard.kr` | 등록됨 |
+| `aboard.co.kr` | **미등록.** 필요하면 지금 잡을 수 있다 |
+
+`gnuboard.net` 에는 `*.gnuboard.net` 와일드카드가 걸려 있다. 아무 이름이나 넣어도
+`gnuboard.net` 으로 해석되므로, `aboard.gnuboard.net` 이 이미 응답하는 것은 선점된 것이
+아니라 와일드카드를 타고 있는 것뿐이다. 그대로 쓸 수 있다.
+
 바꿀 것은 다음과 같고 **6단계에서 한 번에** 바꾼다. 중간에 하면 충돌만 는다.
 
 | 대상 | 현재 | 이후 |
@@ -374,4 +393,4 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 | 설정 키 | `auth.secret` | `security.secret` (첨부 서명 전용이 되었다) |
 | SQLite 기본 파일 | `storage/board.sqlite` | 그대로 |
 | 문서·화면 문구 | apiboard | aboard |
-| 도메인 | `apiboard.gnuboard.net` | 운영자가 정한다 |
+| 도메인 | `apiboard.gnuboard.net` | `aboard.gnuboard.net` |
