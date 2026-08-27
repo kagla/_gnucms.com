@@ -64,7 +64,10 @@ final class ErrorPageTest extends WebTestCase
 
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('입력값을 확인해 주세요', $body);
-        self::assertStringContainsString('q', $body);
+        // 'q' 하나만 찾으면 페이지 어디든 영문자 q 가 있기만 해도 우연히 통과한다
+        // (한글 UI 문구에는 없어서 지금은 통과하지만 근거가 안 된다). error.html.twig
+        // 는 필드명을 <strong> 태그로 감싸 렌더링하므로 그 맥락까지 확인한다.
+        self::assertStringContainsString('<strong>q</strong>', $body);
         self::assertStringContainsString('100자를 넘을 수 없습니다', $body);
     }
 }
