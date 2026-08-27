@@ -53,12 +53,26 @@ apiboard 는 헤드리스 게시판이었다. 인증은 호스트 앱이 소유�
 | | 대상 |
 |---|---|
 | **유지** | `Db/` 전체(방언 3종), `Repository/`, `Service/` 대부분, `Auth/Identity`, `Auth/Acl`, `Validation/`, `Comment/TreeBuilder`, `Support/` |
-| **폐기** | `Http/` 전체(Router·Request·Response·Cors·ApiError), `Auth/TokenIssuer`, `Auth/TokenVerifier`, `Routes.php`, `public/index.php`, `public/docs.php`, `docs/openapi.yaml`, `tests/Api/`, `tests/Docs/`, `tests/Http/`, `tests/Auth/TokenTest.php` |
+| **폐기** | `Http/` 의 Router·Request·Response·ResponseInterface·FileResponse·Cors, `Auth/TokenIssuer`, `Auth/TokenVerifier`, `Routes.php`, `public/index.php`, `public/docs.php`, `docs/openapi.yaml`, `tests/Api/`, `tests/Docs/`, `tests/Http/`, `tests/Auth/TokenTest.php` |
+| **이동** | `Http/ApiError` → `Error/DomainError` |
 | **재작성** | `public/admin.php`(784줄 SPA, fetch + Bearer 전제), `Service/AuthService` |
+
+`ApiError` 는 폐기할 수 없다. `Db/`, `Service/`, `Auth/Acl`, `Validation/`, `Support/`,
+`Install/` 의 15개 파일이 이 예외를 던진다. 도메인이 `Http` 네임스페이스에 의존하는 상태로는
+`Http/` 를 걷어낼 수 없으므로 `ApiBoard\Error\DomainError` 로 옮긴다. 팩터리 이름
+(`notFound`, `forbidden`, `validation` …)과 동작은 그대로 두고 네임스페이스만 바꾼다.
+
+`AttachmentService::download()` 도 `Http\FileResponse` 를 돌려주고 있다. 반환값을
+`array{path, name, mime}` 서술자로 바꾸고, 파일을 실제로 내보내는 일은 Web 계층이 맡는다.
+한글 파일명 처리(RFC 5987)는 그 과정에서 Web 계층으로 옮긴다.
 
 `Http/` 를 남긴 채 Slim 을 올리면 요청 객체가 두 개인 상태가 된다. 그건 가장 나쁜 결과라
 함께 둘 수 없다. `admin.php` 는 CSS 와 화면 구성을 Twig 로 옮겨 살리고, fetch·토큰 처리
 부분만 버린다.
+
+`config` 의 `auth.secret` 은 JWT 가 사라진 뒤에도 **첨부 서술자 서명**에 계속 쓰인다
+(`AttachmentService::sign`). 키 이름이 더 이상 맞지 않으므로 6단계 개명 때 함께 바꾼다.
+그 전까지는 이름을 유지한다. `bootstrap_admin` 은 5단계에서 없어진다.
 
 `Acl` 이 살아남는 것이 이 전환의 핵심이다. 신원을 **어디서 얻는지**만 바뀌고 **무엇을
 허용하는지**는 그대로다.
