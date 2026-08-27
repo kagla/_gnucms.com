@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Slim\Exception\HttpException;
 use Slim\Exception\HttpNotFoundException;
 use Slim\Interfaces\RouteParserInterface;
 use Slim\Psr7\Response;
@@ -17,9 +18,12 @@ use Slim\Views\TwigRuntimeLoader;
 use Throwable;
 
 /**
- * 스택의 가장 바깥이다. 도메인 오류는 그대로 화면으로 옮기고, 그 밖의 예외는
- * 500 으로 뭉갠 뒤 원문을 로그에만 남긴다. 로그에 남기지 않으면 SQL 원문 같은
- * 유일한 단서가 아무 데도 남지 않고 사라진다.
+ * 도메인 오류는 그대로 화면으로 옮기고, 그 밖의 예외는 500 으로 뭉갠 뒤 원문을
+ * 로그에만 남긴다. 로그에 남기지 않으면 SQL 원문 같은 유일한 단서가 아무 데도
+ * 남지 않고 사라진다.
+ *
+ * 스택의 가장 바깥은 아니다. HtmlContentTypeMiddleware 가 이 미들웨어가 만든
+ * 응답까지 감싸야 해서 그보다 바깥(=더 나중에 add)에 등록되어 있다.
  *
  * 라우팅이 실패(404)하면 TwigMiddleware 는 한 번도 실행되지 않아 `base_path()` 같은
  * Slim\Views\TwigRuntimeExtension 함수가 오류 화면 렌더링 중 죽는다. 그래서 여기서도
@@ -65,6 +69,12 @@ final class ErrorPageMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         } catch (HttpNotFoundException $e) {
             return $this->render(404, '찾을 수 없습니다.', '요청하신 주소에 해당하는 것이 없습니다.');
+        } catch (HttpException $e) {
+            // 404 는 위에서 먼저 잡힌다. 여기는 405(허용되지 않은 메서드) 같은 나머지
+            // Slim 라우팅 예외다. 이름으로 잡지 않으면 Throwable 로 떨어져 500 이 된다.
+            $status = $e->getCode() > 0 ? $e->getCode() : 500;
+
+            return $this->render($status, $this->titleFor($status), '요청을 처리할 수 없습니다.');
         } catch (DomainError $e) {
             if ($e->code() === 'INTERNAL') {
                 $this->log($e);
@@ -72,7 +82,7 @@ final class ErrorPageMiddleware implements MiddlewareInterface
                 return $this->render(500, '오류가 발생했습니다.', $this->safeMessage($e));
             }
 
-            return $this->render($e->status(), $this->titleFor($e->status()), $e->getMessage());
+            return $this->render($e->status(), $this->titleFor($e->status()), $e->getMessage(), $e->details());
         } catch (Throwable $e) {
             $this->log($e);
 
@@ -89,6 +99,10 @@ final class ErrorPageMiddleware implements MiddlewareInterface
                 return '권한이 없습니다.';
             case 404:
                 return '찾을 수 없습니다.';
+            case 405:
+                return '허용되지 않은 방식입니다.';
+            case 422:
+                return '입력값을 확인해 주세요.';
             default:
                 return '요청을 처리할 수 없습니다.';
         }
@@ -115,13 +129,14 @@ final class ErrorPageMiddleware implements MiddlewareInterface
         );
     }
 
-    private function render(int $status, string $title, string $message): ResponseInterface
+    private function render(int $status, string $title, string $message, array $details = []): ResponseInterface
     {
         $response = (new Response())->withStatus($status);
 
         return $this->twig->render($response, 'error.html.twig', [
             'title'   => $title,
             'message' => $message,
+            'details' => $details,
         ]);
     }
 }

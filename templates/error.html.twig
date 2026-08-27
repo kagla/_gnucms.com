@@ -3,5 +3,12 @@
 {% block body %}
   <h1>{{ title }}</h1>
   <p class="muted">{{ message }}</p>
+  {% if details is not empty %}
+    <ul class="errors">
+      {% for field, detail in details %}
+        <li><strong>{{ field }}</strong>: {{ detail }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
   <p><a href="{{ url_for('boards.index') }}">처음으로</a></p>
 {% endblock %}

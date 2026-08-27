@@ -14,9 +14,13 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 
 abstract class WebTestCase extends DatabaseTestCase
 {
-    protected function makeApp(array $dbConfig): App
+    /**
+     * @param array $configOverrides 기본 설정 위에 덮어쓸 값. 최상위 키 단위로 합쳐진다.
+     *                                예: ['debug' => false] 로 프로덕션 오류 화면을 테스트한다.
+     */
+    protected function makeApp(array $dbConfig, array $configOverrides = []): App
     {
-        $app = new App([
+        $config = array_replace([
             'db'   => $dbConfig,
             'auth' => ['secret' => 'web-test-secret-that-is-long-enough'],
             'uploads' => [
@@ -26,7 +30,9 @@ abstract class WebTestCase extends DatabaseTestCase
             ],
             'log'   => ['file' => null],
             'debug' => true,
-        ]);
+        ], $configOverrides);
+
+        $app = new App($config);
 
         $schema = new Schema($app->db());
         $schema->drop();
@@ -43,8 +49,13 @@ abstract class WebTestCase extends DatabaseTestCase
 
     protected function get(App $app, string $path, array $query = []): ResponseInterface
     {
+        return $this->request($app, 'GET', $path, $query);
+    }
+
+    protected function request(App $app, string $method, string $path, array $query = []): ResponseInterface
+    {
         $uri = $path . ($query === [] ? '' : '?' . http_build_query($query));
-        $request = (new ServerRequestFactory())->createServerRequest('GET', $uri);
+        $request = (new ServerRequestFactory())->createServerRequest($method, $uri);
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', null, '')->handle($request);
     }
