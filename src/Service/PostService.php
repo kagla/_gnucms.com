@@ -327,7 +327,6 @@ final class PostService
                 'name'  => $file['name'] ?? '',
                 'size'  => (int) ($file['size'] ?? 0),
                 'mime'  => $file['mime'] ?? 'application/octet-stream',
-                'url'   => '/posts/' . (int) $row['id'] . '/files/' . $index,
             ];
         }
 
