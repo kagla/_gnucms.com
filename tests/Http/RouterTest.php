@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Tests\Http;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Http\Request;
 use ApiBoard\Http\Response;
 use ApiBoard\Http\Router;
@@ -66,7 +66,7 @@ final class RouterTest extends TestCase
             return Response::json($p);
         });
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $router->dispatch($this->request('GET', '/boards/free/posts'));
     }
 
@@ -77,7 +77,7 @@ final class RouterTest extends TestCase
         try {
             $router->dispatch($this->request('GET', '/nope'));
             $this->fail('NOT_FOUND 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(404, $e->status());
         }
     }
@@ -92,7 +92,7 @@ final class RouterTest extends TestCase
         try {
             $router->dispatch($this->request('DELETE', '/boards'));
             $this->fail('NOT_FOUND 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(404, $e->status());
         }
     }

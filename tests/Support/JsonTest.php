@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Support\Json;
 
 final class JsonTest extends TestCase
@@ -32,7 +32,7 @@ final class JsonTest extends TestCase
 
     public function testDecodeInvalidJsonThrows(): void
     {
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         Json::decode('{not json');
     }
 }

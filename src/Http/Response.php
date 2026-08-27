@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard\Http;
 
+use ApiBoard\Error\DomainError;
 use ApiBoard\Support\Json;
 
 final class Response implements ResponseInterface
@@ -29,7 +30,7 @@ final class Response implements ResponseInterface
         return new self($payload, $status, []);
     }
 
-    public static function fromError(ApiError $error, bool $debug): self
+    public static function fromError(DomainError $error, bool $debug): self
     {
         return new self([
             'error' => [

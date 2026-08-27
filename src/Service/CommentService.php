@@ -6,7 +6,7 @@ namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
 use ApiBoard\Comment\TreeBuilder;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\CommentRepository;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Validation\Validator;
@@ -50,7 +50,7 @@ final class CommentService
         $acl->assertCanComment($board);
 
         if ($post['deleted_at'] !== null) {
-            throw ApiError::forbidden('삭제된 글에는 댓글을 쓸 수 없습니다.');
+            throw DomainError::forbidden('삭제된 글에는 댓글을 쓸 수 없습니다.');
         }
 
         $v = new Validator($input);
@@ -97,7 +97,7 @@ final class CommentService
     {
         $comment = $this->comments->findWithSecret($id);
         if ($comment === null || $comment['deleted_at'] !== null) {
-            throw ApiError::notFound('댓글을 찾을 수 없습니다.');
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
         }
         $board = $this->boardOf($comment);
 
@@ -120,7 +120,7 @@ final class CommentService
     {
         $comment = $this->comments->findWithSecret($id);
         if ($comment === null || $comment['deleted_at'] !== null) {
-            throw ApiError::notFound('댓글을 찾을 수 없습니다.');
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
         }
         $board = $this->boardOf($comment);
 
@@ -134,7 +134,7 @@ final class CommentService
     {
         $board = $this->postService->boardById((int) $comment['board_id']);
         if ($board === null) {
-            throw ApiError::notFound('게시판을 찾을 수 없습니다.');
+            throw DomainError::notFound('게시판을 찾을 수 없습니다.');
         }
 
         return $board;

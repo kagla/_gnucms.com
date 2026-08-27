@@ -7,7 +7,7 @@ namespace ApiBoard\Tests\Auth;
 use PHPUnit\Framework\TestCase;
 use ApiBoard\Auth\Acl;
 use ApiBoard\Auth\Identity;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class AclTest extends TestCase
 {
@@ -39,7 +39,7 @@ final class AclTest extends TestCase
         $acl = new Acl(Identity::user('user-1', '운영자', false));
 
         $this->assertFalse($acl->isGlobalAdmin());
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $acl->assertGlobalAdmin();
     }
 
@@ -122,14 +122,14 @@ final class AclTest extends TestCase
         try {
             (new Acl(Identity::guest()))->assertCanWrite($board);
             $this->fail('게스트는 401 이어야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(401, $e->status());
         }
 
         try {
             (new Acl(Identity::user('user-1', '회원', false)))->assertCanWrite($board);
             $this->fail('회원은 403 이어야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(403, $e->status());
         }
     }

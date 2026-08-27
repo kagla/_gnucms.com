@@ -42,7 +42,7 @@ final class OpenApiTest extends TestCase
 
     public function testErrorCodesMatchApiError(): void
     {
-        $source = (string) file_get_contents(__DIR__ . '/../../src/Http/ApiError.php');
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Error/DomainError.php');
         preg_match_all("/new self\('([A-Z_]+)'/", $source, $matches);
         $codes = array_values(array_unique($matches[1]));
 

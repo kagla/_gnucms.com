@@ -6,7 +6,7 @@ namespace ApiBoard\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
 use ApiBoard\Db\DialectFactory;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class DialectFactoryTest extends TestCase
 {
@@ -27,7 +27,7 @@ final class DialectFactoryTest extends TestCase
 
     public function testUnknownDriverThrows(): void
     {
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         DialectFactory::fromDsn('oracle:host=localhost');
     }
 
@@ -50,7 +50,7 @@ final class DialectFactoryTest extends TestCase
 
     public function testIdentifierWithQuoteCharacterIsRejected(): void
     {
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         DialectFactory::fromDsn('mysql:host=h')->quoteIdentifier('posts`; DROP TABLE posts; --');
     }
 }

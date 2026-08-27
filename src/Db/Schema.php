@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard\Db;
 
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 /**
  * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고
@@ -28,9 +28,9 @@ final class Schema
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('boards'));
 
             return true;
-        } catch (ApiError $e) {
-            // Throwable 이 아니라 ApiError 로 좁혀 잡는다. Connection 은 PDOException 을
-            // ApiError 로 감싸므로 "테이블 없음" 은 여기로 온다. Throwable 까지 잡으면
+        } catch (DomainError $e) {
+            // Throwable 이 아니라 DomainError 로 좁혀 잡는다. Connection 은 PDOException 을
+            // DomainError 로 감싸므로 "테이블 없음" 은 여기로 온다. Throwable 까지 잡으면
             // Connection 이나 Schema 자체의 버그(TypeError 등)가 "테이블 없음" 으로
             // 둔갑해 조용히 묻힌다.
             return false;
@@ -53,7 +53,7 @@ final class Schema
         foreach (array_reverse(self::TABLES) as $table) {
             try {
                 $this->db->execute('DROP TABLE IF EXISTS ' . $this->db->q($table));
-            } catch (ApiError $e) {
+            } catch (DomainError $e) {
                 // 이미 없는 경우는 성공으로 본다.
             }
         }

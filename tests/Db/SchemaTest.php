@@ -76,7 +76,7 @@ final class SchemaTest extends DatabaseTestCase
         $db = $this->freshDatabase($config);
         $db->insert('boards', $this->boardRow('dup'));
 
-        $this->expectException(\ApiBoard\Http\ApiError::class);
+        $this->expectException(\ApiBoard\Error\DomainError::class);
         $db->insert('boards', $this->boardRow('dup'));
     }
 

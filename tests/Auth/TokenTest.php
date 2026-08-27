@@ -7,7 +7,7 @@ namespace ApiBoard\Tests\Auth;
 use PHPUnit\Framework\TestCase;
 use ApiBoard\Auth\TokenIssuer;
 use ApiBoard\Auth\TokenVerifier;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Support\Base64Url;
 use ApiBoard\Support\Clock;
 use ApiBoard\Support\Json;
@@ -63,7 +63,7 @@ final class TokenTest extends TestCase
     {
         $token = (new TokenIssuer(self::SECRET, 3600))->issue('u', 'n', true);
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $this->expectExceptionMessage('토큰 서명이 올바르지 않습니다.');
         (new TokenVerifier('another-secret-entirely-different!!', 60))->verify($token);
     }
@@ -77,7 +77,7 @@ final class TokenTest extends TestCase
         $claims['admin'] = true;
         $forged = $header . '.' . Base64Url::encode(Json::encode($claims)) . '.' . $signature;
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         (new TokenVerifier(self::SECRET, 60))->verify($forged);
     }
 
@@ -87,7 +87,7 @@ final class TokenTest extends TestCase
 
         Clock::freeze('2026-08-26 02:03:04');
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $this->expectExceptionMessage('토큰이 만료되었습니다.');
         (new TokenVerifier(self::SECRET, 60))->verify($token);
     }
@@ -104,7 +104,7 @@ final class TokenTest extends TestCase
 
     public function testMalformedTokenIsRejected(): void
     {
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         (new TokenVerifier(self::SECRET, 60))->verify('not-a-token');
     }
 
@@ -113,7 +113,7 @@ final class TokenTest extends TestCase
         $header = Base64Url::encode(Json::encode(['typ' => 'JWT', 'alg' => 'none']));
         $payload = Base64Url::encode(Json::encode(['sub' => 'u', 'name' => 'n', 'admin' => true, 'exp' => 99999999999]));
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         (new TokenVerifier(self::SECRET, 60))->verify($header . '.' . $payload . '.');
     }
 
@@ -123,7 +123,7 @@ final class TokenTest extends TestCase
         $payload = Base64Url::encode(Json::encode(['sub' => 'u', 'name' => 'n', 'admin' => false]));
         $signature = Base64Url::encode(hash_hmac('sha256', $header . '.' . $payload, self::SECRET, true));
 
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $this->expectExceptionMessage('토큰에 만료 시각이 없습니다.');
         (new TokenVerifier(self::SECRET, 60))->verify($header . '.' . $payload . '.' . $signature);
     }

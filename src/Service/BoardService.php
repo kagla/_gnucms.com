@@ -6,7 +6,7 @@ namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
 use ApiBoard\Db\Connection;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\BoardRepository;
 use ApiBoard\Repository\CommentRepository;
 use ApiBoard\Repository\PostRepository;
@@ -63,7 +63,7 @@ final class BoardService
     {
         $board = $this->boards->findByKey($key);
         if ($board === null) {
-            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+            throw DomainError::notFound('게시판을 찾을 수 없습니다: ' . $key);
         }
         $acl->assertCanRead($board);
 
@@ -82,7 +82,7 @@ final class BoardService
         $data = $this->validate($input, true);
 
         if ($this->boards->findByKey($data['board_key']) !== null) {
-            throw ApiError::validation(['board_key' => '이미 사용 중인 게시판 키입니다.']);
+            throw DomainError::validation(['board_key' => '이미 사용 중인 게시판 키입니다.']);
         }
 
         $id = $this->boards->create($data);
@@ -96,7 +96,7 @@ final class BoardService
 
         $board = $this->boards->findByKey($key);
         if ($board === null) {
-            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+            throw DomainError::notFound('게시판을 찾을 수 없습니다: ' . $key);
         }
 
         // 부분 수정이므로 요청에 담긴 필드만 검증하고 반영한다.
@@ -139,13 +139,13 @@ final class BoardService
 
         $raw = $input['category_renames'];
         if (!is_array($raw)) {
-            throw ApiError::validation(['category_renames' => '옛 이름과 새 이름을 짝지은 객체여야 합니다.']);
+            throw DomainError::validation(['category_renames' => '옛 이름과 새 이름을 짝지은 객체여야 합니다.']);
         }
         if ($raw === []) {
             return [];
         }
         if (!array_key_exists('categories', $data)) {
-            throw ApiError::validation(['category_renames' => '분류 목록(categories)과 함께 보내야 합니다.']);
+            throw DomainError::validation(['category_renames' => '분류 목록(categories)과 함께 보내야 합니다.']);
         }
 
         $current = isset($board['categories']) && is_array($board['categories']) ? $board['categories'] : [];
@@ -157,23 +157,23 @@ final class BoardService
             $to = is_array($value) ? '' : trim((string) $value);
 
             if ($from === '' || $to === '') {
-                throw ApiError::validation(['category_renames' => '옛 이름과 새 이름이 모두 있어야 합니다.']);
+                throw DomainError::validation(['category_renames' => '옛 이름과 새 이름이 모두 있어야 합니다.']);
             }
             if ($from === $to) {
                 continue;
             }
             if (!in_array($from, $current, true)) {
-                throw ApiError::validation([
+                throw DomainError::validation([
                     'category_renames' => '지금 쓰고 있는 분류가 아닙니다: ' . $from,
                 ]);
             }
             if (in_array($from, $next, true)) {
-                throw ApiError::validation([
+                throw DomainError::validation([
                     'category_renames' => '이름을 바꾸려면 옛 이름이 새 목록에서 빠져야 합니다: ' . $from,
                 ]);
             }
             if (!in_array($to, $next, true)) {
-                throw ApiError::validation([
+                throw DomainError::validation([
                     'category_renames' => '새 이름이 분류 목록에 없습니다: ' . $to,
                 ]);
             }
@@ -190,7 +190,7 @@ final class BoardService
 
         $board = $this->boards->findByKey($key);
         if ($board === null) {
-            throw ApiError::notFound('게시판을 찾을 수 없습니다: ' . $key);
+            throw DomainError::notFound('게시판을 찾을 수 없습니다: ' . $key);
         }
 
         $boardId = (int) $board['id'];

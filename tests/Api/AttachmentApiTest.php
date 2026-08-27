@@ -35,7 +35,7 @@ final class AttachmentApiTest extends ApiTestCase
         $app = $this->makeApp($config);
         $this->board($app);
 
-        $this->expectException(\ApiBoard\Http\ApiError::class);
+        $this->expectException(\ApiBoard\Error\DomainError::class);
         $app->attachments()->upload(
             $app->aclFor($this->authed($app, 'user-1', '홍길동')),
             'free',
@@ -56,7 +56,7 @@ final class AttachmentApiTest extends ApiTestCase
                 $this->fakeUpload('큰파일.txt', str_repeat('x', 1024 * 1024 + 1))
             );
             $this->fail('413 이 나와야 한다');
-        } catch (\ApiBoard\Http\ApiError $e) {
+        } catch (\ApiBoard\Error\DomainError $e) {
             $this->assertSame(413, $e->status());
         }
     }
@@ -157,7 +157,7 @@ final class AttachmentApiTest extends ApiTestCase
                 $this->fakeUpload('메모.txt', '내용')
             );
             $this->fail('거부되어야 한다');
-        } catch (\ApiBoard\Http\ApiError $e) {
+        } catch (\ApiBoard\Error\DomainError $e) {
             $this->assertSame(422, $e->status());
         }
     }

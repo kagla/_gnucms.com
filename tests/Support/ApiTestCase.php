@@ -7,7 +7,7 @@ namespace ApiBoard\Tests\Support;
 use ApiBoard\App;
 use ApiBoard\Auth\TokenIssuer;
 use ApiBoard\Db\Schema;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Http\Request;
 use ApiBoard\Http\Response;
 use ApiBoard\Http\ResponseInterface;
@@ -41,7 +41,7 @@ abstract class ApiTestCase extends DatabaseTestCase
         return $app;
     }
 
-    /** ApiError 도 Response 로 변환해 돌려준다. 테스트가 상태 코드를 그대로 볼 수 있다. */
+    /** DomainError 도 Response 로 변환해 돌려준다. 테스트가 상태 코드를 그대로 볼 수 있다. */
     protected function call(App $app, string $method, string $path, array $body = [], ?string $token = null): ResponseInterface
     {
         $headers = $token === null ? [] : ['Authorization' => 'Bearer ' . $token];
@@ -49,7 +49,7 @@ abstract class ApiTestCase extends DatabaseTestCase
 
         try {
             return $app->router()->dispatch($request);
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             return Response::fromError($e, true);
         }
     }

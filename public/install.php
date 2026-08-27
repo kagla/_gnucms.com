@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../src/autoload.php';
 
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Install\Installer;
 
 $installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
@@ -22,7 +22,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $input = array_merge($input, $_POST);
     try {
         $done = $installer->run($_POST);
-    } catch (ApiError $e) {
+    } catch (DomainError $e) {
         $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
     }
 }

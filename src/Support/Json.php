@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard\Support;
 
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class Json
 {
@@ -15,7 +15,7 @@ final class Json
     {
         $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
-            throw ApiError::internal('JSON 인코딩에 실패했습니다: ' . json_last_error_msg());
+            throw DomainError::internal('JSON 인코딩에 실패했습니다: ' . json_last_error_msg());
         }
 
         return $json;
@@ -29,7 +29,7 @@ final class Json
 
         $value = json_decode($json, true);
         if (!is_array($value)) {
-            throw ApiError::validation(['body' => '올바른 JSON 이 아닙니다.']);
+            throw DomainError::validation(['body' => '올바른 JSON 이 아닙니다.']);
         }
 
         return $value;

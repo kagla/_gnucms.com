@@ -7,7 +7,7 @@ namespace ApiBoard\Install;
 use ApiBoard\Db\Connection;
 use ApiBoard\Db\DialectFactory;
 use ApiBoard\Db\Schema;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Support\Base64Url;
 use ApiBoard\Validation\Validator;
 use Throwable;
@@ -37,7 +37,7 @@ final class Installer
     public function run(array $input): array
     {
         if ($this->isInstalled()) {
-            throw ApiError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
+            throw DomainError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
         }
 
         $v = new Validator($input);
@@ -50,13 +50,13 @@ final class Installer
         $v->check();
 
         if (strpos($dsn, ':') === false) {
-            throw ApiError::validation(['dsn' => 'DSN 형식이 올바르지 않습니다.']);
+            throw DomainError::validation(['dsn' => 'DSN 형식이 올바르지 않습니다.']);
         }
 
         try {
             DialectFactory::fromDsn($dsn);
-        } catch (ApiError $e) {
-            throw ApiError::validation(['dsn' => $e->getMessage()]);
+        } catch (DomainError $e) {
+            throw DomainError::validation(['dsn' => $e->getMessage()]);
         }
 
         $dbConfig = [
@@ -69,7 +69,7 @@ final class Installer
             $db = Connection::create($dbConfig);
             (new Schema($db))->create();
         } catch (Throwable $e) {
-            throw ApiError::validation(['dsn' => 'DB 에 연결하거나 테이블을 만들지 못했습니다: ' . $e->getMessage()]);
+            throw DomainError::validation(['dsn' => 'DB 에 연결하거나 테이블을 만들지 못했습니다: ' . $e->getMessage()]);
         }
 
         $this->ensureStorageDirectories();
@@ -105,7 +105,7 @@ final class Installer
         $php = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n";
 
         if (file_put_contents($this->configPath, $php, LOCK_EX) === false) {
-            throw ApiError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
+            throw DomainError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
         }
         @chmod($this->configPath, 0640);
 
@@ -133,7 +133,7 @@ final class Installer
     {
         foreach ([$this->storageDir . '/uploads', $this->storageDir . '/logs'] as $directory) {
             if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-                throw ApiError::internal('디렉터리를 만들 수 없습니다: ' . $directory);
+                throw DomainError::internal('디렉터리를 만들 수 없습니다: ' . $directory);
             }
         }
     }

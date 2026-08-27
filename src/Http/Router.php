@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ApiBoard\Http;
 
+use ApiBoard\Error\DomainError;
+
 final class Router
 {
     /** @var array<int, array{method: string, regex: string, names: string[], handler: callable}> */
@@ -74,6 +76,6 @@ final class Router
             return $route['handler']($request, $params);
         }
 
-        throw ApiError::notFound('요청한 경로를 찾을 수 없습니다: ' . $request->method() . ' ' . $path);
+        throw DomainError::notFound('요청한 경로를 찾을 수 없습니다: ' . $request->method() . ' ' . $path);
     }
 }

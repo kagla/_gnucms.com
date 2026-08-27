@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Tests\Validation;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Validation\Validator;
 
 final class ValidatorTest extends TestCase
@@ -26,7 +26,7 @@ final class ValidatorTest extends TestCase
         try {
             $v->check();
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(422, $e->status());
             $this->assertSame(['title' => '필수 항목입니다.'], $e->details());
         }
@@ -41,7 +41,7 @@ final class ValidatorTest extends TestCase
         try {
             $v->check();
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(['title', 'content'], array_keys($e->details()));
         }
     }
@@ -78,7 +78,7 @@ final class ValidatorTest extends TestCase
         try {
             $v->check();
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(['password' => '4자 이상이어야 합니다.'], $e->details());
         }
     }
@@ -111,7 +111,7 @@ final class ValidatorTest extends TestCase
         try {
             $v->check();
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertArrayHasKey('perm_read', $e->details());
         }
     }

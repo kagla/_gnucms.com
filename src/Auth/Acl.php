@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard\Auth;
 
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 /**
  * 권한 판정의 단일 출처. 판정 순서는 다음과 같고 위에서부터 단락 평가한다.
@@ -149,7 +149,7 @@ final class Acl
         }
 
         throw $this->identity->isGuest()
-            ? ApiError::unauthorized('로그인이 필요합니다.')
-            : ApiError::forbidden($message);
+            ? DomainError::unauthorized('로그인이 필요합니다.')
+            : DomainError::forbidden($message);
     }
 }

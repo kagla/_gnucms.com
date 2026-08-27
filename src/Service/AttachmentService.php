@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Http\FileResponse;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Support\Clock;
@@ -51,38 +51,38 @@ final class AttachmentService
         $acl->assertCanWrite($board);
 
         if ((int) $board['use_file'] !== 1) {
-            throw ApiError::validation(['file' => '이 게시판은 첨부를 쓰지 않습니다.']);
+            throw DomainError::validation(['file' => '이 게시판은 첨부를 쓰지 않습니다.']);
         }
 
         $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
-            throw ApiError::tooLarge('파일이 너무 큽니다.');
+            throw DomainError::tooLarge('파일이 너무 큽니다.');
         }
         if ($error !== UPLOAD_ERR_OK) {
-            throw ApiError::validation(['file' => '파일 업로드에 실패했습니다.']);
+            throw DomainError::validation(['file' => '파일 업로드에 실패했습니다.']);
         }
 
         $originalName = trim((string) ($file['name'] ?? ''));
         if ($originalName === '') {
-            throw ApiError::validation(['file' => '파일 이름이 없습니다.']);
+            throw DomainError::validation(['file' => '파일 이름이 없습니다.']);
         }
 
         $size = (int) ($file['size'] ?? 0);
         $maxBytes = (int) ($this->config['max_bytes'] ?? 5242880);
         if ($size > $maxBytes) {
-            throw ApiError::tooLarge('파일은 ' . $maxBytes . ' 바이트를 넘을 수 없습니다.');
+            throw DomainError::tooLarge('파일은 ' . $maxBytes . ' 바이트를 넘을 수 없습니다.');
         }
 
         $extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
         $allowed = (array) ($this->config['allowed_ext'] ?? []);
         if ($extension === '' || !in_array($extension, $allowed, true)) {
-            throw ApiError::validation(['file' => '허용되지 않은 확장자입니다: ' . $extension]);
+            throw DomainError::validation(['file' => '허용되지 않은 확장자입니다: ' . $extension]);
         }
 
         $relative = substr(Clock::now(), 0, 4) . '/' . substr(Clock::now(), 5, 2);
         $directory = rtrim((string) $this->config['dir'], '/') . '/' . $relative;
         if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-            throw ApiError::internal('업로드 디렉터리를 만들 수 없습니다: ' . $directory);
+            throw DomainError::internal('업로드 디렉터리를 만들 수 없습니다: ' . $directory);
         }
 
         $id = bin2hex(random_bytes(16));
@@ -94,7 +94,7 @@ final class AttachmentService
             : rename((string) $file['tmp_name'], $path);
 
         if ($moved !== true) {
-            throw ApiError::internal('파일을 저장하지 못했습니다.');
+            throw DomainError::internal('파일을 저장하지 못했습니다.');
         }
 
         $descriptor = [
@@ -121,7 +121,7 @@ final class AttachmentService
         $expectedKeys = ['id', 'name', 'size', 'mime', 'path'];
         foreach ($expectedKeys as $key) {
             if (!array_key_exists($key, $descriptor)) {
-                throw ApiError::validation(['attachments' => '첨부 정보가 올바르지 않습니다.']);
+                throw DomainError::validation(['attachments' => '첨부 정보가 올바르지 않습니다.']);
             }
         }
 
@@ -134,10 +134,10 @@ final class AttachmentService
         ];
 
         if (!hash_equals($this->sign($normalized), $signature)) {
-            throw ApiError::validation(['attachments' => '첨부 서명이 올바르지 않습니다.']);
+            throw DomainError::validation(['attachments' => '첨부 서명이 올바르지 않습니다.']);
         }
         if (!is_file($normalized['path'])) {
-            throw ApiError::validation(['attachments' => '업로드된 파일을 찾을 수 없습니다.']);
+            throw DomainError::validation(['attachments' => '업로드된 파일을 찾을 수 없습니다.']);
         }
 
         return $normalized;
@@ -149,13 +149,13 @@ final class AttachmentService
         $files = $loaded['post']['attachments'];
 
         if (!isset($files[$index])) {
-            throw ApiError::notFound('첨부를 찾을 수 없습니다.');
+            throw DomainError::notFound('첨부를 찾을 수 없습니다.');
         }
 
         $file = $files[$index];
         $path = (string) ($file['path'] ?? '');
         if ($path === '' || !is_file($path)) {
-            throw ApiError::notFound('첨부 파일이 서버에 없습니다.');
+            throw DomainError::notFound('첨부 파일이 서버에 없습니다.');
         }
 
         return new FileResponse(

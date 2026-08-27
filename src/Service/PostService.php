@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Validation\Validator;
 
@@ -73,17 +73,17 @@ final class PostService
     {
         $post = $this->posts->findWithSecret($id);
         if ($post === null) {
-            throw ApiError::notFound('글을 찾을 수 없습니다.');
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
 
         $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
 
         if ($post['deleted_at'] !== null && !$acl->isAdminFor($board)) {
-            throw ApiError::notFound('글을 찾을 수 없습니다.');
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
 
         if ((int) $post['is_secret'] === 1 && !$acl->canModify($board, $post, $password)) {
-            throw ApiError::forbidden('비밀글입니다.');
+            throw DomainError::forbidden('비밀글입니다.');
         }
 
         return ['post' => $post, 'board' => $board];
@@ -154,7 +154,7 @@ final class PostService
     {
         $post = $this->posts->findWithSecret($id);
         if ($post === null) {
-            throw ApiError::notFound('글을 찾을 수 없습니다.');
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
         $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
 
@@ -197,7 +197,7 @@ final class PostService
     {
         $post = $this->posts->findWithSecret($id);
         if ($post === null) {
-            throw ApiError::notFound('글을 찾을 수 없습니다.');
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
         $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
 
@@ -210,7 +210,7 @@ final class PostService
     {
         $post = $this->posts->findWithSecret($id);
         if ($post === null) {
-            throw ApiError::notFound('글을 찾을 수 없습니다.');
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
         $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
 
@@ -237,7 +237,7 @@ final class PostService
     {
         $board = $this->boards->findBoardById($boardId);
         if ($board === null) {
-            throw ApiError::notFound('게시판을 찾을 수 없습니다.');
+            throw DomainError::notFound('게시판을 찾을 수 없습니다.');
         }
 
         return $board;
@@ -246,13 +246,13 @@ final class PostService
     private function verifyAttachments(array $board, $input): array
     {
         if (!is_array($input)) {
-            throw ApiError::validation(['attachments' => '배열이어야 합니다.']);
+            throw DomainError::validation(['attachments' => '배열이어야 합니다.']);
         }
         if ($input !== [] && (int) $board['use_file'] !== 1) {
-            throw ApiError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
+            throw DomainError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
         }
         if ($this->attachments === null) {
-            throw ApiError::internal('첨부 서비스가 연결되지 않았습니다.');
+            throw DomainError::internal('첨부 서비스가 연결되지 않았습니다.');
         }
 
         $verified = [];

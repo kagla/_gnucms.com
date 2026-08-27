@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard\Validation;
 
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 /**
  * 오류를 모았다가 check() 에서 한 번에 던진다. 필드 하나 고칠 때마다
@@ -136,7 +136,7 @@ final class Validator
     public function check(): void
     {
         if ($this->errors !== []) {
-            throw ApiError::validation($this->errors);
+            throw DomainError::validation($this->errors);
         }
     }
 }

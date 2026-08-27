@@ -142,7 +142,7 @@ final class Routes
             $boardKey = (string) $request->input('board_key', '');
             $files = $request->files();
             if (!isset($files['file'])) {
-                throw \ApiBoard\Http\ApiError::validation(['file' => '파일이 없습니다.']);
+                throw \ApiBoard\Error\DomainError::validation(['file' => '파일이 없습니다.']);
             }
 
             return Response::json(['data' => $app->attachments()->upload(

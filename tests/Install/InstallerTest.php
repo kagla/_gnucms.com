@@ -7,7 +7,7 @@ namespace ApiBoard\Tests\Install;
 use PHPUnit\Framework\TestCase;
 use ApiBoard\Db\Connection;
 use ApiBoard\Db\Schema;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 use ApiBoard\Install\Installer;
 
 final class InstallerTest extends TestCase
@@ -80,7 +80,7 @@ final class InstallerTest extends TestCase
         try {
             $this->installer()->run($this->input());
             $this->fail('두 번째 설치는 거부되어야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(403, $e->status());
         }
     }
@@ -90,7 +90,7 @@ final class InstallerTest extends TestCase
         try {
             $this->installer()->run($this->input(['admin_password' => 'short']));
             $this->fail('422 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(422, $e->status());
             $this->assertArrayHasKey('admin_password', $e->details());
         }
@@ -101,7 +101,7 @@ final class InstallerTest extends TestCase
         try {
             $this->installer()->run($this->input(['dsn' => 'oracle:host=localhost']));
             $this->fail('422 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(422, $e->status());
             $this->assertArrayHasKey('dsn', $e->details());
         }
@@ -114,7 +114,7 @@ final class InstallerTest extends TestCase
                 'dsn' => 'mysql:host=127.0.0.1;port=1;dbname=nope',
             ]));
             $this->fail('422 가 나와야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             $this->assertSame(422, $e->status());
             $this->assertArrayHasKey('dsn', $e->details());
         }

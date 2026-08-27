@@ -8,7 +8,7 @@ use ApiBoard\Db\Dialect\DialectInterface;
 use ApiBoard\Db\Dialect\MysqlDialect;
 use ApiBoard\Db\Dialect\PgsqlDialect;
 use ApiBoard\Db\Dialect\SqliteDialect;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class DialectFactory
 {
@@ -25,6 +25,6 @@ final class DialectFactory
                 return new PgsqlDialect();
         }
 
-        throw ApiError::internal('지원하지 않는 DB 드라이버입니다: ' . $driver);
+        throw DomainError::internal('지원하지 않는 DB 드라이버입니다: ' . $driver);
     }
 }

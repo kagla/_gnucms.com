@@ -6,7 +6,7 @@ namespace ApiBoard\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
 use ApiBoard\Db\Connection;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class ConnectionTest extends TestCase
 {
@@ -68,7 +68,7 @@ final class ConnectionTest extends TestCase
         // PDO 는 한 문장에서 이름 파라미터와 위치 파라미터를 섞는 것을 금지한다.
         // SQLite 만 이 혼용을 눈감아 주기 때문에, 막지 않으면 SQLite 테스트는 통과하고
         // MySQL/PostgreSQL 에서만 SQLSTATE[HY093] 로 터진다. 그래서 즉시 거부한다.
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
     }
 
@@ -96,10 +96,10 @@ final class ConnectionTest extends TestCase
         try {
             $this->db->transaction(function (Connection $db): void {
                 $db->insert('widgets', ['name' => '아', 'qty' => 1]);
-                throw ApiError::internal('일부러 실패');
+                throw DomainError::internal('일부러 실패');
             });
             $this->fail('예외가 전파되어야 한다');
-        } catch (ApiError $e) {
+        } catch (DomainError $e) {
             // 기대한 경로
         }
 
@@ -108,7 +108,7 @@ final class ConnectionTest extends TestCase
 
     public function testSyntaxErrorBecomesInternalApiError(): void
     {
-        $this->expectException(ApiError::class);
+        $this->expectException(DomainError::class);
         $this->db->select('SELECT * FROM no_such_table');
     }
 }

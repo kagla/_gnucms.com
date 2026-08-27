@@ -2,15 +2,19 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Http;
+namespace ApiBoard\Error;
 
 use RuntimeException;
 
 /**
- * 클라이언트에게 그대로 보여줄 수 있는 오류. 이 예외가 아닌 모든 예외는
+ * 사용자에게 그대로 보여줄 수 있는 오류. 이 예외가 아닌 모든 예외는
  * 프론트 컨트롤러에서 INTERNAL 로 변환되고 원문은 로그에만 남는다.
+ *
+ * 도메인 계층이 던지므로 HTTP 네임스페이스에 두지 않는다. status() 가
+ * HTTP 상태 코드인 것은 이 예외를 화면으로 옮기는 층의 편의를 위한 것이고,
+ * 도메인은 이 값을 읽지 않는다.
  */
-final class ApiError extends RuntimeException
+final class DomainError extends RuntimeException
 {
     /** @var string */
     private $errorCode;

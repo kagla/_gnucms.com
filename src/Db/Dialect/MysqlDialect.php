@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Db\Dialect;
 
 use PDO;
-use ApiBoard\Http\ApiError;
+use ApiBoard\Error\DomainError;
 
 final class MysqlDialect implements DialectInterface
 {
@@ -17,7 +17,7 @@ final class MysqlDialect implements DialectInterface
     public function quoteIdentifier(string $name): string
     {
         if (strpos($name, '`') !== false) {
-            throw ApiError::internal('식별자에 인용 문자를 쓸 수 없습니다: ' . $name);
+            throw DomainError::internal('식별자에 인용 문자를 쓸 수 없습니다: ' . $name);
         }
 
         return '`' . $name . '`';
