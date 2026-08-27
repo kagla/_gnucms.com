@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ApiBoard;
 
+use ApiBoard\Http\FileResponse;
 use ApiBoard\Http\Request;
 use ApiBoard\Http\Response;
 use ApiBoard\Http\Router;
@@ -155,12 +156,14 @@ final class Routes
         $router->get('/posts/{id}/files/{index}', static function (Request $request, array $params) use ($app) {
             $password = $request->input('password');
 
-            return $app->attachments()->download(
+            $file = $app->attachments()->download(
                 $app->aclFor($request),
                 (int) $params['id'],
                 (int) $params['index'],
                 $password === null ? null : (string) $password
             );
+
+            return new FileResponse($file['path'], $file['name'], $file['mime']);
         });
 
         $router->post('/maintenance/gc', static function (Request $request, array $params) use ($app): Response {

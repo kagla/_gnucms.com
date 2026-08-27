@@ -6,7 +6,6 @@ namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
 use ApiBoard\Error\DomainError;
-use ApiBoard\Http\FileResponse;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Support\Clock;
 
@@ -143,7 +142,13 @@ final class AttachmentService
         return $normalized;
     }
 
-    public function download(Acl $acl, int $postId, int $index, ?string $password): FileResponse
+    /**
+     * 파일을 실제로 내보내는 일은 Web 계층이 한다. 서비스는 무엇을 어떤 이름으로
+     * 보낼지만 정한다.
+     *
+     * @return array{path: string, name: string, mime: string}
+     */
+    public function download(Acl $acl, int $postId, int $index, ?string $password): array
     {
         $loaded = $this->posts->loadForRead($acl, $postId, $password);
         $files = $loaded['post']['attachments'];
@@ -158,11 +163,11 @@ final class AttachmentService
             throw DomainError::notFound('첨부 파일이 서버에 없습니다.');
         }
 
-        return new FileResponse(
-            $path,
-            (string) ($file['name'] ?? 'download'),
-            (string) ($file['mime'] ?? 'application/octet-stream')
-        );
+        return [
+            'path' => $path,
+            'name' => (string) ($file['name'] ?? 'download'),
+            'mime' => (string) ($file['mime'] ?? 'application/octet-stream'),
+        ];
     }
 
     /**
