@@ -5,16 +5,12 @@ declare(strict_types=1);
 namespace ApiBoard;
 
 use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\TokenIssuer;
-use ApiBoard\Auth\TokenVerifier;
+use ApiBoard\Auth\Identity;
 use ApiBoard\Db\Connection;
-use ApiBoard\Http\Request;
-use ApiBoard\Http\Router;
 use ApiBoard\Repository\BoardRepository;
 use ApiBoard\Repository\CommentRepository;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Service\AttachmentService;
-use ApiBoard\Service\AuthService;
 use ApiBoard\Service\BoardService;
 use ApiBoard\Service\CommentService;
 use ApiBoard\Service\PostService;
@@ -39,9 +35,6 @@ final class App
 
     /** @var CommentRepository|null */
     private $comments = null;
-
-    /** @var AuthService|null */
-    private $auth = null;
 
     /** @var BoardService|null */
     private $boardService = null;
@@ -110,24 +103,6 @@ final class App
         return $this->comments;
     }
 
-    public function tokenIssuer(): TokenIssuer
-    {
-        return new TokenIssuer(
-            (string) $this->config('auth.secret', ''),
-            (int) $this->config('auth.ttl', 3600)
-        );
-    }
-
-    public function auth(): AuthService
-    {
-        if ($this->auth === null) {
-            $bootstrap = $this->config('bootstrap_admin');
-            $this->auth = new AuthService(is_array($bootstrap) ? $bootstrap : null, $this->tokenIssuer());
-        }
-
-        return $this->auth;
-    }
-
     public function boardService(): BoardService
     {
         if ($this->boardService === null) {
@@ -173,21 +148,11 @@ final class App
         return $this->commentService;
     }
 
-    public function aclFor(Request $request): Acl
+    /**
+     * 1단계에는 로그인이 없다. 2단계에서 SessionGuard 가 이 자리를 대신한다.
+     */
+    public function guestAcl(): Acl
     {
-        $verifier = new TokenVerifier(
-            (string) $this->config('auth.secret', ''),
-            (int) $this->config('auth.leeway', 60)
-        );
-
-        return new Acl($verifier->verify($request->bearerToken()));
-    }
-
-    public function router(): Router
-    {
-        $router = new Router();
-        Routes::register($router, $this);
-
-        return $router;
+        return new Acl(Identity::guest());
     }
 }

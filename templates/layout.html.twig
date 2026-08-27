@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}게시판{% endblock %}</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #ffffff; --fg: #1a1a1a; --panel: #ffffff; --line: #dddddd;
+    --muted: #666666; --danger: #b00020; --link: #0b57d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #16181c; --fg: #e6e8ea; --panel: #1c1f24; --line: #2c3038;
+      --muted: #9aa1ab; --danger: #ff7b8a; --link: #7cb0ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 1.5rem 1rem; background: var(--bg); color: var(--fg);
+         font: 15px/1.7 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+  main { max-width: 56rem; margin: 0 auto; }
+  a { color: var(--link); }
+  h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: .6rem .5rem; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: .9rem; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .empty { padding: 3rem 0; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

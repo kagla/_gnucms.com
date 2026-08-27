@@ -1,13 +1,6 @@
-# mod_rewrite 가 있으면 깨끗한 경로를, 없으면 ?p= 폴백을 쓴다.
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
-
-    # Authorization 헤더가 CGI 모드에서 사라지는 것을 막는다.
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php/$1 [QSA,L]
+    RewriteRule ^ index.php [QSA,L]
 </IfModule>

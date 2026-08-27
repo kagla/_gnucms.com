@@ -1,0 +1,7 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ message }}</p>
+  <p><a href="{{ base_path() }}/">처음으로</a></p>
+{% endblock %}

@@ -16,6 +16,9 @@
 /storage/logs/*
 !/storage/logs/.gitkeep
 
+# Twig 캐시
+/storage/cache/twig/
+
 .DS_Store
 
 # SDD 진행 기록 (스크래치)
