@@ -54,8 +54,21 @@ final class AttachmentDownloadTest extends WebTestCase
     protected function tearDown(): void
     {
         $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
-        foreach (glob($dir . '/*') ?: [] as $file) {
-            @unlink($file);
+        if (is_dir($dir)) {
+            // 재귀적으로 모든 파일과 디렉토리를 삭제한다.
+            // year/month/... 중첩 구조를 모두 정리하기 위해 CHILD_FIRST 모드를 사용한다.
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $path) {
+                if ($path->isDir()) {
+                    rmdir($path->getPathname());
+                } else {
+                    unlink($path->getPathname());
+                }
+            }
+            rmdir($dir);
         }
 
         parent::tearDown();
