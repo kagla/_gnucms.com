@@ -51,6 +51,62 @@ final class AttachmentDownloadTest extends WebTestCase
         self::assertSame(404, $this->get($app, '/p/' . $post['id'] . '/files/7')->getStatusCode());
     }
 
+    /**
+     * 첨부 다운로드도 글 보기와 같은 경로(PostService::loadForRead())로 권한을 판정한다.
+     * 비밀글의 첨부를 게스트가 받으려 하면 403 이어야 한다 — 로그인해도 소용없다는 뜻.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testAttachmentOnSecretPostIsDeniedToGuestWith403(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key'  => 'free',
+            'name'       => '자유게시판',
+            'use_file'   => true,
+            'use_secret' => true,
+        ]);
+
+        $descriptor = $app->attachments()->upload($acl, 'free', $this->fakeUpload('메모.txt', '안녕하세요'));
+        $post = $app->postService()->create($acl, 'free', [
+            'title'       => '비밀글',
+            'content'     => '본문',
+            'is_secret'   => true,
+            'attachments' => [$descriptor],
+        ]);
+
+        self::assertSame(403, $this->get($app, '/p/' . $post['id'] . '/files/0')->getStatusCode());
+    }
+
+    /**
+     * perm_read = admin 인 게시판의 첨부는 게스트에게 401 이어야 한다 — 로그인하면
+     * 될 수도 있다는 뜻. AttachmentService::download() 가 부르는
+     * BoardService::getEntity() -> Acl::assertCanRead() 에서 나오는 판정이다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testAttachmentInAdminOnlyBoardIsDeniedToGuestWith401(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'secret',
+            'name'      => '관리자전용',
+            'perm_read' => 'admin',
+            'use_file'  => true,
+        ]);
+
+        $descriptor = $app->attachments()->upload($acl, 'secret', $this->fakeUpload('메모.txt', '안녕하세요'));
+        $post = $app->postService()->create($acl, 'secret', [
+            'title'       => '글',
+            'content'     => '본문',
+            'attachments' => [$descriptor],
+        ]);
+
+        self::assertSame(401, $this->get($app, '/p/' . $post['id'] . '/files/0')->getStatusCode());
+    }
+
     protected function tearDown(): void
     {
         $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
