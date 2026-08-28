@@ -1,0 +1,24 @@
+{# harbor view: auth/reset.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}새 비밀번호 설정 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="harbor-auth-card">
+    <header class="harbor-panel-head harbor-panel-head-compact">
+      <p class="harbor-section-kicker">{{ ic.shield() }} New password</p>
+      <h1>새 비밀번호 설정</h1>
+    </header>
+    <form class="harbor-form harbor-auth-form" method="post" action="{{ url_for('auth.reset') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label class="harbor-field">{{ ic.shield() }} 새 비밀번호 <span class="muted">8자 이상</span><input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password is defined %}<p class="harbor-field-error">{{ errors.password }}</p>{% endif %}
+      <label class="harbor-field">{{ ic.shield() }} 비밀번호 확인<input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password_confirmation is defined %}<p class="harbor-field-error">{{ errors.password_confirmation }}</p>{% endif %}
+      {% if errors.token is defined %}<p class="harbor-field-error">{{ errors.token }}</p>{% endif %}
+      <button class="harbor-btn harbor-btn-primary harbor-btn-block" type="submit">{{ ic.check() }} 비밀번호 변경</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

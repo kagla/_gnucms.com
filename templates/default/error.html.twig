@@ -1,15 +1,22 @@
 {% extends "layout.html.twig" %}
-{% block title %}{{ title }}{% endblock %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ title }} · {{ site.site_name }}{% endblock %}
 {% block body %}
-  <section class="surface status-card">
-    <p class="eyebrow">Something went wrong</p>
-    <h1>{{ title }}</h1>
-    <p class="lead">{{ message }}</p>
+<section class="card status-card">
+  <div class="card-body">
+    <span class="status-icon status-icon-error" aria-hidden="true">{{ ico.i('warning', 28) }}</span>
+    <h1 class="card-title">{{ title }}</h1>
+    <p>{{ message }}</p>
     {% if details is not empty %}
-      <ul class="errors">
-        {% for field, detail in details %}<li><strong>{{ field }}</strong>: {{ detail }}</li>{% endfor %}
+      <ul class="list status-list">
+        {% for field, detail in details %}
+          <li class="list-row"><strong>{{ field }}</strong><span>{{ detail }}</span></li>
+        {% endfor %}
       </ul>
     {% endif %}
-    <p><a class="text-link" href="{{ url_for('boards.index') }}">게시판으로 돌아가기 →</a></p>
-  </section>
+    <div class="card-actions">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('boards.index') }}">{{ ico.i('home', 16) }} 홈으로 가기</a>
+    </div>
+  </div>
+</section>
 {% endblock %}

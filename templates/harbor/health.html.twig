@@ -1,0 +1,13 @@
+{# harbor view: health.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}상태 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<section class="harbor-status">
+  <span class="harbor-empty-icon">{{ ic.check() }}</span>
+  <p class="harbor-section-kicker">{{ ic.settings() }} System status</p>
+  <h1>모든 시스템이 정상입니다</h1>
+  <p class="harbor-lead">데이터베이스에 <strong>{{ dialect }}</strong>로 연결되어 있습니다.</p>
+  <p class="muted">{{ ic.shield() }} 이 화면은 연결 상태만 확인하며 테이블 유무는 검사하지 않습니다.</p>
+</section>
+{% endblock %}

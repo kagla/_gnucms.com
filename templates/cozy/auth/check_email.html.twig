@@ -1,0 +1,12 @@
+{% extends "layout.html.twig" %}
+{% block title %}이메일을 확인해 주세요 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="gate">
+  <section class="gate-card gate-card-done">
+    <span class="gate-mark gate-mark-ok" aria-hidden="true">✉</span>
+    <h1>이메일을 확인해 주세요</h1>
+    <p class="gate-sub">가입 주소로 인증 링크를 보냈어요. 링크를 열면 회원가입이 완료됩니다.</p>
+    <p class="gate-switch"><a href="{{ url_for('auth.login') }}">로그인으로 돌아가기</a></p>
+  </section>
+</div>
+{% endblock %}

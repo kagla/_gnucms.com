@@ -1,0 +1,22 @@
+{% extends "layout.html.twig" %}
+{% block title %}비밀번호 찾기 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="gate">
+  <section class="gate-card">
+    <header class="gate-head">
+      <span class="gate-mark gate-mark-soft" aria-hidden="true">?</span>
+      <h1>비밀번호 찾기</h1>
+      <p class="gate-sub">가입한 이메일로 재설정 링크를 보내드려요.</p>
+    </header>
+    <form class="form" method="post" action="{{ url_for('auth.forgot') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <label class="field-label" for="forgot-email">이메일</label>
+        <input id="forgot-email" type="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+      </div>
+      <button class="btn btn-brand btn-lg btn-block" type="submit">재설정 링크 받기</button>
+    </form>
+    <p class="gate-switch"><a href="{{ url_for('auth.login') }}">로그인으로 돌아가기</a></p>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "admin/layout.html.twig" %}
+{% block title %}관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+{% block body %}
+<header class="lumen-admin-head">
+  <div>
+    <p class="lumen-section-kicker">Dashboard</p>
+    <h1>사이트 관리</h1>
+    <p class="lumen-lead">사이트 내용과 커뮤니티를 복잡한 절차 없이 관리합니다.</p>
+  </div>
+  <div class="lumen-admin-actions">
+    <a class="lumen-btn lumen-btn-primary" href="{{ url_for('admin.content.create') }}"><span aria-hidden="true">＋</span> 내용 만들기</a>
+  </div>
+</header>
+{% if query.saved|default('') == '1' %}<p class="lumen-notice lumen-notice-success">변경사항을 저장했습니다.</p>{% endif %}
+{% if query.deleted|default('') == '1' %}<p class="lumen-notice lumen-notice-success">게시판을 삭제했습니다.</p>{% endif %}
+<section class="lumen-stat-grid" aria-label="운영 현황">
+  <a class="lumen-stat-card lumen-stat-link" href="{{ url_for('admin.boards') }}">
+    <span class="lumen-stat-label">게시판</span>
+    <strong>{{ board_count }}</strong>
+    <small>관리하기 →</small>
+  </a>
+  <article class="lumen-stat-card">
+    <span class="lumen-stat-label">내용</span>
+    <strong>{{ page_count }}</strong>
+  </article>
+  <article class="lumen-stat-card">
+    <span class="lumen-stat-label">게시글 / 회원</span>
+    <strong>{{ post_count }} / {{ user_count }}</strong>
+  </article>
+</section>
+{% endblock %}

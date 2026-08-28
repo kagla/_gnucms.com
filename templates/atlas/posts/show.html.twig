@@ -1,0 +1,75 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ post.title }} · {{ site.site_name }}{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ post.content|striptags|slice(0, 150) }}">{% endblock %}
+{% block nav_section %}board{% endblock %}
+{% block body %}
+<div class="read-progress" aria-hidden="true"></div>
+
+<nav class="breadcrumb" aria-label="현재 위치">
+  <a href="{{ url_for('boards.index') }}">커뮤니티</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span aria-current="page">게시글</span>
+</nav>
+
+<article class="article">
+  <header class="article-head">
+    {% if post.category %}<p class="chip">{{ post.category }}</p>{% endif %}
+    <h1 class="article-title">{{ post.title }}</h1>
+    <div class="article-byline">
+      <span class="avatar" data-tone="{{ post.author_name|length % 6 }}" aria-hidden="true">{{ post.author_name|slice(0, 1)|upper }}</span>
+      <span class="article-byline-copy">
+        <strong>{{ post.author_name }}</strong>
+        <span class="article-byline-meta">
+          <time datetime="{{ post.created_at }}">{{ post.created_at|date('Y년 m월 d일 H:i') }}</time>
+          <span class="dot" aria-hidden="true"></span>
+          <span>조회 {{ post.view_count }}</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>댓글 {{ post.comment_count }}</span>
+        </span>
+      </span>
+    </div>
+  </header>
+
+  <div class="article-body prose">{{ post.content|nl2br }}</div>
+
+  {% if post.attachments is not empty %}
+    <section class="attachments" aria-labelledby="attachments-title">
+      <h2 id="attachments-title" class="section-label">첨부파일 {{ post.attachments|length }}</h2>
+      <ul class="attachment-list">
+        {% for file in post.attachments %}
+          <li>
+            <a href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">
+              <span class="attachment-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3H6a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 6 17h8a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M11.5 3v4h4"/></svg>
+              </span>
+              <span class="attachment-name">{{ file.name }}</span>
+              <span class="attachment-size">{{ (file.size / 1024)|round }} KB</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <div class="article-actions">
+    <a class="button button-quiet" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+      <span aria-hidden="true">←</span> 목록으로
+    </a>
+  </div>
+</article>
+
+<section class="comments" aria-labelledby="comments-title" id="comments">
+  <h2 class="section-label" id="comments-title">
+    댓글 <span class="count-pill">{{ post.comment_count }}</span>
+  </h2>
+  {% if comments is empty %}
+    <div class="empty-state empty-state-sm">
+      <p class="empty-title">첫 댓글을 기다리고 있습니다</p>
+    </div>
+  {% else %}
+    {% include 'posts/_comments.html.twig' with {'nodes': comments, 'nested': false} only %}
+  {% endif %}
+</section>
+{% endblock %}

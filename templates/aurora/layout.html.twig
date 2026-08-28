@@ -1,0 +1,69 @@
+{% extends "@default/layout.html.twig" %}
+{% block body_class %}theme-aurora{% endblock %}
+{% block site_header %}
+<header class="site-header aurora-header">
+  <div class="aurora-glow" aria-hidden="true"></div>
+  <div class="header-inner aurora-bar">
+    <a class="aurora-brand" href="{{ url_for('boards.index') }}" aria-label="{{ site.site_name }} 홈">
+      <span class="aurora-brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.5" opacity=".35"/><path d="M8 20c3-6 6-9 8-9s5 3 8 9" stroke="url(#auroraGrad)" stroke-width="2.5" stroke-linecap="round"/><defs><linearGradient id="auroraGrad" x1="8" y1="20" x2="24" y2="11"><stop stop-color="#5eead4"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs></svg>
+      </span>
+      <span class="aurora-brand-text"><strong>{{ site.site_name }}</strong><small>{{ site.site_tagline ?: '함께 만드는 이야기' }}</small></span>
+    </a>
+    <nav class="aurora-nav" aria-label="주요 메뉴">
+      <a class="aurora-nav-link" href="{{ url_for('boards.index') }}">홈</a>
+      {% for item in site_menu %}<a class="aurora-nav-link" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
+    </nav>
+    <div class="aurora-actions">
+      {% if current_user.is_guest %}
+        <a class="aurora-btn aurora-btn-ghost" href="{{ url_for('auth.login') }}">로그인</a>
+        {% if registration_available %}<a class="aurora-btn aurora-btn-primary" href="{{ url_for('auth.register') }}">시작하기</a>{% endif %}
+      {% else %}
+        <span class="aurora-user" title="{{ current_user.display_name }}">{{ current_user.display_name }}</span>
+        {% if current_user.is_admin %}<a class="aurora-btn aurora-btn-ghost" href="{{ url_for('admin.index') }}">관리</a>{% endif %}
+        <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="aurora-btn aurora-btn-ghost logout-button" type="submit">로그아웃</button></form>
+      {% endif %}
+      <button class="theme-toggle aurora-theme-toggle" type="button" aria-label="다크 모드로 전환" title="다크 모드로 전환"><span aria-hidden="true">☾</span></button>
+    </div>
+  </div>
+</header>
+{% endblock %}
+{% block public_body %}
+<div class="aurora-shell">{{ block('body') }}</div>
+{% endblock %}
+{% block site_footer %}
+<footer class="site-footer aurora-footer">
+  <div class="aurora-footer-grid">
+    <div class="aurora-footer-brand">
+      <strong>{{ site.site_name }}</strong>
+      <p>{{ site.site_tagline }}</p>
+    </div>
+    <nav class="aurora-footer-links" aria-label="바로가기">
+      <a href="{{ url_for('boards.index') }}">커뮤니티</a>
+      {% for item in site_menu|slice(0, 3) %}<a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
+    </nav>
+    {% if legal_documents %}
+      <nav class="aurora-footer-legal" aria-label="정책">
+        <a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
+        <a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+      </nav>
+    {% endif %}
+  </div>
+  <p class="aurora-footer-copy">© {{ "now"|date("Y") }} {{ site.site_name }}. 모든 이야기는 커뮤니티의 것입니다.</p>
+</footer>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(!meta){return}
+  function syncColor(){
+    var dark=document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+    meta.content=dark?'#0c1222':'#eef2ff';
+  }
+  syncColor();
+  var btn=document.querySelector('.theme-toggle');
+  if(btn){btn.addEventListener('click',function(){setTimeout(syncColor,0)})}
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block body_class %}admin-page{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+
+{% block chrome %}
+<div class="drawer drawer-lg-open admin-shell">
+  <input id="admin-drawer" type="checkbox" class="drawer-toggle" aria-label="관리 메뉴 열기">
+  <div class="drawer-content admin-main">
+    <header class="navbar" style="background-color: var(--base-100); border: 1px solid var(--line); border-radius: var(--rounded-box); margin-bottom: 1.5rem; padding: 0.5rem 1rem; box-shadow: var(--shadow-sm);">
+      <div class="navbar-start">
+        <label for="admin-drawer" class="btn btn-ghost btn-square md:hidden" aria-label="관리 메뉴 열기">
+          {{ ico.i('menu', 20) }}
+        </label>
+        <span style="font-size: 1.15rem; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+          <span class="badge badge-primary badge-sm">ADMIN</span>
+          관리 콘솔
+        </span>
+      </div>
+      <div class="navbar-end" style="display: flex; align-items: center; gap: 0.5rem;">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('boards.index') }}" target="_blank" rel="noopener">
+          {{ ico.i('external', 14) }} 사이트 바로가기
+        </a>
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-circle btn-sm" aria-label="화면 테마">
+            <span class="theme-ico theme-ico-light">{{ ico.i('sun', 18) }}</span>
+            <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 18) }}</span>
+            <span class="theme-ico theme-ico-system">{{ ico.i('system', 18) }}</span>
+          </div>
+          <ul tabindex="0" class="dropdown-content menu shadow-lg">
+            <li class="menu-title">화면 테마</li>
+            <li><button type="button" data-theme-set="light">{{ ico.i('sun', 15) }} 라이트</button></li>
+            <li><button type="button" data-theme-set="dark">{{ ico.i('moon', 15) }} 다크</button></li>
+            <li><button type="button" data-theme-set="system">{{ ico.i('system', 15) }} 시스템</button></li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <div id="main">
+      {% block body %}{% endblock %}
+    </div>
+  </div>
+
+  <div class="drawer-side">
+    <label for="admin-drawer" class="drawer-overlay" aria-label="관리 메뉴 닫기"></label>
+    {% include 'admin/_sidebar.html.twig' with {'section': block('admin_section')|trim} %}
+  </div>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement,fold=document.querySelector('.admin-fold');
+  function sync(){
+    if(!fold){return}
+    var f=root.dataset.adminSidebar==='collapsed';
+    fold.setAttribute('aria-expanded',f?'false':'true');
+    fold.setAttribute('aria-label',f?'관리 메뉴 펼치기':'관리 메뉴 접기');
+  }
+  if(fold){
+    fold.addEventListener('click',function(){
+      var f=root.dataset.adminSidebar==='collapsed';
+      if(f){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}
+      try{localStorage.setItem('aboard-admin-sidebar',f?'expanded':'collapsed')}catch(e){}
+      sync();
+    });
+    sync();
+  }
+  var d=document.getElementById('admin-drawer');
+  if(d){document.addEventListener('keydown',function(e){if(e.key==='Escape'&&d.checked){d.checked=false}})}
+})();
+</script>
+{% endblock %}

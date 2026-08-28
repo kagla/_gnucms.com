@@ -1,0 +1,318 @@
+{% import '_icons.html.twig' as ico %}
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141820" media="(prefers-color-scheme: dark)">
+<title>{% block title %}{{ site.site_name }}{% endblock %}</title>
+{% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
+<script>
+(function(){
+  var d=document.documentElement,t=null;
+  try{t=localStorage.getItem('aboard-theme')}catch(e){}
+  if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);d.dataset.theme=t}
+  d.setAttribute('data-theme-mode',(t==='light'||t==='dark')?t:'system');
+  try{if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){d.dataset.adminSidebar='collapsed'}}catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="{{ theme_asset('daisyui.css') }}">
+<link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}" data-section="{% block nav_section %}{% endblock %}">
+<a class="skip-link btn btn-primary btn-sm" href="#main">본문 바로가기</a>
+
+{% block chrome %}
+<div class="drawer">
+  <input id="nav-drawer" type="checkbox" class="drawer-toggle" aria-label="전체 메뉴 열기">
+  <div class="drawer-content">
+
+    {% block site_header %}
+    <header class="site-header">
+      <div class="navbar wrap">
+        <div class="navbar-start">
+          <label for="nav-drawer" class="btn btn-ghost btn-square md:hidden" aria-label="메뉴 열기">
+            {{ ico.i('menu', 22) }}
+          </label>
+          <a class="brand" href="{{ url_for('boards.index') }}">
+            <span class="brand-logo" aria-hidden="true">{{ ico.i('home', 20) }}</span>
+            <span class="brand-name">{{ site.site_name }}</span>
+          </a>
+        </div>
+
+        <div class="navbar-center">
+          {% block header_search %}
+          <div class="header-search">
+            <div class="input-wrapper">
+              <span class="header-search-icon" aria-hidden="true">{{ ico.i('search', 16) }}</span>
+              <input type="search" placeholder="인테리어, 이야기, 꿀팁 검색" aria-label="게시글 검색" data-search-input onclick="location.href='{{ url_for('boards.index') }}'">
+              <kbd class="header-search-kbd" aria-hidden="true">/</kbd>
+            </div>
+          </div>
+          {% endblock %}
+        </div>
+
+        <div class="navbar-end">
+          <!-- 테마 선택 드롭다운 -->
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle" aria-label="화면 테마 선택">
+              <span class="theme-ico theme-ico-light">{{ ico.i('sun', 19) }}</span>
+              <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 19) }}</span>
+              <span class="theme-ico theme-ico-system">{{ ico.i('system', 19) }}</span>
+            </div>
+            <ul tabindex="0" class="dropdown-content menu shadow-lg">
+              <li class="menu-title">화면 테마</li>
+              <li><button type="button" data-theme-set="light">{{ ico.i('sun', 16) }} 라이트</button></li>
+              <li><button type="button" data-theme-set="dark">{{ ico.i('moon', 16) }} 다크</button></li>
+              <li><button type="button" data-theme-set="system">{{ ico.i('system', 16) }} 시스템 기본</button></li>
+            </ul>
+          </div>
+
+          <!-- 사용자 메뉴 -->
+          {% if current_user.is_guest %}
+            <a class="btn btn-ghost btn-sm hide-sm" href="{{ url_for('auth.login') }}">로그인</a>
+            {% if registration_available %}
+              <a class="btn btn-primary btn-sm hide-sm" href="{{ url_for('auth.register') }}">회원가입</a>
+            {% endif %}
+          {% else %}
+            <div class="dropdown dropdown-end hide-sm">
+              <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar avatar-sm" aria-label="{{ current_user.display_name }} 메뉴">
+                <div class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}">
+                  <span>{{ current_user.display_name|slice(0, 1)|upper }}</span>
+                </div>
+              </div>
+              <ul tabindex="0" class="dropdown-content menu shadow-lg">
+                <li class="menu-title">{{ current_user.display_name }}</li>
+                {% if current_user.is_admin %}
+                  <li><a href="{{ url_for('admin.index') }}">{{ ico.i('cog', 16) }} 관리 콘솔</a></li>
+                {% endif %}
+                <li>
+                  <form method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit">{{ ico.i('logout', 16) }} 로그아웃</button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- 2단 탭 네비게이션 -->
+      <div class="header-tabs">
+        <div class="wrap">
+          <nav class="tabs" aria-label="주요 카테고리">
+            <a class="tab{% if block('nav_section')|trim == 'home' %} tab-active{% endif %}" href="{{ url_for('boards.index') }}"{% if block('nav_section')|trim == 'home' %} aria-current="page"{% endif %}>
+              {{ ico.i('compass', 16) }} 홈 피드
+            </a>
+            {% block extra_tabs %}{% endblock %}
+            {% for item in site_menu %}
+              <a class="tab" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>
+            {% endfor %}
+          </nav>
+        </div>
+      </div>
+    </header>
+    {% endblock %}
+
+    {% block subnav %}{% endblock %}
+
+    <main class="wrap main-area" id="main">
+      {% block body %}{% endblock %}
+    </main>
+
+    {% block site_footer %}
+    <footer class="footer" style="background-color: var(--base-100); border-top: 1px solid var(--line); padding: 3rem 0 4rem;">
+      <div class="wrap" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2rem;">
+        <aside style="max-width: 400px;">
+          <div class="brand" style="margin-bottom: 0.75rem;">
+            <span class="brand-logo" aria-hidden="true" style="width: 1.8rem; height: 1.8rem; font-size: 0.85rem;">{{ ico.i('home', 15) }}</span>
+            <span style="font-size: 1.1rem; font-weight: 800;">{{ site.site_name }}</span>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">{{ site.site_tagline }}</p>
+          <p style="font-size: 0.78rem; color: var(--text-hint); margin-top: 0.5rem;">오늘의 감각과 따뜻한 일상을 나누는 커뮤니티</p>
+        </aside>
+        <nav style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-sub);">
+          <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-hint); text-transform: uppercase;">사이트 링크</span>
+          <a href="{{ url_for('boards.index') }}" style="display: inline-flex; align-items: center; gap: 0.35rem;">홈으로</a>
+          {% for item in site_menu %}
+            <a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>
+          {% endfor %}
+          {% if legal_documents %}
+            <a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
+            <a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+          {% endif %}
+        </nav>
+      </div>
+    </footer>
+    {% endblock %}
+
+    <!-- 모바일 하단 Dock 네비게이션 -->
+    <nav class="dock" aria-label="빠른 모바일 이동">
+      <a class="dock-item{% if block('nav_section')|trim == 'home' %} dock-active{% endif %}" href="{{ url_for('boards.index') }}">
+        {{ ico.i('home', 20) }}
+        <span>홈</span>
+      </a>
+      <label for="nav-drawer" class="dock-item" role="button" tabindex="0">
+        {{ ico.i('menu', 20) }}
+        <span>메뉴</span>
+      </label>
+      {% if current_user.is_guest %}
+        <a class="dock-item" href="{{ url_for('auth.login') }}">
+          {{ ico.i('user', 20) }}
+          <span>로그인</span>
+        </a>
+      {% else %}
+        <a class="dock-item" href="{{ current_user.is_admin ? url_for('admin.index') : url_for('boards.index') }}">
+          {{ ico.i(current_user.is_admin ? 'cog' : 'user', 20) }}
+          <span>{{ current_user.is_admin ? '관리' : '내 정보' }}</span>
+        </a>
+      {% endif %}
+    </nav>
+  </div>
+
+  <!-- 모바일 사이드 드로어 메뉴 -->
+  <div class="drawer-side">
+    <label for="nav-drawer" class="drawer-overlay" aria-label="메뉴 닫기"></label>
+    <div class="drawer-panel">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; border-bottom: 1px solid var(--line); margin-bottom: 1.25rem;">
+        <span class="brand">
+          <span class="brand-logo" aria-hidden="true" style="width: 2rem; height: 2rem;">{{ ico.i('home', 16) }}</span>
+          <span class="brand-name" style="font-size: 1.1rem;">{{ site.site_name }}</span>
+        </span>
+        <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기">{{ ico.i('close', 18) }}</label>
+      </div>
+
+      {% if not current_user.is_guest %}
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--base-200); border-radius: 0.85rem; margin-bottom: 1.25rem;">
+          <div class="avatar avatar-sm">
+            <div class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}">
+              <span>{{ current_user.display_name|slice(0, 1)|upper }}</span>
+            </div>
+          </div>
+          <div>
+            <strong style="display: block; font-size: 0.95rem;">{{ current_user.display_name }}</strong>
+            <span class="badge badge-soft badge-sm" style="margin-top: 0.2rem;">{{ current_user.is_admin ? '관리자' : '회원' }}</span>
+          </div>
+        </div>
+      {% endif %}
+
+      <ul class="menu" style="flex: 1;">
+        <li class="menu-title">카테고리 & 메뉴</li>
+        <li><a href="{{ url_for('boards.index') }}">{{ ico.i('home', 18) }} 홈 피드</a></li>
+        {% for item in site_menu %}
+          <li><a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ ico.i('document', 18) }} {{ item.title }}</a></li>
+        {% endfor %}
+        {% if not current_user.is_guest and current_user.is_admin %}
+          <li><a href="{{ url_for('admin.index') }}">{{ ico.i('cog', 18) }} 관리 콘솔</a></li>
+        {% endif %}
+      </ul>
+
+      <!-- 테마 세그먼트 버튼 -->
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+        <span style="display: block; font-size: 0.75rem; font-weight: 800; color: var(--text-hint); text-transform: uppercase; margin-bottom: 0.5rem;">화면 테마</span>
+        <div class="join btn-block" role="group" aria-label="화면 테마 선택">
+          <button class="btn join-item btn-sm flex-1" type="button" data-theme-set="light">{{ ico.i('sun', 14) }} 라이트</button>
+          <button class="btn join-item btn-sm flex-1" type="button" data-theme-set="dark">{{ ico.i('moon', 14) }} 다크</button>
+          <button class="btn join-item btn-sm flex-1" type="button" data-theme-set="system">{{ ico.i('system', 14) }} 시스템</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.25rem;">
+        {% if current_user.is_guest %}
+          <a class="btn btn-outline btn-block" href="{{ url_for('auth.login') }}" style="margin-bottom: 0.5rem;">로그인</a>
+          {% if registration_available %}
+            <a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">회원가입</a>
+          {% endif %}
+        {% else %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-outline btn-block" type="submit">{{ ico.i('logout', 16) }} 로그아웃</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+<!-- 맨 위로 가기 버튼 -->
+<button class="btn btn-circle btn-primary to-top" type="button" hidden aria-label="맨 위로 이동">
+  {{ ico.i('arrow-up', 18) }}
+</button>
+
+<script>
+(function(){
+  var root=document.documentElement,mq=window.matchMedia('(prefers-color-scheme: dark)');
+  function stored(){try{return localStorage.getItem('aboard-theme')}catch(e){return null}}
+  function mode(){var t=stored();return (t==='light'||t==='dark')?t:'system'}
+  function apply(){
+    var m=mode();
+    if(m==='system'){
+      root.removeAttribute('data-theme');
+      delete root.dataset.theme;
+    }else{
+      root.setAttribute('data-theme',m);
+      root.dataset.theme=m;
+    }
+    root.setAttribute('data-theme-mode',m);
+    var btns=document.querySelectorAll('[data-theme-set]');
+    for(var i=0;i<btns.length;i++){
+      var on=btns[i].getAttribute('data-theme-set')===m;
+      btns[i].setAttribute('aria-pressed',on?'true':'false');
+      btns[i].classList.toggle('btn-active',on);
+    }
+  }
+  var setters=document.querySelectorAll('[data-theme-set]');
+  for(var j=0;j<setters.length;j++){
+    setters[j].addEventListener('click',function(){
+      var m=this.getAttribute('data-theme-set');
+      try{
+        if(m==='system'){localStorage.removeItem('aboard-theme')}
+        else{localStorage.setItem('aboard-theme',m)}
+      }catch(e){}
+      apply();
+      if(this.blur){this.blur()}
+    });
+  }
+  if(mq.addEventListener){mq.addEventListener('change',apply)}else if(mq.addListener){mq.addListener(apply)}
+  apply();
+
+  var drawer=document.getElementById('nav-drawer');
+  if(drawer){
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&drawer.checked){drawer.checked=false}});
+  }
+
+  var toTop=document.querySelector('.to-top'),tick=false;
+  if(toTop){
+    function upd(){toTop.hidden=window.scrollY<400;tick=false}
+    window.addEventListener('scroll',function(){if(!tick){tick=true;requestAnimationFrame(upd)}},{passive:true});
+    toTop.addEventListener('click',function(){
+      window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    });
+    upd();
+  }
+
+  var head=document.querySelector('.site-header'),lastY=window.scrollY;
+  if(head){
+    window.addEventListener('scroll',function(){
+      var y=window.scrollY;
+      if(y>120&&y>lastY){head.classList.add('is-compact')}else{head.classList.remove('is-compact')}
+      lastY=y;
+    },{passive:true});
+  }
+
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='/'||e.metaKey||e.ctrlKey||e.altKey){return}
+    var t=(e.target.tagName||'').toLowerCase();
+    if(t==='input'||t==='textarea'||t==='select'||e.target.isContentEditable){return}
+    var s=document.querySelector('[data-search-input]');
+    if(s){e.preventDefault();s.focus();s.select()}
+  });
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

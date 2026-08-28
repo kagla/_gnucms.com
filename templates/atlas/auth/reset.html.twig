@@ -1,0 +1,29 @@
+{% extends "layout.html.twig" %}
+{% block title %}새 비밀번호 설정 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="auth-card">
+    <header class="auth-head">
+      <span class="auth-mark" aria-hidden="true">↻</span>
+      <h1>새 비밀번호 설정</h1>
+      <p class="lead">앞으로 사용할 비밀번호를 입력해 주세요.</p>
+    </header>
+    <form class="form" method="post" action="{{ url_for('auth.reset') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <div class="field{% if errors.password is defined %} has-error{% endif %}">
+        <label for="reset-password">새 비밀번호 <span class="field-hint">8자 이상</span></label>
+        <input id="reset-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+        {% if errors.password is defined %}<p class="field-error">{{ errors.password }}</p>{% endif %}
+      </div>
+      <div class="field{% if errors.password_confirmation is defined %} has-error{% endif %}">
+        <label for="reset-password2">비밀번호 확인</label>
+        <input id="reset-password2" type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
+        {% if errors.password_confirmation is defined %}<p class="field-error">{{ errors.password_confirmation }}</p>{% endif %}
+      </div>
+      {% if errors.token is defined %}<p class="field-error">{{ errors.token }}</p>{% endif %}
+      <button class="button button-block button-lg" type="submit">비밀번호 변경</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

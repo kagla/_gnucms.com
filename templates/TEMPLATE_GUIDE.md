@@ -1,4 +1,6 @@
-# 템플릿 구조
+# 템플릿 구조 안내
+
+전체 개발 방법은 [`docs/template-development.md`](../docs/template-development.md)를 참고하세요.
 
 - `default/`는 항상 존재하는 기본 템플릿입니다.
 - 선택한 템플릿 폴더에 요청한 Twig 파일이 없으면 `default/`의 같은 경로를 사용합니다.

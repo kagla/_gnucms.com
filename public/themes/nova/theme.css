@@ -1,0 +1,963 @@
+/* nova — editorial paper / ink. Overrides default inline styles under body.theme-nova. */
+
+body.theme-nova{
+  --bg:#f4efe6;
+  --panel:#faf6ef;
+  --soft:#ebe4d6;
+  --fg:#1c1712;
+  --muted:#6b6258;
+  --subtle:#9a8f84;
+  --line:#d9cfc0;
+  --line2:#c4b8a6;
+  --primary:#b4532a;
+  --primary-dark:#8f3f1f;
+  --primary-soft:#f3e0d4;
+  --danger:#a33b2b;
+  --success:#3d6b4f;
+  --shadow:none;
+  --radius:2px;
+  --ink:#1c1712;
+  --paper:#f4efe6;
+  background:var(--bg);
+  color:var(--fg);
+  font:16px/1.7 system-ui,"Noto Sans KR",sans-serif;
+  letter-spacing:0;
+}
+
+html[data-theme="dark"] body.theme-nova,
+html[data-theme="dark"] .theme-nova{
+  --bg:#1a1714;
+  --panel:#221e1a;
+  --soft:#2c2722;
+  --fg:#f3ece3;
+  --muted:#b3a89c;
+  --subtle:#8a7f73;
+  --line:#3a342c;
+  --line2:#524a40;
+  --primary:#d97850;
+  --primary-dark:#e8926e;
+  --primary-soft:#3a241c;
+  --danger:#e07a6e;
+  --success:#7dae8d;
+  --ink:#f3ece3;
+  --paper:#1a1714;
+}
+
+@media(prefers-color-scheme:dark){
+  html:not([data-theme="light"]) body.theme-nova,
+  html:not([data-theme="light"]) .theme-nova{
+    --bg:#1a1714;
+    --panel:#221e1a;
+    --soft:#2c2722;
+    --fg:#f3ece3;
+    --muted:#b3a89c;
+    --subtle:#8a7f73;
+    --line:#3a342c;
+    --line2:#524a40;
+    --primary:#d97850;
+    --primary-dark:#e8926e;
+    --primary-soft:#3a241c;
+    --danger:#e07a6e;
+    --success:#7dae8d;
+    --ink:#f3ece3;
+    --paper:#1a1714;
+  }
+}
+
+body.theme-nova a:focus-visible,
+body.theme-nova button:focus-visible,
+body.theme-nova input:focus-visible,
+body.theme-nova select:focus-visible,
+body.theme-nova textarea:focus-visible{
+  outline:3px solid color-mix(in srgb,var(--primary) 42%,transparent);
+  outline-offset:2px;
+}
+
+body.theme-nova .header-inner,
+body.theme-nova main,
+body.theme-nova .site-footer{
+  width:min(100% - 40px,820px);
+}
+
+/* —— masthead —— */
+body.theme-nova .site-header,
+body.theme-nova .nova-header{
+  position:relative;
+  top:auto;
+  z-index:4;
+  border-bottom:0;
+  background:var(--bg);
+  backdrop-filter:none;
+}
+
+body.theme-nova .nova-masthead{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:0;
+  min-height:0;
+  padding:18px 0 0;
+}
+
+body.theme-nova .nova-masthead-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  min-height:44px;
+}
+
+body.theme-nova .nova-issue-line{
+  margin:0;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.04em;
+}
+
+body.theme-nova .header-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex:none;
+}
+
+body.theme-nova .account-nav{
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+
+body.theme-nova .nav-link,
+body.theme-nova .logout-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:8px 10px;
+  border:0;
+  border-radius:2px;
+  background:transparent;
+  color:var(--muted);
+  box-shadow:none;
+  font-size:13px;
+  font-weight:650;
+}
+
+body.theme-nova .nav-link:hover,
+body.theme-nova .logout-button:hover{
+  background:transparent;
+  color:var(--fg);
+  transform:none;
+}
+
+body.theme-nova .nav-link-primary{
+  color:var(--primary);
+}
+
+body.theme-nova .account-name{
+  max-width:120px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  padding:0 8px;
+  color:var(--fg);
+  font-size:13px;
+  font-weight:700;
+}
+
+body.theme-nova .logout-form{margin:0}
+
+body.theme-nova .theme-toggle{
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  min-height:44px;
+  padding:0;
+  border:1px solid var(--line2);
+  border-radius:2px;
+  background:transparent;
+  color:var(--fg);
+  box-shadow:none;
+  font-size:16px;
+}
+
+body.theme-nova .theme-toggle:hover{
+  border-color:var(--fg);
+  background:transparent;
+  color:var(--primary);
+  transform:none;
+}
+
+body.theme-nova .nova-wordmark{
+  display:block;
+  margin:10px 0 4px;
+  color:var(--fg);
+  font-size:clamp(32px,7vw,52px);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.035em;
+  font-family:"Noto Serif KR",Georgia,"Noto Sans KR",serif;
+}
+
+body.theme-nova .nova-wordmark:hover{color:var(--primary)}
+
+body.theme-nova .nova-rule{
+  height:4px;
+  margin:10px 0 0;
+  border-top:1px solid var(--fg);
+  border-bottom:1px solid var(--fg);
+  background:transparent;
+}
+
+body.theme-nova .nova-nav{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:2px 4px;
+  margin:0;
+  padding:6px 0 8px;
+  border-bottom:1px solid var(--line);
+}
+
+body.theme-nova .nova-nav .nav-link{
+  font-size:13px;
+  font-weight:700;
+  color:var(--fg);
+}
+
+body.theme-nova .nova-nav .nav-link:hover{color:var(--primary)}
+
+body.theme-nova main{
+  min-height:calc(100vh - 220px);
+  padding-block:28px 56px;
+}
+
+body.theme-nova .site-footer,
+body.theme-nova .nova-footer{
+  padding:0 0 36px;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:500;
+}
+
+body.theme-nova .nova-footer .nova-rule{margin:0 0 16px}
+
+body.theme-nova .nova-colophon{
+  margin:0;
+}
+
+body.theme-nova .nova-colophon strong{
+  color:var(--fg);
+  font-weight:750;
+}
+
+body.theme-nova .nova-legal{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 16px;
+  margin-top:10px;
+}
+
+body.theme-nova .nova-legal a{
+  min-height:44px;
+  display:inline-flex;
+  align-items:center;
+  color:var(--muted);
+  font-weight:650;
+}
+
+body.theme-nova .nova-legal a:hover{color:var(--primary)}
+
+/* —— type —— */
+body.theme-nova h1{
+  margin:0;
+  font-size:clamp(26px,5vw,40px);
+  line-height:1.2;
+  letter-spacing:-.03em;
+  font-weight:800;
+  font-family:"Noto Serif KR",Georgia,"Noto Sans KR",serif;
+}
+
+body.theme-nova h2{
+  margin:28px 0 12px;
+  font-size:18px;
+  line-height:1.35;
+  letter-spacing:-.02em;
+  font-weight:750;
+}
+
+body.theme-nova .eyebrow{
+  margin:0 0 6px;
+  color:var(--primary);
+  font-size:11px;
+  font-weight:750;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+body.theme-nova .lead{
+  max-width:40em;
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:15px;
+}
+
+body.theme-nova .muted{color:var(--muted);font-size:13px}
+
+body.theme-nova .breadcrumb,
+body.theme-nova .nova-crumb{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+  margin:0 0 18px;
+  color:var(--muted);
+  font-size:13px;
+}
+
+body.theme-nova .breadcrumb a:hover{color:var(--primary)}
+body.theme-nova .breadcrumb-separator{color:var(--subtle)}
+
+/* —— home: magazine issue, not a card grid or SaaS hero —— */
+body.theme-nova .nova-issue{
+  margin:0 0 36px;
+  padding:0 0 22px;
+  border-bottom:1px solid var(--fg);
+}
+
+body.theme-nova .nova-kicker{
+  margin:0 0 10px;
+  color:var(--primary);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+
+body.theme-nova .nova-issue-title{
+  max-width:18em;
+  font-size:clamp(28px,6vw,44px);
+  line-height:1.18;
+  word-break:keep-all;
+}
+
+body.theme-nova .nova-deck{
+  max-width:38em;
+  margin:12px 0 0;
+  color:var(--muted);
+  font-size:16px;
+  line-height:1.7;
+  word-break:keep-all;
+}
+
+body.theme-nova .nova-contents-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  margin:0 0 8px;
+}
+
+body.theme-nova .nova-contents-head h2{
+  margin:0;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-family:system-ui,"Noto Sans KR",sans-serif;
+}
+
+body.theme-nova .nova-contents-head p{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+body.theme-nova .nova-folio{
+  padding:22px 0 20px;
+  border-top:1px solid var(--line);
+}
+
+body.theme-nova .nova-folio-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:12px;
+}
+
+body.theme-nova .nova-folio-name{
+  margin:0;
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:-.03em;
+  font-family:"Noto Serif KR",Georgia,"Noto Sans KR",serif;
+}
+
+body.theme-nova .nova-folio-name:hover,
+body.theme-nova .nova-folio-copy a:hover .nova-folio-name{
+  color:var(--primary);
+}
+
+body.theme-nova .nova-folio-desc{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:14px;
+}
+
+body.theme-nova .nova-folio-more{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+  color:var(--primary);
+  font-size:13px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+body.theme-nova .nova-folio-more:hover{text-decoration:underline}
+
+body.theme-nova .nova-headlines{
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+
+body.theme-nova .nova-headlines li a{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  min-height:44px;
+  padding:6px 0;
+  border-top:1px dotted var(--line);
+}
+
+body.theme-nova .nova-headlines li:first-child a{border-top:0}
+
+body.theme-nova .nova-headline{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:15px;
+  font-weight:620;
+}
+
+body.theme-nova .nova-headlines a:hover .nova-headline{color:var(--primary)}
+
+body.theme-nova .nova-headline-date{
+  flex:none;
+  color:var(--subtle);
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+
+body.theme-nova .latest-comment{
+  margin-left:6px;
+  color:var(--primary);
+  font-size:12px;
+  font-weight:700;
+}
+
+body.theme-nova .nova-latest-empty,
+body.theme-nova .nova-empty{
+  margin:0;
+  padding:28px 0;
+  color:var(--muted);
+  font-size:14px;
+}
+
+body.theme-nova .nova-empty{
+  padding:48px 8px;
+  text-align:center;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+
+body.theme-nova .nova-empty p{margin:0}
+
+body.theme-nova .empty{
+  margin:0;
+  padding:48px 16px;
+  text-align:center;
+  color:var(--muted);
+}
+
+body.theme-nova .empty::before{display:none}
+
+/* —— posts list: stacked, not a table-in-a-card —— */
+body.theme-nova .nova-board-head{
+  align-items:flex-end;
+  margin-bottom:20px;
+  padding-bottom:16px;
+  border-bottom:1px solid var(--fg);
+}
+
+body.theme-nova .nova-board-head h1{
+  font-size:clamp(28px,5vw,40px);
+}
+
+body.theme-nova .board-write-button,
+body.theme-nova .button,
+body.theme-nova button{
+  min-height:44px;
+  padding:0 16px;
+  border-radius:2px;
+  background:var(--primary);
+  color:#fff;
+  box-shadow:none;
+  font-weight:750;
+}
+
+body.theme-nova .board-write-button:hover,
+body.theme-nova .button:hover,
+body.theme-nova button:hover{
+  background:var(--primary-dark);
+  transform:none;
+}
+
+body.theme-nova .button-secondary,
+body.theme-nova .logout-button,
+body.theme-nova .theme-toggle{
+  box-shadow:none;
+}
+
+body.theme-nova .nova-search,
+body.theme-nova .board-search{
+  align-items:center;
+  max-width:none;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+body.theme-nova input,
+body.theme-nova select,
+body.theme-nova textarea{
+  min-height:44px;
+  border:1px solid var(--line2);
+  border-radius:2px;
+  background:var(--panel);
+  color:var(--fg);
+  box-shadow:none;
+}
+
+body.theme-nova input:focus,
+body.theme-nova select:focus,
+body.theme-nova textarea:focus{
+  border-color:var(--primary);
+  outline:0;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 16%,transparent);
+}
+
+body.theme-nova .board-search select,
+body.theme-nova .board-search input,
+body.theme-nova .board-search button{
+  height:44px;
+  min-height:44px;
+  border-radius:2px;
+}
+
+body.theme-nova .board-search button{box-shadow:none}
+
+body.theme-nova .nova-post-list{
+  margin:0;
+  padding:0;
+  list-style:none;
+  border-top:1px solid var(--fg);
+}
+
+body.theme-nova .nova-post-item{
+  border-bottom:1px solid var(--line);
+}
+
+body.theme-nova .nova-post-item.is-notice{
+  background:color-mix(in srgb,var(--primary-soft) 55%,transparent);
+}
+
+body.theme-nova .nova-post-link{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+  min-height:64px;
+  padding:12px 0;
+}
+
+body.theme-nova .nova-post-title{
+  font-size:16px;
+  font-weight:680;
+  line-height:1.4;
+}
+
+body.theme-nova .nova-post-link:hover .nova-post-title{color:var(--primary)}
+
+body.theme-nova .nova-post-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 14px;
+  color:var(--subtle);
+  font-size:12px;
+}
+
+body.theme-nova .nova-post-author{color:var(--muted);font-weight:650}
+
+body.theme-nova .nova-cat{
+  display:inline-flex;
+  align-items:center;
+  margin-right:6px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:750;
+}
+
+body.theme-nova .tag{
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  margin-right:6px;
+  padding:0 7px;
+  border-radius:2px;
+  background:var(--primary-soft);
+  color:var(--primary);
+  font-size:11px;
+  font-weight:800;
+}
+
+body.theme-nova .comment-count{
+  margin-left:6px;
+  color:var(--primary);
+  font-size:12px;
+  font-weight:700;
+}
+
+body.theme-nova .post-markers{color:var(--subtle);font-size:12px}
+
+body.theme-nova .pagination{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:4px;
+  margin:28px 0 0;
+}
+
+body.theme-nova .pagination a,
+body.theme-nova .pagination strong,
+body.theme-nova .pagination span{
+  display:grid;
+  place-items:center;
+  min-width:44px;
+  min-height:44px;
+  height:auto;
+  padding:0 8px;
+  border-radius:2px;
+}
+
+body.theme-nova .pagination a{color:var(--muted)}
+body.theme-nova .pagination a:hover{background:var(--primary-soft);color:var(--primary)}
+body.theme-nova .pagination strong{
+  background:var(--primary);
+  color:#fff;
+  box-shadow:none;
+}
+
+/* —— article —— */
+body.theme-nova .nova-article,
+body.theme-nova .article-card{
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+body.theme-nova .surface{
+  overflow:visible;
+  border:1px solid var(--line);
+  border-radius:2px;
+  background:var(--panel);
+  box-shadow:none;
+}
+
+body.theme-nova .nova-article-header,
+body.theme-nova .article-header{
+  padding:0 0 22px;
+  border-bottom:1px solid var(--fg);
+}
+
+body.theme-nova .article-title{
+  font-size:clamp(26px,5vw,38px);
+  line-height:1.22;
+  word-break:keep-all;
+}
+
+body.theme-nova .article-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 16px;
+  margin:12px 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+body.theme-nova .article-meta strong{color:var(--fg)}
+
+body.theme-nova .article-body{
+  min-height:160px;
+  padding:28px 0;
+  font-size:17px;
+  line-height:1.85;
+  overflow-wrap:anywhere;
+}
+
+body.theme-nova .nova-attachments{margin:0 0 8px}
+
+body.theme-nova .attachments{
+  margin:0;
+  padding:0;
+  list-style:none;
+  border:1px solid var(--line);
+  border-radius:2px;
+}
+
+body.theme-nova .attachments li{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  padding:12px 0;
+  margin-inline:14px;
+  border-bottom:1px solid var(--line);
+}
+
+body.theme-nova .attachments li:last-child{border-bottom:0}
+body.theme-nova .attachments a{color:var(--primary);font-weight:650}
+
+body.theme-nova .comments,
+body.theme-nova .nova-comments{
+  margin-top:28px;
+  padding-top:20px;
+  border-top:1px solid var(--fg);
+}
+
+body.theme-nova .comment-count-heading{color:var(--primary)}
+
+body.theme-nova .comment-list{margin:0;padding:0;list-style:none}
+
+body.theme-nova .comment-item{
+  padding:16px 0;
+  border-top:1px solid var(--line);
+}
+
+body.theme-nova .comment-item:first-child{border-top:0}
+
+body.theme-nova .comment-author{color:var(--fg);font-weight:700}
+
+body.theme-nova .comment-children{
+  margin:12px 0 0 16px;
+  padding-left:14px;
+  border-left:2px solid var(--primary-soft);
+}
+
+/* —— fallback pages (auth, editor, boards, cms) —— */
+body.theme-nova .page-head{margin-bottom:18px}
+
+body.theme-nova .home-hero{
+  margin-bottom:24px;
+  padding:0 0 20px;
+  border:0;
+  border-bottom:1px solid var(--fg);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+body.theme-nova .board-grid{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+
+body.theme-nova .board-card{
+  position:static;
+  overflow:visible;
+  border:0;
+  border-top:1px solid var(--line);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+body.theme-nova .board-card:hover{
+  transform:none;
+  border-color:var(--line);
+  box-shadow:none;
+}
+
+body.theme-nova .board-card-link{display:block;padding:18px 0 8px}
+
+body.theme-nova .board-name{
+  display:block;
+  margin:0 0 4px;
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:-.03em;
+  font-family:"Noto Serif KR",Georgia,"Noto Sans KR",serif;
+}
+
+body.theme-nova .board-description{display:block;min-height:0;margin:0;color:var(--muted);font-size:14px}
+
+body.theme-nova .latest-block{
+  padding:4px 0 16px;
+  border-top:0;
+  background:transparent;
+}
+
+body.theme-nova .latest-head{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+
+body.theme-nova .latest-more{color:var(--primary)}
+body.theme-nova .latest-item a{border-radius:0;padding:8px 0}
+body.theme-nova .latest-item a:hover{background:transparent}
+body.theme-nova .latest-title{font-size:14px}
+body.theme-nova .latest-empty{padding:16px 0;text-align:left}
+
+body.theme-nova .table-wrap{overflow-x:auto}
+body.theme-nova table{width:100%;border-collapse:collapse}
+body.theme-nova th,
+body.theme-nova td{
+  padding:14px 0;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+}
+body.theme-nova th{
+  background:transparent;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:750;
+}
+body.theme-nova tbody tr:hover{background:transparent}
+body.theme-nova .post-title-link:hover{color:var(--primary)}
+
+body.theme-nova .auth-card,
+body.theme-nova .editor-card,
+body.theme-nova .status-card{
+  border-radius:2px;
+  box-shadow:none;
+}
+
+body.theme-nova .auth-card{padding:clamp(24px,4vw,36px)}
+body.theme-nova .auth-head h1{font-family:"Noto Serif KR",Georgia,"Noto Sans KR",serif}
+body.theme-nova .auth-submit{width:100%;margin-top:22px}
+body.theme-nova .text-link,
+body.theme-nova .auth-switch a,
+body.theme-nova .form-help a{color:var(--primary);font-weight:700}
+
+body.theme-nova .social-button{
+  border-radius:2px;
+  box-shadow:none;
+}
+
+body.theme-nova .editor-form textarea{
+  min-height:240px;
+  padding:13px 14px;
+  border-radius:2px;
+}
+
+body.theme-nova .errors{
+  border-radius:2px;
+  background:color-mix(in srgb,var(--danger) 8%,var(--panel));
+  color:var(--danger);
+}
+
+body.theme-nova .notice{border-radius:2px}
+body.theme-nova .agreement-box{border-radius:2px;background:var(--soft)}
+
+body.theme-nova .preview-bar{
+  border-radius:2px;
+  background:var(--primary-soft);
+  color:var(--primary);
+}
+
+@media(max-width:800px){
+  /* default layout hides .site-nav here; keep nova masthead nav visible and wrapping */
+  body.theme-nova .site-nav,
+  body.theme-nova .nova-nav,
+  body.theme-nova .site-nav.nova-nav{
+    display:flex;
+    flex-wrap:wrap;
+    margin-right:0;
+  }
+}
+
+@media(max-width:700px){
+  body.theme-nova .header-inner,
+  body.theme-nova main,
+  body.theme-nova .site-footer{
+    width:min(100% - 28px,820px);
+  }
+
+  body.theme-nova main{padding-block:22px 40px}
+
+  body.theme-nova .nova-masthead{padding-top:12px}
+
+  body.theme-nova .header-label{display:none}
+
+  body.theme-nova .account-name,
+  body.theme-nova .logout-button{
+    /* keep logout tappable; hide long name on small screens */
+  }
+
+  body.theme-nova .account-name{display:none}
+
+  body.theme-nova .nova-wordmark{
+    margin-top:6px;
+    font-size:clamp(28px,10vw,40px);
+  }
+
+  body.theme-nova .nova-contents-head{display:block}
+  body.theme-nova .nova-contents-head p{margin-top:4px}
+
+  body.theme-nova .nova-folio-head{flex-direction:column;gap:4px}
+  body.theme-nova .nova-folio-more{min-height:40px}
+
+  body.theme-nova .nova-headline{white-space:normal}
+
+  body.theme-nova .page-head,
+  body.theme-nova .nova-board-head{display:block;margin-bottom:16px}
+  body.theme-nova .page-head .admin-actions,
+  body.theme-nova .board-write-button{margin-top:12px}
+
+  body.theme-nova .toolbar,
+  body.theme-nova .board-search{
+    display:grid;
+    grid-template-columns:1fr auto;
+  }
+  body.theme-nova .toolbar select,
+  body.theme-nova .board-search select{
+    grid-column:1/-1;
+    width:100%;
+  }
+
+  body.theme-nova .article-body{padding:22px 0;font-size:16px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  body.theme-nova,
+  body.theme-nova *,
+  body.theme-nova *::before,
+  body.theme-nova *::after{
+    scroll-behavior:auto!important;
+    transition:none!important;
+  }
+}

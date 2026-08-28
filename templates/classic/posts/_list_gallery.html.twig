@@ -1,0 +1,30 @@
+{# 갤러리형: 큰 썸네일 격자. 사진 게시판에 맞는다. #}
+{% include 'posts/_notices.html.twig' %}
+{% if list.data is empty %}
+  <div class="surface"><p class="empty">조건에 맞는 글이 없습니다.</p></div>
+{% else %}
+  <ul class="gallery-grid">
+    {% for post in list.data %}
+      <li class="gallery-item">
+        <a class="gallery-link" href="{{ url_for('posts.show', {'id': post.id}) }}">
+          <span class="gallery-thumb">
+            {% include 'posts/_thumb.html.twig' %}
+            {% if post.is_secret %}<span class="thumb-lock" title="비밀글" aria-label="비밀글">●</span>{% endif %}
+          </span>
+          <span class="gallery-body">
+            {% if board.use_category and post.category %}<span class="tag tag-quiet">{{ post.category }}</span>{% endif %}
+            <span class="gallery-title">{{ post.title }}</span>
+            <span class="gallery-meta">
+              <span>{{ post.author_name }}</span>
+              <time datetime="{{ post.created_at }}">{{ post.created_at|date('Y.m.d') }}</time>
+            </span>
+            <span class="gallery-stats">
+              <span>조회 {{ post.view_count }}</span>
+              {% if post.comment_count > 0 %}<span class="comment-count">{{ post.comment_count }}</span>{% endif %}
+            </span>
+          </span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

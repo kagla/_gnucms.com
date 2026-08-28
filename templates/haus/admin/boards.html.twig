@@ -1,0 +1,54 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}게시판 관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}boards{% endblock %}
+{% block body %}
+<nav class="breadcrumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><span aria-current="page">게시판</span></nav>
+<div class="page-head">
+  <div>
+    <h1>게시판 관리</h1>
+    <p class="page-desc">게시판을 만들고 이용 권한과 기능, 노출 순서를 관리합니다.</p>
+  </div>
+  <div class="page-head-actions"><a class="btn btn-primary" href="{{ url_for('admin.boards.create') }}">{{ ico.i('plus', 16) }} 게시판 만들기</a></div>
+</div>
+{% if query.saved|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>게시판 설정을 저장했습니다.</span></div>{% endif %}
+{% if query.deleted|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>게시판을 삭제했습니다.</span></div>{% endif %}
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>게시판</th><th>주소</th><th>권한</th><th>사용 기능</th><th class="right">정렬</th><th class="right">관리</th></tr></thead>
+      <tbody>
+      {% for board in boards %}
+        <tr>
+          <td data-label="게시판">
+            <a class="cell-title" href="{{ url_for('posts.index', {key: board.board_key}) }}">{{ board.name }}</a>
+            {% if board.description %}<span class="cell-sub">{{ board.description }}</span>{% endif %}
+          </td>
+          <td data-label="주소"><code class="code">/boards/{{ board.board_key }}</code></td>
+          <td data-label="권한">
+            <span class="badge-row">
+              <span class="badge badge-gray"><em>읽기</em>{{ board.perm_read }}</span>
+              <span class="badge badge-gray"><em>쓰기</em>{{ board.perm_write }}</span>
+              <span class="badge badge-gray"><em>댓글</em>{{ board.perm_comment }}</span>
+            </span>
+          </td>
+          <td data-label="사용 기능">
+            <span class="badge-row">
+              {% if board.use_category %}<span class="badge badge-primary">분류</span>{% endif %}
+              {% if board.use_secret %}<span class="badge badge-primary">비밀글</span>{% endif %}
+              {% if board.use_file %}<span class="badge badge-primary">첨부</span>{% endif %}
+              {% if not board.use_category and not board.use_secret and not board.use_file %}<span class="muted">기본</span>{% endif %}
+            </span>
+          </td>
+          <td data-label="정렬" class="right">{{ board.sort_order }}</td>
+          <td data-label="관리" class="right"><a class="btn btn-white btn-sm" href="{{ url_for('admin.boards.edit', {key: board.board_key}) }}">설정</a></td>
+        </tr>
+      {% else %}
+        <tr class="table-empty"><td colspan="6">아직 게시판이 없습니다. 첫 게시판을 만들어 보세요.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -179,6 +179,22 @@ final class AdminController
         ]);
     }
 
+    /** 게시판을 가로지르는 전체 글 목록. 대시보드의 게시글 카드에서 들어온다. */
+    public function posts(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $query = $request->getQueryParams();
+
+        return Twig::fromRequest($request)->render($response, 'admin/posts.html.twig', [
+            'list'   => $this->app->postService()->listAllPosts($acl, $query),
+            'boards' => $this->app->adminService()->boards($acl),
+            'query'  => [
+                'q'     => isset($query['q']) ? (string) $query['q'] : null,
+                'board' => isset($query['board']) ? (string) $query['board'] : null,
+            ],
+        ]);
+    }
+
     private function boardInput(array $input): array
     {
         return [
@@ -193,6 +209,8 @@ final class AdminController
             'use_secret' => isset($input['use_secret']) ? '1' : '0',
             'use_file' => isset($input['use_file']) ? '1' : '0',
             'use_category' => isset($input['use_category']) ? '1' : '0',
+            'list_type' => (string) ($input['list_type'] ?? 'list'),
+            'home_limit' => (string) ($input['home_limit'] ?? '5'),
             'per_page' => (string) ($input['per_page'] ?? '20'),
             'sort_order' => (string) ($input['sort_order'] ?? '0'),
         ];
@@ -221,7 +239,8 @@ final class AdminController
     {
         return ['board_key' => '', 'name' => '', 'description' => '', 'categories_text' => '', 'managers_text' => '',
             'perm_read' => 'guest', 'perm_write' => 'member', 'perm_comment' => 'member', 'use_secret' => false,
-            'use_file' => false, 'use_category' => false, 'per_page' => 20, 'sort_order' => 0];
+            'use_file' => false, 'use_category' => false, 'list_type' => 'list',
+            'home_limit' => 5, 'per_page' => 20, 'sort_order' => 0];
     }
 
     private function input(ServerRequestInterface $request): array

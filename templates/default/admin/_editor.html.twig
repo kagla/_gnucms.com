@@ -92,6 +92,8 @@
   }});
   var editor=CKEDITOR.replace(textarea.id,{
     language:'ko',height:360,versionCheck:false,resize_minWidth:0,
+    /* 글·댓글 편집기와 같게, 엔터는 줄바꿈 하나다. 문단 사이를 벌리려면 엔터를 두 번 친다. */
+    enterMode:CKEDITOR.ENTER_BR,shiftEnterMode:CKEDITOR.ENTER_BR,autoParagraph:false,
     contentsCss:[{{ (base_path ~ '/vendor/ckeditor4/contents.css')|json_encode|raw }},{{ (base_path ~ '/assets/editor-content.css?v=20260827-2')|json_encode|raw }}],
     bodyClass:'aboard-editor-content',
     uploadUrl:uploadUrl,

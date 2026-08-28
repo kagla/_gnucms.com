@@ -173,6 +173,7 @@ final class AdminCmsController
         $type = (string) $args['type'];
         return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
             'page' => $this->requiredLegalPage($type), 'preview' => true, 'preview_legal_type' => $type,
+            'legal_type' => $type,
         ]);
     }
 
@@ -241,6 +242,7 @@ final class AdminCmsController
             'page' => $page,
             'preview' => true,
             'preview_legal_type' => null,
+            'legal_type' => null,
         ]);
     }
 

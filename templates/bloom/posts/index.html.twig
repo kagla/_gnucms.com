@@ -1,0 +1,41 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% import _self as pager %}
+{% macro pageLink(board, query, p, label) %}
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}?page={{ p }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}" aria-label="{{ p }} 페이지">{{ label|default(p) }}</a>
+{% endmacro %}
+{% block title %}{{ board.name }} · {{ site.site_name }}{% endblock %}
+{% block body %}
+<nav class="bloom-crumb" aria-label="현재 위치"><a href="{{ url_for('boards.index') }}">{{ ic.home() }} 홈</a><span>/</span><span>{{ board.name }}</span></nav>
+<header class="bloom-page-head">
+  <div><h1>{{ ic.board() }} {{ board.name }}</h1>{% if board.description %}<p class="bloom-lead">{{ board.description }}</p>{% endif %}</div>
+  {% if can_write %}<a class="bloom-btn bloom-btn-primary" href="{{ url_for('posts.create', {'key': board.board_key}) }}">{{ ic.pen() }} 글쓰기</a>{% endif %}
+</header>
+<form class="bloom-search-bar" method="get" action="{{ url_for('posts.index', {'key': board.board_key}) }}" role="search">
+  {% if board.use_category and board.categories is not empty %}
+    <select name="category" aria-label="분류"><option value="">전체</option>{% for name in board.categories %}<option value="{{ name }}"{% if query.category == name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+  {% endif %}
+  <div class="bloom-search-field"><span class="bloom-search-icon">{{ ic.search() }}</span><input type="search" name="q" value="{{ query.q }}" placeholder="{{ board.name }}에서 검색" aria-label="검색"></div>
+  <button class="bloom-btn bloom-btn-primary" type="submit">{{ ic.search() }} 검색</button>
+</form>
+<section class="bloom-card-grid bloom-post-grid" aria-label="게시글">
+  {% if list.data is empty and list.notices is empty %}
+    <div class="bloom-empty-state bloom-grid-full">{{ ic.empty() }}<p>조건에 맞는 글이 없습니다.</p></div>
+  {% else %}
+    {% for post in list.notices|merge(list.data) %}
+      <article class="bloom-feed-card{% if post.is_notice %} is-notice{% endif %}">
+        <a href="{{ url_for('posts.show', {'id': post.id}) }}" class="bloom-feed-thumb bloom-thumb-{{ loop.index0 % 6 }}" aria-hidden="true"></a>
+        <div class="bloom-feed-body">
+          <p class="bloom-feed-board">{% if post.is_notice %}<span class="bloom-tag">{{ ic.pin() }} 공지</span>{% endif %}{% if board.use_category and post.category %}{{ post.category }}{% else %}게시글{% endif %}</p>
+          <h3><a href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }}</a></h3>
+          <p class="bloom-feed-meta"><span class="bloom-meta-item">{{ ic.user() }} {{ post.author_name }}</span><span class="bloom-meta-item">{{ ic.calendar() }} {{ post.created_at|slice(0, 10) }}</span><span class="bloom-meta-item">{{ ic.eye() }} {{ post.view_count }}</span>{% if post.comment_count > 0 %}<span class="bloom-meta-item">{{ ic.comment() }} {{ post.comment_count }}</span>{% endif %}</p>
+        </div>
+      </article>
+    {% endfor %}
+  {% endif %}
+</section>
+{% if list.total_pages > 1 %}
+  {% set window = 5 %}{% set start = max(1, list.page - window) %}{% set end = min(list.total_pages, list.page + window) %}
+  <nav class="pagination bloom-pagination" aria-label="페이지">{% if start > 1 %}{{ pager.pageLink(board, query, 1) }}{% if start > 2 %}<span class="muted">…</span>{% endif %}{% endif %}{% for p in start..end %}{% if p == list.page %}<strong aria-current="page">{{ p }}</strong>{% else %}{{ pager.pageLink(board, query, p) }}{% endif %}{% endfor %}{% if end < list.total_pages %}{% if end < list.total_pages - 1 %}<span class="muted">…</span>{% endif %}{{ pager.pageLink(board, query, list.total_pages) }}{% endif %}</nav>
+{% endif %}
+{% endblock %}

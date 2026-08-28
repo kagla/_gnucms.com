@@ -1,0 +1,11 @@
+{% if oauth_providers is not empty %}
+  <div class="auth-divider"><span>또는</span></div>
+  <div class="social-login">
+    {% for provider in oauth_providers %}
+      <a class="social-button social-{{ provider.key }}" href="{{ url_for('oauth.start', {provider: provider.key}) }}">
+        <span class="social-symbol" aria-hidden="true">{% if provider.key == 'google' %}G{% elseif provider.key == 'naver' %}N{% elseif provider.key == 'kakao' %}K{% else %}⌘{% endif %}</span>
+        <span>{{ provider.label }}로 계속하기</span>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}

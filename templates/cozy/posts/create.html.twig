@@ -1,0 +1,70 @@
+{% extends "layout.html.twig" %}
+{% block title %}글쓰기 · {{ board.name }} · {{ site.site_name }}{% endblock %}
+{% block nav_section %}board{% endblock %}
+{% block extra_tabs %}<a class="tab is-active" href="{{ url_for('posts.index', {'key': board.board_key}) }}" aria-current="page">{{ board.name }}</a>{% endblock %}
+{% block body %}
+<div class="back-row">
+  <a class="back-link" href="{{ url_for('posts.index', {'key': board.board_key}) }}"><span aria-hidden="true">‹</span> {{ board.name }}</a>
+</div>
+
+<section class="sheet">
+  <header class="sheet-head">
+    <h1>글쓰기</h1>
+    <p class="sheet-sub">{{ board.name }}에 남길 이야기를 적어 주세요.</p>
+  </header>
+
+  <form class="form" method="post" action="{{ url_for('posts.create', {'key': board.board_key}) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    {% if board.use_category and board.categories is not empty %}
+      <div class="field{% if errors.category is defined %} is-bad{% endif %}">
+        <span class="field-label">분류</span>
+        <div class="radio-chips">
+          {% for name in board.categories %}
+            <label class="radio-chip">
+              <input type="radio" name="category" value="{{ name }}"{% if values.category|default('') == name %} checked{% endif %} required>
+              <span>{{ name }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        {% if errors.category is defined %}<p class="field-msg">{{ errors.category }}</p>{% endif %}
+      </div>
+    {% endif %}
+
+    <div class="field{% if errors.title is defined %} is-bad{% endif %}">
+      <label class="field-label" for="post-title">제목</label>
+      <input id="post-title" type="text" name="title" value="{{ values.title|default('') }}" maxlength="200" required autofocus placeholder="제목을 입력해 주세요">
+      {% if errors.title is defined %}<p class="field-msg">{{ errors.title }}</p>{% endif %}
+    </div>
+
+    <div class="field{% if errors.content is defined %} is-bad{% endif %}">
+      <label class="field-label" for="post-content">내용</label>
+      <textarea id="post-content" name="content" rows="14" required placeholder="어떤 이야기를 나누고 싶으신가요?" data-autogrow>{{ values.content|default('') }}</textarea>
+      {% if errors.content is defined %}<p class="field-msg">{{ errors.content }}</p>{% endif %}
+    </div>
+
+    {% if board.use_secret %}
+      <label class="switch">
+        <input type="checkbox" name="is_secret" value="1"{% if values.is_secret|default(false) %} checked{% endif %}>
+        <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+        <span class="switch-copy"><strong>비밀글로 작성</strong><small>작성자와 관리자만 볼 수 있어요.</small></span>
+      </label>
+    {% endif %}
+
+    <div class="form-bar">
+      <a class="btn btn-ghost" href="{{ url_for('posts.index', {'key': board.board_key}) }}">취소</a>
+      <button class="btn btn-brand" type="submit">등록하기</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var area=document.querySelector('[data-autogrow]');
+  if(!area){return}
+  function grow(){area.style.height='auto';area.style.height=Math.max(area.scrollHeight,260)+'px'}
+  area.addEventListener('input',grow);grow();
+})();
+</script>
+{% endblock %}

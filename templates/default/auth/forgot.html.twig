@@ -1,1 +1,28 @@
-{% extends "layout.html.twig" %}{% block title %}비밀번호 찾기 · aboard{% endblock %}{% block body %}<div class="auth-shell"><section class="surface auth-card"><header class="auth-head"><p class="eyebrow">Password reset</p><h1>비밀번호 찾기</h1><p class="lead">가입한 이메일로 재설정 링크를 보내드립니다.</p></header><form class="auth-form" method="post" action="{{ url_for('auth.forgot') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>이메일<input type="email" name="email" autocomplete="email" required></label><button class="auth-submit" type="submit">재설정 링크 받기</button></form><p class="auth-switch"><a href="{{ url_for('auth.login') }}">로그인으로 돌아가기</a></p></section></div>{% endblock %}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}비밀번호 찾기 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <div class="card-body">
+      <div class="auth-head">
+        <span class="auth-mark auth-mark-soft" aria-hidden="true">{{ ico.i('mail', 22) }}</span>
+        <h1 class="card-title">비밀번호 찾기</h1>
+        <p class="card-sub">가입한 이메일로 재설정 링크를 보내드려요.</p>
+      </div>
+      <form method="post" action="{{ url_for('auth.forgot') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">이메일</legend>
+          <label class="input input-bordered input-block">
+            <span class="input-icon" aria-hidden="true">{{ ico.i('mail', 16) }}</span>
+            <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+          </label>
+        </fieldset>
+        <button class="btn btn-primary btn-block btn-lg" type="submit">재설정 링크 받기</button>
+      </form>
+      <p class="auth-switch"><a class="link link-hover" href="{{ url_for('auth.login') }}">로그인으로 돌아가기</a></p>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "admin/layout.html.twig" %}
+{% block title %}사이트 설정 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}site{% endblock %}
+{% block body %}
+<nav class="crumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">›</span><span aria-current="page">사이트 설정</span></nav>
+<section class="sheet">
+  <header class="sheet-head">
+    <h1>사이트 설정</h1>
+    <p class="sheet-sub">방문자가 가장 먼저 보는 이름과 소개를 정합니다.</p>
+  </header>
+  {% if query.saved|default('') == '1' %}<p class="banner banner-ok">사이트 설정을 저장했습니다.</p>{% endif %}
+  <form class="form" method="post" action="{{ url_for('admin.settings') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <fieldset class="fieldset">
+      <legend>사이트 정보</legend>
+      <div class="field{% if errors.site_name is defined %} is-bad{% endif %}">
+        <label class="field-label" for="s-name">사이트 이름</label>
+        <input id="s-name" type="text" name="site_name" value="{{ values.site_name|default('') }}" maxlength="50" required>
+        {% if errors.site_name is defined %}<p class="field-msg">{{ errors.site_name }}</p>{% endif %}
+      </div>
+      <div class="field{% if errors.site_tagline is defined %} is-bad{% endif %}">
+        <label class="field-label" for="s-tag">짧은 소개</label>
+        <input id="s-tag" type="text" name="site_tagline" value="{{ values.site_tagline|default('') }}" maxlength="120" required>
+        {% if errors.site_tagline is defined %}<p class="field-msg">{{ errors.site_tagline }}</p>{% endif %}
+      </div>
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend>홈 화면</legend>
+      <div class="field{% if errors.home_title is defined %} is-bad{% endif %}">
+        <label class="field-label" for="s-home-title">홈 제목</label>
+        <input id="s-home-title" type="text" name="home_title" value="{{ values.home_title|default('') }}" maxlength="120" required>
+        {% if errors.home_title is defined %}<p class="field-msg">{{ errors.home_title }}</p>{% endif %}
+      </div>
+      <div class="field{% if errors.home_intro is defined %} is-bad{% endif %}">
+        <label class="field-label" for="s-home-intro">홈 소개</label>
+        <textarea id="s-home-intro" name="home_intro" rows="4" maxlength="500" required>{{ values.home_intro|default('') }}</textarea>
+        {% if errors.home_intro is defined %}<p class="field-msg">{{ errors.home_intro }}</p>{% endif %}
+      </div>
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend>표시와 가입</legend>
+      <div class="field{% if errors.theme is defined %} is-bad{% endif %}">
+        <label class="field-label" for="s-theme">템플릿</label>
+        <select id="s-theme" name="theme" required>
+          {% for theme_name in available_themes %}<option value="{{ theme_name }}"{{ values.theme|default(active_theme) == theme_name ? ' selected' : '' }}>{{ theme_name == 'default' ? 'default (기본)' : theme_name }}</option>{% endfor %}
+        </select>
+        {% if errors.theme is defined %}<p class="field-msg">{{ errors.theme }}</p>{% endif %}
+        <p class="field-note">선택한 템플릿에 없는 화면과 파일은 default 템플릿을 사용합니다.</p>
+      </div>
+      <div class="switch-list">
+        <label class="switch">
+          <input type="checkbox" name="registration_enabled" value="1"{{ values.registration_enabled|default(false) ? ' checked' : '' }}>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-copy"><strong>새 회원가입 허용</strong><small>끄면 가입 화면이 닫힙니다.</small></span>
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-bar">
+      <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">취소</a>
+      <button class="btn btn-brand" type="submit">설정 저장</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

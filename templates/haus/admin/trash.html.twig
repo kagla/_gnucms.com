@@ -1,0 +1,47 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}내용 휴지통 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}content{% endblock %}
+{% block body %}
+<nav class="breadcrumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><a href="{{ url_for('admin.content') }}">내용</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><span aria-current="page">휴지통</span></nav>
+<div class="page-head">
+  <div>
+    <h1>내용 휴지통</h1>
+    <p class="page-desc">삭제한 내용은 공개되지 않으며 언제든 복원할 수 있습니다.</p>
+  </div>
+  <div class="page-head-actions"><a class="btn btn-white" href="{{ url_for('admin.content') }}">{{ ico.i('arrow-left', 15) }} 내용 관리로</a></div>
+</div>
+{% if query.restored|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>내용을 초안 상태로 복원했습니다.</span></div>{% endif %}
+{% if query.deleted|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>내용과 연결된 이미지를 완전히 삭제했습니다.</span></div>{% endif %}
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>제목</th><th>주소</th><th>삭제일</th><th class="right">관리</th></tr></thead>
+      <tbody>
+      {% for page in pages %}
+        <tr>
+          <td data-label="제목"><strong class="cell-title">{{ page.title }}</strong></td>
+          <td data-label="주소"><code class="code">/content/{{ page.slug }}</code></td>
+          <td data-label="삭제일">{{ page.deleted_at|date('Y.m.d H:i') }}</td>
+          <td data-label="관리" class="right">
+            <span class="cell-actions">
+              <form class="inline-form" method="post" action="{{ url_for('admin.content.restore', {id: page.id}) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-white btn-sm" type="submit">{{ ico.i('restore', 14) }} 복원</button>
+              </form>
+              <form class="inline-form" method="post" action="{{ url_for('admin.content.permanent_delete', {id: page.id}) }}" onsubmit="return confirm('내용과 연결된 이미지를 모두 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-danger btn-sm" type="submit">{{ ico.i('trash', 14) }} 완전 삭제</button>
+              </form>
+            </span>
+          </td>
+        </tr>
+      {% else %}
+        <tr class="table-empty"><td colspan="4">휴지통이 비어 있습니다.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

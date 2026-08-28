@@ -1,0 +1,112 @@
+<!doctype html>
+{% import '_icons.html.twig' as ic %}
+<html lang="ko" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>{% block title %}{{ site.site_name }}{% endblock %}</title>
+{% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={
+  darkMode:'class',
+  theme:{extend:{colors:{brand:{50:'#e8f7fc',100:'#d4f1f9',500:'#35c5f0',600:'#35c5f0',700:'#2bb8e3'}}}}
+};
+</script>
+<link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
+<script>
+try{
+  var t=localStorage.getItem('aboard-theme');
+  if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark'}
+  else if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.dataset.theme='light'}
+  else if(window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}
+  if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}
+}catch(e){}
+</script>
+</head>
+<body class="{% block body_class %}theme-horizon{% endblock %} hs-overlay-body-open min-h-full">
+{% block site_header %}{% if 'admin-page' not in block('body_class')|trim %}
+<div class="nest-promo" role="note">{{ ic.promo() }}<span>라이프스타일 커뮤니티 · {{ site.site_name }}에서 이야기를 나눠 보세요</span></div>
+<header class="site-header nest-header">
+  <div class="nest-header-row header-inner hz-container">
+    <a class="nest-logo" href="{{ url_for('boards.index') }}" aria-label="{{ site.site_name }} 홈">
+      <span class="nest-logo-mark">{{ ic.logo(32) }}</span>
+      <span class="nest-logo-text">{{ site.site_name }}</span>
+    </a>
+    <button type="button" class="md:hidden hs-collapse-toggle nest-icon-btn nest-mobile-toggle" id="hz-nav-toggle" aria-expanded="false" aria-controls="hz-nav-menu" data-hs-collapse="#hz-nav-menu">
+      <svg class="nest-svg" viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span class="sr-only">메뉴</span>
+    </button>
+    <nav id="hz-nav-menu" class="hs-collapse nest-tabs hidden overflow-hidden md:!block md:!overflow-visible md:!h-auto grow basis-full md:basis-auto" aria-label="주요 메뉴">
+      <a class="nest-tab" href="{{ url_for('boards.index') }}">{{ ic.home() }}<span>홈</span></a>
+      <a class="nest-tab" href="{{ url_for('boards.index') }}">{{ ic.grid() }}<span>커뮤니티</span></a>
+      {% for item in site_menu %}<a class="nest-tab" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ ic.doc() }}<span>{{ item.title }}</span></a>{% endfor %}
+    </nav>
+    <div class="nest-header-actions">
+      {% if current_user.is_guest %}
+        <a class="nest-text-btn" href="{{ url_for('auth.login') }}">{{ ic.user() }}<span>로그인</span></a>
+        {% if registration_available %}<a class="nest-btn nest-btn-primary" href="{{ url_for('auth.register') }}">{{ ic.sparkle() }}<span>회원가입</span></a>{% endif %}
+      {% else %}
+        <span class="nest-user-chip">{{ ic.user() }}<span>{{ current_user.display_name }}</span></span>
+        {% if current_user.is_admin %}<a class="nest-text-btn" href="{{ url_for('admin.index') }}">{{ ic.settings() }}<span>관리</span></a>{% endif %}
+        <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="nest-text-btn logout-button" type="submit">{{ ic.logout() }}<span>로그아웃</span></button></form>
+      {% endif %}
+      <button class="theme-toggle nest-icon-btn" type="button" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+        <span class="nest-theme-moon">{{ ic.moon() }}</span>
+        <span class="nest-theme-sun" hidden>{{ ic.sun() }}</span>
+      </button>
+    </div>
+  </div>
+</header>
+{% endif %}{% endblock %}
+<main class="{% if 'admin-page' in block('body_class')|trim %}admin-page-main{% else %}hz-main{% endif %}">
+{% if 'admin-page' in block('body_class')|trim %}
+<div class="admin-shell flex min-h-[calc(100vh-0px)]" data-admin-page="{{ block('admin_section')|default('dashboard')|trim }}">
+  {% include 'admin/_sidebar.html.twig' %}
+  <div class="admin-content flex-1 min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8 max-w-7xl w-full mx-auto lg:mx-0 lg:max-w-none">
+    {% block body %}{% endblock %}
+  </div>
+</div>
+{% else %}
+<div class="hz-container">{% block public_body %}{{ block('body') }}{% endblock %}</div>
+{% endif %}
+</main>
+{% block site_footer %}{% if 'admin-page' not in block('body_class')|trim %}
+<footer class="site-footer nest-footer">
+  <div class="nest-footer-inner hz-container">
+    <div class="nest-footer-col">{{ ic.logo(28) }}<strong>{{ site.site_name }}</strong><p>{{ site.site_tagline }}</p></div>
+    <nav class="nest-footer-col" aria-label="바로가기"><strong>{{ ic.grid() }} 탐색</strong><a href="{{ url_for('boards.index') }}">{{ ic.board() }} 커뮤니티</a>{% for item in site_menu|slice(0, 4) %}<a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ ic.doc() }} {{ item.title }}</a>{% endfor %}</nav>
+    {% if legal_documents %}<nav class="nest-footer-col" aria-label="정책"><strong>{{ ic.shield() }} 고객센터</strong><a href="{{ url_for('terms.show', {type: 'service'}) }}">{{ ic.doc() }} 이용약관</a><a href="{{ url_for('terms.show', {type: 'privacy'}) }}">{{ ic.shield() }} 개인정보 처리방침</a></nav>{% endif %}
+  </div>
+  <p class="nest-footer-copy">© {{ "now"|date("Y") }} {{ site.site_name }}</p>
+</footer>
+{% endif %}{% endblock %}
+<script src="{{ theme_asset('preline.js') }}"></script>
+<script>
+(function(){
+  var root=document.documentElement,buttons=document.querySelectorAll('.theme-toggle'),meta=document.querySelector('meta[name="theme-color"]');
+  function isDark(){return root.classList.contains('dark')}
+  function sync(){
+    var dark=isDark();
+    buttons.forEach(function(btn){
+      var moon=btn.querySelector('.nest-theme-moon'),sun=btn.querySelector('.nest-theme-sun');
+      if(moon){moon.hidden=dark}if(sun){sun.hidden=!dark}
+      btn.setAttribute('aria-label',dark?'라이트 모드로 전환':'다크 모드로 전환');btn.title=btn.getAttribute('aria-label')
+    });
+    if(meta){meta.content=dark?'#1b2024':'#ffffff'}
+  }
+  buttons.forEach(function(btn){btn.addEventListener('click',function(){
+    var next=isDark()?'light':'dark';
+    if(next==='dark'){root.classList.add('dark');root.dataset.theme='dark'}else{root.classList.remove('dark');root.dataset.theme='light'}
+    try{localStorage.setItem('aboard-theme',next)}catch(e){}sync()
+  })});
+  var sidebarToggle=document.querySelector('.admin-sidebar-toggle');
+  function syncSidebar(){if(!sidebarToggle)return;var c=root.dataset.adminSidebar==='collapsed';sidebarToggle.setAttribute('aria-expanded',c?'false':'true');sidebarToggle.setAttribute('aria-label',c?'관리 메뉴 펼치기':'관리 메뉴 접기');sidebarToggle.title=sidebarToggle.getAttribute('aria-label')}
+  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var c=root.dataset.adminSidebar==='collapsed';if(c){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('aboard-admin-sidebar',c?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
+  sync();
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

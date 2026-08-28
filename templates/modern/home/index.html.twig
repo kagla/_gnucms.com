@@ -1,0 +1,46 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="modern-hero">
+  <div class="modern-hero-main">
+    <p class="modern-kicker"><span></span> aboard community</p>
+    <h1>{{ site.home_title }}</h1>
+    <p class="modern-intro">{{ site.home_intro }}</p>
+    {% if boards is not empty %}<a class="modern-primary-action" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">첫 번째 이야기 보기 <span aria-hidden="true">→</span></a>{% endif %}
+  </div>
+  <aside class="modern-hero-aside" aria-label="커뮤니티 현황">
+    <div class="modern-orbit" aria-hidden="true"><span></span></div>
+    <p>OPEN NOW</p>
+    <strong>{{ '%02d'|format(boards|length) }}</strong>
+    <span>개의 게시판이<br>함께 이야기하고 있어요.</span>
+  </aside>
+</section>
+<section class="modern-directory" aria-labelledby="modern-directory-title">
+  <header class="modern-section-head">
+    <div><p>BOARD DIRECTORY</p><h2 id="modern-directory-title">이야기를 골라보세요</h2></div>
+    <span>관심 있는 공간에 들어가<br>가볍게 대화를 시작하세요.</span>
+  </header>
+  {% if boards is empty %}
+    <div class="modern-empty"><span aria-hidden="true">＋</span><p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="modern-board-list">
+      {% for board in boards %}
+      <article class="modern-board-row">
+        <a class="modern-board-summary" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+          <span class="modern-board-number">{{ '%02d'|format(loop.index) }}</span>
+          <span><strong>{{ board.name }}</strong><small>{{ board.description ?: '새로운 이야기와 소식을 나누는 공간입니다.' }}</small></span>
+          <i aria-hidden="true">↗</i>
+        </a>
+        <div class="modern-latest">
+          {% if board.latest_posts is empty %}<p>아직 첫 이야기를 기다리고 있어요.</p>{% else %}
+            {% for post in board.latest_posts|slice(0, 3) %}
+            <a href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{% if post.is_notice %}<b>공지</b>{% endif %}{{ post.title }}</span><time datetime="{{ post.created_at }}">{{ post.created_at|slice(5, 5) }}</time></a>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

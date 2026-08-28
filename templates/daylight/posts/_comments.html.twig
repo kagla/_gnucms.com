@@ -1,0 +1,10 @@
+{# daylight view: posts/_comments.html.twig #}
+<ul class="comment-list{% if nested|default(false) %} comment-children{% endif %}">
+{% for comment in nodes %}
+  <li class="comment-item">
+    <p class="comment-head muted">{% if not comment.deleted %}<span class="comment-author">{{ comment.author_name }}</span>{% endif %}<span>{{ comment.created_at }}</span>{% if comment.is_secret %}<span title="비밀 댓글" aria-label="비밀 댓글">●</span>{% endif %}</p>
+    <p class="comment-body">{{ comment.content|nl2br }}</p>
+    {% if comment.children is not empty %}{% include 'posts/_comments.html.twig' with {'nodes': comment.children, 'nested': true} only %}{% endif %}
+  </li>
+{% endfor %}
+</ul>

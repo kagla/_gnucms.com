@@ -1,0 +1,56 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}회원 관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}members{% endblock %}
+{% block body %}
+<nav class="breadcrumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><span aria-current="page">회원</span></nav>
+<div class="page-head">
+  <div>
+    <h1>회원 관리</h1>
+    <p class="page-desc">회원 정보를 수정하거나 필요한 경우 이용을 차단합니다. 소유자 권한은 변경되지 않습니다.</p>
+  </div>
+</div>
+{% if saved %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>회원 정보를 저장했습니다.</span></div>{% endif %}
+
+<form class="search-inline" method="get" action="{{ url_for('admin.members') }}" role="search">
+  <span class="search-inline-icon" aria-hidden="true">{{ ico.i('search', 16) }}</span>
+  <input type="search" name="q" value="{{ query }}" placeholder="이메일 또는 표시 이름 검색" aria-label="회원 검색" data-search-input>
+  <button class="btn btn-white btn-sm" type="submit">검색</button>
+</form>
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>회원</th><th>가입일</th><th>상태</th><th class="right">관리</th></tr></thead>
+      <tbody>
+      {% for member in members %}
+        <tr>
+          <td data-label="회원">
+            <span class="cell-user">
+              <span class="avatar avatar-sm" data-tone="{{ member.display_name|length % 6 }}" aria-hidden="true">{{ member.display_name|slice(0, 1)|upper }}</span>
+              <span>
+                <strong class="cell-title">{{ member.display_name }}{% if member.is_admin %} <span class="badge badge-primary">소유자</span>{% endif %}</strong>
+                <span class="cell-sub">{{ member.email }}</span>
+              </span>
+            </span>
+          </td>
+          <td data-label="가입일">{{ member.created_at|date('Y.m.d') }}</td>
+          <td data-label="상태"><span class="badge {{ member.status == 'active' ? 'badge-success' : 'badge-danger' }}">{{ member.status == 'active' ? '활성' : '차단' }}</span></td>
+          <td data-label="관리" class="right">
+            <span class="cell-actions">
+              <a class="btn btn-white btn-sm" href="{{ url_for('admin.members.edit', {id: member.id}) }}">수정</a>
+              <form class="inline-form" method="post" action="{{ url_for('admin.members.status', {id: member.id}) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-white btn-sm" type="submit">{{ member.status == 'active' ? '차단' : '해제' }}</button>
+              </form>
+            </span>
+          </td>
+        </tr>
+      {% else %}
+        <tr class="table-empty"><td colspan="4">조건에 맞는 회원이 없습니다.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}{{ post.title }} · {{ site.site_name }}{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ post.content|striptags|slice(0, 150) }}">{% endblock %}
+{% block nav_section %}board{% endblock %}
+
+{% block extra_tabs %}
+<a class="tab tab-active" href="{{ url_for('posts.index', {'key': board.board_key}) }}" aria-current="page">
+  {{ board.name }}
+</a>
+{% endblock %}
+
+{% block body %}
+<div class="article-wrap">
+  <div class="breadcrumbs" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+    <a href="{{ url_for('boards.index') }}">홈</a>
+    <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+    <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a>
+    <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+    <span style="color: var(--text-main); font-weight: 700;" aria-current="page">게시글</span>
+  </div>
+
+  <article class="card" style="padding: clamp(1.5rem, 4vw, 2.5rem); margin-bottom: 2rem;">
+    <header class="article-header">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+        {% if post.is_notice %}
+          <span class="badge badge-primary">{{ ico.i('megaphone', 12) }} 공지</span>
+        {% endif %}
+        {% if post.category %}
+          <span class="badge badge-soft">{{ ico.i('tag', 12) }} {{ post.category }}</span>
+        {% endif %}
+      </div>
+
+      <h1 class="article-title">{{ post.title }}</h1>
+
+      <div class="article-author-card">
+        <div class="article-author-info">
+          <div class="avatar avatar-sm">
+            <span class="avatar-inner" data-tone="{{ post.author_name|length % 6 }}" aria-hidden="true">
+              {{ post.author_name|slice(0, 1)|upper }}
+            </span>
+          </div>
+          <div>
+            <div class="article-author-name">{{ post.author_name }}</div>
+            <div class="article-meta-date">
+              <time datetime="{{ post.created_at }}">{{ post.created_at|date('Y년 m월 d일 H:i') }}</time>
+              <span style="margin-inline: 0.35rem;">·</span>
+              <span>조회 {{ post.view_count }}</span>
+            </div>
+          </div>
+        </div>
+
+        <a class="btn btn-outline btn-sm hide-sm" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+          {{ ico.i('arrow-left', 14) }} 목록
+        </a>
+      </div>
+    </header>
+
+    <div class="article-body">
+      {{ post.content|nl2br }}
+    </div>
+
+    <!-- 첨부파일 섹션 -->
+    {% if post.attachments is not empty %}
+      <section class="attachment-card" aria-labelledby="attachments-title">
+        <h2 id="attachments-title" style="font-size: 0.92rem; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 0.45rem;">
+          {{ ico.i('clip', 16) }} 첨부파일 <span class="badge badge-sm badge-ghost">{{ post.attachments|length }}</span>
+        </h2>
+        <ul class="attachment-list">
+          {% for file in post.attachments %}
+            <li class="attachment-item">
+              <a href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">
+                {{ ico.i('document', 16) }}
+                <span>{{ file.name }}</span>
+                <span style="font-size: 0.75rem; color: var(--text-hint); font-weight: normal;">({{ (file.size / 1024)|round }} KB)</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    <!-- 하단 통계 및 링크 -->
+    <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 1.25rem; border-top: 1px solid var(--line); margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
+      <div style="display: flex; gap: 1rem;">
+        <span style="display: inline-flex; align-items: center; gap: 0.3rem;">{{ ico.i('eye', 15) }} 조회 {{ post.view_count }}</span>
+        <span style="display: inline-flex; align-items: center; gap: 0.3rem;">{{ ico.i('comment', 15) }} 댓글 {{ post.comment_count }}</span>
+      </div>
+      <a href="#comments" style="color: var(--primary); font-weight: 750;">댓글 보기 ↓</a>
+    </div>
+  </article>
+
+  <!-- 댓글 섹션 -->
+  <section class="card" id="comments" style="padding: clamp(1.5rem, 4vw, 2.5rem); margin-bottom: 2.5rem;" aria-labelledby="comments-title">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+      <h2 id="comments-title" style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.45rem;">
+        {{ ico.i('comment', 18) }} 댓글 <span class="badge badge-soft badge-sm">{{ post.comment_count }}</span>
+      </h2>
+    </div>
+
+    {% if comments is empty %}
+      <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <div style="margin-bottom: 0.5rem; color: var(--text-hint);">{{ ico.i('comment', 40) }}</div>
+        <p style="font-size: 0.95rem; font-weight: 700;">첫 번째 댓글을 남겨 소통을 시작해 보세요.</p>
+      </div>
+    {% else %}
+      {% include 'posts/_comments.html.twig' with {'nodes': comments, 'nested': false} only %}
+    {% endif %}
+  </section>
+
+  <!-- 하단 액션 버튼 -->
+  <div style="display: flex; justify-content: center; gap: 0.75rem;">
+    <a class="btn btn-outline" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+      {{ ico.i('arrow-left', 16) }} 목록으로 돌아가기
+    </a>
+  </div>
+</div>
+{% endblock %}

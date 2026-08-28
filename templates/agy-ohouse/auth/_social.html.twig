@@ -1,0 +1,26 @@
+{% import '_icons.html.twig' as ico %}
+{% if oauth_providers is not empty %}
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin: 1.5rem 0; color: var(--text-hint); font-size: 0.78rem; font-weight: 750;">
+    <span style="flex: 1; height: 1px; background: var(--line);"></span>
+    <span>간편 로그인 / 가입</span>
+    <span style="flex: 1; height: 1px; background: var(--line);"></span>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 0.6rem;" aria-label="소셜 로그인">
+    {% for provider in oauth_providers %}
+      <a class="btn btn-outline btn-block" style="display: flex; align-items: center; justify-content: center; gap: 0.6rem; height: 2.85rem; font-weight: 750;" href="{{ url_for('oauth.start', {provider: provider.key}) }}">
+        <span style="display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 0.35rem; font-weight: 900; font-size: 0.85rem;">
+          {% if provider.key == 'google' %}
+            <span style="color: #4285f4;">G</span>
+          {% elseif provider.key == 'naver' %}
+            <span style="background: #03c75a; color: #fff; width: 1.3rem; height: 1.3rem; display: grid; place-items: center; border-radius: 0.25rem; font-size: 0.75rem;">N</span>
+          {% elseif provider.key == 'kakao' %}
+            <span style="background: #fee500; color: #191919; width: 1.3rem; height: 1.3rem; display: grid; place-items: center; border-radius: 0.25rem; font-size: 0.75rem;">K</span>
+          {% else %}
+            <span>⌘</span>
+          {% endif %}
+        </span>
+        <span>{{ provider.label }}로 계속하기</span>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}

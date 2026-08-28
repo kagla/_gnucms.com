@@ -1,0 +1,13 @@
+{# daylight view: admin/boards.html.twig #}
+{% extends "admin/layout.html.twig" %}
+{% block title %}게시판 관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}boards{% endblock %}
+{% block body %}
+<div class="page-head"><div class="page-head-copy"><nav class="breadcrumb"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span class="breadcrumb-separator">/</span><span>게시판</span></nav><h1>게시판 관리</h1><p class="lead">게시판을 만들고 이용 권한과 기능, 노출 순서를 관리합니다.</p></div><div class="admin-actions"><a class="button" href="{{ url_for('admin.boards.create') }}"><span aria-hidden="true">＋</span>게시판 만들기</a></div></div>
+{% if query.saved|default('') == '1' %}<p class="notice success">게시판 설정을 저장했습니다.</p>{% endif %}
+{% if query.deleted|default('') == '1' %}<p class="notice success">게시판을 삭제했습니다.</p>{% endif %}
+<section class="surface admin-panel board-admin-list"><div class="table-wrap"><table><thead><tr><th>게시판</th><th>주소</th><th>권한</th><th>사용 기능</th><th>정렬</th><th>관리</th></tr></thead><tbody>
+{% for board in boards %}<tr><td><a class="post-title-link" href="{{ url_for('posts.index', {key: board.board_key}) }}">{{ board.name }}</a>{% if board.description %}<div class="member-email">{{ board.description }}</div>{% endif %}</td><td class="meta-cell">/boards/{{ board.board_key }}</td><td><div class="board-permissions"><span>읽기 {{ board.perm_read }}</span><span>쓰기 {{ board.perm_write }}</span><span>댓글 {{ board.perm_comment }}</span></div></td><td><div class="board-options">{% if board.use_category %}<span class="tag">분류</span>{% endif %}{% if board.use_secret %}<span class="tag">비밀글</span>{% endif %}{% if board.use_file %}<span class="tag">첨부</span>{% endif %}{% if not board.use_category and not board.use_secret and not board.use_file %}<span class="muted">기본</span>{% endif %}</div></td><td class="meta-cell">{{ board.sort_order }}</td><td><a class="small-button" href="{{ url_for('admin.boards.edit', {key: board.board_key}) }}">설정</a></td></tr>
+{% else %}<tr><td colspan="6" class="empty-row">아직 게시판이 없습니다. 첫 게시판을 만들어 보세요.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

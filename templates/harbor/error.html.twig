@@ -1,0 +1,18 @@
+{# harbor view: error.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<section class="harbor-status">
+  <span class="harbor-empty-icon">{{ ic.shield() }}</span>
+  <p class="harbor-section-kicker">Something went wrong</p>
+  <h1>{{ title }}</h1>
+  <p class="harbor-lead">{{ message }}</p>
+  {% if details is not empty %}
+    <ul class="errors harbor-errors">
+      {% for field, detail in details %}<li><strong>{{ field }}</strong>: {{ detail }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  <a class="harbor-btn harbor-btn-primary" href="{{ url_for('boards.index') }}">{{ ic.home() }} 홈으로 돌아가기</a>
+</section>
+{% endblock %}

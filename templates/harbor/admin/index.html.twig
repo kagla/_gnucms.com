@@ -1,0 +1,34 @@
+{# harbor view: admin/index.html.twig #}
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+{% block body %}
+<header class="harbor-admin-head">
+  <div>
+    <p class="harbor-section-kicker">{{ ic.settings() }} Dashboard</p>
+    <h1>사이트 관리</h1>
+    <p class="harbor-lead">사이트 내용과 커뮤니티를 복잡한 절차 없이 관리합니다.</p>
+  </div>
+  <div class="harbor-admin-actions">
+    <a class="harbor-btn harbor-btn-primary" href="{{ url_for('admin.content.create') }}">{{ ic.pen() }} 내용 만들기</a>
+  </div>
+</header>
+{% if query.saved|default('') == '1' %}<p class="harbor-notice harbor-notice-success">{{ ic.check() }} 변경사항을 저장했습니다.</p>{% endif %}
+{% if query.deleted|default('') == '1' %}<p class="harbor-notice harbor-notice-success">{{ ic.check() }} 게시판을 삭제했습니다.</p>{% endif %}
+<section class="harbor-stat-grid" aria-label="운영 현황">
+  <a class="harbor-stat-card harbor-stat-link" href="{{ url_for('admin.boards') }}">
+    <span class="harbor-stat-label">{{ ic.board() }} 게시판</span>
+    <strong>{{ board_count }}</strong>
+    <small>{{ ic.arrow() }} 관리하기</small>
+  </a>
+  <article class="harbor-stat-card">
+    <span class="harbor-stat-label">{{ ic.doc() }} 내용</span>
+    <strong>{{ page_count }}</strong>
+  </article>
+  <article class="harbor-stat-card">
+    <span class="harbor-stat-label">{{ ic.users() }} 게시글 / 회원</span>
+    <strong>{{ post_count }} / {{ user_count }}</strong>
+  </article>
+</section>
+{% endblock %}

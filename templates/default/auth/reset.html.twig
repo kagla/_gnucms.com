@@ -1,1 +1,38 @@
-{% extends "layout.html.twig" %}{% block title %}새 비밀번호 설정 · aboard{% endblock %}{% block body %}<div class="auth-shell"><section class="surface auth-card"><header class="auth-head"><p class="eyebrow">New password</p><h1>새 비밀번호 설정</h1></header><form class="auth-form" method="post" action="{{ url_for('auth.reset') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="token" value="{{ token }}"><label>새 비밀번호 <span class="muted">8자 이상</span><input type="password" name="password" minlength="8" autocomplete="new-password" required></label>{% if errors.password is defined %}<p class="field-error">{{ errors.password }}</p>{% endif %}<label>비밀번호 확인<input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required></label>{% if errors.password_confirmation is defined %}<p class="field-error">{{ errors.password_confirmation }}</p>{% endif %}{% if errors.token is defined %}<p class="field-error">{{ errors.token }}</p>{% endif %}<button class="auth-submit" type="submit">비밀번호 변경</button></form></section></div>{% endblock %}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}새 비밀번호 설정 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <div class="card-body">
+      <div class="auth-head">
+        <span class="auth-mark auth-mark-soft" aria-hidden="true">{{ ico.i('shield', 22) }}</span>
+        <h1 class="card-title">새 비밀번호 설정</h1>
+        <p class="card-sub">앞으로 사용할 비밀번호를 입력해 주세요.</p>
+      </div>
+      <form method="post" action="{{ url_for('auth.reset') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <fieldset class="fieldset{% if errors.password is defined %} is-invalid{% endif %}">
+          <legend class="fieldset-legend">새 비밀번호 <span class="legend-hint">8자 이상</span></legend>
+          <label class="input input-bordered input-block">
+            <span class="input-icon" aria-hidden="true">{{ ico.i('lock', 16) }}</span>
+            <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          {% if errors.password is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.password }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset{% if errors.password_confirmation is defined %} is-invalid{% endif %}">
+          <legend class="fieldset-legend">비밀번호 확인</legend>
+          <label class="input input-bordered input-block">
+            <span class="input-icon" aria-hidden="true">{{ ico.i('lock', 16) }}</span>
+            <input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
+          </label>
+          {% if errors.password_confirmation is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.password_confirmation }}</p>{% endif %}
+        </fieldset>
+        {% if errors.token is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.token }}</p>{% endif %}
+        <button class="btn btn-primary btn-block btn-lg" type="submit">비밀번호 변경</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

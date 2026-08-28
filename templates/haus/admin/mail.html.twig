@@ -1,0 +1,124 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}메일 설정 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}mail{% endblock %}
+{% block body %}
+<nav class="breadcrumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><span aria-current="page">메일 설정</span></nav>
+<section class="card">
+  <div class="card-header">
+    <h1>{{ ico.i('mail', 19) }} 메일 설정</h1>
+    <p class="card-sub">회원 인증과 비밀번호 재설정 메일을 보낼 계정을 연결합니다.</p>
+  </div>
+  <div class="card-alert">
+    {% if query.saved|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>SMTP 설정을 저장했습니다.</span></div>{% endif %}
+    {% if query.tested|default('') == '1' %}<div class="alert alert-success"><span class="alert-icon" aria-hidden="true">{{ ico.i('check-circle', 17) }}</span><span>발신 주소로 테스트 메일을 보냈습니다.</span></div>{% endif %}
+    {% if test_error %}<div class="alert alert-danger"><span class="alert-icon" aria-hidden="true">{{ ico.i('warning', 17) }}</span><span>{{ test_error }}</span></div>{% endif %}
+  </div>
+
+  <form class="card-body form" method="post" action="{{ url_for('admin.mail') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="switch-group">
+      <label class="switch">
+        <input type="checkbox" name="enabled" value="1"{{ values.enabled|default(false) ? ' checked' : '' }}>
+        <span class="switch-ui" aria-hidden="true"></span>
+        <span class="switch-copy"><strong>SMTP로 메일 보내기</strong></span>
+      </label>
+    </div>
+
+    <fieldset class="fieldset">
+      <legend>서버</legend>
+      <div class="form-group">
+        <label class="label" for="m-provider">메일 서비스</label>
+        <select class="input select" id="m-provider" name="provider" data-mail-provider>
+          <option value="gmail"{{ values.provider|default('gmail') == 'gmail' ? ' selected' : '' }}>Gmail</option>
+          <option value="naver"{{ values.provider|default('') == 'naver' ? ' selected' : '' }}>네이버 메일</option>
+          <option value="daum"{{ values.provider|default('') == 'daum' ? ' selected' : '' }}>다음 메일</option>
+          <option value="custom"{{ values.provider|default('') == 'custom' ? ' selected' : '' }}>직접 설정</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="form-group{% if errors.host is defined %} has-error{% endif %}">
+          <label class="label" for="m-host">SMTP 서버</label>
+          <input class="input" id="m-host" type="text" name="host" value="{{ values.host|default('smtp.gmail.com') }}" maxlength="253" data-mail-host required>
+          {% if errors.host is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.host }}</p>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label" for="m-port">포트</label>
+          <input class="input" id="m-port" type="number" name="port" value="{{ values.port|default(465) }}" min="1" max="65535" data-mail-port required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="label" for="m-enc">보안 연결</label>
+        <select class="input select" id="m-enc" name="encryption" data-mail-encryption>
+          <option value="ssl"{{ values.encryption|default('ssl') == 'ssl' ? ' selected' : '' }}>SSL/TLS</option>
+          <option value="tls"{{ values.encryption|default('') == 'tls' ? ' selected' : '' }}>STARTTLS</option>
+        </select>
+      </div>
+      <p class="hint-panel" data-mail-help></p>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>계정</legend>
+      <div class="form-group{% if errors.username is defined %} has-error{% endif %}">
+        <label class="label" for="m-user">SMTP 사용자 이름</label>
+        <input class="input" id="m-user" type="text" name="username" value="{{ values.username|default('') }}" maxlength="254" autocomplete="username" required>
+        {% if errors.username is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.username }}</p>{% endif %}
+      </div>
+      <div class="form-group{% if errors.password is defined %} has-error{% endif %}">
+        <label class="label" for="m-pass">앱 비밀번호</label>
+        <input class="input" id="m-pass" type="password" name="password" value="" autocomplete="new-password" placeholder="{{ values.password_set|default(false) ? '저장됨 · 변경할 때만 입력' : '앱 비밀번호 입력' }}">
+        {% if errors.password is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.password }}</p>{% endif %}
+        <p class="help-text">일반 로그인 비밀번호가 아니라 메일 서비스에서 발급한 앱 비밀번호를 사용하세요.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>발신 정보</legend>
+      <div class="grid-2">
+        <div class="form-group{% if errors.from_email is defined %} has-error{% endif %}">
+          <label class="label" for="m-from">발신 이메일</label>
+          <input class="input" id="m-from" type="email" name="from_email" value="{{ values.from_email|default('') }}" maxlength="254" required>
+          {% if errors.from_email is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.from_email }}</p>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label" for="m-from-name">발신 이름</label>
+          <input class="input" id="m-from-name" type="text" name="from_name" value="{{ values.from_name|default('aboard') }}" maxlength="100" required>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <a class="btn btn-white" href="{{ url_for('admin.index') }}">취소</a>
+      <button class="btn btn-primary" type="submit">설정 저장</button>
+    </div>
+  </form>
+
+  {% if values.password_set|default(false) and values.enabled|default(false) %}
+    <form class="card-footer" method="post" action="{{ url_for('admin.mail.test') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-white" type="submit">{{ ico.i('mail', 15) }} 테스트 메일 보내기</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var provider=document.querySelector('[data-mail-provider]');if(!provider){return}
+  var host=document.querySelector('[data-mail-host]'),port=document.querySelector('[data-mail-port]'),enc=document.querySelector('[data-mail-encryption]'),help=document.querySelector('[data-mail-help]');
+  var presets={
+    gmail:{host:'smtp.gmail.com',port:'465',encryption:'ssl',help:'Google 계정의 2단계 인증을 켠 뒤 16자리 앱 비밀번호를 발급하세요.'},
+    naver:{host:'smtp.naver.com',port:'587',encryption:'tls',help:'네이버 메일에서 IMAP/SMTP 사용을 켜고 애플리케이션 비밀번호를 발급하세요.'},
+    daum:{host:'smtp.daum.net',port:'465',encryption:'ssl',help:'다음 계정에서 앱 비밀번호를 발급해 사용하세요.'}
+  };
+  function sync(change){
+    var p=presets[provider.value],custom=!p;
+    host.readOnly=!custom;port.readOnly=!custom;enc.disabled=!custom;
+    if(change&&p){host.value=p.host;port.value=p.port;enc.value=p.encryption}
+    help.textContent=p?p.help:'SMTP 제공업체가 안내한 서버, 포트와 보안 연결을 입력하세요.';
+  }
+  provider.addEventListener('change',function(){sync(true)});
+  sync(false);
+})();
+</script>
+{% endblock %}

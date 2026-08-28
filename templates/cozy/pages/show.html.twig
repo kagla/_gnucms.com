@@ -1,0 +1,19 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ page.title }} · {{ site.site_name }}{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ page.seo_description ?: site.site_tagline }}">{% endblock %}
+{% block body %}
+{% if preview %}
+  <div class="banner banner-info">
+    <span>{{ page.status == 'published' ? '공개된 내용 미리보기입니다.' : '아직 공개되지 않은 초안 미리보기입니다.' }}</span>
+    <a class="link" href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
+  </div>
+{% endif %}
+<article class="detail detail-page">
+  <header class="detail-head">
+    <span class="chip-tone" data-tone="1">{{ site.site_name }}</span>
+    <h1 class="detail-title">{{ page.title }}</h1>
+    {% if page.seo_description %}<p class="detail-summary">{{ page.seo_description }}</p>{% endif %}
+  </header>
+  <div class="detail-body prose rich-content">{{ page.content|cms_html }}</div>
+</article>
+{% endblock %}

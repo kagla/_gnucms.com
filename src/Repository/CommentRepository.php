@@ -10,13 +10,14 @@ use ApiBoard\Support\Clock;
 final class CommentRepository
 {
     private const COLUMNS = 'id, board_id, post_id, parent_id, depth, content, author_id, author_name,'
-        . ' is_secret, created_at, updated_at, deleted_at';
+        . ' is_secret, image_key, created_at, updated_at, deleted_at';
 
     private const DEFAULTS = [
         'parent_id'      => null,
         'author_id'      => null,
         'guest_password' => null,
         'is_secret'      => 0,
+        'image_key'      => null,
     ];
 
     /** @var Connection */

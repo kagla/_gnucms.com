@@ -1,0 +1,12 @@
+{% extends "layout.html.twig" %}
+{% block title %}비밀번호 변경 완료 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="gate">
+  <section class="gate-card gate-card-done">
+    <span class="gate-mark gate-mark-ok" aria-hidden="true">✓</span>
+    <h1>비밀번호를 변경했어요</h1>
+    <p class="gate-sub">새 비밀번호로 다시 로그인해 주세요.</p>
+    <a class="btn btn-brand btn-lg btn-block" href="{{ url_for('auth.login') }}">로그인하기</a>
+  </section>
+</div>
+{% endblock %}

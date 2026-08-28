@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
+use ApiBoard\Cms\ContentImageService;
+use ApiBoard\Cms\HtmlSanitizer;
 use ApiBoard\Comment\TreeBuilder;
 use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\CommentRepository;
@@ -24,11 +26,54 @@ final class CommentService
     /** @var CommentRepository */
     private $comments;
 
-    public function __construct(PostService $postService, PostRepository $postRepo, CommentRepository $comments)
-    {
+    /** @var HtmlSanitizer */
+    private $sanitizer;
+
+    /** @var ContentImageService */
+    private $images;
+
+    /** @var NotificationService|null */
+    private $notifications;
+
+    public function __construct(
+        PostService $postService,
+        PostRepository $postRepo,
+        CommentRepository $comments,
+        HtmlSanitizer $sanitizer,
+        ContentImageService $images,
+        ?NotificationService $notifications = null
+    ) {
         $this->postService = $postService;
         $this->postRepo = $postRepo;
         $this->comments = $comments;
+        $this->sanitizer = $sanitizer;
+        $this->images = $images;
+        $this->notifications = $notifications;
+    }
+
+    /** 댓글 본문도 편집기 HTML 이다. 저장과 출력 두 곳에서 정화한다. */
+    private function cleanContent(string $raw): string
+    {
+        return $this->sanitizer->clean($raw);
+    }
+
+    /** 편집기가 올린 이미지를 묶는 폴더 이름. */
+    private function editorImageKey(Validator $v, array $input): ?string
+    {
+        if (!array_key_exists('image_key', $input)) {
+            return null;
+        }
+        $key = strtolower((string) $v->optionalString('image_key', 32));
+        if ($key === '') {
+            return null;
+        }
+        if (preg_match('/^[a-f0-9]{32}$/D', $key) !== 1) {
+            $v->fail('image_key', '이미지 저장 정보를 확인할 수 없습니다.');
+
+            return null;
+        }
+
+        return $key;
     }
 
     public function listComments(Acl $acl, int $postId, ?string $password): array
@@ -57,8 +102,9 @@ final class CommentService
         $data = [
             'board_id' => (int) $post['board_id'],
             'post_id'  => $postId,
-            'content'  => $v->requiredString('content'),
+            'content'  => $this->cleanContent($v->requiredString('content')),
         ];
+        $data['image_key'] = $this->editorImageKey($v, $input);
 
         $parentId = $v->int('parent_id', 0, 0, PHP_INT_MAX);
         if ($parentId > 0) {
@@ -89,6 +135,12 @@ final class CommentService
 
         $id = $this->comments->create($data);
         $this->postRepo->adjustCommentCount($postId, 1);
+        if ($data['image_key'] !== null) {
+            $this->images->sync((string) $data['image_key'], (string) $data['content']);
+        }
+        if ($this->notifications !== null) {
+            $this->notifications->notifyComment($postId, $id);
+        }
 
         return $this->present($this->comments->find($id));
     }
@@ -105,13 +157,21 @@ final class CommentService
         $password = $v->optionalPassword('password');
         $acl->assertCanModify($board, $comment, $password);
 
-        $data = ['content' => $v->requiredString('content')];
+        $data = ['content' => $this->cleanContent($v->requiredString('content'))];
         if (array_key_exists('is_secret', $input)) {
             $data['is_secret'] = $v->bool('is_secret', false) ? 1 : 0;
+        }
+        $imageKey = $this->editorImageKey($v, $input);
+        if ($imageKey !== null) {
+            $data['image_key'] = $imageKey;
         }
         $v->check();
 
         $this->comments->update($id, $data);
+        // 고치면서 뺀 사진은 더 둘 이유가 없다.
+        if ($imageKey !== null) {
+            $this->images->sync($imageKey, (string) $data['content']);
+        }
 
         return $this->present($this->comments->find($id));
     }
@@ -144,6 +204,29 @@ final class CommentService
      * 비밀 댓글의 내용을 트리 조립 전에 가린다. 트리를 만든 뒤 순회하는 것보다
      * 단순하고, 구조(누가 누구에게 달았는지)는 그대로 남는다.
      */
+    /**
+     * 수정 화면에 쓸 댓글 하나를 내준다.
+     *
+     * 글을 읽을 수 있어야 하고, 비밀 댓글이면 목록과 같은 기준으로 가려진다.
+     * 가려진 댓글은 내용을 보여 줄 수 없으므로 아예 없는 것으로 다룬다.
+     */
+    public function getForEdit(Acl $acl, int $id): array
+    {
+        $comment = $this->comments->find($id);
+        if ($comment === null || $comment['deleted_at'] !== null) {
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
+        }
+
+        $loaded = $this->postService->loadForRead($acl, (int) $comment['post_id'], null);
+        $masked = $this->maskSecrets([$comment], $acl, $loaded['post'], $loaded['board'])[0];
+        if ($masked['content'] === self::SECRET_PLACEHOLDER && (int) $comment['is_secret'] === 1) {
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
+        }
+
+        // 편집기가 올린 사진을 이어서 관리하려면 수정 화면도 같은 키를 알아야 한다.
+        return $this->present($comment) + ['image_key' => $comment['image_key']];
+    }
+
     private function maskSecrets(array $rows, Acl $acl, array $post, array $board): array
     {
         $sub = $acl->identity()->sub();

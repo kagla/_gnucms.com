@@ -1,0 +1,15 @@
+{# harbor view: auth/reset_sent.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}이메일을 확인해 주세요 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="harbor-auth-card harbor-status-card">
+    <span class="harbor-empty-icon">{{ ic.mail() }}</span>
+    <p class="harbor-section-kicker">{{ ic.mail() }} Check your inbox</p>
+    <h1>이메일을 확인해 주세요</h1>
+    <p class="harbor-lead">가입된 계정이라면 비밀번호 재설정 링크를 보냈습니다.</p>
+    <p class="auth-switch"><a href="{{ url_for('auth.login') }}">{{ ic.user() }} 로그인으로 돌아가기</a></p>
+  </section>
+</div>
+{% endblock %}

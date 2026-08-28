@@ -1,0 +1,33 @@
+{% extends "layout.html.twig" %}
+{% block title %}로그인 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="gate">
+  <section class="gate-card">
+    <header class="gate-head">
+      <span class="gate-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.4 12 3.6l8.5 6.8"/><path d="M5.8 12v7.2a1 1 0 0 0 1 1h10.4a1 1 0 0 0 1-1V12"/></svg>
+      </span>
+      <h1>{{ site.site_name }}에 로그인</h1>
+      <p class="gate-sub">이야기를 이어서 나눠 보세요.</p>
+    </header>
+    <form class="form" method="post" action="{{ url_for('auth.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field{% if errors.email is defined %} is-bad{% endif %}">
+        <label class="field-label" for="login-email">이메일</label>
+        <input id="login-email" type="email" name="email" value="{{ values.email|default('') }}" autocomplete="email" placeholder="you@example.com" required>
+        {% if errors.email is defined %}<p class="field-msg">{{ errors.email }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <div class="field-label-row">
+          <label class="field-label" for="login-password">비밀번호</label>
+          <a class="link" href="{{ url_for('auth.forgot') }}">비밀번호 찾기</a>
+        </div>
+        <input id="login-password" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-brand btn-lg btn-block" type="submit">로그인</button>
+    </form>
+    {% include "auth/_social.html.twig" %}
+    <p class="gate-switch">아직 회원이 아니신가요? <a href="{{ url_for('auth.register') }}">회원가입</a></p>
+  </section>
+</div>
+{% endblock %}

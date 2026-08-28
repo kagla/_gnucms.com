@@ -1,0 +1,13 @@
+{% extends "layout.html.twig" %}
+{% block title %}이메일 인증 완료 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="lumen-auth-card lumen-status-card">
+    <span class="status-dot"></span>
+    <p class="lumen-section-kicker">Welcome aboard</p>
+    <h1>인증이 완료됐습니다</h1>
+    <p class="lumen-lead">이제 로그인하고 커뮤니티에 참여할 수 있습니다.</p>
+    <a class="lumen-btn lumen-btn-primary lumen-btn-block" href="{{ url_for('auth.login') }}">로그인하기</a>
+  </section>
+</div>
+{% endblock %}

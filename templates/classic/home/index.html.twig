@@ -1,0 +1,12 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="home-hero"><p class="eyebrow">{{ site.site_tagline }}</p><h1>{{ site.home_title }}</h1><p class="lead">{{ site.home_intro }}</p></section>
+<div class="community-head"><div><h2>커뮤니티</h2><p class="muted">최근 이야기를 게시판별로 모았습니다.</p></div></div>
+{% if boards is empty %}<div class="surface"><p class="empty">아직 만들어진 게시판이 없습니다.</p></div>{% else %}
+<div class="board-grid">{% for board in boards %}<section class="board-card">
+  <a class="board-card-link" href="{{ url_for('posts.index', {'key': board.board_key}) }}"><span class="board-name">{{ board.name }}</span><span class="board-description">{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</span></a>
+  <div class="latest-block"><div class="latest-head"><span>최신글</span><a class="latest-more" href="{{ url_for('posts.index', {'key': board.board_key}) }}">전체보기</a></div>
+  {% if board.latest_posts is empty %}<p class="latest-empty">아직 등록된 글이 없습니다.</p>{% else %}<ul class="latest-list">{% for post in board.latest_posts %}<li class="latest-item"><a href="{{ url_for('posts.show', {'id': post.id}) }}"><span class="latest-title">{% if post.is_notice %}<span class="tag">공지</span>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<span class="latest-comment">{{ post.comment_count }}</span>{% endif %}</span><time class="latest-date" datetime="{{ post.created_at }}">{{ post.created_at|slice(0, 10) }}</time></a></li>{% endfor %}</ul>{% endif %}
+  </div></section>{% endfor %}</div>{% endif %}
+{% endblock %}

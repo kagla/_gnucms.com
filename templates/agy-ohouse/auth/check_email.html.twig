@@ -1,0 +1,18 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}이메일을 확인해 주세요 · {{ site.site_name }}{% endblock %}
+
+{% block body %}
+<div style="max-width: 460px; margin: 3.5rem auto; text-align: center;">
+  <section class="card" style="padding: clamp(2rem, 5vw, 3rem);">
+    <div style="color: var(--primary); margin-bottom: 1rem;">
+      {{ ico.i('mail', 56) }}
+    </div>
+    <span class="badge badge-soft" style="align-self: center; margin-bottom: 0.5rem;">Almost there</span>
+    <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main); margin-bottom: 0.5rem;">이메일을 확인해 주세요</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 2rem;">가입하신 이메일로 인증 링크를 보냈습니다. 링크를 확인하여 가입을 완료해 주세요.</p>
+    <a class="btn btn-primary btn-block" href="{{ url_for('auth.login') }}">로그인으로 이동</a>
+  </section>
+</div>
+{% endblock %}

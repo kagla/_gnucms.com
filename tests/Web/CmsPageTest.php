@@ -152,7 +152,7 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('<h1>약관 관리</h1>', $this->body($legalPage));
         self::assertStringContainsString('이용약관', $this->body($legalPage));
         self::assertStringContainsString('/admin/terms/service', $this->body($legalPage));
-        self::assertStringContainsString('<td class="meta-cell">/terms/service</td>', $this->body($legalPage));
+        self::assertStringContainsString('>/terms/service<', $this->body($legalPage));
         self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
         $terms = $app->cms()->findBySlug('terms');
         self::assertSame(200, $this->get($app, '/admin/terms/service')->getStatusCode());

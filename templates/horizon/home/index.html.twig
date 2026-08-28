@@ -1,0 +1,78 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="nest-banner" aria-label="추천">
+  <div class="nest-banner-slide">
+    <div class="nest-banner-copy">
+      <p class="nest-eyebrow">{{ ic.sparkle() }} 오늘의 픽</p>
+      <h1>{{ site.home_title }}</h1>
+      <p class="nest-lead">{{ site.home_intro }}</p>
+      {% if boards is not empty %}
+        <a class="nest-btn nest-btn-primary nest-btn-lg" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">{{ ic.arrow() }} 지금 둘러보기</a>
+      {% endif %}
+    </div>
+    <div class="nest-banner-visual" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+</section>
+
+{% if boards is not empty %}
+<nav class="nest-chips" aria-label="게시판 카테고리">
+  {% for board in boards %}
+    <a class="nest-chip{% if loop.first %} is-active{% endif %}" href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ ic.chip() }}<span>{{ board.name }}</span></a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<section class="nest-feed" aria-labelledby="nest-feed-title">
+  <header class="nest-feed-head">
+    <h2 id="nest-feed-title">{{ ic.comment() }} 오늘의 이야기</h2>
+    <p>커뮤니티에서 올라온 최신 글을 모았습니다.</p>
+  </header>
+  {% if boards is empty %}
+    <div class="nest-empty-state">{{ ic.empty() }}<p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="nest-card-grid">
+      {% for board in boards %}
+        {% for post in board.latest_posts|slice(0, 2) %}
+          <article class="nest-feed-card">
+            <a href="{{ url_for('posts.show', {'id': post.id}) }}" class="nest-feed-thumb nest-thumb-{{ (loop.index0 + loop.parent.loop.index0) % 6 }}" aria-hidden="true"></a>
+            <div class="nest-feed-body">
+              <p class="nest-feed-board">{{ ic.board() }} {{ board.name }}</p>
+              <h3><a href="{{ url_for('posts.show', {'id': post.id}) }}">{% if post.is_notice %}<span class="nest-tag">{{ ic.pin() }} 공지</span>{% endif %}{{ post.title }}</a></h3>
+              <p class="nest-feed-meta"><span class="nest-meta-item">{{ ic.user() }} {{ post.author_name }}</span><span class="nest-meta-item">{{ ic.calendar() }} {{ post.created_at|slice(0, 10) }}</span>{% if post.comment_count > 0 %}<span class="nest-meta-item">{{ ic.comment() }} {{ post.comment_count }}</span>{% endif %}</p>
+            </div>
+          </article>
+        {% else %}
+          <article class="nest-feed-card nest-feed-card-empty">
+            <a href="{{ url_for('posts.index', {'key': board.board_key}) }}" class="nest-feed-thumb nest-thumb-muted"></a>
+            <div class="nest-feed-body">
+              <p class="nest-feed-board">{{ ic.board() }} {{ board.name }}</p>
+              <h3><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ ic.pen() }} 첫 이야기를 시작해 보세요</a></h3>
+              <p class="nest-feed-meta">{{ board.description ?: '새로운 공간이 열렸습니다.' }}</p>
+            </div>
+          </article>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="nest-spaces" id="nest-boards" aria-labelledby="nest-spaces-title">
+  <header class="nest-feed-head">
+    <h2 id="nest-spaces-title">{{ ic.grid() }} 공간 둘러보기</h2>
+    <p>관심 주제의 게시판으로 이동하세요.</p>
+  </header>
+  {% if boards is not empty %}
+    <div class="nest-space-list">
+      {% for board in boards %}
+        <a class="nest-space-item" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+          <span class="nest-space-icon" aria-hidden="true">{{ ic.board() }}</span>
+          <span class="nest-space-copy"><strong>{{ board.name }}</strong><small>{{ board.description ?: '이야기와 소식을 나누는 공간' }}</small></span>
+          <span class="nest-space-arrow" aria-hidden="true">{{ ic.arrow() }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

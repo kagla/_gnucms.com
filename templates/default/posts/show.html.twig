@@ -1,27 +1,246 @@
 {% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
 {% block title %}{{ post.title }} · {{ site.site_name }}{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ post.content|striptags|slice(0, 150) }}">{% endblock %}
+{% block nav_section %}board{% endblock %}
+{% block extra_tabs %}<a class="tab tab-active" href="{{ url_for('posts.index', {'key': board.board_key}) }}" aria-current="page">{{ board.name }}</a>{% endblock %}
 {% block body %}
-  <nav class="breadcrumb" aria-label="현재 위치">
-    <a href="{{ url_for('boards.index') }}">게시판</a><span class="breadcrumb-separator" aria-hidden="true">/</span>
-    <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a><span class="breadcrumb-separator" aria-hidden="true">/</span><span>게시글</span>
-  </nav>
-  <article class="surface article-card">
-    <header class="article-header">
-      {% if post.category %}<p class="eyebrow">{{ post.category }}</p>{% endif %}
-      <h1 class="article-title">{{ post.title }}</h1>
-      <p class="article-meta"><strong>{{ post.author_name }}</strong><span>{{ post.created_at }}</span><span>조회 {{ post.view_count }}</span></p>
-    </header>
-    <div class="article-body">{{ post.content|nl2br }}</div>
-    {% if post.attachments is not empty %}
-      <section aria-labelledby="attachments-title"><h2 id="attachments-title">첨부파일</h2><ul class="attachments">
-      {% for file in post.attachments %}
-        <li><a href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">{{ file.name }}</a><span class="muted">{{ file.size }} bytes</span></li>
-      {% endfor %}
-      </ul></section>
+<div class="read-progress" aria-hidden="true"></div>
+
+<div class="breadcrumbs">
+  <ul>
+    <li><a href="{{ url_for('boards.index') }}">홈</a></li>
+    <li><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a></li>
+    <li aria-current="page">게시글</li>
+  </ul>
+</div>
+
+<article class="card article">
+  <div class="card-body article-head">
+    {% if post.category %}<span class="badge badge-ghost">{{ ico.i('tag', 13) }} {{ post.category }}</span>{% endif %}
+    <h1 class="card-title article-title">{{ post.title }}</h1>
+    <div class="article-writer">
+      <span class="avatar avatar-placeholder avatar-sm">
+        <span class="avatar-inner" data-tone="{{ post.author_name|length % 6 }}" aria-hidden="true"><span>{{ post.author_name|slice(0, 1)|upper }}</span></span>
+      </span>
+      <span class="article-writer-copy">
+        <strong>{{ post.author_name }}</strong>
+        <span class="article-writer-meta">
+          <time datetime="{{ post.created_at }}">{{ post.created_at|date('y-m-d H:i:s') }}</time>
+          <span class="stat-inline">{{ ico.i('eye', 14) }} 조회 {{ post.view_count }}</span>
+          {# 댓글 수를 누르면 댓글 자리로 간다. 따로 "댓글 보기" 를 둘 이유가 없다. #}
+          <a class="stat-inline stat-inline-link" href="#comments">{{ ico.i('comment', 14) }} 댓글 {{ post.comment_count }}</a>
+        </span>
+      </span>
+      <span class="article-actions-inline">
+        {% set mine = current_user.is_admin
+          or (post.author_id is not null and current_user.id is not null and post.author_id == current_user.id)
+          or post.author_id is null %}
+        {% if mine %}
+          <a class="btn btn-outline btn-sm" href="{{ url_for('posts.edit', {'id': post.id}) }}">{{ ico.i('pencil', 14) }} 수정</a>
+        {% endif %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ ico.i('arrow-left', 15) }} 목록</a>
+      </span>
+    </div>
+  </div>
+
+  <div class="divider divider-flush"></div>
+
+  <div class="card-body article-body prose">{{ post.content|cms_html }}</div>
+
+  {% if post.attachments is not empty %}
+    <div class="card-body article-files">
+      <h2 class="section-title">{{ ico.i('clip', 16) }} 첨부파일 <span class="badge badge-ghost badge-sm">{{ post.attachments|length }}</span></h2>
+      <ul class="list file-list">
+        {% for file in post.attachments %}
+          <li class="list-row">
+            <span class="file-ico" aria-hidden="true">{{ ico.i('document', 17) }}</span>
+            <a class="file-name link link-hover" href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">{{ file.name }}</a>
+            <span class="file-size">{{ (file.size / 1024)|round }} KB</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</article>
+
+<section class="card comments" id="comments" aria-labelledby="comments-title">
+  <div class="card-body">
+    <h2 class="section-title" id="comments-title">{{ ico.i('comment', 16) }} 댓글 <span class="badge badge-primary badge-soft badge-sm">{{ post.comment_count }}</span></h2>
+    {# 댓글이 없을 때는 아무것도 그리지 않는다. 머리에 이미 "댓글 0" 이 있고,
+       바로 아래가 쓰는 자리라 빈 자리를 알리는 그림은 자리만 차지한다. #}
+    {% if comments is not empty %}
+      {% include 'posts/_comments.html.twig' with {'nodes': comments, 'nested': false, 'can_comment': can_comment} only %}
     {% endif %}
-    <section class="comments" aria-labelledby="comments-title">
-      <h2 id="comments-title">댓글 <span class="comment-count-heading">{{ post.comment_count }}</span></h2>
-      {% if comments is empty %}<p class="empty">첫 댓글을 기다리고 있습니다.</p>{% else %}{% include 'posts/_comments.html.twig' with {'nodes': comments, 'nested': false} only %}{% endif %}
-    </section>
-  </article>
+
+    {% if can_comment %}
+      {# 답글을 쓰면 폼이 그 댓글 아래로 옮겨 간다. 취소하면 이 자리로 돌아온다. #}
+      <div data-comment-form-home hidden></div>
+      <form class="comment-form" id="comment-form" method="post" action="{{ url_for('comments.create', {'id': post.id}) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="image_key" value="{{ comment_values.image_key|default('') }}">
+        <input type="hidden" name="uploaded_images" value="{{ comment_values.uploaded_images|default('') }}" data-uploaded-images>
+        <input type="hidden" name="parent_id" value="{{ comment_values.parent_id|default('') }}" data-parent-id>
+
+        <p class="comment-reply-to" data-reply-to hidden>
+          <span data-reply-name></span>님에게 답글
+          <button class="btn btn-ghost btn-sm" type="button" data-reply-cancel>취소</button>
+        </p>
+        <p class="comment-reply-to comment-edit-to" data-edit-to hidden>
+          내 댓글 고치는 중
+          <button class="btn btn-ghost btn-sm" type="button" data-edit-cancel>취소</button>
+        </p>
+
+        {% if current_user.is_guest %}
+          <div class="grid-2" data-guest-fields>
+            <fieldset class="fieldset{% if comment_errors.author_name is defined %} is-invalid{% endif %}" data-name-field>
+              <legend class="fieldset-legend">이름</legend>
+              <input class="input input-bordered input-block" type="text" name="author_name" value="{{ comment_values.author_name|default('') }}" maxlength="100" required>
+              {% if comment_errors.author_name is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ comment_errors.author_name }}</p>{% endif %}
+            </fieldset>
+            <fieldset class="fieldset{% if comment_errors.password is defined %} is-invalid{% endif %}">
+              <legend class="fieldset-legend">비밀번호 <span class="legend-hint">수정·삭제에 씁니다</span></legend>
+              <input class="input input-bordered input-block" type="password" name="password" required>
+              {% if comment_errors.password is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ comment_errors.password }}</p>{% endif %}
+            </fieldset>
+          </div>
+        {% endif %}
+
+        <fieldset class="fieldset{% if comment_errors.content is defined %} is-invalid{% endif %}">
+          <legend class="fieldset-legend sr-only">댓글 내용</legend>
+          <textarea class="textarea textarea-bordered textarea-block" id="comment-content" name="content" rows="4" required placeholder="댓글을 남겨 주세요">{{ comment_values.content|default('') }}</textarea>
+          {% if comment_errors.content is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ comment_errors.content }}</p>{% endif %}
+        </fieldset>
+
+        <div class="comment-form-foot">
+          {% if board.use_secret %}
+            <label class="label toggle-row comment-secret">
+              <input class="toggle toggle-primary" type="checkbox" name="is_secret" value="1"{% if comment_values.is_secret|default(false) %} checked{% endif %}>
+              <span><strong>{{ ico.i('lock', 14) }} 비밀 댓글</strong></span>
+            </label>
+          {% endif %}
+          <button class="btn btn-primary" type="submit" data-submit>댓글 등록</button>
+          {# 고치는 중에만 나온다. 같은 폼을 삭제 주소로 보내므로 비밀번호 칸도 함께 간다. #}
+          <button class="btn btn-error btn-outline btn-delete" type="submit" data-delete hidden formnovalidate
+                  onclick="return confirm('이 댓글을 삭제할까요? 되돌릴 수 없습니다.')">{{ ico.i('trash', 15) }} 삭제</button>
+        </div>
+      </form>
+    {% else %}
+      <p class="comment-denied">{% if current_user.is_guest %}댓글을 쓰려면 <a class="link" href="{{ url_for('auth.login') }}">로그인</a>이 필요합니다.{% else %}이 게시판에 댓글을 쓸 권한이 없습니다.{% endif %}</p>
+    {% endif %}
+  </div>
+</section>
+
+<div class="article-actions">
+  <a class="btn btn-outline btn-lg" href="{{ url_for('posts.index', {'key': board.board_key}) }}">목록으로 돌아가기</a>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if can_comment %}
+  {% include 'posts/_editor.html.twig' with {
+    'editor_id': 'comment-content',
+    'upload_url': url_for('comment.editor.images', {'id': post.id}) ~ '?csrf_token=' ~ (csrf_token|url_encode) ~ '&image_key=' ~ (comment_values.image_key|default('')|url_encode),
+    'discard_url': url_for('comment.editor.images.discard', {'id': post.id}) ~ '?csrf_token=' ~ (csrf_token|url_encode) ~ '&image_key=' ~ (comment_values.image_key|default('')|url_encode),
+    'editor_mini': true
+  } only %}
+  <script>
+  (function(){
+    var form=document.getElementById('comment-form');
+    if(!form){return}
+    var home=document.querySelector('[data-comment-form-home]'),
+        parent=form.querySelector('[data-parent-id]'),bar=form.querySelector('[data-reply-to]'),
+        name=form.querySelector('[data-reply-name]'),cancel=form.querySelector('[data-reply-cancel]'),
+        editBar=form.querySelector('[data-edit-to]'),editCancel=form.querySelector('[data-edit-cancel]'),
+        del=form.querySelector('[data-delete]'),
+        imageKey=form.querySelector('[name="image_key"]'),
+        nameField=form.querySelector('[data-name-field]'),
+        submit=form.querySelector('[data-submit]'),
+        createAction=form.getAttribute('action'),
+        submitLabel=submit?submit.textContent:'댓글 등록';
+
+    /* 폼을 옮길 때는 편집기를 껐다 켜야 한다. 편집기가 아직 없으면 그냥 옮긴다. */
+    function place(move){
+      var api=window.aboardEditor&&window.aboardEditor['comment-content'];
+      if(api){api.remount(move)}else{move()}
+    }
+
+    function toReply(button){
+      var id=button.getAttribute('data-reply'),target=document.getElementById('comment-'+id);
+      if(!target){return}
+      parent.value=id;
+      name.textContent=button.getAttribute('data-reply-author')||'';
+      bar.hidden=false;
+      form.classList.add('is-reply');
+      place(function(){
+        /* 답글의 답글이 이미 달려 있으면 그 묶음 뒤에 놓아야 순서가 맞다. */
+        var after=target.nextElementSibling;
+        if(after&&after.classList.contains('comment-thread-sub')){target=after}
+        target.parentNode.insertBefore(form,target.nextSibling);
+      });
+      focusSoon();
+    }
+
+    /* 댓글을 이 자리에서 고친다. 폼을 그 댓글 아래로 옮기고 보낼 곳만 바꾼다.
+       화면에 보이는 본문은 사진이 축소본으로 바뀐 것이라 그대로 쓰면 안 되므로,
+       템플릿에 담아 둔 원래 내용을 편집기에 넣는다. */
+    function toEdit(link){
+      var id=link.getAttribute('data-edit'),
+          target=document.getElementById('comment-'+id),
+          source=document.querySelector('template[data-source="'+id+'"]');
+      if(!target||!source){return}
+
+      parent.value='';
+      bar.hidden=true;
+      editBar.hidden=false;
+      form.classList.remove('is-reply');
+      form.classList.add('is-editing');
+      form.setAttribute('action',link.getAttribute('data-edit-action'));
+      if(nameField){nameField.hidden=true}
+      if(submit){submit.textContent='댓글 저장'}
+      if(del){del.hidden=false;del.setAttribute('formaction',link.getAttribute('data-delete-action')||'')}
+      if(imageKey){imageKey.value=''}
+
+      var textarea=document.getElementById('comment-content');
+      place(function(){
+        textarea.value=source.content.textContent;
+        target.parentNode.insertBefore(form,target.nextSibling);
+      });
+      focusSoon();
+    }
+
+    /* 답글·수정 어느 쪽이든 처음 상태로 되돌린다. */
+    function reset(){
+      parent.value='';
+      bar.hidden=true;
+      editBar.hidden=true;
+      form.classList.remove('is-reply','is-editing');
+      form.setAttribute('action',createAction);
+      if(nameField){nameField.hidden=false}
+      if(submit){submit.textContent=submitLabel}
+      if(del){del.hidden=true;del.removeAttribute('formaction')}
+      var textarea=document.getElementById('comment-content');
+      place(function(){
+        textarea.value='';
+        if(home){home.parentNode.insertBefore(form,home.nextSibling)}
+      });
+    }
+
+    function focusSoon(){
+      form.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+      var api=window.aboardEditor&&window.aboardEditor['comment-content'];
+      if(api){window.setTimeout(api.focus,120)}
+    }
+
+    document.addEventListener('click',function(e){
+      if(!e.target.closest){return}
+      var button=e.target.closest('[data-reply]');
+      if(button){toReply(button);return}
+      var link=e.target.closest('[data-edit]');
+      if(link&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){e.preventDefault();toEdit(link)}
+    });
+    if(cancel){cancel.addEventListener('click',reset)}
+    if(editCancel){editCancel.addEventListener('click',reset)}
+  })();
+  </script>
+{% endif %}
 {% endblock %}

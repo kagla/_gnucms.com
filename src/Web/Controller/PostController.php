@@ -6,6 +6,7 @@ namespace ApiBoard\Web\Controller;
 
 use ApiBoard\App;
 use ApiBoard\Error\DomainError;
+use ApiBoard\Service\BoardService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
@@ -35,11 +36,122 @@ final class PostController
             'board' => $board,
             'list'  => $list,
             'can_write' => $acl->canWrite($boardEntity),
+            'view' => $this->resolveView($query, $board),
+            'view_types' => BoardService::LIST_TYPES,
             'query' => [
                 'q'        => isset($query['q']) ? (string) $query['q'] : null,
                 'category' => isset($query['category']) ? (string) $query['category'] : null,
             ],
         ]);
+    }
+
+    public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $id = (int) $args['id'];
+        $loaded = $this->app->postService()->loadForRead($acl, $id, null);
+
+        return $this->renderEditForm($request, $response, $id, [
+            'title'     => $loaded['post']['title'],
+            'content'   => $loaded['post']['content'],
+            'category'  => $loaded['post']['category'],
+            'is_secret' => (bool) $loaded['post']['is_secret'],
+            'image_key' => (string) ($loaded['post']['image_key'] ?? '') ?: bin2hex(random_bytes(16)),
+        ], []);
+    }
+
+    public function update(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $id = (int) $args['id'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $this->assertCsrf($input);
+
+        try {
+            $this->app->postService()->update($acl, $id, $input);
+        } catch (DomainError $e) {
+            // 비밀번호가 틀린 경우(401/403)도 오류 화면 대신 폼에서 알려 준다.
+            if (!in_array($e->status(), [401, 403, 422], true)) {
+                throw $e;
+            }
+            $errors = $e->details();
+            if ($errors === []) {
+                $errors = ['password' => $e->getMessage()];
+            }
+
+            return $this->renderEditForm($request, $response->withStatus(422), $id, $input, $errors);
+        }
+
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('posts.show', ['id' => (string) $id]);
+
+        return $response->withHeader('Location', $url)->withStatus(303);
+    }
+
+    public function destroy(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $id = (int) $args['id'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $this->assertCsrf($input);
+
+        $boardKey = (string) $this->app->postService()
+            ->loadForRead($acl, $id, null)['board']['board_key'];
+
+        try {
+            $this->app->postService()->delete($acl, $id, isset($input['password']) ? (string) $input['password'] : null);
+        } catch (DomainError $e) {
+            if (!in_array($e->status(), [401, 403, 422], true)) {
+                throw $e;
+            }
+
+            return $this->renderEditForm($request, $response->withStatus(422), $id, $input, [
+                'password' => $e->getMessage(),
+            ]);
+        }
+
+        $url = RouteContext::fromRequest($request)->getRouteParser()
+            ->urlFor('posts.index', ['key' => $boardKey]);
+
+        return $response->withHeader('Location', $url)->withStatus(303);
+    }
+
+    private function renderEditForm(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        int $id,
+        array $values,
+        array $errors
+    ): ResponseInterface {
+        $acl = $this->app->guestAcl();
+        $loaded = $this->app->postService()->loadForRead($acl, $id, null);
+        $post = $loaded['post'];
+
+        return Twig::fromRequest($request)->render($response, 'posts/edit.html.twig', [
+            'board'  => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
+            'post'   => ['id' => $id, 'author_id' => $post['author_id']],
+            'errors' => $errors,
+            'values' => $values,
+            // 비회원이 쓴 글은 비밀번호로 주인을 확인한다. 관리자는 그냥 고칠 수 있다.
+            'needs_password' => $post['author_id'] === null && !$acl->isAdminFor($loaded['board']),
+        ]);
+    }
+
+    /**
+     * 목록 형태를 정한다. 게시판 설정이 기본값이고 ?view= 로 잠시 바꿔 볼 수 있다.
+     * 이 값은 템플릿 파일 이름에 들어가므로 반드시 허용 목록 안에서만 고른다.
+     */
+    private function resolveView(array $query, array $board): string
+    {
+        $requested = isset($query['view']) ? (string) $query['view'] : '';
+        if (in_array($requested, BoardService::LIST_TYPES, true)) {
+            return $requested;
+        }
+
+        $configured = (string) ($board['list_type'] ?? 'list');
+
+        return in_array($configured, BoardService::LIST_TYPES, true) ? $configured : 'list';
     }
 
     public function createForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -52,7 +164,8 @@ final class PostController
         return Twig::fromRequest($request)->render($response, 'posts/create.html.twig', [
             'board' => $this->app->boardService()->get($acl, $key),
             'errors' => [],
-            'values' => [],
+            // 편집기가 올린 이미지를 한 폴더로 묶는 키. 저장할 때 본문에 남은 것만 남긴다.
+            'values' => ['image_key' => bin2hex(random_bytes(16))],
         ]);
     }
 
@@ -103,6 +216,9 @@ final class PostController
             'post'     => $post,
             'board'    => $board,
             'comments' => $comments,
+            'can_comment' => $acl->canComment($loaded['board']),
+            'comment_errors' => [],
+            'comment_values' => ['image_key' => bin2hex(random_bytes(16))],
         ]);
     }
 

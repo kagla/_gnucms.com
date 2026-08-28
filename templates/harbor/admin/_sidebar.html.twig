@@ -1,0 +1,39 @@
+{# harbor view: admin/_sidebar.html.twig #}
+{% import '_icons.html.twig' as ic %}
+<aside class="admin-sidebar harbor-admin-sidebar" id="admin-sidebar">
+  <div class="harbor-admin-sidebar-top">
+    <a class="harbor-admin-brand" href="{{ url_for('admin.index') }}">
+      <span class="harbor-admin-brand-mark">{{ ic.logo(28) }}</span>
+      <span><strong>관리 콘솔</strong><small>{{ site.site_name }}</small></span>
+    </a>
+    <button class="admin-sidebar-toggle harbor-admin-toggle" type="button" aria-controls="admin-sidebar" aria-label="관리 메뉴 접기" aria-expanded="true" title="관리 메뉴 접기"><span aria-hidden="true">{{ ic.arrow() }}</span></button>
+  </div>
+  <nav class="admin-nav harbor-admin-nav" aria-label="관리 메뉴">
+    <div class="admin-nav-group">
+      <span class="admin-nav-label harbor-admin-nav-label">운영</span>
+      <a class="admin-nav-item admin-nav-dashboard harbor-admin-nav-item" href="{{ url_for('admin.index') }}" title="대시보드"><span class="admin-nav-icon">{{ ic.home() }}</span><span>대시보드</span></a>
+      <a class="admin-nav-item admin-nav-boards harbor-admin-nav-item" href="{{ url_for('admin.boards') }}" title="게시판 관리"><span class="admin-nav-icon">{{ ic.board() }}</span><span>게시판</span></a>
+      <a class="admin-nav-item admin-nav-content harbor-admin-nav-item" href="{{ url_for('admin.content') }}" title="내용 관리"><span class="admin-nav-icon">{{ ic.doc() }}</span><span>내용</span></a>
+      <a class="admin-nav-item admin-nav-members harbor-admin-nav-item" href="{{ url_for('admin.members') }}" title="회원 관리"><span class="admin-nav-icon">{{ ic.users() }}</span><span>회원</span></a>
+    </div>
+    <div class="admin-nav-group">
+      <span class="admin-nav-label harbor-admin-nav-label">설정</span>
+      <a class="admin-nav-item admin-nav-site harbor-admin-nav-item" href="{{ url_for('admin.settings') }}" title="사이트 설정"><span class="admin-nav-icon">{{ ic.settings() }}</span><span>사이트</span></a>
+      <a class="admin-nav-item admin-nav-mail harbor-admin-nav-item" href="{{ url_for('admin.mail') }}" title="메일 설정"><span class="admin-nav-icon">{{ ic.mail() }}</span><span>메일</span></a>
+      <a class="admin-nav-item admin-nav-legal harbor-admin-nav-item" href="{{ url_for('admin.terms') }}" title="약관 관리"><span class="admin-nav-icon">{{ ic.shield() }}</span><span>약관</span></a>
+      <a class="admin-nav-item admin-nav-security harbor-admin-nav-item" href="{{ url_for('admin.password') }}" title="계정 보안"><span class="admin-nav-icon">{{ ic.shield() }}</span><span>보안</span></a>
+    </div>
+  </nav>
+  <a class="admin-site-link harbor-admin-site-link" href="{{ url_for('boards.index') }}" title="사이트 보기"><span>{{ ic.external() }} 사이트 보기</span></a>
+  <div class="admin-account harbor-admin-account">
+    <span class="admin-account-name">{{ ic.user() }} {{ current_user.display_name }}</span>
+    <button class="theme-toggle harbor-theme-toggle harbor-icon-btn" type="button" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+      <span class="harbor-theme-moon">{{ ic.moon() }}</span>
+      <span class="harbor-theme-sun" hidden>{{ ic.sun() }}</span>
+    </button>
+    <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="logout-button harbor-btn harbor-btn-ghost" type="submit" title="로그아웃"><span class="admin-logout-icon">{{ ic.logout() }}</span><span class="admin-logout-label">로그아웃</span></button>
+    </form>
+  </div>
+</aside>

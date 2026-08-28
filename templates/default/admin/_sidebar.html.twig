@@ -1,26 +1,40 @@
-<aside class="admin-sidebar" id="admin-sidebar">
+{% import '_icons.html.twig' as ico %}
+<aside class="admin-sidebar">
   <div class="admin-sidebar-head">
-    <a class="admin-home-link" href="{{ url_for('admin.index') }}"><span class="admin-console-icon" aria-hidden="true">▦</span><strong>관리 콘솔</strong></a>
-    <button class="admin-sidebar-toggle" type="button" aria-controls="admin-sidebar" aria-label="관리 메뉴 접기" aria-expanded="true" title="관리 메뉴 접기"><span aria-hidden="true">‹</span></button>
+    <a class="brand" href="{{ url_for('admin.index') }}">
+      <span class="brand-logo" aria-hidden="true">{{ ico.i('dashboard', 17) }}</span>
+      <span class="admin-brand-copy">
+        <strong>관리 콘솔</strong>
+        <small>{{ site.site_name }}</small>
+      </span>
+    </a>
+    <button class="btn btn-ghost btn-square btn-sm admin-fold" type="button" aria-expanded="true" aria-label="관리 메뉴 접기">{{ ico.i('chevron-left', 17) }}</button>
   </div>
-  <nav class="admin-nav" aria-label="관리 메뉴">
-    <div class="admin-nav-group"><span class="admin-nav-label">운영</span>
-      <a class="admin-nav-item admin-nav-dashboard" href="{{ url_for('admin.index') }}" title="대시보드"><span class="admin-nav-icon" aria-hidden="true">⌂</span><span>대시보드</span></a>
-      <a class="admin-nav-item admin-nav-boards" href="{{ url_for('admin.boards') }}" title="게시판 관리"><span class="admin-nav-icon" aria-hidden="true">▤</span><span>게시판 관리</span></a>
-      <a class="admin-nav-item admin-nav-content" href="{{ url_for('admin.content') }}" title="내용 관리"><span class="admin-nav-icon" aria-hidden="true">□</span><span>내용 관리</span></a>
-      <a class="admin-nav-item admin-nav-members" href="{{ url_for('admin.members') }}" title="회원 관리"><span class="admin-nav-icon" aria-hidden="true">♙</span><span>회원 관리</span></a>
+
+  <ul class="menu admin-menu">
+    <li class="menu-title">운영</li>
+    <li><a href="{{ url_for('admin.index') }}"{% if section == 'dashboard' %} class="menu-active" aria-current="page"{% endif %} title="대시보드">{{ ico.i('dashboard', 18) }}<span class="menu-text">대시보드</span></a></li>
+    <li><a href="{{ url_for('admin.boards') }}"{% if section == 'boards' %} class="menu-active" aria-current="page"{% endif %} title="게시판 관리">{{ ico.i('board', 18) }}<span class="menu-text">게시판 관리</span></a></li>
+    <li><a href="{{ url_for('admin.posts') }}"{% if section == 'posts' %} class="menu-active" aria-current="page"{% endif %} title="전체 글">{{ ico.i('comment', 18) }}<span class="menu-text">전체 글</span></a></li>
+    <li><a href="{{ url_for('admin.content') }}"{% if section == 'content' %} class="menu-active" aria-current="page"{% endif %} title="내용 관리">{{ ico.i('document', 18) }}<span class="menu-text">내용 관리</span></a></li>
+    <li><a href="{{ url_for('admin.members') }}"{% if section == 'members' %} class="menu-active" aria-current="page"{% endif %} title="회원 관리">{{ ico.i('users', 18) }}<span class="menu-text">회원 관리</span></a></li>
+    <li class="menu-title">설정</li>
+    <li><a href="{{ url_for('admin.settings') }}"{% if section == 'site' %} class="menu-active" aria-current="page"{% endif %} title="사이트 설정">{{ ico.i('cog', 18) }}<span class="menu-text">사이트 설정</span></a></li>
+    <li><a href="{{ url_for('admin.mail') }}"{% if section == 'mail' %} class="menu-active" aria-current="page"{% endif %} title="메일 설정">{{ ico.i('mail', 18) }}<span class="menu-text">메일 설정</span></a></li>
+    <li><a href="{{ url_for('admin.terms') }}"{% if section == 'legal' %} class="menu-active" aria-current="page"{% endif %} title="약관 관리">{{ ico.i('scale', 18) }}<span class="menu-text">약관 관리</span></a></li>
+    <li><a href="{{ url_for('admin.password') }}"{% if section == 'security' %} class="menu-active" aria-current="page"{% endif %} title="계정 보안">{{ ico.i('shield', 18) }}<span class="menu-text">계정 보안</span></a></li>
+  </ul>
+
+  <div class="admin-sidebar-foot">
+    <div class="admin-user">
+      <span class="avatar avatar-placeholder avatar-sm">
+        <span class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}" aria-hidden="true"><span>{{ current_user.display_name|slice(0, 1)|upper }}</span></span>
+      </span>
+      <span class="admin-user-name">{{ current_user.display_name }}</span>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost btn-square btn-sm" type="submit" aria-label="로그아웃" title="로그아웃">{{ ico.i('logout', 17) }}</button>
+      </form>
     </div>
-    <div class="admin-nav-group"><span class="admin-nav-label">설정</span>
-      <a class="admin-nav-item admin-nav-site" href="{{ url_for('admin.settings') }}" title="사이트 설정"><span class="admin-nav-icon" aria-hidden="true">◇</span><span>사이트 설정</span></a>
-      <a class="admin-nav-item admin-nav-mail" href="{{ url_for('admin.mail') }}" title="메일 설정"><span class="admin-nav-icon" aria-hidden="true">✉</span><span>메일 설정</span></a>
-      <a class="admin-nav-item admin-nav-legal" href="{{ url_for('admin.terms') }}" title="약관 관리"><span class="admin-nav-icon" aria-hidden="true">§</span><span>약관 관리</span></a>
-      <a class="admin-nav-item admin-nav-security" href="{{ url_for('admin.password') }}" title="계정 보안"><span class="admin-nav-icon" aria-hidden="true">○</span><span>계정 보안</span></a>
-    </div>
-  </nav>
-  <a class="admin-site-link" href="{{ url_for('boards.index') }}" title="사이트 보기"><span>사이트 보기</span><span aria-hidden="true">↗</span></a>
-  <div class="admin-account">
-    <span class="admin-account-name">{{ current_user.display_name }}</span>
-    <button class="theme-toggle" type="button" aria-label="다크 모드로 전환" title="다크 모드로 전환"><span aria-hidden="true">☾</span></button>
-    <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="logout-button" type="submit" title="로그아웃"><span class="admin-logout-icon" aria-hidden="true">↪</span><span class="admin-logout-label">로그아웃</span></button></form>
   </div>
 </aside>

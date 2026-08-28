@@ -1,0 +1,35 @@
+{# harbor view: auth/register.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}회원가입 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="harbor-auth-card">
+    <header class="harbor-panel-head harbor-panel-head-compact">
+      <p class="harbor-section-kicker">{{ ic.sparkle() }} Join us</p>
+      <h1>회원가입</h1>
+      <p class="harbor-lead">가벼운 커뮤니티에 참여하고 새로운 이야기를 시작하세요.</p>
+    </header>
+    <form class="harbor-form harbor-auth-form" method="post" action="{{ url_for('auth.register') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="harbor-field">{{ ic.mail() }} 이메일<input type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="email" required></label>
+      {% if errors.email is defined %}<p class="harbor-field-error">{{ errors.email }}</p>{% endif %}
+      <label class="harbor-field">{{ ic.shield() }} 비밀번호 <span class="muted">8자 이상</span><input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password is defined %}<p class="harbor-field-error">{{ errors.password }}</p>{% endif %}
+      <label class="harbor-field">{{ ic.shield() }} 비밀번호 확인<input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password_confirmation is defined %}<p class="harbor-field-error">{{ errors.password_confirmation }}</p>{% endif %}
+      {% if legal %}
+        <div class="harbor-agreement">
+          <label class="harbor-check"><input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required><span>{{ ic.doc() }} <a class="text-link" href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener">이용약관</a>에 동의합니다. <span class="required-mark">필수</span></span></label>
+          {% if errors.agree_terms is defined %}<p class="harbor-field-error">{{ errors.agree_terms }}</p>{% endif %}
+          <label class="harbor-check"><input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required><span>{{ ic.shield() }} <a class="text-link" href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener">개인정보 수집·이용 안내</a>에 동의합니다. <span class="required-mark">필수</span></span></label>
+          {% if errors.agree_privacy is defined %}<p class="harbor-field-error">{{ errors.agree_privacy }}</p>{% endif %}
+        </div>
+      {% endif %}
+      <button class="harbor-btn harbor-btn-primary harbor-btn-block" type="submit">{{ ic.sparkle() }} 가입하고 시작하기</button>
+    </form>
+    {% include "auth/_social.html.twig" %}
+    <p class="auth-switch">이미 계정이 있으신가요? <a href="{{ url_for('auth.login') }}">{{ ic.user() }} 로그인</a></p>
+  </section>
+</div>
+{% endblock %}

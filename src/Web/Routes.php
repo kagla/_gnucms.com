@@ -14,6 +14,9 @@ use ApiBoard\Web\Controller\PostController;
 use ApiBoard\Web\Controller\PageController;
 use ApiBoard\Web\Controller\AdminCmsController;
 use ApiBoard\Web\Controller\CmsImageController;
+use ApiBoard\Web\Controller\CommentController;
+use ApiBoard\Web\Controller\EditorImageController;
+use ApiBoard\Web\Controller\NotificationController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -46,6 +49,7 @@ final class Routes
         $slim->get('/admin', [$admin, 'index'])->setName('admin.index');
         $slim->get('/admin/password', [$admin, 'passwordForm'])->setName('admin.password');
         $slim->post('/admin/password', [$admin, 'password']);
+        $slim->get('/admin/posts', [$admin, 'posts'])->setName('admin.posts');
         $slim->get('/admin/boards', [$admin, 'boards'])->setName('admin.boards');
         $slim->get('/admin/boards/new', [$admin, 'createForm'])->setName('admin.boards.create');
         $slim->post('/admin/boards/new', [$admin, 'create']);
@@ -132,9 +136,10 @@ final class Routes
             $slim->get('/content/' . $legacyLegalSlug, $legacyLegalRedirect);
         }
         $slim->get('/content/{slug:[a-z0-9][a-z0-9_-]*}', [$pageController, 'show'])->setName('content.show');
-        $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+\.(?:jpg|png|gif|webp)}',
+        // 파일 이름 뒤의 -thumb / -view 는 줄여서 내보내는 크기다 (ContentImageService::VARIANTS).
+        $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'showOwned'])->setName('editor.owned_image');
-        $slim->get('/media/editor/{year:[0-9]+}/{month:[0-9]+}/{file:[a-f0-9]+\.(?:jpg|png|gif|webp)}',
+        $slim->get('/media/editor/{year:[0-9]+}/{month:[0-9]+}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'show'])->setName('editor.image');
         $slim->get('/page/{slug:[a-z0-9][a-z0-9_-]*}', static function (
             ServerRequestInterface $request,
@@ -174,8 +179,39 @@ final class Routes
         $slim->post('/b/{key}/write', [$posts, 'create']);
         $files = new FileController($app);
         $slim->get('/posts/{id:[0-9]+}', [$posts, 'show'])->setName('posts.show');
+        $slim->get('/posts/{id:[0-9]+}/edit', [$posts, 'editForm'])->setName('posts.edit');
+        $slim->post('/posts/{id:[0-9]+}/edit', [$posts, 'update']);
+        $slim->post('/posts/{id:[0-9]+}/delete', [$posts, 'destroy'])->setName('posts.delete');
         $slim->get('/posts/{id:[0-9]+}/files/{index:[0-9]+}', [$files, 'download'])
             ->setName('files.download');
+        $slim->get('/posts/{id:[0-9]+}/images/{index:[0-9]+}', [$files, 'image'])
+            ->setName('files.image');
+        // 목록 카드에 쓰는 축소본. 원본은 위 주소로 눌렀을 때만 받아 간다.
+        $slim->get('/posts/{id:[0-9]+}/images/{index:[0-9]+}/{variant:thumb|view}', [$files, 'image'])
+            ->setName('files.image_variant');
+
+        $comments = new CommentController($app);
+        $slim->post('/posts/{id:[0-9]+}/comments', [$comments, 'create'])->setName('comments.create');
+
+        $notifications = new NotificationController($app);
+        $slim->get('/notifications', [$notifications, 'index'])->setName('notifications.index');
+        $slim->get('/notifications/{id:[0-9]+}', [$notifications, 'open'])->setName('notifications.open');
+        $slim->post('/notifications/read-all', [$notifications, 'readAll'])->setName('notifications.read_all');
+
+        $slim->get('/comments/{id:[0-9]+}/edit', [$comments, 'editForm'])->setName('comments.edit');
+        $slim->post('/comments/{id:[0-9]+}/edit', [$comments, 'update']);
+        $slim->post('/comments/{id:[0-9]+}/delete', [$comments, 'destroy'])->setName('comments.delete');
+
+        // 본문 편집기 이미지. 관리자 전용인 admin.editor.images 와 달리 게시판 권한으로 판단한다.
+        $editorImages = new EditorImageController($app);
+        $slim->post('/boards/{key}/editor/images', [$editorImages, 'uploadForBoard'])
+            ->setName('board.editor.images');
+        $slim->post('/boards/{key}/editor/images/discard', [$editorImages, 'discardForBoard'])
+            ->setName('board.editor.images.discard');
+        $slim->post('/posts/{id:[0-9]+}/comments/images', [$editorImages, 'uploadForComment'])
+            ->setName('comment.editor.images');
+        $slim->post('/posts/{id:[0-9]+}/comments/images/discard', [$editorImages, 'discardForComment'])
+            ->setName('comment.editor.images.discard');
         $slim->get('/p/{id:[0-9]+}', static function (
             ServerRequestInterface $request,
             ResponseInterface $response,

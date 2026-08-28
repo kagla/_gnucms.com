@@ -1,0 +1,55 @@
+{% extends "layout.html.twig" %}
+{% import _self as pager %}
+{% macro pageLink(board, query, view, p, label) %}
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}?page={{ p }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}{% if view %}&amp;view={{ view }}{% endif %}" aria-label="{{ p }} 페이지">{{ label|default(p) }}</a>
+{% endmacro %}
+{% macro viewLink(board, query, name) %}{{ url_for('posts.index', {'key': board.board_key}) }}?view={{ name }}{% if query.q %}&amp;q={{ query.q|url_encode }}{% endif %}{% if query.category %}&amp;category={{ query.category|url_encode }}{% endif %}{% endmacro %}
+{% block title %}{{ board.name }} · {{ site.site_name }}{% endblock %}
+{% block body %}
+  {# 목록 형태는 게시판 설정이 기본이고 ?view= 로 잠시 바꿀 수 있다.
+     view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다. #}
+  {% set view = view|default('list') %}
+  {% set view_param = view != board.list_type|default('list') ? view : null %}
+
+  <nav class="breadcrumb" aria-label="현재 위치">
+    <a href="{{ url_for('boards.index') }}">게시판</a><span class="breadcrumb-separator" aria-hidden="true">/</span><span>{{ board.name }}</span>
+  </nav>
+  <header class="page-head board-page-head"><div class="page-head-copy"><p class="eyebrow">Board</p><h1>{{ board.name }}</h1>{% if board.description %}<p class="lead">{{ board.description }}</p>{% endif %}</div><div class="page-head-tools">{% if not current_user.is_guest and current_user.is_admin %}<a class="button button-quiet board-settings-link" href="{{ url_for('admin.boards.edit', {key: board.board_key}) }}">게시판 설정</a>{% endif %}{% if can_write %}<a class="button board-write-button" href="{{ url_for('posts.create', {'key': board.board_key}) }}"><span aria-hidden="true">＋</span>글쓰기</a>{% endif %}</div></header>
+
+  <form class="toolbar board-search" method="get" action="{{ url_for('posts.index', {'key': board.board_key}) }}" role="search">
+    {% if view_param %}<input type="hidden" name="view" value="{{ view_param }}">{% endif %}
+    {% if board.use_category and board.categories is not empty %}
+      <select name="category" aria-label="분류 선택">
+        <option value="">전체 분류</option>
+        {% for name in board.categories %}<option value="{{ name }}"{% if query.category == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    {% endif %}
+    <div class="board-search-field"><span class="board-search-icon" aria-hidden="true"></span><input type="search" name="q" value="{{ query.q }}" placeholder="제목이나 내용 검색" aria-label="게시글 검색"></div>
+    <button type="submit">검색</button>
+  </form>
+
+  {% if view_types is defined and view_types|length > 1 %}
+    {% set view_labels = {'list': '목록', 'gallery': '갤러리', 'magazine': '매거진', 'news': '뉴스형'} %}
+    <nav class="view-switch" aria-label="목록 형태 선택">
+      {% for name in view_types %}
+        {% if name == view %}
+          <strong class="view-switch-item is-active" aria-current="true">{{ view_labels[name]|default(name) }}</strong>
+        {% else %}
+          <a class="view-switch-item" href="{{ pager.viewLink(board, query, name)|trim }}">{{ view_labels[name]|default(name) }}</a>
+        {% endif %}
+      {% endfor %}
+    </nav>
+  {% endif %}
+
+  {# 파셜이 배포에서 빠져도 오류 화면 대신 목록형으로 떨어지게 한다. #}
+  {% include ['posts/_list_' ~ view ~ '.html.twig', 'posts/_list_list.html.twig'] %}
+
+  {% if list.total_pages > 1 %}
+    {% set window = 5 %}{% set start = max(1, list.page - window) %}{% set end = min(list.total_pages, list.page + window) %}
+    <nav class="pagination" aria-label="페이지 이동">
+      {% if start > 1 %}{{ pager.pageLink(board, query, view_param, 1) }}{% if start > 2 %}<span class="muted">…</span>{% endif %}{% endif %}
+      {% for p in start..end %}{% if p == list.page %}<strong aria-current="page">{{ p }}</strong>{% else %}{{ pager.pageLink(board, query, view_param, p) }}{% endif %}{% endfor %}
+      {% if end < list.total_pages %}{% if end < list.total_pages - 1 %}<span class="muted">…</span>{% endif %}{{ pager.pageLink(board, query, view_param, list.total_pages) }}{% endif %}
+    </nav>
+  {% endif %}
+{% endblock %}

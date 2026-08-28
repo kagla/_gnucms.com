@@ -1,0 +1,15 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ title }} · {{ site.site_name }}{% endblock %}
+{% block body %}
+<section class="state">
+  <span class="state-art state-art-warn" aria-hidden="true"></span>
+  <h1>{{ title }}</h1>
+  <p class="state-lead">{{ message }}</p>
+  {% if details is not empty %}
+    <ul class="state-list">
+      {% for field, detail in details %}<li><strong>{{ field }}</strong><span>{{ detail }}</span></li>{% endfor %}
+    </ul>
+  {% endif %}
+  <a class="btn btn-brand btn-lg" href="{{ url_for('boards.index') }}">홈으로 가기</a>
+</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+{# codex-bloom view: auth/verified.html.twig #}
+{# codex-bloom view: auth/verified.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}이메일 인증 완료 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="codex-bloom-auth-card codex-bloom-status-card">
+    <span class="codex-bloom-empty-icon">{{ ic.check() }}</span>
+    <p class="codex-bloom-section-kicker">{{ ic.sparkle() }} Welcome aboard</p>
+    <h1>인증이 완료됐습니다</h1>
+    <p class="codex-bloom-lead">이제 로그인하고 커뮤니티에 참여할 수 있습니다.</p>
+    <a class="codex-bloom-btn codex-bloom-btn-primary codex-bloom-btn-block" href="{{ url_for('auth.login') }}">{{ ic.user() }} 로그인하기</a>
+  </section>
+</div>
+{% endblock %}

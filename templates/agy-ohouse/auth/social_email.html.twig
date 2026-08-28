@@ -1,0 +1,30 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}이메일 확인 · {{ site.site_name }}{% endblock %}
+
+{% block body %}
+<div style="max-width: 440px; margin: 3rem auto;">
+  <section class="card" style="padding: clamp(1.75rem, 5vw, 2.5rem);">
+    <header style="text-align: center; margin-bottom: 2rem;">
+      <span class="badge badge-soft" style="margin-bottom: 0.5rem;">{{ provider_label }} 연동</span>
+      <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main);">이메일 확인</h1>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.35rem;">계정을 안전하게 연동하기 위해 사용할 이메일 주소를 입력해 주세요.</p>
+    </header>
+
+    <form method="post" action="{{ url_for('oauth.email') }}" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">이메일</span></label>
+        <input class="input input-bordered" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" placeholder="example@domain.com" autocomplete="email" required autofocus>
+        {% if errors.email is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.email }}</p>{% endif %}
+      </div>
+
+      <button class="btn btn-primary btn-block" type="submit" style="height: 3rem;">
+        {{ ico.i('mail', 16) }} 확인 메일 보내기
+      </button>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -40,6 +40,54 @@ final class Schema
         }
     }
 
+    /**
+     * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
+     * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
+     */
+    public const VERSION = '4';
+
+    /**
+     * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
+     *
+     * 컬럼이 늘어난 뒤 마이그레이션을 잊으면 목록 조회가 통째로 실패해 사이트가 멈춘다.
+     * 사람이 기억해야 하는 절차로 두지 않고 부팅할 때 스스로 맞춘다.
+     * 각 migrate* 는 여러 번 돌려도 안전하므로 동시 요청이 겹쳐도 문제되지 않는다.
+     */
+    public function ensureCurrent(): void
+    {
+        try {
+            $row = $this->db->selectOne(
+                'SELECT setting_value FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+                ['schema_version']
+            );
+        } catch (DomainError $e) {
+            // site_settings 자체가 없는 아주 오래된 설치. 전체 마이그레이션이 만들어 준다.
+            $row = null;
+        }
+
+        if ($row !== null && (string) $row['setting_value'] === self::VERSION) {
+            return;
+        }
+
+        $this->migrateAll();
+    }
+
+    /** 지금까지의 마이그레이션을 순서대로 모두 적용한다. */
+    public function migrateAll(): void
+    {
+        $this->migrateAccounts();
+        $this->migrateCms();
+        $this->migrateBoards();
+        $this->migrateEditorImages();
+        $this->migrateNotifications();
+        $this->ensureSiteSetting('schema_version', self::VERSION);
+        $this->db->execute(
+            'UPDATE ' . $this->db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?',
+            [self::VERSION, 'schema_version']
+        );
+    }
+
     public function create(): void
     {
         if ($this->exists()) {
@@ -49,6 +97,9 @@ final class Schema
         foreach ($this->statements() as $sql) {
             $this->db->execute($this->expand($sql));
         }
+
+        // 새로 만든 스키마는 이미 최신이다. 첫 요청에서 헛돌지 않게 표시해 둔다.
+        $this->ensureSiteSetting('schema_version', self::VERSION);
     }
 
     /** 기존 게시판 설치에 회원 테이블만 안전하게 추가한다. */
@@ -88,6 +139,56 @@ final class Schema
 
         $this->migrateOauth();
         $this->migrateFirstAdminState();
+    }
+
+    /**
+     * 기존 설치에 게시판 목록 형태(list_type) 컬럼을 추가한다.
+     * migrateAccounts()/migrateCms() 와 같은 방식으로, 업그레이드할 때 한 번 부른다.
+     */
+    public function migrateBoards(): void
+    {
+        $this->addColumnIfMissing('boards', 'list_type', 'VARCHAR(20) NOT NULL DEFAULT \'list\'');
+        $this->addColumnIfMissing('boards', 'home_limit', 'INTEGER NOT NULL DEFAULT 5');
+    }
+
+    /** 글·댓글 본문 편집기가 올린 이미지를 묶어 두는 키. 업그레이드할 때 한 번 부른다. */
+    public function migrateEditorImages(): void
+    {
+        foreach (['posts', 'comments'] as $table) {
+            $this->addColumnIfMissing($table, 'image_key', 'VARCHAR(32) NULL');
+        }
+    }
+
+    /** 알림함 표. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migrateNotifications(): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('notifications'));
+        } catch (DomainError $e) {
+            foreach ($this->notificationStatements() as $sql) {
+                $this->db->execute($this->expand($sql));
+            }
+        }
+    }
+
+    /**
+     * 컬럼이 없으면 더한다. 표 자체가 없으면 아직 설치 전이므로 그냥 넘어간다
+     * (표를 만드는 일은 create() 의 몫이다).
+     */
+    private function addColumnIfMissing(string $table, string $column, string $definition): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q($table));
+        } catch (DomainError $e) {
+            return;
+        }
+
+        try {
+            $this->db->selectOne('SELECT ' . $column . ' FROM ' . $this->db->q($table) . ' LIMIT 1');
+        } catch (DomainError $e) {
+            $this->db->execute('ALTER TABLE ' . $this->db->q($table)
+                . ' ADD COLUMN ' . $column . ' ' . $definition);
+        }
     }
 
     public function migrateCms(): void
@@ -174,6 +275,8 @@ final class Schema
                 use_secret    SMALLINT     NOT NULL DEFAULT 0,
                 use_file      SMALLINT     NOT NULL DEFAULT 0,
                 use_category  SMALLINT     NOT NULL DEFAULT 0,
+                list_type     VARCHAR(20)  NOT NULL DEFAULT \'list\',
+                home_limit    INTEGER      NOT NULL DEFAULT 5,
                 per_page      INTEGER      NOT NULL DEFAULT 20,
                 sort_order    INTEGER      NOT NULL DEFAULT 0,
                 created_at    {DATETIME}   NOT NULL,
@@ -196,6 +299,7 @@ final class Schema
                 view_count     INTEGER      NOT NULL DEFAULT 0,
                 comment_count  INTEGER      NOT NULL DEFAULT 0,
                 attachments    {TEXT}       NULL,
+                image_key      VARCHAR(32)  NULL,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL,
                 deleted_at     {DATETIME}   NULL
@@ -215,6 +319,7 @@ final class Schema
                 author_name    VARCHAR(100) NOT NULL,
                 guest_password VARCHAR(255) NULL,
                 is_secret      SMALLINT     NOT NULL DEFAULT 0,
+                image_key      VARCHAR(32)  NULL,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL,
                 deleted_at     {DATETIME}   NULL
@@ -222,7 +327,7 @@ final class Schema
 
             'CREATE INDEX ix_comments_post ON comments (post_id, id)',
         ], $this->accountStatements(), $this->settingsStatements(), $this->mailSettingsStatements(),
-            $this->pageStatements(), $this->consentStatements());
+            $this->pageStatements(), $this->consentStatements(), $this->notificationStatements());
     }
 
     private function accountStatements(): array
@@ -359,6 +464,28 @@ final class Schema
                 updated_at    {DATETIME}  NOT NULL
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_mail_settings_key ON mail_settings (setting_key)',
+        ];
+    }
+
+    /**
+     * 알림함. 회원에게만 쌓이므로 user_id 는 users.id 를 문자열로 담는
+     * posts.author_id / comments.author_id 와 같은 형태로 맞춘다.
+     */
+    private function notificationStatements(): array
+    {
+        return [
+            'CREATE TABLE notifications (
+                id          {AUTO_PK},
+                user_id     VARCHAR(64)  NOT NULL,
+                kind        VARCHAR(20)  NOT NULL,
+                post_id     BIGINT       NOT NULL,
+                comment_id  BIGINT       NULL,
+                actor_name  VARCHAR(100) NOT NULL,
+                subject     VARCHAR(200) NOT NULL,
+                is_read     SMALLINT     NOT NULL DEFAULT 0,
+                created_at  {DATETIME}   NOT NULL
+            ){SUFFIX}',
+            'CREATE INDEX ix_notifications_user ON notifications (user_id, is_read, id)',
         ];
     }
 

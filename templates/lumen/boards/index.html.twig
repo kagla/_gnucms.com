@@ -1,0 +1,37 @@
+{% extends "layout.html.twig" %}
+{% block title %}게시판 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<section class="lumen-hero lumen-hero-compact">
+  <div class="lumen-hero-copy">
+    <p class="lumen-badge"><span aria-hidden="true"></span> Community</p>
+    <h1>커뮤니티</h1>
+    <p class="lumen-lead">작은 모임부터 새로운 서비스까지, 필요한 이야기만 담아 가볍게 시작하는 공간입니다.</p>
+  </div>
+</section>
+<section class="lumen-boards" aria-labelledby="lumen-all-boards">
+  <header class="lumen-section-head">
+    <div><p class="lumen-section-kicker">All boards</p><h2 id="lumen-all-boards">전체 게시판</h2></div>
+  </header>
+  {% if boards is empty %}
+    <div class="lumen-empty-state"><span class="lumen-empty-icon" aria-hidden="true">◇</span><p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="lumen-board-grid">
+      {% for board in boards %}
+        <article class="lumen-board-card">
+          <a class="lumen-board-card-head" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+            <span class="lumen-board-index">{{ '%02d'|format(loop.index) }}</span>
+            <div><h3>{{ board.name }}</h3><p>{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</p></div>
+            <span class="lumen-board-arrow" aria-hidden="true">→</span>
+          </a>
+          <div class="lumen-board-latest">
+            <div class="lumen-board-latest-head"><span>최신글</span><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">전체</a></div>
+            {% if board.latest_posts is empty %}<p class="lumen-board-latest-empty">아직 등록된 글이 없습니다.</p>{% else %}
+              <ul>{% for post in board.latest_posts %}<li><a href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{% if post.is_notice %}<em class="lumen-tag">공지</em>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<b>{{ post.comment_count }}</b>{% endif %}</span><time datetime="{{ post.created_at }}">{{ post.created_at|slice(0, 10) }}</time></a></li>{% endfor %}</ul>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

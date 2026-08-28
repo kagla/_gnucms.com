@@ -1,0 +1,13 @@
+{% extends "layout.html.twig" %}
+{% block title %}이메일을 확인해 주세요 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="lumen-auth-card lumen-status-card">
+    <span class="status-dot"></span>
+    <p class="lumen-section-kicker">Almost there</p>
+    <h1>이메일을 확인해 주세요</h1>
+    <p class="lumen-lead">가입 주소로 인증 링크를 보냈습니다. 링크를 열면 회원가입이 완료됩니다.</p>
+    <p class="auth-switch"><a href="{{ url_for('auth.login') }}">로그인으로 돌아가기</a></p>
+  </section>
+</div>
+{% endblock %}

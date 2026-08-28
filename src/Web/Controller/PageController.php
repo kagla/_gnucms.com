@@ -24,6 +24,8 @@ final class PageController
             'page' => $this->app->cmsService()->publishedPage((string) $args['slug']),
             'preview' => false,
             'preview_legal_type' => null,
+            // 관리자에게 보여 줄 '이 내용 수정' 링크가 약관인지 일반 내용인지 가른다.
+            'legal_type' => null,
         ]);
     }
 
@@ -34,6 +36,7 @@ final class PageController
             'page' => $this->app->cmsService()->publishedPage($slug),
             'preview' => false,
             'preview_legal_type' => null,
+            'legal_type' => (string) $args['type'],
         ]);
     }
 }

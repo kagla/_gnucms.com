@@ -1,10 +1,13 @@
 {% extends "layout.html.twig" %}
-{% block title %}상태{% endblock %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}상태 · {{ site.site_name }}{% endblock %}
 {% block body %}
-  <section class="surface status-card">
-    <p class="eyebrow">System status</p>
-    <h1>모든 시스템이 정상입니다</h1>
-    <p><span class="status-dot" aria-hidden="true"></span>데이터베이스에 <strong>{{ dialect }}</strong>로 연결되어 있습니다.</p>
-    <p class="muted">이 화면은 연결 상태만 확인하며 테이블 유무는 검사하지 않습니다.</p>
-  </section>
+<section class="card status-card">
+  <div class="card-body">
+    <span class="status-icon status-icon-success" aria-hidden="true">{{ ico.i('check-circle', 28) }}</span>
+    <h1 class="card-title">모든 시스템이 정상입니다</h1>
+    <p><span class="status status-success" aria-hidden="true"></span> 데이터베이스에 <strong>{{ dialect }}</strong>로 연결되어 있습니다.</p>
+    <p class="status-note">이 화면은 연결 상태만 확인하며 테이블 유무는 검사하지 않습니다.</p>
+  </div>
+</section>
 {% endblock %}

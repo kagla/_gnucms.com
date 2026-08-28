@@ -1,0 +1,25 @@
+{# 목록형: 고전적인 표. 정보 밀도가 가장 높다. #}
+<div class="surface">
+{% if list.data is empty and list.notices is empty %}
+  <p class="empty">조건에 맞는 글이 없습니다.</p>
+{% else %}
+  <div class="table-wrap"><table>
+    <thead><tr>{% if board.use_category %}<th>분류</th>{% endif %}<th>제목</th><th>글쓴이</th><th>날짜</th><th>조회</th></tr></thead>
+    <tbody>
+    {% for post in list.notices|merge(list.data) %}
+      <tr>
+        {% if board.use_category %}<td class="meta-cell">{{ post.category ?: '—' }}</td>{% endif %}
+        <td>
+          {% if post.is_notice %}<span class="tag">공지</span>{% endif %}
+          {% if post.is_secret %}<span class="post-markers" title="비밀글" aria-label="비밀글">●</span>{% endif %}
+          <a class="post-title-link" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }}</a>
+          {% if post.comment_count > 0 %}<span class="comment-count">{{ post.comment_count }}</span>{% endif %}
+          {% if post.file_count > 0 %}<span class="post-markers" title="첨부파일 있음" aria-label="첨부파일 있음">＋</span>{% endif %}
+        </td>
+        <td class="meta-cell">{{ post.author_name }}</td><td class="meta-cell">{{ post.created_at }}</td><td class="meta-cell">{{ post.view_count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+{% endif %}
+</div>

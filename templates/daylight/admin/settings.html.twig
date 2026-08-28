@@ -1,0 +1,15 @@
+{# daylight view: admin/settings.html.twig #}
+{% extends "admin/layout.html.twig" %}
+{% block title %}사이트 설정 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}site{% endblock %}
+{% block body %}<nav class="breadcrumb"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span class="breadcrumb-separator">/</span><span>사이트 설정</span></nav>
+<section class="surface editor-card admin-editor"><header class="auth-head"><p class="eyebrow">기본 설정</p><h1>사이트 설정</h1><p class="lead">방문자가 가장 먼저 보는 이름과 소개를 정합니다.</p></header>
+{% if query.saved|default('') == '1' %}<p class="notice success">사이트 설정을 저장했습니다.</p>{% endif %}
+<form class="editor-form" method="post" action="{{ url_for('admin.settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>사이트 이름<input type="text" name="site_name" value="{{ values.site_name|default('') }}" maxlength="50" required></label>{% if errors.site_name is defined %}<p class="field-error">{{ errors.site_name }}</p>{% endif %}
+<label>짧은 소개<input type="text" name="site_tagline" value="{{ values.site_tagline|default('') }}" maxlength="120" required></label>{% if errors.site_tagline is defined %}<p class="field-error">{{ errors.site_tagline }}</p>{% endif %}
+<label>홈 제목<input type="text" name="home_title" value="{{ values.home_title|default('') }}" maxlength="120" required></label>{% if errors.home_title is defined %}<p class="field-error">{{ errors.home_title }}</p>{% endif %}
+<label>홈 소개<textarea name="home_intro" rows="4" maxlength="500" required>{{ values.home_intro|default('') }}</textarea></label>{% if errors.home_intro is defined %}<p class="field-error">{{ errors.home_intro }}</p>{% endif %}
+<label>템플릿<select name="theme" required>{% for theme_name in available_themes %}<option value="{{ theme_name }}"{{ values.theme|default(active_theme) == theme_name ? ' selected' : '' }}>{{ theme_name == 'default' ? 'default (기본)' : theme_name }}</option>{% endfor %}</select></label>{% if errors.theme is defined %}<p class="field-error">{{ errors.theme }}</p>{% endif %}<p class="editor-help">선택한 템플릿에 없는 화면과 파일은 default 템플릿을 사용합니다.</p>
+<div class="option-row"><label class="check-label"><input type="checkbox" name="registration_enabled" value="1"{{ values.registration_enabled|default(false) ? ' checked' : '' }}>새 회원가입 허용</label></div>
+<div class="form-actions"><a class="nav-link" href="{{ url_for('admin.index') }}">취소</a><button type="submit">설정 저장</button></div></form></section>{% endblock %}

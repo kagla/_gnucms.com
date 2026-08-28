@@ -1,0 +1,14 @@
+{# 표가 아닌 형태에서 공지를 목록 위에 따로 고정한다. #}
+{% if list.notices is not empty %}
+  <ul class="pinned-notices">
+    {% for post in list.notices %}
+      <li>
+        <a href="{{ url_for('posts.show', {'id': post.id}) }}">
+          <span class="tag">공지</span>
+          <span class="pinned-title">{{ post.title }}</span>
+          <time class="pinned-date" datetime="{{ post.created_at }}">{{ post.created_at|date('Y.m.d') }}</time>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

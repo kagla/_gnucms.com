@@ -1,0 +1,34 @@
+{% import '_icons.html.twig' as ico %}
+
+<div class="comment-list{% if nested|default(false) %} comment-thread-sub{% endif %}">
+{% for comment in nodes %}
+  <div class="chat" style="margin-bottom: 1rem;">
+    <div class="chat-image">
+      <div class="avatar avatar-sm">
+        <span class="avatar-inner" data-tone="{{ comment.deleted ? 0 : comment.author_name|length % 6 }}" aria-hidden="true">
+          <span>{{ comment.deleted ? '·' : comment.author_name|slice(0, 1)|upper }}</span>
+        </span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.35rem; width: 100%;">
+      <div class="chat-header">
+        {% if comment.deleted %}
+          <span style="color: var(--text-hint); font-style: italic;">삭제된 댓글</span>
+        {% else %}
+          <span>{{ comment.author_name }}</span>
+        {% endif %}
+        <time datetime="{{ comment.created_at }}">{{ comment.created_at|date('Y.m.d H:i') }}</time>
+        {% if comment.is_secret %}
+          <span class="badge badge-sm badge-soft" title="비밀 댓글" aria-label="비밀 댓글">{{ ico.i('lock', 11) }} 비밀</span>
+        {% endif %}
+      </div>
+      <div class="chat-bubble">
+        {{ comment.content|nl2br }}
+      </div>
+    </div>
+  </div>
+  {% if comment.children is not empty %}
+    {% include 'posts/_comments.html.twig' with {'nodes': comment.children, 'nested': true} only %}
+  {% endif %}
+{% endfor %}
+</div>

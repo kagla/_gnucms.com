@@ -1,0 +1,41 @@
+{# harbor view: posts/show.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}{{ post.title }} · {{ site.site_name }}{% endblock %}
+{% block body %}
+<nav class="harbor-crumb" aria-label="현재 위치">
+  <a href="{{ url_for('boards.index') }}">{{ ic.home() }} 홈</a><span aria-hidden="true">/</span>
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ board.name }}</a><span aria-hidden="true">/</span>
+  <span>글</span>
+</nav>
+<article class="harbor-article">
+  <header class="harbor-article-head">
+    <div class="harbor-post-card-tags">
+      {% if post.is_notice %}<span class="harbor-tag">{{ ic.pin() }} 공지</span>{% endif %}
+      {% if post.category %}<span class="harbor-tag harbor-tag-soft">{{ post.category }}</span>{% endif %}
+      {% if post.is_secret %}<span class="harbor-tag harbor-tag-muted" title="비밀글">{{ ic.shield() }}</span>{% endif %}
+    </div>
+    <h1>{{ post.title }}</h1>
+    <div class="harbor-article-meta">
+      <span class="harbor-author">{{ ic.user() }} {{ post.author_name }}</span>
+      <time datetime="{{ post.created_at }}">{{ ic.calendar() }} {{ post.created_at }}</time>
+      <span>{{ ic.eye() }} 조회 {{ post.view_count }}</span>
+    </div>
+  </header>
+  <div class="harbor-article-body">{{ post.content|nl2br }}</div>
+  {% if post.attachments is not empty %}
+    <section class="harbor-attachments" aria-labelledby="attachments-title">
+      <h2 id="attachments-title">{{ ic.clip() }} 첨부파일</h2>
+      <ul>{% for file in post.attachments %}<li><a href="{{ url_for('files.download', {'id': post.id, 'index': file.index}) }}">{{ ic.clip() }} {{ file.name }}</a><span class="muted">{{ file.size }} bytes</span></li>{% endfor %}</ul>
+    </section>
+  {% endif %}
+  <section class="harbor-comments" aria-labelledby="comments-title">
+    <h2 id="comments-title">{{ ic.comment() }} 댓글 <span>{{ post.comment_count }}</span></h2>
+    {% if comments is empty %}
+      <div class="harbor-empty-state harbor-empty-compact">{{ ic.comment() }}<p>첫 댓글을 기다리고 있습니다.</p></div>
+    {% else %}
+      {% include 'posts/_comments.html.twig' with {'nodes': comments, 'harbored': false} only %}
+    {% endif %}
+  </section>
+</article>
+{% endblock %}

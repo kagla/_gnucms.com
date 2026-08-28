@@ -18,7 +18,7 @@ final class SchemaTest extends DatabaseTestCase
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
-                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 6 : 0),
+                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 7 : 0),
                 (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table))['c'],
                 $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );

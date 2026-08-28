@@ -1,0 +1,91 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }} · {{ site.site_name }}{% endblock %}
+{% block admin_section %}content{% endblock %}
+
+{% block body %}
+<div class="breadcrumbs" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+  <a href="{{ url_for('admin.index') }}">관리 콘솔</a>
+  <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+  <a href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">{{ legal ? '약관' : '내용 관리' }}</a>
+  <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+  <span style="color: var(--text-main); font-weight: 700;" aria-current="page">{{ create ? '새 내용' : values.title }}</span>
+</div>
+
+<section class="card" style="padding: clamp(1.5rem, 4vw, 2.5rem); margin-bottom: 2rem;">
+  <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line);">
+    <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main);">{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }}</h1>
+    <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">내용을 작성하고 공개 여부와 상단 메뉴 표시를 설정합니다.</p>
+  </div>
+
+  <form method="post" action="{{ create ? url_for('admin.content.create') : url_for('admin.content.edit', {id: page_id}) }}" style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="image_key" value="{{ values.image_key }}">
+    <input type="hidden" name="uploaded_images" value="{{ values.uploaded_images|default('') }}" data-uploaded-images>
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">제목</span></label>
+      <input class="input input-bordered" type="text" name="title" value="{{ values.title|default('') }}" maxlength="200" placeholder="페이지 제목" required autofocus>
+      {% if errors.title is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.title }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">주소 슬러그 (영문 소문자, 숫자, 하이픈)</span></label>
+      <input class="input input-bordered" type="text" name="slug" value="{{ values.slug|default('') }}" maxlength="100" pattern="[a-z0-9][a-z0-9_-]*" placeholder="예: about, guide"{{ legal ? ' readonly style="background: var(--base-200);"' : '' }} required>
+      {% if errors.slug is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.slug }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">본문 내용</span></label>
+      <textarea class="textarea textarea-bordered" id="content-editor" name="content" rows="16" placeholder="내용을 작성해 주세요." data-cms-editor>{{ values.content|default('') }}</textarea>
+      {% if errors.content is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.content }}</p>{% endif %}
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">공개 상태</span></label>
+        <select class="select select-bordered" name="status">
+          <option value="draft"{{ values.status|default('draft') == 'draft' ? ' selected' : '' }}>초안</option>
+          <option value="published"{{ values.status|default('draft') == 'published' ? ' selected' : '' }}>공개</option>
+        </select>
+      </div>
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">메뉴 정렬 순서</span></label>
+        <input class="input input-bordered" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999">
+      </div>
+    </div>
+
+    <div style="padding: 0.85rem 1rem; background: var(--base-200); border-radius: 0.65rem;">
+      <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+        <input type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }} style="accent-color: var(--primary);">
+        <span>상단 네비게이션 메뉴에 표시</span>
+      </label>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+      {% if not create %}
+        <a class="btn btn-outline" href="{{ url_for('admin.content.preview', {id: page_id}) }}" target="_blank" rel="noopener">
+          {{ ico.i('eye', 15) }} 미리보기
+        </a>
+      {% endif %}
+      <a class="btn btn-ghost" href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">취소</a>
+      <button class="btn btn-primary" type="submit">{{ create ? '내용 만들기' : '변경사항 저장' }}</button>
+    </div>
+  </form>
+
+  {% if not create %}
+    <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+      <div>
+        <strong style="color: var(--error); font-size: 0.95rem;">휴지통으로 이동</strong>
+        <p style="font-size: 0.82rem; color: var(--text-muted);">공개가 즉시 중단되며 휴지통에서 다시 복원할 수 있습니다.</p>
+      </div>
+      <form method="post" action="{{ url_for('admin.content.delete', {id: page_id}) }}" onsubmit="return confirm('이 내용을 휴지통으로 옮길까요?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-error btn-sm" type="submit">{{ ico.i('trash', 14) }} 휴지통 이동</button>
+      </form>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% include "admin/_editor.html.twig" %}{% endblock %}

@@ -1,0 +1,35 @@
+{# codex-bloom view: admin/index.html.twig #}
+{# codex-bloom view: admin/index.html.twig #}
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+{% block body %}
+<header class="codex-bloom-admin-head">
+  <div>
+    <p class="codex-bloom-section-kicker">{{ ic.settings() }} Dashboard</p>
+    <h1>사이트 관리</h1>
+    <p class="codex-bloom-lead">사이트 내용과 커뮤니티를 복잡한 절차 없이 관리합니다.</p>
+  </div>
+  <div class="codex-bloom-admin-actions">
+    <a class="codex-bloom-btn codex-bloom-btn-primary" href="{{ url_for('admin.content.create') }}">{{ ic.pen() }} 내용 만들기</a>
+  </div>
+</header>
+{% if query.saved|default('') == '1' %}<p class="codex-bloom-notice codex-bloom-notice-success">{{ ic.check() }} 변경사항을 저장했습니다.</p>{% endif %}
+{% if query.deleted|default('') == '1' %}<p class="codex-bloom-notice codex-bloom-notice-success">{{ ic.check() }} 게시판을 삭제했습니다.</p>{% endif %}
+<section class="codex-bloom-stat-grid" aria-label="운영 현황">
+  <a class="codex-bloom-stat-card codex-bloom-stat-link" href="{{ url_for('admin.boards') }}">
+    <span class="codex-bloom-stat-label">{{ ic.board() }} 게시판</span>
+    <strong>{{ board_count }}</strong>
+    <small>{{ ic.arrow() }} 관리하기</small>
+  </a>
+  <article class="codex-bloom-stat-card">
+    <span class="codex-bloom-stat-label">{{ ic.doc() }} 내용</span>
+    <strong>{{ page_count }}</strong>
+  </article>
+  <article class="codex-bloom-stat-card">
+    <span class="codex-bloom-stat-label">{{ ic.users() }} 게시글 / 회원</span>
+    <strong>{{ post_count }} / {{ user_count }}</strong>
+  </article>
+</section>
+{% endblock %}

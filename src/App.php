@@ -18,10 +18,12 @@ use ApiBoard\Auth\Identity;
 use ApiBoard\Db\Connection;
 use ApiBoard\Repository\BoardRepository;
 use ApiBoard\Repository\CommentRepository;
+use ApiBoard\Repository\NotificationRepository;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Service\AttachmentService;
 use ApiBoard\Service\BoardService;
 use ApiBoard\Service\CommentService;
+use ApiBoard\Service\NotificationService;
 use ApiBoard\Service\PostService;
 use ApiBoard\Mail\NativeMailer;
 use ApiBoard\Mail\MailerInterface;
@@ -33,6 +35,7 @@ use ApiBoard\Oauth\ProviderRegistry;
 use ApiBoard\Cms\CmsRepository;
 use ApiBoard\Cms\CmsService;
 use ApiBoard\Cms\ContentImageService;
+use ApiBoard\Cms\ContentRenderer;
 use ApiBoard\Cms\HtmlSanitizer;
 
 /**
@@ -64,6 +67,12 @@ final class App
 
     /** @var CommentService|null */
     private $commentService = null;
+
+    /** @var NotificationRepository|null */
+    private $notifications = null;
+
+    /** @var NotificationService|null */
+    private $notificationService = null;
 
     /** @var AttachmentService|null */
     private $attachmentService = null;
@@ -100,6 +109,8 @@ final class App
     private ?ConsentRepository $consents = null;
 
     private ?HtmlSanitizer $htmlSanitizer = null;
+
+    private ?ContentRenderer $contentRenderer = null;
 
     private ?ContentImageService $contentImages = null;
 
@@ -162,6 +173,28 @@ final class App
         return $this->comments;
     }
 
+    public function notifications(): NotificationRepository
+    {
+        if ($this->notifications === null) {
+            $this->notifications = new NotificationRepository($this->db());
+        }
+
+        return $this->notifications;
+    }
+
+    public function notificationService(): NotificationService
+    {
+        if ($this->notificationService === null) {
+            $this->notificationService = new NotificationService(
+                $this->notifications(),
+                $this->posts(),
+                $this->comments()
+            );
+        }
+
+        return $this->notificationService;
+    }
+
     public function boardService(): BoardService
     {
         if ($this->boardService === null) {
@@ -174,7 +207,12 @@ final class App
     public function postService(): PostService
     {
         if ($this->postService === null) {
-            $this->postService = new PostService($this->boardService(), $this->posts());
+            $this->postService = new PostService(
+                $this->boardService(),
+                $this->posts(),
+                $this->htmlSanitizer(),
+                $this->contentImages()
+            );
             // attachments() 가 다시 postService() 를 부르므로 여기서 호출하면 무한 재귀가 된다.
             // 첨부가 필요한 시점에 attachments() 가 setAttachmentService() 로 연결한다.
         }
@@ -201,7 +239,14 @@ final class App
     public function commentService(): CommentService
     {
         if ($this->commentService === null) {
-            $this->commentService = new CommentService($this->postService(), $this->posts(), $this->comments());
+            $this->commentService = new CommentService(
+                $this->postService(),
+                $this->posts(),
+                $this->comments(),
+                $this->htmlSanitizer(),
+                $this->contentImages(),
+                $this->notificationService()
+            );
         }
 
         return $this->commentService;
@@ -347,6 +392,15 @@ final class App
             $this->htmlSanitizer = new HtmlSanitizer();
         }
         return $this->htmlSanitizer;
+    }
+
+    public function contentRenderer(): ContentRenderer
+    {
+        if ($this->contentRenderer === null) {
+            $this->contentRenderer = new ContentRenderer($this->htmlSanitizer());
+        }
+
+        return $this->contentRenderer;
     }
 
     public function contentImages(): ContentImageService

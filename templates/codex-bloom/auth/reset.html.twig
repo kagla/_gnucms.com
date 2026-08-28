@@ -1,0 +1,25 @@
+{# codex-bloom view: auth/reset.html.twig #}
+{# codex-bloom view: auth/reset.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}새 비밀번호 설정 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="codex-bloom-auth-card">
+    <header class="codex-bloom-panel-head codex-bloom-panel-head-compact">
+      <p class="codex-bloom-section-kicker">{{ ic.shield() }} New password</p>
+      <h1>새 비밀번호 설정</h1>
+    </header>
+    <form class="codex-bloom-form codex-bloom-auth-form" method="post" action="{{ url_for('auth.reset') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label class="codex-bloom-field">{{ ic.shield() }} 새 비밀번호 <span class="muted">8자 이상</span><input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password is defined %}<p class="codex-bloom-field-error">{{ errors.password }}</p>{% endif %}
+      <label class="codex-bloom-field">{{ ic.shield() }} 비밀번호 확인<input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required></label>
+      {% if errors.password_confirmation is defined %}<p class="codex-bloom-field-error">{{ errors.password_confirmation }}</p>{% endif %}
+      {% if errors.token is defined %}<p class="codex-bloom-field-error">{{ errors.token }}</p>{% endif %}
+      <button class="codex-bloom-btn codex-bloom-btn-primary codex-bloom-btn-block" type="submit">{{ ic.check() }} 비밀번호 변경</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

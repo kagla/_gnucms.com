@@ -48,21 +48,50 @@ final class PostShowTest extends WebTestCase
         self::assertSame(1, (int) $app->posts()->find((int) $post['id'])['view_count']);
     }
 
-    /** @dataProvider connectionProvider */
-    public function testHtmlInContentIsEscaped(array $dbConfig): void
+    /**
+     * 본문은 편집기가 보내는 HTML 을 허용한다. 대신 저장과 출력 두 곳에서 정화하므로
+     * 서식은 살아남고 스크립트·이벤트 속성은 사라져야 한다.
+     *
+     * @dataProvider connectionProvider
+     */
+    public function testDangerousHtmlIsStrippedWhileFormattingSurvives(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
         $post = $app->postService()->create($acl, 'free', [
             'title'   => '제목',
-            'content' => '<script>alert(1)</script>',
+            'content' => '<p>안녕 <strong>굵게</strong></p>'
+                . '<script>alert(1)</script>'
+                . '<img src="x" onerror="alert(1)">'
+                . '<a href="javascript:alert(1)">링크</a>',
         ]);
 
         $body = $this->body($this->get($app, '/posts/' . $post['id']));
 
-        self::assertStringNotContainsString('<script>alert(1)</script>', $body);
-        self::assertStringContainsString('&lt;script&gt;', $body);
+        self::assertStringContainsString('<strong>굵게</strong>', $body);
+        // 레이아웃 자체가 <script> 를 쓰므로 태그가 아니라 심어 둔 값으로 판단한다.
+        self::assertStringNotContainsString('alert(1)', $body);
+        self::assertStringNotContainsString('onerror', $body);
+        self::assertStringNotContainsString('javascript:', $body);
+    }
+
+    /** 평문으로 저장된 옛 글도 줄바꿈을 지키며 그대로 보여야 한다. */
+    #[\PHPUnit\Framework\Attributes\DataProvider('connectionProvider')]
+    public function testPlainTextPostStillRendersWithLineBreaks(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $post = $app->postService()->create($acl, 'free', [
+            'title'   => '제목',
+            'content' => "첫 줄\n둘째 줄",
+        ]);
+
+        $body = $this->body($this->get($app, '/posts/' . $post['id']));
+
+        self::assertStringContainsString('첫 줄', $body);
+        self::assertStringContainsString('<br', $body);
     }
 
     /** @dataProvider connectionProvider */

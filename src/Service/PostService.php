@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
+use ApiBoard\Cms\ContentImageService;
+use ApiBoard\Cms\ContentRenderer;
+use ApiBoard\Cms\HtmlSanitizer;
 use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Validation\Validator;
@@ -20,10 +23,50 @@ final class PostService
     /** @var AttachmentService|null 순환 의존을 피하려고 나중에 주입한다 */
     private $attachments = null;
 
-    public function __construct(BoardService $boards, PostRepository $posts)
-    {
+    /** @var HtmlSanitizer */
+    private $sanitizer;
+
+    /** @var ContentImageService */
+    private $images;
+
+    public function __construct(
+        BoardService $boards,
+        PostRepository $posts,
+        HtmlSanitizer $sanitizer,
+        ContentImageService $images
+    ) {
         $this->boards = $boards;
         $this->posts = $posts;
+        $this->sanitizer = $sanitizer;
+        $this->images = $images;
+    }
+
+    /**
+     * 본문은 편집기가 보내는 HTML 이다. 저장 시점에 한 번 정화해 두고,
+     * 출력에서도 cms_html 로 한 번 더 거른다. 평문이 들어오면 정화기가 문단으로 감싼다.
+     */
+    private function cleanContent(string $raw): string
+    {
+        return $this->sanitizer->clean($raw);
+    }
+
+    /** 편집기가 올린 이미지를 묶는 폴더 이름. 형식이 어긋나면 저장을 막는다. */
+    private function editorImageKey(Validator $v, array $input): ?string
+    {
+        if (!array_key_exists('image_key', $input)) {
+            return null;
+        }
+        $key = strtolower((string) $v->optionalString('image_key', 32));
+        if ($key === '') {
+            return null;
+        }
+        if (preg_match('/^[a-f0-9]{32}$/D', $key) !== 1) {
+            $v->fail('image_key', '이미지 저장 정보를 확인할 수 없습니다.');
+
+            return null;
+        }
+
+        return $key;
     }
 
     public function setAttachmentService(AttachmentService $attachments): void
@@ -72,6 +115,53 @@ final class PostService
     }
 
     /** 메인 화면용으로 게시판의 최신 글 요약을 제한된 개수만 돌려준다. */
+    /**
+     * 관리 화면의 전체 글 목록. 게시판 경계를 넘으므로 사이트 관리 권한이 필요하다.
+     * 각 글에 board_key/board_name 을 붙여 어느 게시판 글인지 바로 알 수 있게 한다.
+     */
+    public function listAllPosts(Acl $acl, array $query): array
+    {
+        $acl->assertGlobalAdmin();
+
+        $v = new Validator($query);
+        $page = $v->int('page', 1, 1, 100000);
+        $perPage = $v->int('per_page', 30, 10, 100);
+        $q = $v->optionalString('q', 100);
+        $boardKey = $v->optionalString('board', 50);
+        $includeDeleted = $v->bool('include_deleted', false);
+        $v->check();
+
+        $boards = [];
+        foreach ($this->boards->listBoards($acl) as $board) {
+            $boards[(int) $board['id']] = $board;
+        }
+
+        $boardId = null;
+        if ($boardKey !== null && $boardKey !== '') {
+            $entity = $this->boards->getEntity($acl, $boardKey);
+            $boardId = (int) $entity['id'];
+        }
+
+        $result = $this->posts->paginateAll($page, $perPage, $q, $boardId, $includeDeleted);
+
+        $rows = [];
+        foreach ($result['rows'] as $row) {
+            $summary = $this->summary($row);
+            $board = $boards[(int) $row['board_id']] ?? null;
+            $summary['board_key'] = $board['board_key'] ?? null;
+            $summary['board_name'] = $board['name'] ?? '(삭제된 게시판)';
+            $rows[] = $summary;
+        }
+
+        return [
+            'data'        => $rows,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total'       => $result['total'],
+            'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+        ];
+    }
+
     public function latestPosts(Acl $acl, string $boardKey, int $limit = 5): array
     {
         $board = $this->boards->getEntity($acl, $boardKey);
@@ -129,8 +219,9 @@ final class PostService
         $data = [
             'board_id' => (int) $board['id'],
             'title'    => $v->requiredString('title', 200),
-            'content'  => $v->requiredString('content'),
+            'content'  => $this->cleanContent($v->requiredString('content')),
         ];
+        $data['image_key'] = $this->editorImageKey($v, $input);
 
         $identity = $acl->identity();
         if ($identity->isGuest()) {
@@ -162,6 +253,10 @@ final class PostService
         $v->check();
 
         $id = $this->posts->create($data);
+        // 본문에 남지 않은 이미지는 지운다. 편집 중 올렸다가 지운 것들이다.
+        if ($data['image_key'] !== null) {
+            $this->images->sync((string) $data['image_key'], (string) $data['content']);
+        }
 
         return $this->detail($this->posts->findWithSecret($id));
     }
@@ -183,7 +278,11 @@ final class PostService
             $data['title'] = $v->requiredString('title', 200);
         }
         if (array_key_exists('content', $input)) {
-            $data['content'] = $v->requiredString('content');
+            $data['content'] = $this->cleanContent($v->requiredString('content'));
+        }
+        $updateKey = $this->editorImageKey($v, $input);
+        if ($updateKey !== null) {
+            $data['image_key'] = $updateKey;
         }
         if (array_key_exists('category', $input)) {
             $data['category'] = $this->validateCategory($v, $board, $input);
@@ -204,6 +303,10 @@ final class PostService
 
         if ($data !== []) {
             $this->posts->update($id, $data);
+        }
+        $syncKey = $updateKey ?? (($post['image_key'] ?? null) ? (string) $post['image_key'] : null);
+        if ($syncKey !== null && array_key_exists('content', $data)) {
+            $this->images->sync($syncKey, (string) $data['content']);
         }
 
         return $this->detail($this->posts->findWithSecret($id));
@@ -282,7 +385,15 @@ final class PostService
     private function validateCategory(Validator $v, array $board, array $input): ?string
     {
         $category = $v->optionalString('category', 50);
+        $usesCategory = (int) $board['use_category'] === 1 && $board['categories'] !== [];
+
         if ($category === null) {
+            // 분류를 쓰는 게시판인데 고르지 않았다면 이유를 알려 준다.
+            // 예전에는 조용히 통과시켜 분류 없는 글이 섞였다.
+            if ($usesCategory) {
+                $v->fail('category', '분류를 선택해 주세요.');
+            }
+
             return null;
         }
         if ((int) $board['use_category'] !== 1) {
@@ -310,8 +421,13 @@ final class PostService
         return $requested;
     }
 
+    /** 갤러리·매거진·뉴스형 목록이 쓰는 발췌문 길이 */
+    private const EXCERPT_LENGTH = 120;
+
     private function summary(array $row): array
     {
+        $secret = (bool) $row['is_secret'];
+
         return [
             'id'            => (int) $row['id'],
             'category'      => $row['category'],
@@ -319,13 +435,72 @@ final class PostService
             'author_id'     => $row['author_id'],
             'author_name'   => $row['author_name'],
             'is_notice'     => (bool) $row['is_notice'],
-            'is_secret'     => (bool) $row['is_secret'],
+            'is_secret'     => $secret,
             'view_count'    => (int) $row['view_count'],
             'comment_count' => (int) $row['comment_count'],
             'file_count'    => count($row['attachments']),
+            // 비밀글은 목록에서 본문과 사진을 흘리면 안 된다. 제목만 남긴다.
+            'excerpt'         => $secret ? null : $this->excerpt((string) $row['content']),
+            'thumbnail_index' => $secret ? null : $this->firstImageIndex($row['attachments']),
+            'thumbnail_url'   => $secret ? null : $this->firstContentImage((string) $row['content']),
             'deleted'       => $row['deleted_at'] !== null,
             'created_at'    => $row['created_at'],
         ];
+    }
+
+    /** 본문 앞부분을 한 줄로 눌러 목록용 발췌문을 만든다. */
+    private function excerpt(string $content): ?string
+    {
+        // 본문이 HTML 이므로 태그를 걷어내고 한 줄로 만든다.
+        $text = html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+        if ($text === '') {
+            return null;
+        }
+
+        if (mb_strlen($text) <= self::EXCERPT_LENGTH) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, self::EXCERPT_LENGTH) . '…';
+    }
+
+    /** 첨부 중 첫 이미지의 인덱스. 목록 썸네일 주소를 만들 때 쓴다. */
+    /**
+     * 본문에 넣은 첫 사진의 주소. 첨부가 없어도 목록에 썸네일을 보이려고 쓴다.
+     *
+     * 편집기가 올린 사진만 받아들인다. 본문에는 다른 사이트 주소도 들어올 수 있는데,
+     * 그것을 목록에서 불러오면 방문자 정보가 그 사이트로 새어 나간다.
+     */
+    private function firstContentImage(string $content): ?string
+    {
+        if (!preg_match_all('/<img\b[^>]*\bsrc\s*=\s*"([^"]+)"/i', $content, $matches)) {
+            return null;
+        }
+
+        foreach ($matches[1] as $raw) {
+            $url = html_entity_decode($raw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            // 목록에는 카드 크기에 맞춘 축소본을 쓴다. 원본을 그대로 내보내면
+            // 글 목록 한 화면에 수십 MB 가 오간다.
+            $thumb = ContentRenderer::variantUrl($url, 'thumb');
+            if ($thumb !== null) {
+                return $thumb;
+            }
+        }
+
+        return null;
+    }
+
+    private function firstImageIndex(array $attachments): ?int
+    {
+        foreach (array_values($attachments) as $index => $file) {
+            $mime = (string) ($file['mime'] ?? '');
+            if (str_starts_with($mime, 'image/')) {
+                return $index;
+            }
+        }
+
+        return null;
     }
 
     private function detail(array $row): array

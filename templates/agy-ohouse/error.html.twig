@@ -1,0 +1,33 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}{{ title }} · {{ site.site_name }}{% endblock %}
+
+{% block body %}
+<div style="max-width: 540px; margin: 4rem auto; text-align: center;">
+  <div class="card" style="padding: 3rem 2rem;">
+    <div style="color: var(--warning); margin-bottom: 1rem;">
+      {{ ico.i('warning', 56) }}
+    </div>
+    <span class="badge badge-error-soft" style="align-self: center; margin-bottom: 0.75rem;">오류가 발생했습니다</span>
+    <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.035em; color: var(--text-main); margin-bottom: 0.5rem;">{{ title }}</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem;">{{ message }}</p>
+
+    {% if details is not empty %}
+      <div class="alert alert-error" style="text-align: left; margin-bottom: 1.5rem; font-size: 0.85rem;">
+        <ul style="padding-left: 1.25rem;">
+          {% for field, detail in details %}
+            <li><strong>{{ field }}</strong>: {{ detail }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div>
+      <a class="btn btn-primary" href="{{ url_for('boards.index') }}">
+        {{ ico.i('home', 16) }} 홈으로 돌아가기
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

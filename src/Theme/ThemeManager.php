@@ -86,8 +86,12 @@ final class ThemeManager
             $theme = self::DEFAULT_THEME;
         }
 
+        $file = $this->assetRoot . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . $path;
         $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
-        return rtrim($basePath, '/') . '/themes/' . rawurlencode($theme) . '/' . $encodedPath;
+        $url = rtrim($basePath, '/') . '/themes/' . rawurlencode($theme) . '/' . $encodedPath;
+        $modifiedAt = is_file($file) ? filemtime($file) : false;
+
+        return $modifiedAt === false ? $url : $url . '?v=' . $modifiedAt;
     }
 
     private function isAvailable(string $theme): bool

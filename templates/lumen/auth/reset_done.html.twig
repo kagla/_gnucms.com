@@ -1,0 +1,13 @@
+{% extends "layout.html.twig" %}
+{% block title %}비밀번호 변경 완료 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="lumen-auth-card lumen-status-card">
+    <span class="status-dot"></span>
+    <p class="lumen-section-kicker">All set</p>
+    <h1>비밀번호를 변경했습니다</h1>
+    <p class="lumen-lead">새 비밀번호로 다시 로그인해 주세요.</p>
+    <a class="lumen-btn lumen-btn-primary lumen-btn-block" href="{{ url_for('auth.login') }}">로그인하기</a>
+  </section>
+</div>
+{% endblock %}

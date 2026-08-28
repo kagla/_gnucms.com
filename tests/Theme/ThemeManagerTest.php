@@ -55,8 +55,16 @@ final class ThemeManagerTest extends TestCase
 
         $themes = $this->manager('modern');
 
-        self::assertSame('/community/themes/modern/theme.css', $themes->assetUrl('theme.css', '/community'));
-        self::assertSame('/community/themes/default/logo.png', $themes->assetUrl('logo.png', '/community'));
+        self::assertSame(
+            '/community/themes/modern/theme.css?v='
+                . filemtime($this->root . '/public/themes/modern/theme.css'),
+            $themes->assetUrl('theme.css', '/community')
+        );
+        self::assertSame(
+            '/community/themes/default/logo.png?v='
+                . filemtime($this->root . '/public/themes/default/logo.png'),
+            $themes->assetUrl('logo.png', '/community')
+        );
     }
 
     public function testUnknownOrUnsafeThemeFallsBackToDefault(): void

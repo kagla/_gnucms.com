@@ -1,0 +1,143 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}메일 설정 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}mail{% endblock %}
+
+{% block body %}
+<div class="breadcrumbs" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+  <a href="{{ url_for('admin.index') }}">관리 콘솔</a>
+  <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+  <span style="color: var(--text-main); font-weight: 700;" aria-current="page">메일 설정</span>
+</div>
+
+<section class="card" style="padding: clamp(1.5rem, 4vw, 2.5rem); margin-bottom: 2rem;">
+  <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line);">
+    <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main);">메일 발송 설정</h1>
+    <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">회원가입 인증 및 비밀번호 재설정 메일을 발송할 SMTP 계정을 설정합니다.</p>
+  </div>
+
+  {% if query.saved|default('') == '1' %}<div class="alert alert-success" style="margin-bottom: 1.25rem;">{{ ico.i('check-circle', 18) }}<span>SMTP 설정을 저장했습니다.</span></div>{% endif %}
+  {% if query.tested|default('') == '1' %}<div class="alert alert-success" style="margin-bottom: 1.25rem;">{{ ico.i('check-circle', 18) }}<span>발신 주소로 테스트 메일을 발송했습니다.</span></div>{% endif %}
+  {% if test_error %}<div class="alert alert-error" style="margin-bottom: 1.25rem;">{{ ico.i('warning', 18) }}<span>{{ test_error }}</span></div>{% endif %}
+
+  <form method="post" action="{{ url_for('admin.mail') }}" style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div style="padding: 1rem; background: var(--base-200); border-radius: 0.75rem;">
+      <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.95rem; font-weight: 800;">
+        <input type="checkbox" name="enabled" value="1"{{ values.enabled|default(false) ? ' checked' : '' }} style="accent-color: var(--primary);">
+        <span>SMTP 메일 발송 활성화</span>
+      </label>
+    </div>
+
+    <!-- 서버 설정 -->
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); border-left: 3px solid var(--primary); padding-left: 0.6rem;">서버 정보</h2>
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">메일 서비스</span></label>
+        <select class="select select-bordered" name="provider" data-mail-provider>
+          <option value="gmail"{{ values.provider|default('gmail') == 'gmail' ? ' selected' : '' }}>Gmail</option>
+          <option value="naver"{{ values.provider|default('') == 'naver' ? ' selected' : '' }}>네이버 메일</option>
+          <option value="daum"{{ values.provider|default('') == 'daum' ? ' selected' : '' }}>다음 메일</option>
+          <option value="custom"{{ values.provider|default('') == 'custom' ? ' selected' : '' }}>직접 설정</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">SMTP 서버 호스트</span></label>
+          <input class="input input-bordered" type="text" name="host" value="{{ values.host|default('smtp.gmail.com') }}" maxlength="253" data-mail-host required>
+          {% if errors.host is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.host }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">포트 번호</span></label>
+          <input class="input input-bordered" type="number" name="port" value="{{ values.port|default(465) }}" min="1" max="65535" data-mail-port required>
+        </div>
+      </div>
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">보안 암호화</span></label>
+        <select class="select select-bordered" name="encryption" data-mail-encryption>
+          <option value="ssl"{{ values.encryption|default('ssl') == 'ssl' ? ' selected' : '' }}>SSL/TLS</option>
+          <option value="tls"{{ values.encryption|default('') == 'tls' ? ' selected' : '' }}>STARTTLS</option>
+        </select>
+      </div>
+
+      <div class="alert alert-info" data-mail-help style="font-size: 0.85rem;"></div>
+    </div>
+
+    <!-- 계정 설정 -->
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); border-left: 3px solid var(--primary); padding-left: 0.6rem;">인증 계정</h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">SMTP 아이디/이메일</span></label>
+          <input class="input input-bordered" type="text" name="username" value="{{ values.username|default('') }}" maxlength="254" autocomplete="username" required>
+          {% if errors.username is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.username }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">SMTP 비밀번호 / 앱 비밀번호</span></label>
+          <input class="input input-bordered" type="password" name="password" value="{{ values.password|default('') }}" maxlength="255" autocomplete="current-password" placeholder="{{ values.has_password ? '•••••••• (변경 시에만 입력)' : '' }}"{{ values.has_password ? '' : ' required' }}>
+          {% if errors.password is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.password }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">발신자 이메일 주소</span></label>
+          <input class="input input-bordered" type="email" name="from_email" value="{{ values.from_email|default('') }}" maxlength="254" required>
+          {% if errors.from_email is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.from_email }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="label"><span class="label-text" style="font-weight: 750;">발신자 이름</span></label>
+          <input class="input input-bordered" type="text" name="from_name" value="{{ values.from_name|default(site.site_name) }}" maxlength="100" required>
+          {% if errors.from_name is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.from_name }}</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+      <button class="btn btn-outline" type="submit" name="test" value="1">
+        {{ ico.i('mail', 15) }} 테스트 메일 발송
+      </button>
+      <div style="display: flex; gap: 0.5rem;">
+        <a class="btn btn-ghost" href="{{ url_for('admin.index') }}">취소</a>
+        <button class="btn btn-primary" type="submit">설정 저장</button>
+      </div>
+    </div>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var provider=document.querySelector('[data-mail-provider]'),
+      host=document.querySelector('[data-mail-host]'),
+      port=document.querySelector('[data-mail-port]'),
+      enc=document.querySelector('[data-mail-encryption]'),
+      help=document.querySelector('[data-mail-help]');
+  if(!provider){return}
+  var presets={
+    gmail:{host:'smtp.gmail.com',port:465,enc:'ssl',help:'Gmail은 2단계 인증 후 생성한 <strong>16자리 앱 비밀번호</strong>를 입력해야 합니다.'},
+    naver:{host:'smtp.naver.com',port:465,enc:'ssl',help:'네이버 메일 환경설정에서 <strong>POP3/IMAP 설정 및 SMTP 사용</strong>을 켜야 합니다.'},
+    daum:{host:'smtp.daum.net',port:465,enc:'ssl',help:'카카오 메일 / Daum 메일 환경설정에서 <strong>IMAP/SMTP 사용</strong>을 켜야 합니다.'},
+    custom:{host:'',port:587,enc:'tls',help:'자체 메일 서버의 접속 정보와 포트, 보안 방식을 입력해 주세요.'}
+  };
+  function update(syncValues){
+    var p=presets[provider.value]||presets.custom;
+    if(syncValues&&provider.value!=='custom'){
+      host.value=p.host;
+      port.value=p.port;
+      enc.value=p.enc;
+    }
+    help.innerHTML=p.help;
+    help.style.display=p.help?'flex':'none';
+  }
+  provider.addEventListener('change',function(){update(true)});
+  update(false);
+})();
+</script>
+{% endblock %}

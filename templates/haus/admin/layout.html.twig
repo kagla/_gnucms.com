@@ -1,0 +1,63 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block body_class %}admin-page{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+{% block chrome %}
+<div class="admin">
+  {% include 'admin/_sidebar.html.twig' with {'section': block('admin_section')|trim} %}
+  <div class="admin-main">
+    <header class="admin-topbar">
+      <button class="btn-icon admin-menu" type="button" aria-controls="admin-sidebar" aria-expanded="false" aria-label="관리 메뉴 열기">{{ ico.i('menu', 20) }}</button>
+      <a class="admin-topbar-title" href="{{ url_for('admin.index') }}">관리 콘솔</a>
+      <div class="admin-topbar-actions">
+        <a class="btn btn-white btn-sm" href="{{ url_for('boards.index') }}">{{ ico.i('external', 15) }} 사이트 보기</a>
+        <button class="btn-icon theme-btn" type="button" data-theme-toggle aria-label="화면 테마 바꾸기">
+          <span class="theme-ico theme-ico-light">{{ ico.i('sun', 18) }}</span>
+          <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 18) }}</span>
+          <span class="theme-ico theme-ico-system">{{ ico.i('system', 18) }}</span>
+        </button>
+      </div>
+    </header>
+    <div class="admin-body" id="main">{{ block('body') }}</div>
+  </div>
+  <div class="admin-backdrop" data-admin-close hidden></div>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,shell=document.querySelector('.admin');
+  var fold=document.querySelector('.admin-fold'),menu=document.querySelector('.admin-menu'),bd=document.querySelector('.admin-backdrop');
+  function syncFold(){
+    if(!fold){return}
+    var f=root.dataset.adminSidebar==='collapsed';
+    fold.setAttribute('aria-expanded',f?'false':'true');
+    fold.setAttribute('aria-label',f?'관리 메뉴 펼치기':'관리 메뉴 접기');
+    fold.title=fold.getAttribute('aria-label');
+  }
+  if(fold){
+    fold.addEventListener('click',function(){
+      var f=root.dataset.adminSidebar==='collapsed';
+      if(f){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}
+      try{localStorage.setItem('aboard-admin-sidebar',f?'expanded':'collapsed')}catch(e){}
+      syncFold();
+    });
+    syncFold();
+  }
+  function close(){
+    if(!shell){return}
+    shell.classList.remove('is-open');
+    if(bd){bd.hidden=true}
+    if(menu){menu.setAttribute('aria-expanded','false');menu.setAttribute('aria-label','관리 메뉴 열기')}
+  }
+  if(menu&&shell){
+    menu.addEventListener('click',function(){
+      var open=shell.classList.toggle('is-open');
+      if(bd){bd.hidden=!open}
+      menu.setAttribute('aria-expanded',open?'true':'false');
+      menu.setAttribute('aria-label',open?'관리 메뉴 닫기':'관리 메뉴 열기');
+    });
+    if(bd){bd.addEventListener('click',close)}
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'){close()}});
+  }
+})();
+</script>
+{% endblock %}

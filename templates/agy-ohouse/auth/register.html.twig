@@ -1,0 +1,65 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}회원가입 · {{ site.site_name }}{% endblock %}
+
+{% block body %}
+<div style="max-width: 460px; margin: 3rem auto;">
+  <section class="card" style="padding: clamp(1.75rem, 5vw, 2.5rem);">
+    <header style="text-align: center; margin-bottom: 2rem;">
+      <span class="badge badge-soft" style="margin-bottom: 0.5rem;">Join us</span>
+      <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main);">회원가입</h1>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.35rem;">{{ site.site_name }}의 새로운 가족이 되어주세요.</p>
+    </header>
+
+    <form method="post" action="{{ url_for('auth.register') }}" style="display: flex; flex-direction: column; gap: 1rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">이메일</span></label>
+        <input class="input input-bordered" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" placeholder="example@domain.com" autocomplete="email" required autofocus>
+        {% if errors.email is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.email }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">비밀번호 <span style="font-size: 0.75rem; color: var(--text-muted);">(8자 이상)</span></span></label>
+        <input class="input input-bordered" type="password" name="password" minlength="8" placeholder="8자 이상의 비밀번호" autocomplete="new-password" required>
+        {% if errors.password is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.password }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label class="label"><span class="label-text" style="font-weight: 750;">비밀번호 확인</span></label>
+        <input class="input input-bordered" type="password" name="password_confirmation" minlength="8" placeholder="비밀번호 다시 입력" autocomplete="new-password" required>
+        {% if errors.password_confirmation is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.password_confirmation }}</p>{% endif %}
+      </div>
+
+      {% if legal %}
+        <div style="padding: 1rem; background: var(--base-200); border-radius: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required style="accent-color: var(--primary);">
+            <span><a href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 750; text-decoration: underline;">이용약관</a>에 동의합니다. <span style="color: var(--error); font-weight: 800;">(필수)</span></span>
+          </label>
+          {% if errors.agree_terms is defined %}<p class="badge badge-error-soft">{{ errors.agree_terms }}</p>{% endif %}
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required style="accent-color: var(--primary);">
+            <span><a href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 750; text-decoration: underline;">개인정보 처리방침</a>에 동의합니다. <span style="color: var(--error); font-weight: 800;">(필수)</span></span>
+          </label>
+          {% if errors.agree_privacy is defined %}<p class="badge badge-error-soft">{{ errors.agree_privacy }}</p>{% endif %}
+        </div>
+      {% endif %}
+
+      <button class="btn btn-primary btn-block" type="submit" style="margin-top: 0.5rem; height: 3rem;">
+        {{ ico.i('check', 16) }} 가입하고 시작하기
+      </button>
+    </form>
+
+    {% include "auth/_social.html.twig" %}
+
+    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--text-muted);">
+      이미 계정이 있으신가요?
+      <a href="{{ url_for('auth.login') }}" style="color: var(--primary); font-weight: 800; margin-left: 0.35rem;">로그인</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

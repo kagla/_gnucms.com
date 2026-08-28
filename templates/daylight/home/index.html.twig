@@ -1,0 +1,67 @@
+{# daylight view: home/index.html.twig #}
+{% extends "layout.html.twig" %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="studio-hero discovery-hero">
+  <div class="discovery-main">
+    <div class="discovery-copy"><span>오늘 발견한 이야기</span><h1>{{ site.home_title }}</h1><p>{{ site.home_intro }}</p>{% if boards is not empty %}<a href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">새로운 이야기 보기 <i aria-hidden="true">→</i></a>{% endif %}</div>
+    <div class="discovery-art" aria-hidden="true"><i></i><i></i><i></i><span>talk<br>together</span></div>
+  </div>
+  <aside class="discovery-side">
+    <span>DAILY COMMUNITY</span><strong>경험과 생각을<br>발견하는 곳</strong><p>관심 있는 주제를 둘러보고<br>나만의 이야기도 들려주세요.</p><div><b>{{ boards|length }}</b><small>개의 열린 공간</small></div>
+  </aside>
+</section>
+
+{% if boards is not empty %}
+<nav class="studio-quick-nav" aria-label="게시판 바로가기">
+  {% for board in boards|slice(0, 8) %}
+  <a href="{{ url_for('posts.index', {'key': board.board_key}) }}"><span class="quick-icon quick-icon-{{ (loop.index0 % 6) + 1 }}">{{ board.name|slice(0, 1) }}</span><strong>{{ board.name }}</strong></a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<section class="studio-popular" id="studio-popular" aria-labelledby="popular-title">
+  <header class="content-section-head"><div><h2 id="popular-title">지금 인기 있는 이야기</h2><p>커뮤니티에서 새롭게 올라온 이야기를 만나보세요.</p></div><a href="#community-title">게시판 전체보기 <span aria-hidden="true">›</span></a></header>
+  {% set has_posts = false %}
+  <div class="story-feed">
+  {% for board in boards %}
+    {% set board_index = loop.index0 %}
+    {% for post in board.latest_posts|slice(0, 2) %}
+      {% set has_posts = true %}
+      <article class="story-feed-card">
+        <a class="story-visual story-visual-{{ ((board_index * 2 + loop.index0) % 6) + 1 }}" href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{{ board.name|slice(0, 1) }}</span><small>{{ board.name }}</small></a>
+        <div><a class="story-title" href="{{ url_for('posts.show', {'id': post.id}) }}">{% if post.is_notice %}<b>공지</b>{% endif %}{{ post.title }}</a><p><span class="story-avatar">{{ post.author_name|slice(0, 1) }}</span>{{ post.author_name }}{% if post.comment_count > 0 %}<em>댓글 {{ post.comment_count }}</em>{% endif %}</p></div>
+      </article>
+    {% endfor %}
+  {% endfor %}
+  </div>
+  {% if not has_posts %}<div class="studio-empty"><span aria-hidden="true">＋</span><h3>첫 이야기를 기다리고 있어요</h3><p>관심 있는 게시판에서 대화를 시작해 보세요.</p></div>{% endif %}
+</section>
+
+<section class="studio-community" aria-labelledby="community-title">
+  <header class="content-section-head"><div><h2 id="community-title">관심 게시판 둘러보기</h2><p>주제별 공간에서 더 깊은 이야기를 나눠보세요.</p></div></header>
+  {% if boards is empty %}
+    <div class="studio-empty"><span aria-hidden="true">＋</span><h3>첫 공간을 준비하고 있습니다</h3><p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="studio-board-grid">
+    {% for board in boards %}
+      <article class="studio-board-card">
+        <a class="studio-board-head" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+          <span class="studio-board-index">{{ '%02d'|format(loop.index) }}</span><span class="studio-board-copy"><strong>{{ board.name }}</strong><small>{{ board.description ?: '새로운 이야기와 소식을 나누는 공간입니다.' }}</small></span><span class="studio-board-arrow" aria-hidden="true">›</span>
+        </a>
+        <div class="studio-latest">
+          {% if board.latest_posts is empty %}<p class="studio-latest-empty">아직 첫 이야기를 기다리고 있어요.</p>{% else %}
+          <ul>{% for post in board.latest_posts|slice(0, 3) %}<li><a href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{% if post.is_notice %}<b>공지</b>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<em>{{ post.comment_count }}</em>{% endif %}</span><time datetime="{{ post.created_at }}">{{ post.created_at|slice(5, 5) }}</time></a></li>{% endfor %}</ul>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="studio-guide" id="studio-guide">
+  <div><span>ABOARD GUIDE</span><h2>좋은 커뮤니티는<br>편안한 대화에서 시작됩니다.</h2><p>서로를 존중하고, 경험을 나누고, 함께 더 나은 공간을 만들어가요.</p></div>
+  {% if current_user.is_guest and registration_available %}<a href="{{ url_for('auth.register') }}">커뮤니티 참여하기 <span aria-hidden="true">→</span></a>{% endif %}
+</section>
+{% endblock %}

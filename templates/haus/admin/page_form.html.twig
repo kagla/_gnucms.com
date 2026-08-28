@@ -1,0 +1,67 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }} · {{ site.site_name }}{% endblock %}
+{% block admin_section %}content{% endblock %}
+{% block body %}
+<nav class="breadcrumb" aria-label="현재 위치"><a href="{{ url_for('admin.index') }}">사이트 관리</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><a href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">{{ legal ? '약관' : '내용' }}</a><span aria-hidden="true">{{ ico.i('chevron-right', 13) }}</span><span aria-current="page">{{ create ? '새 내용' : values.title }}</span></nav>
+<section class="card">
+  <div class="card-header">
+    <h1>{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }}</h1>
+    <p class="card-sub">내용을 작성하고 공개 여부와 메뉴 표시만 정하세요.</p>
+  </div>
+  <form class="card-body form" method="post" action="{{ create ? url_for('admin.content.create') : url_for('admin.content.edit', {id: page_id}) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="image_key" value="{{ values.image_key }}">
+    <input type="hidden" name="uploaded_images" value="{{ values.uploaded_images|default('') }}" data-uploaded-images>
+    <div class="form-group{% if errors.title is defined %} has-error{% endif %}">
+      <label class="label" for="c-title">제목</label>
+      <input class="input" id="c-title" type="text" name="title" value="{{ values.title|default('') }}" maxlength="200" required>
+      {% if errors.title is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.title }}</p>{% endif %}
+    </div>
+    <div class="form-group{% if errors.slug is defined %} has-error{% endif %}">
+      <label class="label" for="c-slug">주소 <span class="label-hint">{{ legal ? '회원가입 연결을 위해 고정됩니다.' : '예: about' }}</span></label>
+      <input class="input" id="c-slug" type="text" name="slug" value="{{ values.slug|default('') }}" maxlength="100" pattern="[a-z0-9][a-z0-9_-]*"{{ legal ? ' readonly' : '' }} required>
+      {% if errors.slug is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.slug }}</p>{% endif %}
+    </div>
+    <div class="form-group{% if errors.content is defined %} has-error{% endif %}">
+      <label class="label" for="content-editor">내용</label>
+      <textarea class="input textarea" id="content-editor" name="content" rows="14" data-cms-editor>{{ values.content|default('') }}</textarea>
+      <p class="help-text">사진 올리기에서 여러 장을 선택하거나 편집 영역으로 끌어놓을 수 있습니다.</p>
+      {% if errors.content is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.content }}</p>{% endif %}
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="label" for="c-status">상태</label>
+        <select class="input select" id="c-status" name="status">
+          <option value="draft"{{ values.status|default('draft') == 'draft' ? ' selected' : '' }}>초안</option>
+          <option value="published"{{ values.status|default('draft') == 'published' ? ' selected' : '' }}>공개</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label" for="c-sort">메뉴 순서</label>
+        <input class="input" id="c-sort" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
+      </div>
+    </div>
+    <div class="switch-group">
+      <label class="switch">
+        <input type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }}>
+        <span class="switch-ui" aria-hidden="true"></span>
+        <span class="switch-copy"><strong>상단 메뉴에 표시</strong></span>
+      </label>
+    </div>
+    <div class="form-actions">
+      {% if not create %}<a class="btn btn-white" href="{{ url_for('admin.content.preview', {id: page_id}) }}" target="_blank" rel="noopener">{{ ico.i('eye', 15) }} 미리보기</a>{% endif %}
+      <a class="btn btn-white" href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">취소</a>
+      <button class="btn btn-primary" type="submit">{{ create ? '내용 만들기' : '변경사항 저장' }}</button>
+    </div>
+  </form>
+  {% if not create %}
+    <form class="danger-zone" method="post" action="{{ url_for('admin.content.delete', {id: page_id}) }}" onsubmit="return confirm('이 내용을 휴지통으로 옮길까요?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div><strong>{{ ico.i('trash', 15) }} 휴지통으로 이동</strong><p>공개가 중단되며 휴지통에서 다시 복원할 수 있습니다.</p></div>
+      <button class="btn btn-danger" type="submit">휴지통으로 이동</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% include "admin/_editor.html.twig" %}{% endblock %}

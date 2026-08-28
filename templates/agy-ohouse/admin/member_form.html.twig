@@ -1,0 +1,67 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+
+{% block title %}회원 정보 수정 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}members{% endblock %}
+
+{% block body %}
+<div class="breadcrumbs" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+  <a href="{{ url_for('admin.index') }}">관리 콘솔</a>
+  <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+  <a href="{{ url_for('admin.members') }}">회원 관리</a>
+  <span style="margin-inline: 0.35rem; color: var(--text-hint);">›</span>
+  <span style="color: var(--text-main); font-weight: 700;" aria-current="page">{{ values.email }}</span>
+</div>
+
+<section class="card" style="padding: clamp(1.5rem, 4vw, 2.5rem); max-width: 680px; margin-bottom: 2rem;">
+  <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line);">
+    <h1 style="font-size: 1.75rem; font-weight: 900; letter-spacing: -0.04em; color: var(--text-main);">회원 정보 수정</h1>
+    <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">회원의 표시 이름과 이메일, 이용 상태를 변경합니다.</p>
+  </div>
+
+  <form method="post" action="{{ url_for('admin.members.edit', {id: values.id}) }}" style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">이메일</span></label>
+      <input class="input input-bordered" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="off" required>
+      {% if errors.email is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.email }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">표시 이름</span></label>
+      <input class="input input-bordered" type="text" name="display_name" value="{{ values.display_name|default('') }}" maxlength="100" required>
+      {% if errors.display_name is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.display_name }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="label"><span class="label-text" style="font-weight: 750;">이용 상태</span></label>
+      <select class="select select-bordered" name="status">
+        <option value="active"{{ values.status|default('active') == 'active' ? ' selected' : '' }}>활성</option>
+        <option value="blocked"{{ values.status|default('active') == 'blocked' ? ' selected' : '' }}>차단</option>
+      </select>
+      {% if errors.status is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.status }}</p>{% endif %}
+    </div>
+
+    <div style="padding: 1rem; background: var(--base-200); border-radius: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: var(--text-muted);">권한</span>
+        <strong style="color: var(--text-main);">{{ values.is_admin ? '사이트 소유자' : '일반 회원' }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: var(--text-muted);">이메일 인증</span>
+        <strong style="color: var(--text-main);">{{ values.email_verified ? '완료' : '대기' }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: var(--text-muted);">가입일시</span>
+        <strong style="color: var(--text-main);">{{ values.created_at|date('Y.m.d H:i') }}</strong>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+      <a class="btn btn-ghost" href="{{ url_for('admin.members') }}">취소</a>
+      <button class="btn btn-primary" type="submit">변경사항 저장</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

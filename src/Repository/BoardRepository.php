@@ -21,6 +21,8 @@ final class BoardRepository
         'use_secret'   => 0,
         'use_file'     => 0,
         'use_category' => 0,
+        'list_type'    => 'list',
+        'home_limit'   => 5,
         'per_page'     => 20,
         'sort_order'   => 0,
     ];

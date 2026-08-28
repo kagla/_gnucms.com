@@ -1,0 +1,49 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="nova-issue">
+  {% if site.site_tagline %}<p class="nova-kicker">{{ site.site_tagline }}</p>{% endif %}
+  <h1 class="nova-issue-title">{{ site.home_title }}</h1>
+  {% if site.home_intro %}<p class="nova-deck">{{ site.home_intro }}</p>{% endif %}
+</section>
+
+{% if boards is empty %}
+  <div class="nova-empty" role="status">
+    <p>아직 만들어진 게시판이 없습니다.</p>
+  </div>
+{% else %}
+  <section class="nova-contents" aria-labelledby="nova-contents-title">
+    <header class="nova-contents-head">
+      <h2 id="nova-contents-title">목차</h2>
+      <p>게시판별로 최근 글을 모았습니다.</p>
+    </header>
+    {% for board in boards %}
+    <section class="nova-folio">
+      <header class="nova-folio-head">
+        <div class="nova-folio-copy">
+          <a href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+            <h3 class="nova-folio-name">{{ board.name }}</h3>
+          </a>
+          <p class="nova-folio-desc">{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</p>
+        </div>
+        <a class="nova-folio-more" href="{{ url_for('posts.index', {'key': board.board_key}) }}">이 면 전체</a>
+      </header>
+      {% if board.latest_posts is empty %}
+        <p class="nova-latest-empty">아직 등록된 글이 없습니다.</p>
+      {% else %}
+        <ol class="nova-headlines">
+          {% for post in board.latest_posts %}
+          <li>
+            <a href="{{ url_for('posts.show', {'id': post.id}) }}">
+              <span class="nova-headline">{% if post.is_notice %}<span class="tag">공지</span>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<span class="latest-comment">{{ post.comment_count }}</span>{% endif %}</span>
+              <time class="nova-headline-date" datetime="{{ post.created_at }}">{{ post.created_at|slice(0, 10) }}</time>
+            </a>
+          </li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </section>
+{% endif %}
+{% endblock %}

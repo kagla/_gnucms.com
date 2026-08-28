@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Web;
 
 use ApiBoard\App;
+use ApiBoard\Db\Schema;
 use ApiBoard\Web\Middleware\ErrorPageMiddleware;
 use ApiBoard\Web\Middleware\HtmlContentTypeMiddleware;
 use ApiBoard\Web\Middleware\SessionGuard;
@@ -28,6 +29,9 @@ final class Kernel
         $slim = AppFactory::create();
         $slim->setBasePath($basePath);
 
+        // 배포 뒤 마이그레이션을 잊어도 화면이 통째로 멈추지 않도록 스스로 맞춘다.
+        (new Schema($app->db()))->ensureCurrent();
+
         $site = $app->cmsService()->settings();
         $themes = new ThemeManager(
             $templateDir,
@@ -43,9 +47,10 @@ final class Kernel
             'autoescape'       => 'html',
         ]);
         $twig->getEnvironment()->addGlobal('current_user', [
-            'is_guest' => true, 'display_name' => null, 'is_admin' => false,
+            'is_guest' => true, 'id' => null, 'display_name' => null, 'is_admin' => false,
         ]);
         $twig->getEnvironment()->addGlobal('csrf_token', '');
+        $twig->getEnvironment()->addGlobal('unread_notifications', 0);
         $twig->getEnvironment()->addGlobal('oauth_providers', $app->providerRegistry()->options());
         $registrationAvailable = (bool) $site['registration_enabled'];
         $legalDocuments = [];
@@ -68,9 +73,10 @@ final class Kernel
             'theme_asset',
             static fn (string $path): string => $themes->assetUrl($path, $basePath)
         ));
+        // 정화한 뒤 본문 사진을 축소본 + 원본 링크로 바꿔 내보낸다.
         $twig->getEnvironment()->addFilter(new TwigFilter(
             'cms_html',
-            [$app->htmlSanitizer(), 'clean'],
+            [$app->contentRenderer(), 'render'],
             ['is_safe' => ['html']]
         ));
 

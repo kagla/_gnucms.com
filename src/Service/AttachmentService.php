@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Service;
 
 use ApiBoard\Auth\Acl;
+use ApiBoard\Cms\ImageResizer;
 use ApiBoard\Error\DomainError;
 use ApiBoard\Repository\PostRepository;
 use ApiBoard\Support\Clock;
@@ -26,18 +27,23 @@ final class AttachmentService
     /** @var string */
     private $secret;
 
+    /** @var ImageResizer */
+    private $resizer;
+
     public function __construct(
         BoardService $boards,
         PostService $posts,
         PostRepository $postRepo,
         array $config,
-        string $secret
+        string $secret,
+        ?ImageResizer $resizer = null
     ) {
         $this->boards = $boards;
         $this->posts = $posts;
         $this->postRepo = $postRepo;
         $this->config = $config;
         $this->secret = $secret;
+        $this->resizer = $resizer ?? new ImageResizer();
     }
 
     /**
@@ -171,6 +177,19 @@ final class AttachmentService
     }
 
     /**
+     * 첨부 이미지의 축소본 경로. 없으면 만들고, 만들 수 없으면 원본을 그대로 준다.
+     *
+     * 이름 앞에 점을 붙여 두면 collectGarbage() 가 건드리지 않는다.
+     * 그쪽은 글에 연결되지 않은 파일을 지우는데, 축소본은 글이 직접 가리키지 않기 때문이다.
+     */
+    public function thumbnailPath(string $original, int $width): string
+    {
+        $target = dirname($original) . '/.' . $width . '-' . basename($original);
+
+        return $this->resizer->ensure($original, $target, $width) ? $target : $original;
+    }
+
+    /**
      * 어떤 글에도 연결되지 않은 파일을 지운다. cron 이 보장되지 않는
      * 저가 호스팅을 가정하므로 관리자가 화면에서 직접 돌린다.
      *
@@ -214,6 +233,15 @@ final class AttachmentService
             if (@unlink($path)) {
                 $deleted++;
                 $bytes += $size;
+                // 원본이 사라졌으니 그 축소본도 쓸모가 없다.
+                foreach (glob(dirname($path) . '/.*-' . basename($path)) ?: [] as $thumb) {
+                    if (is_file($thumb)) {
+                        $bytes += (int) filesize($thumb);
+                        if (@unlink($thumb)) {
+                            $deleted++;
+                        }
+                    }
+                }
             }
         }
 

@@ -1,0 +1,40 @@
+{# codex-bloom view: boards/index.html.twig #}
+{# codex-bloom view: boards/index.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}게시판 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<section class="codex-bloom-hero codex-bloom-hero-compact">
+  <div class="codex-bloom-hero-copy">
+    <p class="codex-bloom-badge">{{ ic.grid() }} Community</p>
+    <h1>커뮤니티</h1>
+    <p class="codex-bloom-lead">작은 모임부터 새로운 서비스까지, 필요한 이야기만 담아 가볍게 시작하는 공간입니다.</p>
+  </div>
+</section>
+<section class="codex-bloom-boards" aria-labelledby="codex-bloom-all-boards">
+  <header class="codex-bloom-section-head">
+    <div><p class="codex-bloom-section-kicker">{{ ic.board() }} All boards</p><h2 id="codex-bloom-all-boards">전체 게시판</h2></div>
+  </header>
+  {% if boards is empty %}
+    <div class="codex-bloom-empty-state">{{ ic.empty() }}<p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="codex-bloom-board-grid">
+      {% for board in boards %}
+        <article class="codex-bloom-board-card">
+          <a class="codex-bloom-board-card-head" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+            <span class="codex-bloom-board-index">{{ ic.board() }}</span>
+            <div><h3>{{ board.name }}</h3><p>{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</p></div>
+            <span class="codex-bloom-board-arrow" aria-hidden="true">{{ ic.arrow() }}</span>
+          </a>
+          <div class="codex-bloom-board-latest">
+            <div class="codex-bloom-board-latest-head"><span>{{ ic.sparkle() }} 최신글</span><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ ic.arrow() }} 전체</a></div>
+            {% if board.latest_posts is empty %}<p class="codex-bloom-board-latest-empty">{{ ic.pen() }} 아직 등록된 글이 없습니다.</p>{% else %}
+              <ul>{% for post in board.latest_posts %}<li><a href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{% if post.is_notice %}<em class="codex-bloom-tag">{{ ic.pin() }} 공지</em>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<b>{{ ic.comment() }} {{ post.comment_count }}</b>{% endif %}</span><time datetime="{{ post.created_at }}">{{ post.created_at|slice(0, 10) }}</time></a></li>{% endfor %}</ul>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

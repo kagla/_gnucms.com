@@ -1,0 +1,10 @@
+{% extends "layout.html.twig" %}
+{% block title %}상태 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<section class="status-page">
+  <span class="status-art status-art-ok" aria-hidden="true"></span>
+  <h1>모든 시스템이 정상입니다</h1>
+  <p class="lead"><span class="status-dot" aria-hidden="true"></span>데이터베이스에 <strong>{{ dialect }}</strong>로 연결되어 있습니다.</p>
+  <p class="muted">이 화면은 연결 상태만 확인하며 테이블 유무는 검사하지 않습니다.</p>
+</section>
+{% endblock %}

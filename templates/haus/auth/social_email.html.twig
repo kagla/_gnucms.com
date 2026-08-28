@@ -1,0 +1,26 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}이메일 확인 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <div class="auth-head">
+      <span class="auth-mark auth-mark-soft" aria-hidden="true">{{ ico.i('mail', 22) }}</span>
+      <h1>이메일을 확인해 주세요</h1>
+      <p class="auth-sub">{{ provider_label }} 계정을 안전하게 연결하려면 사용할 이메일 주소를 한 번 확인해야 해요.</p>
+    </div>
+    <form class="form" method="post" action="{{ url_for('oauth.email') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="form-group{% if errors.email is defined %} has-error{% endif %}">
+        <label class="label" for="social-email">이메일</label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">{{ ico.i('mail', 16) }}</span>
+          <input class="input has-icon" id="social-email" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="email" required>
+        </div>
+        {% if errors.email is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.email }}</p>{% endif %}
+      </div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">확인 메일 보내기</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

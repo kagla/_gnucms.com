@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApiBoard\Web\Controller;
 
 use ApiBoard\App;
+use ApiBoard\Service\BoardService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Views\Twig;
@@ -21,15 +22,21 @@ final class BoardController
 
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $boards = $this->app->boardService()->listBoards($this->app->guestAcl());
-        foreach ($boards as &$board) {
+        $acl = $this->app->guestAcl();
+        $boards = [];
+        foreach ($this->app->boardService()->listBoards($acl) as $board) {
+            // 메인 노출 글 수가 0 이면 그 게시판은 메인에 내지 않는다.
+            $limit = (int) ($board['home_limit'] ?? BoardService::DEFAULT_HOME_LIMIT);
+            if ($limit < 1) {
+                continue;
+            }
             $board['latest_posts'] = $this->app->postService()->latestPosts(
-                $this->app->guestAcl(),
+                $acl,
                 (string) $board['board_key'],
-                5
+                $limit
             );
+            $boards[] = $board;
         }
-        unset($board);
 
         return Twig::fromRequest($request)->render($response, 'home/index.html.twig', [
             'boards' => $boards,

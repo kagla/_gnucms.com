@@ -1,0 +1,60 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}회원가입 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <div class="auth-head">
+      <span class="auth-mark" aria-hidden="true">{{ ico.i('sparkle', 22) }}</span>
+      <h1>{{ site.site_name }} 시작하기</h1>
+      <p class="auth-sub">1분이면 가입할 수 있어요.</p>
+    </div>
+    <form class="form" method="post" action="{{ url_for('auth.register') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="form-group{% if errors.email is defined %} has-error{% endif %}">
+        <label class="label" for="join-email">이메일</label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">{{ ico.i('mail', 16) }}</span>
+          <input class="input has-icon" id="join-email" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+        {% if errors.email is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.email }}</p>{% endif %}
+      </div>
+      <div class="form-group{% if errors.password is defined %} has-error{% endif %}">
+        <label class="label" for="join-password">비밀번호 <span class="label-hint">8자 이상</span></label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">{{ ico.i('lock', 16) }}</span>
+          <input class="input has-icon" id="join-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+        </div>
+        {% if errors.password is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.password }}</p>{% endif %}
+      </div>
+      <div class="form-group{% if errors.password_confirmation is defined %} has-error{% endif %}">
+        <label class="label" for="join-password2">비밀번호 확인</label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">{{ ico.i('lock', 16) }}</span>
+          <input class="input has-icon" id="join-password2" type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
+        </div>
+        {% if errors.password_confirmation is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.password_confirmation }}</p>{% endif %}
+      </div>
+      {% if legal %}
+        <div class="consent">
+          <label class="checkbox{% if errors.agree_terms is defined %} has-error{% endif %}">
+            <input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required>
+            <span class="checkbox-ui" aria-hidden="true"></span>
+            <span><a class="link" href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener">이용약관</a> 동의 <em class="required">필수</em></span>
+          </label>
+          {% if errors.agree_terms is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.agree_terms }}</p>{% endif %}
+          <label class="checkbox{% if errors.agree_privacy is defined %} has-error{% endif %}">
+            <input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required>
+            <span class="checkbox-ui" aria-hidden="true"></span>
+            <span><a class="link" href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener">개인정보 수집·이용</a> 동의 <em class="required">필수</em></span>
+          </label>
+          {% if errors.agree_privacy is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.agree_privacy }}</p>{% endif %}
+        </div>
+      {% endif %}
+      <button class="btn btn-primary btn-lg btn-block" type="submit">가입하기</button>
+    </form>
+    {% include "auth/_social.html.twig" %}
+    <p class="auth-switch">이미 계정이 있으신가요? <a href="{{ url_for('auth.login') }}">로그인</a></p>
+  </section>
+</div>
+{% endblock %}

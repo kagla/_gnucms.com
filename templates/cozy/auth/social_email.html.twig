@@ -1,0 +1,22 @@
+{% extends "layout.html.twig" %}
+{% block title %}이메일 확인 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="gate">
+  <section class="gate-card">
+    <header class="gate-head">
+      <span class="gate-mark gate-mark-soft" aria-hidden="true">@</span>
+      <h1>이메일을 확인해 주세요</h1>
+      <p class="gate-sub">{{ provider_label }} 계정을 안전하게 연결하려면 사용할 이메일 주소를 한 번 확인해야 해요.</p>
+    </header>
+    <form class="form" method="post" action="{{ url_for('oauth.email') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field{% if errors.email is defined %} is-bad{% endif %}">
+        <label class="field-label" for="social-email">이메일</label>
+        <input id="social-email" type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="email" required>
+        {% if errors.email is defined %}<p class="field-msg">{{ errors.email }}</p>{% endif %}
+      </div>
+      <button class="btn btn-brand btn-lg btn-block" type="submit">확인 메일 보내기</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

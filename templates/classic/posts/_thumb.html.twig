@@ -1,0 +1,6 @@
+{# 목록 썸네일. 이미지 첨부가 없으면 제목 첫 글자로 자리를 채운다. #}
+{% if post.thumbnail_index|default(null) is not null %}
+  <img class="thumb-image" src="{{ url_for('files.image', {'id': post.id, 'index': post.thumbnail_index}) }}" alt="" loading="lazy" decoding="async" width="480" height="300">
+{% else %}
+  <span class="thumb-blank" data-tone="{{ post.id % 6 }}" aria-hidden="true">{{ post.title|slice(0, 1) }}</span>
+{% endif %}

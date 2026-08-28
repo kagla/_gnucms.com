@@ -1,0 +1,49 @@
+{% extends "layout.html.twig" %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block body %}
+<section class="lumen-hero">
+  <div class="lumen-hero-copy">
+    <p class="lumen-badge"><span aria-hidden="true"></span> Welcome</p>
+    <h1>{{ site.home_title }}</h1>
+    <p class="lumen-lead">{{ site.home_intro }}</p>
+    {% if boards is not empty %}
+      <div class="lumen-hero-actions">
+        <a class="lumen-btn lumen-btn-primary lumen-btn-lg" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">이야기 둘러보기</a>
+        <a class="lumen-btn lumen-btn-ghost lumen-btn-lg" href="#lumen-boards">게시판 목록</a>
+      </div>
+    {% endif %}
+  </div>
+  <aside class="lumen-hero-stats" aria-label="커뮤니티 요약">
+    <div class="lumen-stat-card"><span class="lumen-stat-label">게시판</span><strong>{{ boards|length }}</strong></div>
+    <div class="lumen-stat-card"><span class="lumen-stat-label">커뮤니티</span><strong>{{ site.site_name|slice(0, 1) }}✦</strong></div>
+    <div class="lumen-stat-card lumen-stat-accent"><span class="lumen-stat-label">상태</span><strong>OPEN</strong></div>
+  </aside>
+</section>
+<section class="lumen-boards" id="lumen-boards" aria-labelledby="lumen-boards-title">
+  <header class="lumen-section-head">
+    <div><p class="lumen-section-kicker">Spaces</p><h2 id="lumen-boards-title">게시판 둘러보기</h2></div>
+    <p class="lumen-section-desc">관심 있는 주제의 공간으로 들어가 이야기를 시작해 보세요.</p>
+  </header>
+  {% if boards is empty %}
+    <div class="lumen-empty-state"><span class="lumen-empty-icon" aria-hidden="true">◇</span><p>아직 만들어진 게시판이 없습니다.</p></div>
+  {% else %}
+    <div class="lumen-board-grid">
+      {% for board in boards %}
+        <article class="lumen-board-card">
+          <a class="lumen-board-card-head" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+            <span class="lumen-board-index">{{ '%02d'|format(loop.index) }}</span>
+            <div><h3>{{ board.name }}</h3><p>{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</p></div>
+            <span class="lumen-board-arrow" aria-hidden="true">→</span>
+          </a>
+          <div class="lumen-board-latest">
+            <div class="lumen-board-latest-head"><span>최신글</span><a href="{{ url_for('posts.index', {'key': board.board_key}) }}">전체</a></div>
+            {% if board.latest_posts is empty %}<p class="lumen-board-latest-empty">첫 이야기를 기다리고 있어요.</p>{% else %}
+              <ul>{% for post in board.latest_posts|slice(0, 4) %}<li><a href="{{ url_for('posts.show', {'id': post.id}) }}"><span>{% if post.is_notice %}<em class="lumen-tag">공지</em>{% endif %}{{ post.title }}{% if post.comment_count > 0 %}<b>{{ post.comment_count }}</b>{% endif %}</span><time datetime="{{ post.created_at }}">{{ post.created_at|slice(5, 5) }}</time></a></li>{% endfor %}</ul>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

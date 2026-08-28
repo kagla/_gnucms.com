@@ -1,0 +1,20 @@
+{% extends "layout.html.twig" %}
+{% block title %}로그인 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="studio-auth-layout">
+  <aside class="studio-auth-story"><p class="section-index">WELCOME BACK</p><h1>다시 만나서<br>반가워요.</h1><p>로그인하고 이어지던 이야기로 돌아가세요.</p><div aria-hidden="true"><i></i><i></i><i></i></div></aside>
+  <section class="surface auth-card">
+    <header class="auth-head"><span>MEMBER LOGIN</span><h2>로그인</h2><p class="lead">계정 정보를 입력해 주세요.</p></header>
+    <form class="auth-form" method="post" action="{{ url_for('auth.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>이메일<input type="email" name="email" value="{{ values.email|default('') }}" placeholder="name@example.com" autocomplete="email" required></label>
+      {% if errors.email is defined %}<p class="field-error">{{ errors.email }}</p>{% endif %}
+      <label>비밀번호<input type="password" name="password" placeholder="비밀번호 입력" autocomplete="current-password" required></label>
+      <p class="form-help"><a href="{{ url_for('auth.forgot') }}">비밀번호를 잊으셨나요?</a></p>
+      <button class="auth-submit" type="submit">로그인</button>
+    </form>
+    {% include "auth/_social.html.twig" %}
+    {% if registration_available %}<p class="auth-switch">처음 방문하셨나요? <a href="{{ url_for('auth.register') }}">새 계정 만들기</a></p>{% endif %}
+  </section>
+</div>
+{% endblock %}

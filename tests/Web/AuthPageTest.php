@@ -17,16 +17,16 @@ final class AuthPageTest extends WebTestCase
         $login = $this->body($this->get($app, '/login'));
         $register = $this->body($this->get($app, '/register'));
 
-        self::assertStringContainsString('<h1>로그인</h1>', $login);
+        self::assertStringContainsString('<title>로그인', $login);
         self::assertStringContainsString('name="csrf_token"', $login);
-        self::assertStringContainsString('<h1>회원가입</h1>', $register);
+        self::assertStringContainsString('<title>회원가입', $register);
         self::assertStringContainsString('password_confirmation', $register);
         self::assertStringNotContainsString('name="name"', $register);
 
         $forgot = $this->body($this->get($app, '/forgot-password'));
         $reset = $this->body($this->get($app, '/reset-password', ['token' => 'example-token']));
-        self::assertStringContainsString('<h1>비밀번호 찾기</h1>', $forgot);
-        self::assertStringContainsString('<h1>새 비밀번호 설정</h1>', $reset);
+        self::assertStringContainsString('<title>비밀번호 찾기', $forgot);
+        self::assertStringContainsString('<title>새 비밀번호 설정', $reset);
         self::assertStringContainsString('value="example-token"', $reset);
     }
 

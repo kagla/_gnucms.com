@@ -15,7 +15,7 @@ final class PostRepository
      * 이 목록에 없는 컬럼은 findWithSecret() 로만 얻을 수 있다.
      */
     private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name,'
-        . ' is_notice, is_secret, view_count, comment_count, attachments,'
+        . ' is_notice, is_secret, view_count, comment_count, attachments, image_key,'
         . ' created_at, updated_at, deleted_at';
 
     private const DEFAULTS = [
@@ -27,6 +27,7 @@ final class PostRepository
         'view_count'     => 0,
         'comment_count'  => 0,
         'attachments'    => [],
+        'image_key'      => null,
     ];
 
     /** LIKE 검색의 이스케이프 문자. 백슬래시는 MySQL 문자열 리터럴에서 한 번 더 처리되므로 피한다. */
@@ -87,6 +88,48 @@ final class PostRepository
         if ($category !== null && $category !== '') {
             $where .= ' AND category = :category';
             $params['category'] = $category;
+        }
+
+        $total = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $this->db->q('posts') . ' WHERE ' . $where,
+            $params
+        )['c'];
+
+        $offset = max(0, ($page - 1) * $perPage);
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        );
+
+        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+    }
+
+    /**
+     * 게시판을 가로질러 글을 훑는다. 관리 화면 전용이며, 서비스 계층에서 관리 권한을
+     * 확인한 뒤에만 호출한다. 공지도 함께 보여 준다.
+     */
+    public function paginateAll(
+        int $page,
+        int $perPage,
+        ?string $q = null,
+        ?int $boardId = null,
+        bool $includeDeleted = false
+    ): array {
+        $where = $includeDeleted ? '1 = 1' : 'deleted_at IS NULL';
+        $params = [];
+
+        if ($q !== null && $q !== '') {
+            $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
+                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
+            $pattern = '%' . $this->escapeLike($q) . '%';
+            $params['q'] = $pattern;
+            $params['q2'] = $pattern;
+        }
+
+        if ($boardId !== null) {
+            $where .= ' AND board_id = :board_id';
+            $params['board_id'] = $boardId;
         }
 
         $total = (int) $this->db->selectOne(

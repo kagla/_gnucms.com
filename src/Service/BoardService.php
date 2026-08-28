@@ -16,6 +16,13 @@ final class BoardService
 {
     public const PERM_LEVELS = ['guest', 'member', 'admin'];
 
+    /** 게시글 목록을 그리는 형태. 템플릿 파일 이름에 쓰이므로 반드시 이 목록으로 제한한다. */
+    public const LIST_TYPES = ['list', 'gallery', 'magazine', 'news'];
+
+    /** 메인에 내는 최신 글 수. 0 은 메인에서 빼겠다는 뜻이다. */
+    public const DEFAULT_HOME_LIMIT = 5;
+    public const MAX_HOME_LIMIT = 10;
+
     /** @var Connection */
     private $db;
 
@@ -213,6 +220,10 @@ final class BoardService
             'use_secret'   => (bool) $board['use_secret'],
             'use_file'     => (bool) $board['use_file'],
             'use_category' => (bool) $board['use_category'],
+            // 컬럼이 없는(마이그레이션 전) 설치에서도 목록 형태로 안전하게 떨어진다.
+            'list_type'    => $this->listTypeOf($board),
+            // 0 이면 메인에 이 게시판을 내지 않는다.
+            'home_limit'   => $this->homeLimitOf($board),
             'per_page'     => (int) $board['per_page'],
             'sort_order'   => (int) $board['sort_order'],
             'created_at'   => $board['created_at'],
@@ -224,6 +235,27 @@ final class BoardService
         }
 
         return $view;
+    }
+
+    /**
+     * 메인에 낼 최신 글 수. 컬럼이 없는(마이그레이션 전) 설치에서는 예전처럼 5개를 낸다.
+     * 0 은 "메인에 내지 않음" 이라는 뜻이다.
+     */
+    private function homeLimitOf(array $board): int
+    {
+        if (!array_key_exists('home_limit', $board) || $board['home_limit'] === null) {
+            return self::DEFAULT_HOME_LIMIT;
+        }
+
+        return max(0, min(self::MAX_HOME_LIMIT, (int) $board['home_limit']));
+    }
+
+    /** 저장된 값이 비었거나 알 수 없는 값이면 기본 형태로 돌린다. */
+    private function listTypeOf(array $board): string
+    {
+        $type = (string) ($board['list_type'] ?? '');
+
+        return in_array($type, self::LIST_TYPES, true) ? $type : 'list';
     }
 
     /**
@@ -260,8 +292,14 @@ final class BoardService
                 $data[$field] = $v->bool($field, false) ? 1 : 0;
             }
         }
+        if ($isCreate || array_key_exists('list_type', $input)) {
+            $data['list_type'] = $v->inList('list_type', self::LIST_TYPES, 'list');
+        }
         if ($isCreate || array_key_exists('per_page', $input)) {
             $data['per_page'] = $v->int('per_page', 20, 1, 100);
+        }
+        if ($isCreate || array_key_exists('home_limit', $input)) {
+            $data['home_limit'] = $v->int('home_limit', self::DEFAULT_HOME_LIMIT, 0, self::MAX_HOME_LIMIT);
         }
         if ($isCreate || array_key_exists('sort_order', $input)) {
             $data['sort_order'] = $v->int('sort_order', 0, -9999, 9999);

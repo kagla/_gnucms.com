@@ -1,0 +1,25 @@
+{# harbor view: auth/login.html.twig #}
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ic %}
+{% block title %}로그인 · {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-shell">
+  <section class="harbor-auth-card">
+    <header class="harbor-panel-head harbor-panel-head-compact">
+      <p class="harbor-section-kicker">{{ ic.user() }} Welcome back</p>
+      <h1>로그인</h1>
+      <p class="harbor-lead">다시 만나서 반가워요. 이야기를 이어가세요.</p>
+    </header>
+    <form class="harbor-form harbor-auth-form" method="post" action="{{ url_for('auth.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="harbor-field">{{ ic.mail() }} 이메일<input type="email" name="email" value="{{ values.email|default('') }}" autocomplete="email" required></label>
+      {% if errors.email is defined %}<p class="harbor-field-error">{{ errors.email }}</p>{% endif %}
+      <label class="harbor-field">{{ ic.shield() }} 비밀번호<input type="password" name="password" autocomplete="current-password" required></label>
+      <p class="form-help"><a href="{{ url_for('auth.forgot') }}">비밀번호를 잊으셨나요?</a></p>
+      <button class="harbor-btn harbor-btn-primary harbor-btn-block" type="submit">{{ ic.user() }} 로그인</button>
+    </form>
+    {% include "auth/_social.html.twig" %}
+    <p class="auth-switch">아직 회원이 아니신가요? <a href="{{ url_for('auth.register') }}">{{ ic.sparkle() }} 회원가입</a></p>
+  </section>
+</div>
+{% endblock %}
