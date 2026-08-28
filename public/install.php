@@ -47,7 +47,7 @@ function h(?string $value): string
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aboard 설치</title>
+<title>gnucms.com 설치</title>
 <style>
   :root { color-scheme: light; --bg: #f7f8fb; --panel: #fff; --fg: #172033; --muted: #667085; --line: #d0d5dd; --primary: #635bff; --danger: #d92d20; }
   * { box-sizing: border-box; }
@@ -72,9 +72,9 @@ function h(?string $value): string
 </head>
 <body>
 <main>
-<div class="brand"><span class="mark">A</span>aboard</div>
+<div class="brand"><span class="mark">A</span>gnucms.com</div>
 <p class="eyebrow">Setup</p>
-<h1>aboard 설치</h1>
+<h1>gnucms.com 설치</h1>
 <p class="intro">몇 가지 기본 정보를 입력하면 바로 커뮤니티를 시작할 수 있습니다.</p>
 
 <?php if ($done !== null): ?>

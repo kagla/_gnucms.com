@@ -348,6 +348,18 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 **알고 감수하는 약점:** 영어권에서 `abroad`(해외)와 철자를 혼동하기 쉽다. 주 사용자층이
 국내라 감수한다. 흔한 단어라 검색이 어려운 것도 같은 이유로 감수한다.
 
+### 15.1 이후 변경 (2026-08-28)
+
+**`gnucms.com` 으로 다시 바꿨다.** 위의 `aboard` 검토는 그때의 판단 기록으로 남겨 둔다
+(도메인 표의 `aboard.*` 항목도 그 시점의 조사 결과이므로 고치지 않는다).
+
+- 이름: `gnucms.com`
+- 임시 도메인: `gnucms.gnuboard.net`
+
+코드 안쪽 식별자(`ApiBoard` 네임스페이스, `aboard-theme` 같은 저장 키,
+`AboardImages` 같은 편집기 플러그인 이름)는 그대로 두었다. 사람이 보는 이름이 아니고,
+한꺼번에 바꾸면 얻는 것 없이 깨질 자리만 늘어난다.
+
 버린 후보와 이유를 남긴다. 같은 논의를 다시 하지 않기 위해서다.
 
 | 후보 | 버린 이유 |
@@ -365,7 +377,7 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 
 ### 15.1 도메인
 
-`aboard.gnuboard.net` 을 쓴다. 짧은 최상위 도메인은 전부 임자가 있다.
+`gnucms.gnuboard.net` 을 쓴다. 짧은 최상위 도메인은 전부 임자가 있다.
 
 | 도메인 | 상태 |
 |---|---|
@@ -379,7 +391,7 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 | `aboard.co.kr` | **미등록.** 필요하면 지금 잡을 수 있다 |
 
 `gnuboard.net` 에는 `*.gnuboard.net` 와일드카드가 걸려 있다. 아무 이름이나 넣어도
-`gnuboard.net` 으로 해석되므로, `aboard.gnuboard.net` 이 이미 응답하는 것은 선점된 것이
+`gnuboard.net` 으로 해석되므로, `gnucms.gnuboard.net` 이 이미 응답하는 것은 선점된 것이
 아니라 와일드카드를 타고 있는 것뿐이다. 그대로 쓸 수 있다.
 
 바꿀 것은 다음과 같고 **6단계에서 한 번에** 바꾼다. 중간에 하면 충돌만 는다.
@@ -393,4 +405,4 @@ Slim 을 `PATH_INFO` 기반으로 태우고, 기준 경로는 실행 시점에 �
 | 설정 키 | `auth.secret` | `security.secret` (첨부 서명 전용이 되었다) |
 | SQLite 기본 파일 | `storage/board.sqlite` | 그대로 |
 | 문서·화면 문구 | apiboard | aboard |
-| 도메인 | `apiboard.gnuboard.net` | `aboard.gnuboard.net` |
+| 도메인 | `apiboard.gnuboard.net` | `gnucms.gnuboard.net` |

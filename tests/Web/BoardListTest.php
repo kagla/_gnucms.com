@@ -185,6 +185,6 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('홈 최신글 6', $body);
         self::assertStringContainsString('홈 최신글 2', $body);
         self::assertStringNotContainsString('홈 최신글 1', $body);
-        self::assertStringContainsString('aboard · 가볍게 시작하는 기초 커뮤니티', $body);
+        self::assertStringContainsString('gnucms.com · 가볍게 시작하는 기초 커뮤니티', $body);
     }
 }

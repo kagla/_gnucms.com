@@ -63,7 +63,7 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('default (기본)', $this->body($settingsPage));
         $settingsSaved = $this->post($app, '/admin/settings', [
             'csrf_token' => $_SESSION['csrf_token'],
-            'site_name' => 'aboard',
+            'site_name' => 'gnucms.com',
             'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
             'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
             'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',

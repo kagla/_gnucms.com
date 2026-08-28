@@ -44,7 +44,7 @@
     <p class="harbor-form-help">일반 로그인 비밀번호가 아니라 메일 서비스에서 발급한 앱 비밀번호를 사용하세요.</p>
     <div class="harbor-form-grid">
       <label class="harbor-field">발신 이메일<input type="email" name="from_email" value="{{ values.from_email|default('') }}" maxlength="254" required></label>
-      <label class="harbor-field">발신 이름<input type="text" name="from_name" value="{{ values.from_name|default('aboard') }}" maxlength="100" required></label>
+      <label class="harbor-field">발신 이름<input type="text" name="from_name" value="{{ values.from_name|default('gnucms.com') }}" maxlength="100" required></label>
     </div>
     {% if errors.from_email is defined %}<p class="harbor-field-error">{{ errors.from_email }}</p>{% endif %}
     <div class="harbor-mail-help" data-mail-help></div>

@@ -19,7 +19,7 @@ final class NativeMailer implements MailerInterface
     {
         $encodedSubject = function_exists('mb_encode_mimeheader')
             ? mb_encode_mimeheader($subject, 'UTF-8') : $subject;
-        $headers = "From: aboard <{$this->from}>\r\n"
+        $headers = "From: gnucms.com <{$this->from}>\r\n"
             . "Content-Type: text/plain; charset=UTF-8\r\n"
             . "Content-Transfer-Encoding: 8bit";
         if (!mail($to, $encodedSubject, $body, $headers)) {

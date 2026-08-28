@@ -3,7 +3,7 @@
 {% block body %}
 <section class="modern-hero">
   <div class="modern-hero-main">
-    <p class="modern-kicker"><span></span> aboard community</p>
+    <p class="modern-kicker"><span></span> gnucms.com community</p>
     <h1>{{ site.home_title }}</h1>
     <p class="modern-intro">{{ site.home_intro }}</p>
     {% if boards is not empty %}<a class="modern-primary-action" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">첫 번째 이야기 보기 <span aria-hidden="true">→</span></a>{% endif %}

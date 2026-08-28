@@ -44,7 +44,7 @@ final class SocialAuthService
             throw DomainError::validation(['email' => '올바른 이메일 주소를 입력해 주세요.']);
         }
         $url = $this->appUrl . '/auth/complete?token=' . rawurlencode($token);
-        $this->mailer->send($email, '[aboard] 소셜 로그인 이메일 확인',
+        $this->mailer->send($email, '[gnucms.com] 소셜 로그인 이메일 확인',
             "소셜 로그인을 완료하려면 아래 링크를 열어 주세요.\n\n{$url}\n\n이 링크는 30분 동안 유효합니다.");
 
         return $email;

@@ -271,7 +271,7 @@ final class App
                 $this->users(),
                 new TokenService($this->tokens),
                 $this->mailer(),
-                (string) $this->config('app.url', 'https://aboard.gnuboard.net'),
+                (string) $this->config('app.url', 'https://gnucms.gnuboard.net'),
                 $this->cmsService(),
                 $this->consents()
             );
@@ -284,7 +284,7 @@ final class App
     {
         if ($this->providerRegistry === null) {
             $config = (array) $this->config('oauth', []);
-            $appUrl = rtrim((string) $this->config('app.url', 'https://aboard.gnuboard.net'), '/');
+            $appUrl = rtrim((string) $this->config('app.url', 'https://gnucms.gnuboard.net'), '/');
             foreach (['google', 'naver', 'kakao', 'github'] as $key) {
                 if (isset($config[$key]) && is_array($config[$key]) && empty($config[$key]['redirect_uri'])) {
                     $config[$key]['redirect_uri'] = $appUrl . '/auth/' . $key . '/callback';
@@ -312,7 +312,7 @@ final class App
             }
             $this->socialAuthService = new SocialAuthService(
                 $this->providerRegistry(), $this->linkingService, $this->mailer(),
-                (string) $this->config('app.url', 'https://aboard.gnuboard.net')
+                (string) $this->config('app.url', 'https://gnucms.gnuboard.net')
             );
         }
         return $this->socialAuthService;
@@ -357,8 +357,8 @@ final class App
         }
         $this->mailer()->send(
             (string) $settings['from_email'],
-            '[aboard] SMTP 테스트 메일',
-            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 aboard 관리자에서 보낸 테스트 메일입니다."
+            '[gnucms.com] SMTP 테스트 메일',
+            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 gnucms.com 관리자에서 보낸 테스트 메일입니다."
         );
     }
 
