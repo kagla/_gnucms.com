@@ -346,7 +346,7 @@ public/vendor/daisyui/daisyui.css      로컬에 고정한 DaisyUI CSS
 ```
 
 DaisyUI CSS는 런타임 CDN 호출 없이 로컬에서 제공됩니다. composer, npm, Tailwind 컴파일러나
-브라우저 컴파일러가 필요하지 않습니다. `data-theme="light|dark"`와 `aboard-theme` 저장값을
+브라우저 컴파일러가 필요하지 않습니다. `data-theme="light|dark"`와 `gnucms-theme` 저장값을
 공유해 첫 페인트부터 색상 모드가 일치하며, 모바일 메뉴와 관리자 사이드바 접기도 지원합니다.
 
 ### compact
@@ -392,8 +392,8 @@ site_header  body  site_footer  scripts  admin_section
 사이드바 셸을 만들며, 관리 화면 스크립트는 `chrome` 안에 있으므로 하위 템플릿이 `scripts`
 블록을 자유롭게 쓸 수 있습니다.
 
-폼 필드 이름과 `csrf_token`, 라우트 이름은 `default`와 같습니다. 다크 모드(`aboard-theme`)와
-관리 사이드바 접힘(`aboard-admin-sidebar`)의 localStorage 키도 `default`와 공유합니다.
+폼 필드 이름과 `csrf_token`, 라우트 이름은 `default`와 같습니다. 다크 모드(`gnucms-theme`)와
+관리 사이드바 접힘(`gnucms-admin-sidebar`)의 localStorage 키도 `default`와 공유합니다.
 
 ### cozy
 
@@ -443,7 +443,7 @@ shadow(`shadow-2xs`~`shadow-xl`), focus ring(2px + offset 2px), 컨테이너(`ma
 - `<head>` 인라인 스크립트로 첫 페인트 전 결정(깜빡임 없음)
 - 시스템 모드에서 OS 설정 변경을 새로고침 없이 반영
 - JavaScript 가 꺼져 있어도 `prefers-color-scheme` 로 동작
-- localStorage 키는 `aboard-theme` (`light` | `dark` | 없으면 시스템)
+- localStorage 키는 `gnucms-theme` (`light` | `dark` | 없으면 시스템)
 
 아이콘은 매크로로 씁니다.
 
@@ -711,11 +711,11 @@ POST     /comments/{id}/delete   댓글 삭제
 
 답글 버튼을 누르면 댓글 폼이 그 댓글 바로 아래로 옮겨 갑니다(`.comment-form.is-reply`).
 CKEditor 는 iframe 이라 DOM 을 그냥 옮기면 내용이 날아가므로,
-`posts/_editor.html.twig` 가 내어 주는 `window.aboardEditor['<textarea id>']` 를 씁니다.
+`posts/_editor.html.twig` 가 내어 주는 `window.gnucmsEditor['<textarea id>']` 를 씁니다.
 
 ```js
-window.aboardEditor['comment-content'].remount(function(){ /* 여기서 폼을 옮긴다 */ });
-window.aboardEditor['comment-content'].focus();
+window.gnucmsEditor['comment-content'].remount(function(){ /* 여기서 폼을 옮긴다 */ });
+window.gnucmsEditor['comment-content'].focus();
 ```
 
 `remount()` 는 편집기를 끄고(내용은 textarea 로 되돌아갑니다) 콜백을 실행한 뒤 다시 켭니다.

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Db\Dialect;
+namespace GnuCms\Db\Dialect;
 
 use PDO;
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 
 final class PgsqlDialect implements DialectInterface
 {

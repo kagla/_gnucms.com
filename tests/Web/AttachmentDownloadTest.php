@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\Tests\Support\WebTestCase;
 
 final class AttachmentDownloadTest extends WebTestCase
 {
@@ -120,7 +120,7 @@ final class AttachmentDownloadTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        $dir = sys_get_temp_dir() . '/apiboard-test-uploads';
+        $dir = sys_get_temp_dir() . '/gnucms-test-uploads';
         if (is_dir($dir)) {
             // 재귀적으로 모든 파일과 디렉토리를 삭제한다.
             // year/month/... 중첩 구조를 모두 정리하기 위해 CHILD_FIRST 모드를 사용한다.

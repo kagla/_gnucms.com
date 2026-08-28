@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Service;
+namespace GnuCms\Service;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Repository\CommentRepository;
-use ApiBoard\Repository\NotificationRepository;
-use ApiBoard\Repository\PostRepository;
+use GnuCms\Auth\Acl;
+use GnuCms\Error\DomainError;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\NotificationRepository;
+use GnuCms\Repository\PostRepository;
 
 /**
  * 사이트 안 알림함.

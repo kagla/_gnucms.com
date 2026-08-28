@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Mail;
+namespace GnuCms\Mail;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Validation\Validator;
 
 final class MailSettingsService
 {

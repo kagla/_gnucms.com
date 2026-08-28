@@ -32,7 +32,7 @@
     fold.addEventListener('click',function(){
       var folded=root.dataset.adminSidebar==='collapsed';
       if(folded){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}
-      try{localStorage.setItem('aboard-admin-sidebar',folded?'expanded':'collapsed')}catch(e){}
+      try{localStorage.setItem('gnucms-admin-sidebar',folded?'expanded':'collapsed')}catch(e){}
       syncFold();
     });
     syncFold();

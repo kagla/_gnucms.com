@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Account;
+namespace GnuCms\Tests\Account;
 
-use ApiBoard\Account\IdentityRepository;
-use ApiBoard\Account\LinkingService;
-use ApiBoard\Account\UserRepository;
-use ApiBoard\Oauth\SocialProfile;
-use ApiBoard\Tests\Support\DatabaseTestCase;
+use GnuCms\Account\IdentityRepository;
+use GnuCms\Account\LinkingService;
+use GnuCms\Account\UserRepository;
+use GnuCms\Oauth\SocialProfile;
+use GnuCms\Tests\Support\DatabaseTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class LinkingServiceTest extends DatabaseTestCase

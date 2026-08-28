@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ApiBoard\App;
-use ApiBoard\Web\BasePath;
-use ApiBoard\Web\Kernel;
+use GnuCms\App;
+use GnuCms\Web\BasePath;
+use GnuCms\Web\Kernel;
 
 ini_set('display_errors', '0');
 error_reporting(E_ALL);

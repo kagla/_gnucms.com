@@ -1489,6 +1489,6 @@ a.stat-card:hover{border-color:var(--border-accent);box-shadow:var(--shadow-md);
   box-shadow:none!important;
 }
 .cke_contents{background:var(--surface)!important}
-.cke_button__aboardimage_icon,.cke_button_icon{opacity:.9}
+.cke_button__gnucmsimage_icon,.cke_button_icon{opacity:.9}
 .cke_reset_all,.cke_dialog_body{color:var(--fg)}
 .theme-toggle .theme-icon{display:block;font-size:14px;line-height:1}

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Account;
+namespace GnuCms\Account;
 
-use ApiBoard\Error\DomainError;
-use ApiBoard\Support\Base64Url;
-use ApiBoard\Support\Clock;
+use GnuCms\Error\DomainError;
+use GnuCms\Support\Base64Url;
+use GnuCms\Support\Clock;
 
 final class TokenService
 {

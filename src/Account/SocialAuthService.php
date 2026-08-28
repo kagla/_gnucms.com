@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Account;
+namespace GnuCms\Account;
 
-use ApiBoard\Error\DomainError;
-use ApiBoard\Mail\MailerInterface;
-use ApiBoard\Oauth\ProviderRegistry;
-use ApiBoard\Oauth\SocialProfile;
+use GnuCms\Error\DomainError;
+use GnuCms\Mail\MailerInterface;
+use GnuCms\Oauth\ProviderRegistry;
+use GnuCms\Oauth\SocialProfile;
 
 final class SocialAuthService
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Support;
+namespace GnuCms\Tests\Support;
 
-use ApiBoard\Mail\MailerInterface;
+use GnuCms\Mail\MailerInterface;
 
 final class CollectingMailer implements MailerInterface
 {

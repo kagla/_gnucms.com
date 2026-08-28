@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Service;
+namespace GnuCms\Service;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Cms\ContentImageService;
-use ApiBoard\Cms\ContentRenderer;
-use ApiBoard\Cms\HtmlSanitizer;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\ContentRenderer;
+use GnuCms\Cms\HtmlSanitizer;
+use GnuCms\Error\DomainError;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Validation\Validator;
 
 final class PostService
 {

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Support;
+namespace GnuCms\Tests\Support;
 
-use ApiBoard\App;
-use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\Identity;
-use ApiBoard\Db\Schema;
-use ApiBoard\Web\Kernel;
+use GnuCms\App;
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Db\Schema;
+use GnuCms\Web\Kernel;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Psr\Http\Message\UploadedFileInterface;
@@ -25,7 +25,7 @@ abstract class WebTestCase extends DatabaseTestCase
             'db'   => $dbConfig,
             'auth' => ['secret' => 'web-test-secret-that-is-long-enough'],
             'uploads' => [
-                'dir'         => sys_get_temp_dir() . '/apiboard-test-uploads',
+                'dir'         => sys_get_temp_dir() . '/gnucms-test-uploads',
                 'max_bytes'   => 1024 * 1024,
                 'allowed_ext' => ['txt', 'png', 'pdf'],
             ],

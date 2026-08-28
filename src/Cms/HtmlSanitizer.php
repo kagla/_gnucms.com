@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Cms;
+namespace GnuCms\Cms;
 
 use HTMLPurifier;
 use HTMLPurifier_Config;

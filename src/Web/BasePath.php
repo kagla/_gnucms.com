@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web;
+namespace GnuCms\Web;
 
 /**
  * 프론트 컨트롤러의 기준 경로 계산. mod_rewrite 가 있으면 REQUEST_URI 에

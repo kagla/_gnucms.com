@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Cms;
+namespace GnuCms\Tests\Cms;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\Identity;
-use ApiBoard\Cms\ContentImageService;
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Cms\ContentImageService;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\UploadedFile;
 
@@ -17,7 +17,7 @@ final class ContentImageServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir() . '/aboard-editor-' . bin2hex(random_bytes(5));
+        $this->root = sys_get_temp_dir() . '/gnucms-editor-' . bin2hex(random_bytes(5));
     }
 
     protected function tearDown(): void
@@ -33,7 +33,7 @@ final class ContentImageServiceTest extends TestCase
     public function testAdminCanStoreAndReadAValidatedImage(): void
     {
         $key = bin2hex(random_bytes(16));
-        $temporary = tempnam(sys_get_temp_dir(), 'aboard-png-');
+        $temporary = tempnam(sys_get_temp_dir(), 'gnucms-png-');
         self::assertNotFalse($temporary);
         file_put_contents($temporary, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

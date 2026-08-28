@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Controller;
+namespace GnuCms\Web\Controller;
 
-use ApiBoard\App;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Oauth\SocialProfile;
+use GnuCms\App;
+use GnuCms\Error\DomainError;
+use GnuCms\Oauth\SocialProfile;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;

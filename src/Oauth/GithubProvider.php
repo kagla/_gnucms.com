@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Oauth;
+namespace GnuCms\Oauth;
 
 final class GithubProvider extends AbstractProvider
 {

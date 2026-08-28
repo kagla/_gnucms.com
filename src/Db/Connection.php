@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Db;
+namespace GnuCms\Db;
 
 use PDO;
 use PDOException;
-use ApiBoard\Db\Dialect\DialectInterface;
-use ApiBoard\Error\DomainError;
+use GnuCms\Db\Dialect\DialectInterface;
+use GnuCms\Error\DomainError;
 use Throwable;
 
 /**

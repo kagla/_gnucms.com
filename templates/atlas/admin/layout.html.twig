@@ -35,7 +35,7 @@
     collapse.addEventListener('click',function(){
       var collapsed=root.dataset.adminSidebar==='collapsed';
       if(collapsed){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}
-      try{localStorage.setItem('aboard-admin-sidebar',collapsed?'expanded':'collapsed')}catch(e){}
+      try{localStorage.setItem('gnucms-admin-sidebar',collapsed?'expanded':'collapsed')}catch(e){}
       syncCollapse();
     });
     syncCollapse();

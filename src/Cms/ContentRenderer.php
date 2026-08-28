@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Cms;
+namespace GnuCms\Cms;
 
 /**
  * 저장된 본문을 화면에 내보내기 직전에 손질한다.

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\Db\Schema;
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\Db\Schema;
+use GnuCms\Tests\Support\WebTestCase;
 
 final class ErrorPageTest extends WebTestCase
 {

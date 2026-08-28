@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Service;
+namespace GnuCms\Service;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Db\Connection;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Repository\BoardRepository;
-use ApiBoard\Repository\CommentRepository;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Db\Connection;
+use GnuCms\Error\DomainError;
+use GnuCms\Repository\BoardRepository;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Validation\Validator;
 
 final class BoardService
 {

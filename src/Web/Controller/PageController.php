@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Controller;
+namespace GnuCms\Web\Controller;
 
-use ApiBoard\App;
+use GnuCms\App;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Views\Twig;

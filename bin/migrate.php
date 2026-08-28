@@ -18,8 +18,8 @@ declare(strict_types=1);
  * 여러 번 돌려도 안전하다.
  */
 
-use ApiBoard\Db\Connection;
-use ApiBoard\Db\Schema;
+use GnuCms\Db\Connection;
+use GnuCms\Db\Schema;
 
 require __DIR__ . '/../vendor/autoload.php';
 

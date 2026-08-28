@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Install;
+namespace GnuCms\Tests\Install;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Db\Connection;
-use ApiBoard\Db\Schema;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Install\Installer;
+use GnuCms\Db\Connection;
+use GnuCms\Db\Schema;
+use GnuCms\Error\DomainError;
+use GnuCms\Install\Installer;
 
 final class InstallerTest extends TestCase
 {
@@ -17,7 +17,7 @@ final class InstallerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->workDir = sys_get_temp_dir() . '/apiboard-install-' . bin2hex(random_bytes(4));
+        $this->workDir = sys_get_temp_dir() . '/gnucms-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
     }

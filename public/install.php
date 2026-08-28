@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use ApiBoard\Error\DomainError;
-use ApiBoard\Install\Installer;
+use GnuCms\Error\DomainError;
+use GnuCms\Install\Installer;
 
 $installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
 

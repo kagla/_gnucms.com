@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Middleware;
+namespace GnuCms\Web\Middleware;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;

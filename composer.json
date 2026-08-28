@@ -1,5 +1,5 @@
 {
-    "name": "kagla/apiboard",
+    "name": "kagla/gnucms",
     "description": "어느 DB 에서나 도는 게시판",
     "type": "project",
     "license": "MIT",
@@ -19,12 +19,12 @@
     },
     "autoload": {
         "psr-4": {
-            "ApiBoard\\": "src/"
+            "GnuCms\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ApiBoard\\Tests\\": "tests/"
+            "GnuCms\\Tests\\": "tests/"
         }
     },
     "config": {

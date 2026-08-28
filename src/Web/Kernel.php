@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web;
+namespace GnuCms\Web;
 
-use ApiBoard\App;
-use ApiBoard\Db\Schema;
-use ApiBoard\Web\Middleware\ErrorPageMiddleware;
-use ApiBoard\Web\Middleware\HtmlContentTypeMiddleware;
-use ApiBoard\Web\Middleware\SessionGuard;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Theme\ThemeManager;
+use GnuCms\App;
+use GnuCms\Db\Schema;
+use GnuCms\Web\Middleware\ErrorPageMiddleware;
+use GnuCms\Web\Middleware\HtmlContentTypeMiddleware;
+use GnuCms\Web\Middleware\SessionGuard;
+use GnuCms\Error\DomainError;
+use GnuCms\Theme\ThemeManager;
 use Slim\App as SlimApp;
 use Slim\Factory\AppFactory;
 use Slim\Views\Twig;

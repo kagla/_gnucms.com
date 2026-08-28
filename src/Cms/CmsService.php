@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Cms;
+namespace GnuCms\Cms;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Error\DomainError;
+use GnuCms\Validation\Validator;
 
 final class CmsService
 {

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Repository;
+namespace GnuCms\Repository;
 
-use ApiBoard\Db\Connection;
-use ApiBoard\Support\Clock;
-use ApiBoard\Support\Json;
+use GnuCms\Db\Connection;
+use GnuCms\Support\Clock;
+use GnuCms\Support\Json;
 
 final class PostRepository
 {

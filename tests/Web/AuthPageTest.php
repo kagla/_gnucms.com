@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class AuthPageTest extends WebTestCase

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Theme;
+namespace GnuCms\Tests\Theme;
 
-use ApiBoard\Theme\ThemeManager;
+use GnuCms\Theme\ThemeManager;
 use PHPUnit\Framework\TestCase;
 use Slim\Views\Twig;
 
@@ -14,7 +14,7 @@ final class ThemeManagerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir() . '/aboard-theme-' . bin2hex(random_bytes(6));
+        $this->root = sys_get_temp_dir() . '/gnucms-theme-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/templates/default', 0777, true);
         mkdir($this->root . '/templates/modern', 0777, true);
         mkdir($this->root . '/public/themes/default', 0777, true);

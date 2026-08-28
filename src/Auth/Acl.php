@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Auth;
+namespace GnuCms\Auth;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 
 /**
  * 권한 판정의 단일 출처. 판정 순서는 다음과 같고 위에서부터 단락 평가한다.

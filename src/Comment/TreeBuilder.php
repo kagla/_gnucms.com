@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Comment;
+namespace GnuCms\Comment;
 
 /**
  * 평면 댓글 목록을 중첩 트리로 만든다.

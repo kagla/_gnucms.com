@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\App;
-use ApiBoard\Cms\ContentImageService;
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\App;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**

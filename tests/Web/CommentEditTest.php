@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\App;
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\App;
+use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /** 댓글 수정과 삭제. 비회원 댓글은 비밀번호로 주인을 확인한다. */
@@ -116,7 +116,7 @@ final class CommentEditTest extends WebTestCase
         // 글쓴이도 관리자도 아닌 다른 회원이 남긴 비밀 댓글
         $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문']);
         $comment = $app->commentService()->create(
-            new \ApiBoard\Auth\Acl(\ApiBoard\Auth\Identity::user('42', '다른 회원', false)),
+            new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::user('42', '다른 회원', false)),
             (int) $post['id'],
             ['content' => '비밀스러운 이야기', 'is_secret' => '1']
         );

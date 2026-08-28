@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Install;
+namespace GnuCms\Install;
 
-use ApiBoard\Db\Connection;
-use ApiBoard\Db\DialectFactory;
-use ApiBoard\Db\Schema;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Support\Base64Url;
-use ApiBoard\Validation\Validator;
+use GnuCms\Db\Connection;
+use GnuCms\Db\DialectFactory;
+use GnuCms\Db\Schema;
+use GnuCms\Error\DomainError;
+use GnuCms\Support\Base64Url;
+use GnuCms\Validation\Validator;
 use Throwable;
 
 final class Installer

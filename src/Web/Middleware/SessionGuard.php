@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Middleware;
+namespace GnuCms\Web\Middleware;
 
-use ApiBoard\App;
-use ApiBoard\Auth\Identity;
+use GnuCms\App;
+use GnuCms\Auth\Identity;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -26,7 +26,7 @@ final class SessionGuard implements MiddlewareInterface
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_name('aboard_session');
+            session_name('gnucms_session');
             session_set_cookie_params([
                 'lifetime' => 0,
                 'path' => '/',

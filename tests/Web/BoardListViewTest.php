@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\App;
-use ApiBoard\Db\Schema;
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\App;
+use GnuCms\Db\Schema;
+use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -374,7 +374,7 @@ final class BoardListViewTest extends WebTestCase
             'use_secret' => '1', 'perm_write' => 'guest',
         ]);
         $image = '/media/editor/' . str_repeat('c', 32) . '/' . str_repeat('d', 32) . '.jpg';
-        $app->postService()->create(new \ApiBoard\Auth\Acl(\ApiBoard\Auth\Identity::guest()), 'gallery', [
+        $app->postService()->create(new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::guest()), 'gallery', [
             'title' => '비밀 사진', 'content' => '<img src="' . $image . '">',
             'author_name' => '손님', 'password' => 'secret-pass-1', 'is_secret' => '1',
         ]);

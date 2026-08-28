@@ -17,11 +17,11 @@ tailwind.config={
 <link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 <script>
 try{
-  var t=localStorage.getItem('aboard-theme');
+  var t=localStorage.getItem('gnucms-theme');
   if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark'}
   else if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.dataset.theme='light'}
   else if(window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}
-  if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}
+  if(localStorage.getItem('gnucms-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}
 }catch(e){}
 </script>
 </head>
@@ -99,11 +99,11 @@ try{
   buttons.forEach(function(btn){btn.addEventListener('click',function(){
     var next=isDark()?'light':'dark';
     if(next==='dark'){root.classList.add('dark');root.dataset.theme='dark'}else{root.classList.remove('dark');root.dataset.theme='light'}
-    try{localStorage.setItem('aboard-theme',next)}catch(e){}sync()
+    try{localStorage.setItem('gnucms-theme',next)}catch(e){}sync()
   })});
   var sidebarToggle=document.querySelector('.admin-sidebar-toggle');
   function syncSidebar(){if(!sidebarToggle)return;var c=root.dataset.adminSidebar==='collapsed';sidebarToggle.setAttribute('aria-expanded',c?'false':'true');sidebarToggle.setAttribute('aria-label',c?'관리 메뉴 펼치기':'관리 메뉴 접기');sidebarToggle.title=sidebarToggle.getAttribute('aria-label')}
-  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var c=root.dataset.adminSidebar==='collapsed';if(c){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('aboard-admin-sidebar',c?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
+  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var c=root.dataset.adminSidebar==='collapsed';if(c){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('gnucms-admin-sidebar',c?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
   sync();
 })();
 </script>

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Mail;
+namespace GnuCms\Tests\Mail;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\Identity;
-use ApiBoard\Mail\MailSettingsRepository;
-use ApiBoard\Mail\MailSettingsService;
-use ApiBoard\Mail\SecretCipher;
-use ApiBoard\Tests\Support\DatabaseTestCase;
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Mail\MailSettingsRepository;
+use GnuCms\Mail\MailSettingsService;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Tests\Support\DatabaseTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class MailSettingsServiceTest extends DatabaseTestCase

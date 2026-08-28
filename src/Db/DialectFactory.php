@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Db;
+namespace GnuCms\Db;
 
-use ApiBoard\Db\Dialect\DialectInterface;
-use ApiBoard\Db\Dialect\MysqlDialect;
-use ApiBoard\Db\Dialect\PgsqlDialect;
-use ApiBoard\Db\Dialect\SqliteDialect;
-use ApiBoard\Error\DomainError;
+use GnuCms\Db\Dialect\DialectInterface;
+use GnuCms\Db\Dialect\MysqlDialect;
+use GnuCms\Db\Dialect\PgsqlDialect;
+use GnuCms\Db\Dialect\SqliteDialect;
+use GnuCms\Error\DomainError;
 
 final class DialectFactory
 {

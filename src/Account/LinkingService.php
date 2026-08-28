@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Account;
+namespace GnuCms\Account;
 
-use ApiBoard\Db\Connection;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Oauth\SocialProfile;
+use GnuCms\Db\Connection;
+use GnuCms\Error\DomainError;
+use GnuCms\Oauth\SocialProfile;
 
 final class LinkingService
 {

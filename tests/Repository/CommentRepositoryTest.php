@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Repository;
+namespace GnuCms\Tests\Repository;
 
-use ApiBoard\Repository\BoardRepository;
-use ApiBoard\Repository\CommentRepository;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Support\Clock;
+use GnuCms\Repository\BoardRepository;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Support\Clock;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ApiBoard\Tests\Support\DatabaseTestCase;
+use GnuCms\Tests\Support\DatabaseTestCase;
 
 final class CommentRepositoryTest extends DatabaseTestCase
 {

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Account;
+namespace GnuCms\Account;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Db\Connection;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Service\BoardService;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Db\Connection;
+use GnuCms\Error\DomainError;
+use GnuCms\Service\BoardService;
+use GnuCms\Validation\Validator;
 
 final class AdminService
 {

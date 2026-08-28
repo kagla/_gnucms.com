@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Error;
+namespace GnuCms\Tests\Error;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 use PHPUnit\Framework\TestCase;
 
 final class DomainErrorTest extends TestCase

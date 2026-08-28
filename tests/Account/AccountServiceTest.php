@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Account;
+namespace GnuCms\Tests\Account;
 
-use ApiBoard\Account\AccountService;
-use ApiBoard\Account\TokenRepository;
-use ApiBoard\Account\TokenService;
-use ApiBoard\Account\UserRepository;
-use ApiBoard\Account\ConsentRepository;
-use ApiBoard\Cms\CmsRepository;
-use ApiBoard\Cms\CmsService;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Tests\Support\CollectingMailer;
-use ApiBoard\Tests\Support\DatabaseTestCase;
+use GnuCms\Account\AccountService;
+use GnuCms\Account\TokenRepository;
+use GnuCms\Account\TokenService;
+use GnuCms\Account\UserRepository;
+use GnuCms\Account\ConsentRepository;
+use GnuCms\Cms\CmsRepository;
+use GnuCms\Cms\CmsService;
+use GnuCms\Error\DomainError;
+use GnuCms\Tests\Support\CollectingMailer;
+use GnuCms\Tests\Support\DatabaseTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class AccountServiceTest extends DatabaseTestCase

@@ -35,7 +35,7 @@ Preline 은 Tailwind 유틸리티 기반이라 빌드 없이는 쓸 수 없습�
 - JavaScript 가 꺼져 있어도 prefers-color-scheme 로 다크가 적용됩니다.
 - 색 토큰 전부(표면·텍스트·테두리·상태·그림자·아바타 톤)를 다크에서 재정의했습니다.
 - 명암비는 라이트/다크 모두 본문 AAA, 링크·버튼·상태색 AA 이상입니다.
-- localStorage 키는 default 와 같은 aboard-theme (light | dark | 없으면 시스템)입니다.
+- localStorage 키는 default 와 같은 gnucms-theme (light | dark | 없으면 시스템)입니다.
   CKEditor 는 data-theme 속성 변화를 감시하므로 세 모드 모두에서 함께 바뀝니다.
 
 오늘의집에서 참고한 UX
@@ -70,5 +70,5 @@ header_search / extra_tabs / subnav / body / site_footer / scripts / admin_secti
 유지 사항
 ---------
 - 폼 필드 이름과 csrf_token, 라우트 이름은 default 와 동일합니다.
-- 관리 사이드바 접힘은 aboard-admin-sidebar 키를 default 와 공유합니다.
+- 관리 사이드바 접힘은 gnucms-admin-sidebar 키를 default 와 공유합니다.
 - admin/_editor.html.twig 는 default 와 동일합니다(CKEditor 연동).

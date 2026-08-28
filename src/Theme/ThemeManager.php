@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Theme;
+namespace GnuCms\Theme;
 
 use InvalidArgumentException;
 

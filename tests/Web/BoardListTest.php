@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\Tests\Support\WebTestCase;
 
 final class BoardListTest extends WebTestCase
 {
@@ -57,7 +57,7 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('가볍게 시작하고, 오래 이어지는 공간', $body);
         self::assertStringContainsString('기초 커뮤니티', $body);
         self::assertStringContainsString('theme-toggle', $body);
-        self::assertStringContainsString('aboard-theme', $body);
+        self::assertStringContainsString('gnucms-theme', $body);
     }
 
     /** @dataProvider connectionProvider */

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Controller;
+namespace GnuCms\Web\Controller;
 
-use ApiBoard\App;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Support\Json;
+use GnuCms\App;
+use GnuCms\Error\DomainError;
+use GnuCms\Support\Json;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;

@@ -42,8 +42,8 @@ header_search / extra_tabs / subnav / body / site_footer / scripts / admin_secti
 유지 사항
 ---------
 - 폼 필드 이름과 csrf_token, 라우트 이름은 default 와 동일합니다.
-- 다크 모드는 localStorage 의 aboard-theme,
-  관리 사이드바 접힘은 aboard-admin-sidebar 키를 default 와 공유합니다.
+- 다크 모드는 localStorage 의 gnucms-theme,
+  관리 사이드바 접힘은 gnucms-admin-sidebar 키를 default 와 공유합니다.
 - admin/_editor.html.twig 는 default 와 동일합니다(CKEditor 연동).
 - 오늘의집에는 다크 모드가 없지만, 이 프로젝트의 테마 토글 계약을 지키려고
   같은 색 언어로 다크 팔레트를 따로 설계했습니다.

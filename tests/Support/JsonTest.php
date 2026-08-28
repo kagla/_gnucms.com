@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Support;
+namespace GnuCms\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Support\Json;
+use GnuCms\Error\DomainError;
+use GnuCms\Support\Json;
 
 final class JsonTest extends TestCase
 {

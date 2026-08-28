@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Error;
+namespace GnuCms\Error;
 
 use RuntimeException;
 

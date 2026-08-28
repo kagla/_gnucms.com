@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Oauth;
+namespace GnuCms\Oauth;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 use League\OAuth2\Client\Provider\GenericProvider;
 use Throwable;
 

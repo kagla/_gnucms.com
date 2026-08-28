@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Service;
+namespace GnuCms\Service;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Cms\ContentImageService;
-use ApiBoard\Cms\HtmlSanitizer;
-use ApiBoard\Comment\TreeBuilder;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Repository\CommentRepository;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Validation\Validator;
+use GnuCms\Auth\Acl;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\HtmlSanitizer;
+use GnuCms\Comment\TreeBuilder;
+use GnuCms\Error\DomainError;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Validation\Validator;
 
 final class CommentService
 {

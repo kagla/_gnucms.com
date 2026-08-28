@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Db;
+namespace GnuCms\Tests\Db;
 
 use PHPUnit\Framework\Attributes\DataProvider;
-use ApiBoard\Db\Connection;
-use ApiBoard\Db\Schema;
-use ApiBoard\Tests\Support\DatabaseTestCase;
+use GnuCms\Db\Connection;
+use GnuCms\Db\Schema;
+use GnuCms\Tests\Support\DatabaseTestCase;
 
 final class SchemaTest extends DatabaseTestCase
 {
@@ -76,7 +76,7 @@ final class SchemaTest extends DatabaseTestCase
         $db = $this->freshDatabase($config);
         $db->insert('boards', $this->boardRow('dup'));
 
-        $this->expectException(\ApiBoard\Error\DomainError::class);
+        $this->expectException(\GnuCms\Error\DomainError::class);
         $db->insert('boards', $this->boardRow('dup'));
     }
 

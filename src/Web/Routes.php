@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web;
+namespace GnuCms\Web;
 
-use ApiBoard\App;
-use ApiBoard\Web\Controller\BoardController;
-use ApiBoard\Web\Controller\AuthController;
-use ApiBoard\Web\Controller\OauthController;
-use ApiBoard\Web\Controller\AdminController;
-use ApiBoard\Web\Controller\FileController;
-use ApiBoard\Web\Controller\PostController;
-use ApiBoard\Web\Controller\PageController;
-use ApiBoard\Web\Controller\AdminCmsController;
-use ApiBoard\Web\Controller\CmsImageController;
-use ApiBoard\Web\Controller\CommentController;
-use ApiBoard\Web\Controller\EditorImageController;
-use ApiBoard\Web\Controller\NotificationController;
+use GnuCms\App;
+use GnuCms\Web\Controller\BoardController;
+use GnuCms\Web\Controller\AuthController;
+use GnuCms\Web\Controller\OauthController;
+use GnuCms\Web\Controller\AdminController;
+use GnuCms\Web\Controller\FileController;
+use GnuCms\Web\Controller\PostController;
+use GnuCms\Web\Controller\PageController;
+use GnuCms\Web\Controller\AdminCmsController;
+use GnuCms\Web\Controller\CmsImageController;
+use GnuCms\Web\Controller\CommentController;
+use GnuCms\Web\Controller\EditorImageController;
+use GnuCms\Web\Controller\NotificationController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;

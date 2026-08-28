@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Cms;
+namespace GnuCms\Cms;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Error\DomainError;
+use GnuCms\Auth\Acl;
+use GnuCms\Error\DomainError;
 use Psr\Http\Message\UploadedFileInterface;
 
 final class ContentImageService

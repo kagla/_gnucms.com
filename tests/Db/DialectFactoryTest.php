@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Db;
+namespace GnuCms\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Db\DialectFactory;
-use ApiBoard\Error\DomainError;
+use GnuCms\Db\DialectFactory;
+use GnuCms\Error\DomainError;
 
 final class DialectFactoryTest extends TestCase
 {

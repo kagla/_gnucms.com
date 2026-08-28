@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Oauth;
+namespace GnuCms\Oauth;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 
 final class ProviderRegistry
 {

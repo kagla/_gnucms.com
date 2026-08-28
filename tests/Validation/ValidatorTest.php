@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Validation;
+namespace GnuCms\Tests\Validation;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Validation\Validator;
+use GnuCms\Error\DomainError;
+use GnuCms\Validation\Validator;
 
 final class ValidatorTest extends TestCase
 {

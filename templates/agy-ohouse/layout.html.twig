@@ -12,10 +12,10 @@
 <script>
 (function(){
   var d=document.documentElement,t=null;
-  try{t=localStorage.getItem('aboard-theme')}catch(e){}
+  try{t=localStorage.getItem('gnucms-theme')}catch(e){}
   if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);d.dataset.theme=t}
   d.setAttribute('data-theme-mode',(t==='light'||t==='dark')?t:'system');
-  try{if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){d.dataset.adminSidebar='collapsed'}}catch(e){}
+  try{if(localStorage.getItem('gnucms-admin-sidebar')==='collapsed'){d.dataset.adminSidebar='collapsed'}}catch(e){}
 })();
 </script>
 <link rel="stylesheet" href="{{ theme_asset('daisyui.css') }}">
@@ -246,7 +246,7 @@
 <script>
 (function(){
   var root=document.documentElement,mq=window.matchMedia('(prefers-color-scheme: dark)');
-  function stored(){try{return localStorage.getItem('aboard-theme')}catch(e){return null}}
+  function stored(){try{return localStorage.getItem('gnucms-theme')}catch(e){return null}}
   function mode(){var t=stored();return (t==='light'||t==='dark')?t:'system'}
   function apply(){
     var m=mode();
@@ -270,8 +270,8 @@
     setters[j].addEventListener('click',function(){
       var m=this.getAttribute('data-theme-set');
       try{
-        if(m==='system'){localStorage.removeItem('aboard-theme')}
-        else{localStorage.setItem('aboard-theme',m)}
+        if(m==='system'){localStorage.removeItem('gnucms-theme')}
+        else{localStorage.setItem('gnucms-theme',m)}
       }catch(e){}
       apply();
       if(this.blur){this.blur()}

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Db\Dialect;
+namespace GnuCms\Db\Dialect;
 
 use PDO;
 

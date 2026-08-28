@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Service;
+namespace GnuCms\Service;
 
-use ApiBoard\Auth\Acl;
-use ApiBoard\Cms\ImageResizer;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Support\Clock;
+use GnuCms\Auth\Acl;
+use GnuCms\Cms\ImageResizer;
+use GnuCms\Error\DomainError;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Support\Clock;
 
 final class AttachmentService
 {

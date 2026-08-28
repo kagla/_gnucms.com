@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Web\Controller;
+namespace GnuCms\Web\Controller;
 
-use ApiBoard\App;
-use ApiBoard\Cms\ContentImageService;
-use ApiBoard\Error\DomainError;
+use GnuCms\App;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Psr7\Stream;

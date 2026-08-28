@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Db;
+namespace GnuCms\Db;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 
 /**
  * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고

@@ -1158,7 +1158,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:600}
 /* '사진 올리기' 는 직접 만든 버튼이라 CKEditor 스프라이트에 아이콘이 없다.
    아이콘 없이 빈 칸으로 보여 누를 곳을 못 찾는다 — 사진 글리프를 직접 넣는다.
    다크 모드 반전은 아래 .cke_button_icon 규칙이 함께 처리한다. */
-.cke_button__aboardimages_icon{
+.cke_button__gnucmsimages_icon{
   background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2020%2020'%20fill='none'%20stroke='%23575757'%20stroke-width='1.6'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='2.4'%20y='3.8'%20width='15.2'%20height='12.4'%20rx='2.2'/%3E%3Ccircle%20cx='7'%20cy='8.4'%20r='1.4'/%3E%3Cpath%20d='m3.2%2014.4%204.1-3.6%203%202.6%202.7-2.3%203.8%203.3'/%3E%3C/svg%3E")!important;
   background-position:center!important;
   background-size:16px 16px!important;

@@ -9,7 +9,7 @@
 {% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
 <link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 <script>
-try{var savedTheme=localStorage.getItem('aboard-theme');if(savedTheme){document.documentElement.dataset.theme=savedTheme}if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}}catch(e){}
+try{var savedTheme=localStorage.getItem('gnucms-theme');if(savedTheme){document.documentElement.dataset.theme=savedTheme}if(localStorage.getItem('gnucms-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}}catch(e){}
 </script>
 </head>
 <body class="{% block body_class %}daylight-page{% endblock %}">
@@ -76,10 +76,10 @@ try{var savedTheme=localStorage.getItem('aboard-theme');if(savedTheme){document.
   var root=document.documentElement,button=document.querySelector('.theme-toggle'),meta=document.querySelector('meta[name="theme-color"]');
   function isDark(){return root.dataset.theme==='dark'||(!root.dataset.theme&&window.matchMedia('(prefers-color-scheme: dark)').matches)}
   function sync(){if(!button){return}var dark=isDark(),icon=button.querySelector('span');if(icon){icon.textContent=dark?'☀':'☾'}button.setAttribute('aria-label',dark?'라이트 모드로 전환':'다크 모드로 전환');button.title=button.getAttribute('aria-label');if(meta){meta.content=dark?'#16191c':'#ffffff'}}
-  if(button){button.addEventListener('click',function(){var theme=isDark()?'light':'dark';root.dataset.theme=theme;try{localStorage.setItem('aboard-theme',theme)}catch(e){}sync()})}
+  if(button){button.addEventListener('click',function(){var theme=isDark()?'light':'dark';root.dataset.theme=theme;try{localStorage.setItem('gnucms-theme',theme)}catch(e){}sync()})}
   var sidebarToggle=document.querySelector('.admin-sidebar-toggle');
   function syncSidebar(){if(!sidebarToggle){return}var collapsed=root.dataset.adminSidebar==='collapsed';sidebarToggle.setAttribute('aria-expanded',collapsed?'false':'true');sidebarToggle.setAttribute('aria-label',collapsed?'관리 메뉴 펼치기':'관리 메뉴 접기');sidebarToggle.title=sidebarToggle.getAttribute('aria-label')}
-  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var collapsed=root.dataset.adminSidebar==='collapsed';if(collapsed){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('aboard-admin-sidebar',collapsed?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
+  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var collapsed=root.dataset.adminSidebar==='collapsed';if(collapsed){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('gnucms-admin-sidebar',collapsed?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
   sync();
 })();
 </script>

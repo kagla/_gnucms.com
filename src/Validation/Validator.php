@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Validation;
+namespace GnuCms\Validation;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 
 /**
  * 오류를 모았다가 check() 에서 한 번에 던진다. 필드 하나 고칠 때마다

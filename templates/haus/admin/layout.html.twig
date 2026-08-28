@@ -37,7 +37,7 @@
     fold.addEventListener('click',function(){
       var f=root.dataset.adminSidebar==='collapsed';
       if(f){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}
-      try{localStorage.setItem('aboard-admin-sidebar',f?'expanded':'collapsed')}catch(e){}
+      try{localStorage.setItem('gnucms-admin-sidebar',f?'expanded':'collapsed')}catch(e){}
       syncFold();
     });
     syncFold();

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\App;
-use ApiBoard\Tests\Support\WebTestCase;
+use GnuCms\App;
+use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /** 글 수정과 삭제. 비회원 글은 비밀번호로 주인을 확인한다. */

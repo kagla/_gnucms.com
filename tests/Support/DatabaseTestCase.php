@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Support;
+namespace GnuCms\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Db\Connection;
-use ApiBoard\Db\Schema;
+use GnuCms\Db\Connection;
+use GnuCms\Db\Schema;
 
 /**
  * 데이터 제공자로 사용 가능한 DB 를 모두 돌린다. SQLite 는 항상 돌고,

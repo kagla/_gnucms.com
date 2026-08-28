@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Web;
+namespace GnuCms\Tests\Web;
 
-use ApiBoard\Web\BasePath;
+use GnuCms\Web\BasePath;
 use PHPUnit\Framework\TestCase;
 
 final class BasePathTest extends TestCase

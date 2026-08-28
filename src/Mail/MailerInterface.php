@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Mail;
+namespace GnuCms\Mail;
 
 interface MailerInterface
 {

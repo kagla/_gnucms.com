@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Mail;
+namespace GnuCms\Mail;
 
-use ApiBoard\Error\DomainError;
+use GnuCms\Error\DomainError;
 use PHPMailer\PHPMailer\Exception as MailException;
 use PHPMailer\PHPMailer\PHPMailer;
 

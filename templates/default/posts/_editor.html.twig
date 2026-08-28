@@ -43,8 +43,8 @@
     if(!editor.document){return}
     var body=editor.document.getBody(),html=editor.document.getDocumentElement();
     [body,html].forEach(function(el){
-      el.removeClass('aboard-editor-light');el.removeClass('aboard-editor-dark');
-      el.addClass(isDark()?'aboard-editor-dark':'aboard-editor-light');
+      el.removeClass('gnucms-editor-light');el.removeClass('gnucms-editor-dark');
+      el.addClass(isDark()?'gnucms-editor-dark':'gnucms-editor-light');
     });
   }
 
@@ -89,10 +89,10 @@
     });
     document.body.appendChild(input);input.click();
   }
-  if(!CKEDITOR.plugins.get('aboardpostimages')){
-    CKEDITOR.plugins.add('aboardpostimages',{init:function(editor){
-      editor.addCommand('aboardPostImages',{exec:function(){chooseImages(editor)}});
-      editor.ui.addButton('AboardImages',{label:'사진 올리기',command:'aboardPostImages',toolbar:'insert,5'});
+  if(!CKEDITOR.plugins.get('gnucmspostimages')){
+    CKEDITOR.plugins.add('gnucmspostimages',{init:function(editor){
+      editor.addCommand('gnucmsPostImages',{exec:function(){chooseImages(editor)}});
+      editor.ui.addButton('GnucmsImages',{label:'사진 올리기',command:'gnucmsPostImages',toolbar:'insert,5'});
     }});
   }
 
@@ -105,10 +105,10 @@
     versionCheck:false,
     resize_minWidth:0,
     contentsCss:[{{ (base_path ~ '/vendor/ckeditor4/contents.css')|json_encode|raw }},{{ (base_path ~ '/assets/editor-content.css')|json_encode|raw }}],
-    bodyClass:'aboard-editor-content',
+    bodyClass:'gnucms-editor-content',
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:uploadUrl+'&responseType=json',
-    extraPlugins:'uploadimage,notification,aboardpostimages',
+    extraPlugins:'uploadimage,notification,gnucmspostimages',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',
     format_tags:'p;h2;h3;h4;pre',
@@ -124,14 +124,14 @@
       ? [
           {name:'basicstyles',items:['Bold','Italic','Underline','Strike']},
           {name:'colors',items:['TextColor','BGColor']},
-          {name:'insert',items:['AboardImages']}
+          {name:'insert',items:['GnucmsImages']}
         ]
       : (narrow
         ? [
             {name:'styles',items:['Format']},
             {name:'basicstyles',items:['Bold','Italic','Underline','Strike']},
             {name:'colors',items:['TextColor','BGColor']},
-            {name:'insert',items:['AboardImages']},
+            {name:'insert',items:['GnucmsImages']},
             {name:'tools',items:['Maximize']}
           ]
         : [
@@ -140,7 +140,7 @@
             {name:'colors',items:['TextColor','BGColor']},
             {name:'paragraph',items:['NumberedList','BulletedList','Blockquote']},
             {name:'links',items:['Link','Unlink']},
-            {name:'insert',items:['AboardImages','HorizontalRule']},
+            {name:'insert',items:['GnucmsImages','HorizontalRule']},
             {name:'history',items:['Undo','Redo']},
             {name:'tools',items:['Maximize']}
           ]),
@@ -166,8 +166,8 @@
   /* 답글을 쓸 때 폼을 해당 댓글 아래로 옮긴다. CKEditor 는 iframe 이라
      그냥 옮기면 내용이 날아간다. 그래서 껐다가 옮기고 다시 켠다.
      destroy() 가 textarea 에 내용을 되돌려 주므로 쓰던 글은 그대로 남는다. */
-  window.aboardEditor=window.aboardEditor||{};
-  window.aboardEditor[textarea.id]={
+  window.gnucmsEditor=window.gnucmsEditor||{};
+  window.gnucmsEditor[textarea.id]={
     remount:function(move){
       editor.destroy();
       if(typeof move==='function'){move()}

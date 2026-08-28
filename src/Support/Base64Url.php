@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Support;
+namespace GnuCms\Support;
 
 final class Base64Url
 {

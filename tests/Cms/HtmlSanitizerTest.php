@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Cms;
+namespace GnuCms\Tests\Cms;
 
-use ApiBoard\Cms\HtmlSanitizer;
+use GnuCms\Cms\HtmlSanitizer;
 use PHPUnit\Framework\TestCase;
 
 final class HtmlSanitizerTest extends TestCase

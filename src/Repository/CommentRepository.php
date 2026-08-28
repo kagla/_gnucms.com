@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Repository;
+namespace GnuCms\Repository;
 
-use ApiBoard\Db\Connection;
-use ApiBoard\Support\Clock;
+use GnuCms\Db\Connection;
+use GnuCms\Support\Clock;
 
 final class CommentRepository
 {

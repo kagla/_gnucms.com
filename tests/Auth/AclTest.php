@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Tests\Auth;
+namespace GnuCms\Tests\Auth;
 
 use PHPUnit\Framework\TestCase;
-use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\Identity;
-use ApiBoard\Error\DomainError;
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Error\DomainError;
 
 final class AclTest extends TestCase
 {

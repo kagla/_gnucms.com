@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard\Account;
+namespace GnuCms\Account;
 
-use ApiBoard\Auth\Identity;
-use ApiBoard\Error\DomainError;
-use ApiBoard\Mail\MailerInterface;
-use ApiBoard\Validation\Validator;
-use ApiBoard\Cms\CmsService;
+use GnuCms\Auth\Identity;
+use GnuCms\Error\DomainError;
+use GnuCms\Mail\MailerInterface;
+use GnuCms\Validation\Validator;
+use GnuCms\Cms\CmsService;
 
 final class AccountService
 {

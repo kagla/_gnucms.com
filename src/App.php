@@ -2,41 +2,41 @@
 
 declare(strict_types=1);
 
-namespace ApiBoard;
+namespace GnuCms;
 
-use ApiBoard\Account\AccountService;
-use ApiBoard\Account\UserRepository;
-use ApiBoard\Account\TokenRepository;
-use ApiBoard\Account\TokenService;
-use ApiBoard\Account\IdentityRepository;
-use ApiBoard\Account\LinkingService;
-use ApiBoard\Account\SocialAuthService;
-use ApiBoard\Account\AdminService;
-use ApiBoard\Account\ConsentRepository;
-use ApiBoard\Auth\Acl;
-use ApiBoard\Auth\Identity;
-use ApiBoard\Db\Connection;
-use ApiBoard\Repository\BoardRepository;
-use ApiBoard\Repository\CommentRepository;
-use ApiBoard\Repository\NotificationRepository;
-use ApiBoard\Repository\PostRepository;
-use ApiBoard\Service\AttachmentService;
-use ApiBoard\Service\BoardService;
-use ApiBoard\Service\CommentService;
-use ApiBoard\Service\NotificationService;
-use ApiBoard\Service\PostService;
-use ApiBoard\Mail\NativeMailer;
-use ApiBoard\Mail\MailerInterface;
-use ApiBoard\Mail\MailSettingsRepository;
-use ApiBoard\Mail\MailSettingsService;
-use ApiBoard\Mail\SecretCipher;
-use ApiBoard\Mail\SmtpMailer;
-use ApiBoard\Oauth\ProviderRegistry;
-use ApiBoard\Cms\CmsRepository;
-use ApiBoard\Cms\CmsService;
-use ApiBoard\Cms\ContentImageService;
-use ApiBoard\Cms\ContentRenderer;
-use ApiBoard\Cms\HtmlSanitizer;
+use GnuCms\Account\AccountService;
+use GnuCms\Account\UserRepository;
+use GnuCms\Account\TokenRepository;
+use GnuCms\Account\TokenService;
+use GnuCms\Account\IdentityRepository;
+use GnuCms\Account\LinkingService;
+use GnuCms\Account\SocialAuthService;
+use GnuCms\Account\AdminService;
+use GnuCms\Account\ConsentRepository;
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Db\Connection;
+use GnuCms\Repository\BoardRepository;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\NotificationRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Service\AttachmentService;
+use GnuCms\Service\BoardService;
+use GnuCms\Service\CommentService;
+use GnuCms\Service\NotificationService;
+use GnuCms\Service\PostService;
+use GnuCms\Mail\NativeMailer;
+use GnuCms\Mail\MailerInterface;
+use GnuCms\Mail\MailSettingsRepository;
+use GnuCms\Mail\MailSettingsService;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Mail\SmtpMailer;
+use GnuCms\Oauth\ProviderRegistry;
+use GnuCms\Cms\CmsRepository;
+use GnuCms\Cms\CmsService;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\ContentRenderer;
+use GnuCms\Cms\HtmlSanitizer;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -353,7 +353,7 @@ final class App
     {
         $settings = $this->mailSettingsService()->runtime();
         if ($settings === null) {
-            throw \ApiBoard\Error\DomainError::validation(['enabled' => 'SMTP를 사용하도록 설정해 주세요.']);
+            throw \GnuCms\Error\DomainError::validation(['enabled' => 'SMTP를 사용하도록 설정해 주세요.']);
         }
         $this->mailer()->send(
             (string) $settings['from_email'],
