@@ -25,7 +25,7 @@ abstract class WebTestCase extends DatabaseTestCase
             'db'   => $dbConfig,
             'auth' => ['secret' => 'web-test-secret-that-is-long-enough'],
             'uploads' => [
-                'dir'         => sys_get_temp_dir() . '/gnucms-test-uploads',
+                'dir'         => sys_get_temp_dir() . '/' . GNUCMS_ID . '-test-uploads',
                 'max_bytes'   => 1024 * 1024,
                 'allowed_ext' => ['txt', 'png', 'pdf'],
             ],

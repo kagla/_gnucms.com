@@ -2,7 +2,7 @@
 {% block title %}회원가입 · {{ site.site_name }}{% endblock %}
 {% block body %}
 <div class="auth-shell"><section class="surface auth-card">
-  <header class="auth-head"><p class="eyebrow">Join gnucms.com</p><h1>회원가입</h1><p class="lead">가벼운 커뮤니티에 참여하고 새로운 이야기를 시작하세요.</p></header>
+  <header class="auth-head"><p class="eyebrow">Join {{ site.site_name }}</p><h1>회원가입</h1><p class="lead">가벼운 커뮤니티에 참여하고 새로운 이야기를 시작하세요.</p></header>
   <form class="auth-form" method="post" action="{{ url_for('auth.register') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>이메일<input type="email" name="email" value="{{ values.email|default('') }}" maxlength="191" autocomplete="email" required></label>

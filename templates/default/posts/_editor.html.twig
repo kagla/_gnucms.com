@@ -43,8 +43,8 @@
     if(!editor.document){return}
     var body=editor.document.getBody(),html=editor.document.getDocumentElement();
     [body,html].forEach(function(el){
-      el.removeClass('gnucms-editor-light');el.removeClass('gnucms-editor-dark');
-      el.addClass(isDark()?'gnucms-editor-dark':'gnucms-editor-light');
+      el.removeClass('{{ GNUCMS_ID }}-editor-light');el.removeClass('{{ GNUCMS_ID }}-editor-dark');
+      el.addClass(isDark()?'{{ GNUCMS_ID }}-editor-dark':'{{ GNUCMS_ID }}-editor-light');
     });
   }
 
@@ -89,10 +89,10 @@
     });
     document.body.appendChild(input);input.click();
   }
-  if(!CKEDITOR.plugins.get('gnucmspostimages')){
-    CKEDITOR.plugins.add('gnucmspostimages',{init:function(editor){
-      editor.addCommand('gnucmsPostImages',{exec:function(){chooseImages(editor)}});
-      editor.ui.addButton('GnucmsImages',{label:'사진 올리기',command:'gnucmsPostImages',toolbar:'insert,5'});
+  if(!CKEDITOR.plugins.get('{{ GNUCMS_ID }}postimages')){
+    CKEDITOR.plugins.add('{{ GNUCMS_ID }}postimages',{init:function(editor){
+      editor.addCommand('{{ GNUCMS_ID }}PostImages',{exec:function(){chooseImages(editor)}});
+      editor.ui.addButton('{{ GNUCMS_ID|capitalize }}Images',{label:'사진 올리기',command:'{{ GNUCMS_ID }}PostImages',toolbar:'insert,5'});
     }});
   }
 
@@ -105,10 +105,10 @@
     versionCheck:false,
     resize_minWidth:0,
     contentsCss:[{{ (base_path ~ '/vendor/ckeditor4/contents.css')|json_encode|raw }},{{ (base_path ~ '/assets/editor-content.css')|json_encode|raw }}],
-    bodyClass:'gnucms-editor-content',
+    bodyClass:'{{ GNUCMS_ID }}-editor-content',
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:uploadUrl+'&responseType=json',
-    extraPlugins:'uploadimage,notification,gnucmspostimages',
+    extraPlugins:'uploadimage,notification,{{ GNUCMS_ID }}postimages',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',
     format_tags:'p;h2;h3;h4;pre',
@@ -124,14 +124,14 @@
       ? [
           {name:'basicstyles',items:['Bold','Italic','Underline','Strike']},
           {name:'colors',items:['TextColor','BGColor']},
-          {name:'insert',items:['GnucmsImages']}
+          {name:'insert',items:['{{ GNUCMS_ID|capitalize }}Images']}
         ]
       : (narrow
         ? [
             {name:'styles',items:['Format']},
             {name:'basicstyles',items:['Bold','Italic','Underline','Strike']},
             {name:'colors',items:['TextColor','BGColor']},
-            {name:'insert',items:['GnucmsImages']},
+            {name:'insert',items:['{{ GNUCMS_ID|capitalize }}Images']},
             {name:'tools',items:['Maximize']}
           ]
         : [
@@ -140,7 +140,7 @@
             {name:'colors',items:['TextColor','BGColor']},
             {name:'paragraph',items:['NumberedList','BulletedList','Blockquote']},
             {name:'links',items:['Link','Unlink']},
-            {name:'insert',items:['GnucmsImages','HorizontalRule']},
+            {name:'insert',items:['{{ GNUCMS_ID|capitalize }}Images','HorizontalRule']},
             {name:'history',items:['Undo','Redo']},
             {name:'tools',items:['Maximize']}
           ]),
@@ -166,8 +166,8 @@
   /* 답글을 쓸 때 폼을 해당 댓글 아래로 옮긴다. CKEditor 는 iframe 이라
      그냥 옮기면 내용이 날아간다. 그래서 껐다가 옮기고 다시 켠다.
      destroy() 가 textarea 에 내용을 되돌려 주므로 쓰던 글은 그대로 남는다. */
-  window.gnucmsEditor=window.gnucmsEditor||{};
-  window.gnucmsEditor[textarea.id]={
+  window.{{ GNUCMS_ID }}Editor=window.{{ GNUCMS_ID }}Editor||{};
+  window.{{ GNUCMS_ID }}Editor[textarea.id]={
     remount:function(move){
       editor.destroy();
       if(typeof move==='function'){move()}

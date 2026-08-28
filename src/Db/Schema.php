@@ -408,7 +408,7 @@ final class Schema
                 updated_at    {DATETIME}   NOT NULL
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_site_settings_key ON site_settings (setting_key)',
-            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('site_name', 'gnucms.com', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('site_name', '" . GNUCMS . "', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('site_tagline', '가볍게 시작하는 기초 커뮤니티', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_title', '가볍게 시작하고, 오래 이어지는 공간', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_intro', '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.', '2026-01-01 00:00:00')",

@@ -48,7 +48,7 @@ final class CmsPageTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testOwnerCanCreatePageFromAdmin(array $dbConfig): void
     {
-        $editorRoot = sys_get_temp_dir() . '/gnucms-web-editor-' . bin2hex(random_bytes(5));
+        $editorRoot = sys_get_temp_dir() . '/' . GNUCMS_ID . '-web-editor-' . bin2hex(random_bytes(5));
         $app = $this->makeApp($dbConfig, ['editor' => ['dir' => $editorRoot, 'max_bytes' => 1024 * 1024]]);
         $id = $app->users()->create('owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '소유자', true);
         $app->users()->verifyEmail($id);
@@ -63,7 +63,7 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('default (기본)', $this->body($settingsPage));
         $settingsSaved = $this->post($app, '/admin/settings', [
             'csrf_token' => $_SESSION['csrf_token'],
-            'site_name' => 'gnucms.com',
+            'site_name' => GNUCMS,
             'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
             'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
             'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
@@ -80,7 +80,7 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('/vendor/ckeditor4/ckeditor.js', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('data-cms-editor', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString("input.multiple=true", $this->body($this->get($app, '/admin/content/new')));
-        self::assertStringContainsString("items:['GnucmsImages'", $this->body($this->get($app, '/admin/content/new')));
+        self::assertStringContainsString("items:['" . ucfirst(GNUCMS_ID) . "Images'", $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('navigator.sendBeacon', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('data-uploaded-images', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('refreshStoredImages', $this->body($this->get($app, '/admin/content/new')));
@@ -89,7 +89,7 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $createForm, $keyMatch));
         $imageKey = $keyMatch[1];
 
-        $temporaryImage = tempnam(sys_get_temp_dir(), 'gnucms-web-png-');
+        $temporaryImage = tempnam(sys_get_temp_dir(), GNUCMS_ID . '-web-png-');
         self::assertNotFalse($temporaryImage);
         file_put_contents($temporaryImage, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -109,7 +109,7 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(200, $this->get($app, $uploadedImage['url'])->getStatusCode());
         $storedImage = $editorRoot . substr($uploadedImage['url'], strlen('/media/editor'));
 
-        $discardTemporary = tempnam(sys_get_temp_dir(), 'gnucms-discard-png-');
+        $discardTemporary = tempnam(sys_get_temp_dir(), GNUCMS_ID . '-discard-png-');
         self::assertNotFalse($discardTemporary);
         file_put_contents($discardTemporary, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

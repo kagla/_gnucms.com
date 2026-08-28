@@ -11,7 +11,7 @@ use GnuCms\Validation\Validator;
 final class CmsService
 {
     public const DEFAULT_SETTINGS = [
-        'site_name' => 'gnucms.com',
+        'site_name' => GNUCMS,
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',

@@ -4,7 +4,7 @@
 <header class="site-header modern-header">
   <div class="header-inner">
     <a class="modern-brand" href="{{ url_for('boards.index') }}" aria-label="{{ site.site_name }} 홈">
-      <span class="modern-brand-mark" aria-hidden="true">a<span></span></span>
+      <span class="modern-brand-mark" aria-hidden="true">{{ site.site_name|first }}<span></span></span>
       <span class="modern-brand-copy"><strong>{{ site.site_name }}</strong><small>open community</small></span>
     </a>
     <nav class="modern-nav" aria-label="주요 메뉴">

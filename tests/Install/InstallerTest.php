@@ -17,7 +17,7 @@ final class InstallerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->workDir = sys_get_temp_dir() . '/gnucms-install-' . bin2hex(random_bytes(4));
+        $this->workDir = sys_get_temp_dir() . '/' . GNUCMS_ID . '-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
     }

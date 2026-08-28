@@ -271,7 +271,7 @@ final class App
                 $this->users(),
                 new TokenService($this->tokens),
                 $this->mailer(),
-                (string) $this->config('app.url', 'https://gnucms.gnuboard.net'),
+                (string) $this->config('app.url', GNUCMS_URL),
                 $this->cmsService(),
                 $this->consents()
             );
@@ -284,7 +284,7 @@ final class App
     {
         if ($this->providerRegistry === null) {
             $config = (array) $this->config('oauth', []);
-            $appUrl = rtrim((string) $this->config('app.url', 'https://gnucms.gnuboard.net'), '/');
+            $appUrl = rtrim((string) $this->config('app.url', GNUCMS_URL), '/');
             foreach (['google', 'naver', 'kakao', 'github'] as $key) {
                 if (isset($config[$key]) && is_array($config[$key]) && empty($config[$key]['redirect_uri'])) {
                     $config[$key]['redirect_uri'] = $appUrl . '/auth/' . $key . '/callback';
@@ -312,7 +312,8 @@ final class App
             }
             $this->socialAuthService = new SocialAuthService(
                 $this->providerRegistry(), $this->linkingService, $this->mailer(),
-                (string) $this->config('app.url', 'https://gnucms.gnuboard.net')
+                (string) $this->config('app.url', GNUCMS_URL),
+                $this->cmsService()
             );
         }
         return $this->socialAuthService;
@@ -323,7 +324,10 @@ final class App
         if ($this->mailer === null) {
             $smtp = $this->mailSettingsService()->runtime();
             $this->mailer = $smtp === null
-                ? new NativeMailer((string) $this->config('mail.from', 'no-reply@localhost'))
+                ? new NativeMailer(
+                    (string) $this->config('mail.from', 'no-reply@localhost'),
+                    (string) $this->cmsService()->settings()['site_name']
+                )
                 : new SmtpMailer($smtp);
         }
         return $this->mailer;
@@ -355,10 +359,11 @@ final class App
         if ($settings === null) {
             throw \GnuCms\Error\DomainError::validation(['enabled' => 'SMTP를 사용하도록 설정해 주세요.']);
         }
+        $siteName = (string) $this->cmsService()->settings()['site_name'];
         $this->mailer()->send(
             (string) $settings['from_email'],
-            '[gnucms.com] SMTP 테스트 메일',
-            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 gnucms.com 관리자에서 보낸 테스트 메일입니다."
+            '[' . $siteName . '] SMTP 테스트 메일',
+            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 {$siteName} 관리자에서 보낸 테스트 메일입니다."
         );
     }
 

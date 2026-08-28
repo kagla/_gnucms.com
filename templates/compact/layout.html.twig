@@ -7,7 +7,7 @@
 <title>{% block title %}{{ site.site_name }}{% endblock %}</title>
 {% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
 <script>
-try{var t=localStorage.getItem('gnucms-theme');if(t){document.documentElement.dataset.theme=t}}catch(e){}
+try{var t=localStorage.getItem('{{ GNUCMS_ID }}-theme');if(t){document.documentElement.dataset.theme=t}}catch(e){}
 </script>
 <link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 </head>
@@ -17,7 +17,7 @@ try{var t=localStorage.getItem('gnucms-theme');if(t){document.documentElement.da
 <header class="site-header">
   <div class="header-inner shell">
     <a class="brand" href="{{ url_for('boards.index') }}" aria-label="{{ site.site_name }} 홈">
-      <span class="brand-mark" aria-hidden="true">a</span><span class="brand-name">{{ site.site_name }}</span>
+      <span class="brand-mark" aria-hidden="true">{{ site.site_name|first }}</span><span class="brand-name">{{ site.site_name }}</span>
     </a>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="메뉴 열기"><span aria-hidden="true"></span></button>
     <nav class="site-nav" id="site-nav" aria-label="주요 메뉴">
@@ -73,7 +73,7 @@ try{var t=localStorage.getItem('gnucms-theme');if(t){document.documentElement.da
     button.addEventListener('click',function(){
       var theme=isDark()?'light':'dark';
       root.dataset.theme=theme;
-      try{localStorage.setItem('gnucms-theme',theme)}catch(e){}
+      try{localStorage.setItem('{{ GNUCMS_ID }}-theme',theme)}catch(e){}
       sync();
     });
     sync();

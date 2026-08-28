@@ -63,7 +63,7 @@ abstract class AbstractProvider implements ProviderInterface
     protected function fetchJson(string $url, string $accessToken): array
     {
         $request = $this->client->getAuthenticatedRequest('GET', $url, $accessToken, [
-            'headers' => ['Accept' => 'application/json', 'User-Agent' => 'gnucms.com'],
+            'headers' => ['Accept' => 'application/json', 'User-Agent' => GNUCMS],
         ]);
         $data = $this->client->getParsedResponse($request);
 

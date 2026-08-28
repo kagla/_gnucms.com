@@ -120,7 +120,7 @@ final class AttachmentDownloadTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        $dir = sys_get_temp_dir() . '/gnucms-test-uploads';
+        $dir = sys_get_temp_dir() . '/' . GNUCMS_ID . '-test-uploads';
         if (is_dir($dir)) {
             // 재귀적으로 모든 파일과 디렉토리를 삭제한다.
             // year/month/... 중첩 구조를 모두 정리하기 위해 CHILD_FIRST 모드를 사용한다.

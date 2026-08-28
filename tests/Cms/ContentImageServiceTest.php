@@ -17,7 +17,7 @@ final class ContentImageServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir() . '/gnucms-editor-' . bin2hex(random_bytes(5));
+        $this->root = sys_get_temp_dir() . '/' . GNUCMS_ID . '-editor-' . bin2hex(random_bytes(5));
     }
 
     protected function tearDown(): void
@@ -33,7 +33,7 @@ final class ContentImageServiceTest extends TestCase
     public function testAdminCanStoreAndReadAValidatedImage(): void
     {
         $key = bin2hex(random_bytes(16));
-        $temporary = tempnam(sys_get_temp_dir(), 'gnucms-png-');
+        $temporary = tempnam(sys_get_temp_dir(), GNUCMS_ID . '-png-');
         self::assertNotFalse($temporary);
         file_put_contents($temporary, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

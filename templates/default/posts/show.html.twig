@@ -160,7 +160,7 @@
 
     /* 폼을 옮길 때는 편집기를 껐다 켜야 한다. 편집기가 아직 없으면 그냥 옮긴다. */
     function place(move){
-      var api=window.gnucmsEditor&&window.gnucmsEditor['comment-content'];
+      var api=window.{{ GNUCMS_ID }}Editor&&window.{{ GNUCMS_ID }}Editor['comment-content'];
       if(api){api.remount(move)}else{move()}
     }
 
@@ -227,7 +227,7 @@
 
     function focusSoon(){
       form.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
-      var api=window.gnucmsEditor&&window.gnucmsEditor['comment-content'];
+      var api=window.{{ GNUCMS_ID }}Editor&&window.{{ GNUCMS_ID }}Editor['comment-content'];
       if(api){window.setTimeout(api.focus,120)}
     }
 

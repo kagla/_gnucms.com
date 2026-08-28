@@ -67,7 +67,7 @@ final class AccountService
             if (!(bool) $existing['email_verified']) {
                 $this->sendVerification($existing);
             } else {
-                $this->mailer->send($email, '[gnucms.com] 가입 시도 안내',
+                $this->mailer->send($email, '[' . $this->siteName() . '] 가입 시도 안내',
                     "이미 가입된 계정입니다.\n\n로그인: {$this->appUrl}/login");
             }
             return $this->publicUser($existing, false);
@@ -131,7 +131,7 @@ final class AccountService
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
         $url = $this->appUrl . '/reset-password?token=' . rawurlencode($token);
-        $this->mailer->send((string) $user['email'], '[gnucms.com] 비밀번호 재설정',
+        $this->mailer->send((string) $user['email'], '[' . $this->siteName() . '] 비밀번호 재설정',
             "아래 링크에서 비밀번호를 다시 설정해 주세요.\n\n{$url}\n\n이 링크는 1시간 동안 유효합니다.");
     }
 
@@ -203,8 +203,15 @@ final class AccountService
     {
         $token = $this->tokens->issue((int) $user['id'], TokenService::VERIFY_EMAIL);
         $url = $this->appUrl . '/verify-email?token=' . rawurlencode($token);
-        $this->mailer->send((string) $user['email'], '[gnucms.com] 이메일 인증',
-            "gnucms.com 가입을 완료하려면 아래 링크를 열어 주세요.\n\n{$url}\n\n이 링크는 24시간 동안 유효합니다.");
+        $siteName = $this->siteName();
+        $this->mailer->send((string) $user['email'], '[' . $siteName . '] 이메일 인증',
+            "{$siteName} 가입을 완료하려면 아래 링크를 열어 주세요.\n\n{$url}\n\n이 링크는 24시간 동안 유효합니다.");
+    }
+
+    /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */
+    private function siteName(): string
+    {
+        return (string) $this->cms->settings()['site_name'];
     }
 
     private function displayNameFromEmail(string $email): string

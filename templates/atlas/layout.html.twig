@@ -9,7 +9,7 @@
 <title>{% block title %}{{ site.site_name }}{% endblock %}</title>
 {% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
 <script>
-try{var t=localStorage.getItem('gnucms-theme');if(t){document.documentElement.dataset.theme=t}if(localStorage.getItem('gnucms-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}}catch(e){}
+try{var t=localStorage.getItem('{{ GNUCMS_ID }}-theme');if(t){document.documentElement.dataset.theme=t}if(localStorage.getItem('{{ GNUCMS_ID }}-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}}catch(e){}
 </script>
 <link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 </head>
@@ -134,9 +134,9 @@ try{var t=localStorage.getItem('gnucms-theme');if(t){document.documentElement.da
     toggles[i].addEventListener('click',function(){
       var theme=isDark()?'light':'dark';
       root.dataset.theme=theme;
-      try{localStorage.setItem('gnucms-theme',theme)}catch(e){}
+      try{localStorage.setItem('{{ GNUCMS_ID }}-theme',theme)}catch(e){}
       syncTheme();
-      document.dispatchEvent(new CustomEvent('gnucms:theme',{detail:{dark:theme==='dark'}}));
+      document.dispatchEvent(new CustomEvent('{{ GNUCMS_ID }}:theme',{detail:{dark:theme==='dark'}}));
     });
   }
   syncTheme();

@@ -57,7 +57,7 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('가볍게 시작하고, 오래 이어지는 공간', $body);
         self::assertStringContainsString('기초 커뮤니티', $body);
         self::assertStringContainsString('theme-toggle', $body);
-        self::assertStringContainsString('gnucms-theme', $body);
+        self::assertStringContainsString(GNUCMS_ID . '-theme', $body);
     }
 
     /** @dataProvider connectionProvider */
@@ -185,6 +185,6 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('홈 최신글 6', $body);
         self::assertStringContainsString('홈 최신글 2', $body);
         self::assertStringNotContainsString('홈 최신글 1', $body);
-        self::assertStringContainsString('gnucms.com · 가볍게 시작하는 기초 커뮤니티', $body);
+        self::assertStringContainsString(GNUCMS . ' · 가볍게 시작하는 기초 커뮤니티', $body);
     }
 }

@@ -144,7 +144,7 @@ final class AdminPageTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1', 'provider' => 'gmail',
             'host' => 'smtp.gmail.com', 'port' => '465', 'encryption' => 'ssl',
             'username' => 'owner@gmail.com', 'password' => 'google-app-password',
-            'from_email' => 'owner@gmail.com', 'from_name' => 'gnucms.com',
+            'from_email' => 'owner@gmail.com', 'from_name' => GNUCMS,
         ]);
         self::assertSame(303, $saved->getStatusCode());
         self::assertSame('/admin/mail?saved=1', $saved->getHeaderLine('Location'));

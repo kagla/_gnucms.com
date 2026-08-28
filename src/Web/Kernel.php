@@ -69,6 +69,9 @@ final class Kernel
         $twig->getEnvironment()->addGlobal('base_path', $basePath);
         $twig->getEnvironment()->addGlobal('active_theme', $themes->name());
         $twig->getEnvironment()->addGlobal('available_themes', $themes->availableThemes());
+        // 사람이 보는 이름은 site.site_name 이 앞서고, GNUCMS 는 그 기본값이다.
+        $twig->getEnvironment()->addGlobal('GNUCMS', GNUCMS);
+        $twig->getEnvironment()->addGlobal('GNUCMS_ID', GNUCMS_ID);
         $twig->getEnvironment()->addFunction(new TwigFunction(
             'theme_asset',
             static fn (string $path): string => $themes->assetUrl($path, $basePath)

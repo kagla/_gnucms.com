@@ -153,6 +153,27 @@ final class AccountServiceTest extends DatabaseTestCase
         ])['id']);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testVerificationMailUsesConfiguredSiteName(array $config): void
+    {
+        [$service, $mailer, , , $cms] = $this->service($config);
+        $service->register([
+            'email' => 'owner@example.com', 'password' => 'safe-password-123',
+            'password_confirmation' => 'safe-password-123',
+        ]);
+        $cms->saveSettings(['site_name' => '우리 커뮤니티']);
+
+        $service->register([
+            'email' => 'member@example.com', 'password' => 'member-password-123',
+            'password_confirmation' => 'member-password-123', 'agree_terms' => '1', 'agree_privacy' => '1',
+        ]);
+
+        self::assertCount(1, $mailer->messages);
+        self::assertSame('[우리 커뮤니티] 이메일 인증', $mailer->messages[0]['subject']);
+        self::assertStringContainsString('우리 커뮤니티 가입을 완료하려면', $mailer->messages[0]['body']);
+        self::assertStringNotContainsString(GNUCMS, $mailer->messages[0]['subject']);
+    }
+
     private function service(array $config): array
     {
         $db = $this->freshDatabase($config);
@@ -175,7 +196,7 @@ final class AccountServiceTest extends DatabaseTestCase
             $consents
         );
 
-        return [$service, $mailer, $users, $consents];
+        return [$service, $mailer, $users, $consents, $cmsRepository];
     }
 
     private function tokenFrom(string $body): string

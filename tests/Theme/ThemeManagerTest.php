@@ -14,7 +14,7 @@ final class ThemeManagerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir() . '/gnucms-theme-' . bin2hex(random_bytes(6));
+        $this->root = sys_get_temp_dir() . '/' . GNUCMS_ID . '-theme-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/templates/default', 0777, true);
         mkdir($this->root . '/templates/modern', 0777, true);
         mkdir($this->root . '/public/themes/default', 0777, true);

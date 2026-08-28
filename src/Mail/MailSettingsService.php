@@ -33,7 +33,7 @@ final class MailSettingsService
         return array_merge([
             'enabled' => false, 'provider' => 'gmail', 'host' => 'smtp.gmail.com', 'port' => 465,
             'encryption' => 'ssl', 'username' => '', 'from_email' => $this->fallbackFrom,
-            'from_name' => 'gnucms.com', 'password_set' => false,
+            'from_name' => GNUCMS, 'password_set' => false,
         ], $stored, [
             'enabled' => ($stored['enabled'] ?? '0') === '1',
             'port' => (int) ($stored['port'] ?? 465),

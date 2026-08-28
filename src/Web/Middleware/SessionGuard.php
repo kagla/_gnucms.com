@@ -26,7 +26,7 @@ final class SessionGuard implements MiddlewareInterface
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_name('gnucms_session');
+            session_name(GNUCMS_ID . '_session');
             session_set_cookie_params([
                 'lifetime' => 0,
                 'path' => '/',

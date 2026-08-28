@@ -18,11 +18,11 @@ tailwind.config={
 <link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 <script>
 try{
-  var t=localStorage.getItem('gnucms-theme');
+  var t=localStorage.getItem('{{ GNUCMS_ID }}-theme');
   if(t==='dark'){document.documentElement.dataset.theme='dark';document.documentElement.classList.add('dark')}
   else if(t==='light'){document.documentElement.dataset.theme='light';document.documentElement.classList.remove('dark')}
   else if(window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.dataset.theme='dark';document.documentElement.classList.add('dark')}
-  if(localStorage.getItem('gnucms-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}
+  if(localStorage.getItem('{{ GNUCMS_ID }}-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}
 }catch(e){}
 </script>
 </head>
@@ -100,11 +100,11 @@ try{
     var next=isDark()?'light':'dark';
     root.dataset.theme=next;
     if(next==='dark'){root.classList.add('dark')}else{root.classList.remove('dark')}
-    try{localStorage.setItem('gnucms-theme',next)}catch(e){}syncTheme()
+    try{localStorage.setItem('{{ GNUCMS_ID }}-theme',next)}catch(e){}syncTheme()
   })});
   var sidebarToggle=document.querySelector('.admin-sidebar-toggle');
   function syncSidebar(){if(!sidebarToggle)return;var c=root.dataset.adminSidebar==='collapsed';sidebarToggle.setAttribute('aria-expanded',c?'false':'true');sidebarToggle.setAttribute('aria-label',c?'관리 메뉴 펼치기':'관리 메뉴 접기');sidebarToggle.title=sidebarToggle.getAttribute('aria-label')}
-  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var c=root.dataset.adminSidebar==='collapsed';if(c){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('gnucms-admin-sidebar',c?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
+  if(sidebarToggle){sidebarToggle.addEventListener('click',function(){var c=root.dataset.adminSidebar==='collapsed';if(c){delete root.dataset.adminSidebar}else{root.dataset.adminSidebar='collapsed'}try{localStorage.setItem('{{ GNUCMS_ID }}-admin-sidebar',c?'expanded':'collapsed')}catch(e){}syncSidebar()});syncSidebar()}
   var navToggle=document.getElementById('bloom-nav-toggle'),navMenu=document.getElementById('bloom-nav-menu'),header=document.getElementById('bloom-header');
   if(navToggle&&navMenu&&header){navToggle.addEventListener('click',function(){var open=header.classList.toggle('is-nav-open');navToggle.setAttribute('aria-expanded',open?'true':'false')})}
   syncTheme();
