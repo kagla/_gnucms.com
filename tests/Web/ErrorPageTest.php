@@ -59,7 +59,7 @@ final class ErrorPageTest extends WebTestCase
         $app = $this->makeApp(self::SQLITE);
         $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
 
-        $response = $this->get($app, '/b/free', ['q' => str_repeat('가', 101)]);
+        $response = $this->get($app, '/boards/free', ['q' => str_repeat('가', 101)]);
         $body = $this->body($response);
 
         self::assertSame(422, $response->getStatusCode());

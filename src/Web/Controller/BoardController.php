@@ -22,8 +22,16 @@ final class BoardController
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $boards = $this->app->boardService()->listBoards($this->app->guestAcl());
+        foreach ($boards as &$board) {
+            $board['latest_posts'] = $this->app->postService()->latestPosts(
+                $this->app->guestAcl(),
+                (string) $board['board_key'],
+                5
+            );
+        }
+        unset($board);
 
-        return Twig::fromRequest($request)->render($response, 'boards/index.html.twig', [
+        return Twig::fromRequest($request)->render($response, 'home/index.html.twig', [
             'boards' => $boards,
         ]);
     }

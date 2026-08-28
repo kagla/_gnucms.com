@@ -29,6 +29,7 @@ final class InstallerTest extends TestCase
         }
         @rmdir($this->workDir . '/config');
         @rmdir($this->workDir . '/storage/uploads');
+        @rmdir($this->workDir . '/storage/editor');
         @rmdir($this->workDir . '/storage/logs');
         @rmdir($this->workDir . '/storage');
         @rmdir($this->workDir);
@@ -52,15 +53,38 @@ final class InstallerTest extends TestCase
         $this->assertTrue((new Schema($db))->exists());
     }
 
-    public function testGeneratedConfigHasStrongSecretAndHashedPassword(): void
+    public function testGeneratedConfigHasStrongSecretAndNoPrecreatedUser(): void
     {
         $this->installer()->run($this->input());
         $config = require $this->configPath();
 
         $this->assertGreaterThanOrEqual(43, strlen($config['auth']['secret']));
-        $this->assertTrue(password_verify('supersecret1', $config['bootstrap_admin']['password_hash']));
-        $this->assertSame('root', $config['bootstrap_admin']['id']);
+        $db = Connection::create($config['db']);
+        $this->assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
+        $this->assertSame('0', $db->selectOne(
+            "SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'"
+        )['state_value']);
+        $this->assertArrayNotHasKey('bootstrap_admin', $config);
+        $this->assertSame('https://community.example.com', $config['app']['url']);
+        $this->assertSame('no-reply@example.com', $config['mail']['from']);
+        $this->assertSame($this->workDir . '/storage/editor', $config['editor']['dir']);
+        $this->assertDirectoryExists($config['editor']['dir']);
         $this->assertFalse($config['debug']);
+    }
+
+    public function testInvalidAppUrlAndMailFromAreRejected(): void
+    {
+        try {
+            $this->installer()->run($this->input([
+                'app_url' => 'javascript:alert(1)',
+                'mail_from' => "bad\naddress",
+            ]));
+            $this->fail('422 가 나와야 한다');
+        } catch (DomainError $e) {
+            $this->assertSame(422, $e->status());
+            $this->assertArrayHasKey('app_url', $e->details());
+            $this->assertArrayHasKey('mail_from', $e->details());
+        }
     }
 
     public function testCorsOriginsAreParsedLineByLine(): void
@@ -82,17 +106,6 @@ final class InstallerTest extends TestCase
             $this->fail('두 번째 설치는 거부되어야 한다');
         } catch (DomainError $e) {
             $this->assertSame(403, $e->status());
-        }
-    }
-
-    public function testShortAdminPasswordIsRejected(): void
-    {
-        try {
-            $this->installer()->run($this->input(['admin_password' => 'short']));
-            $this->fail('422 가 나와야 한다');
-        } catch (DomainError $e) {
-            $this->assertSame(422, $e->status());
-            $this->assertArrayHasKey('admin_password', $e->details());
         }
     }
 
@@ -133,11 +146,11 @@ final class InstallerTest extends TestCase
     private function input(array $overrides = []): array
     {
         return array_merge([
+            'app_url'        => 'https://community.example.com/',
+            'mail_from'      => 'no-reply@example.com',
             'dsn'            => 'sqlite:' . $this->workDir . '/storage/board.sqlite',
             'db_username'    => '',
             'db_password'    => '',
-            'admin_id'       => 'root',
-            'admin_password' => 'supersecret1',
             'cors_origins'   => '',
         ], $overrides);
     }

@@ -11,6 +11,7 @@ use ApiBoard\Db\Schema;
 use ApiBoard\Web\Kernel;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use Psr\Http\Message\UploadedFileInterface;
 
 abstract class WebTestCase extends DatabaseTestCase
 {
@@ -57,7 +58,22 @@ abstract class WebTestCase extends DatabaseTestCase
         $uri = $path . ($query === [] ? '' : '?' . http_build_query($query));
         $request = (new ServerRequestFactory())->createServerRequest($method, $uri);
 
-        return Kernel::create($app, dirname(__DIR__, 2) . '/templates', null, '')->handle($request);
+        return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    protected function post(App $app, string $path, array $body): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', $path)->withParsedBody($body);
+
+        return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    /** @param array<string, UploadedFileInterface> $files */
+    protected function upload(App $app, string $path, array $files): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', $path)->withUploadedFiles($files);
+
+        return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }
 
     protected function body(ResponseInterface $response): string

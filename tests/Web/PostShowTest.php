@@ -26,7 +26,7 @@ final class PostShowTest extends WebTestCase
             'parent_id' => $parent['id'],
         ]);
 
-        $response = $this->get($app, '/p/' . $post['id']);
+        $response = $this->get($app, '/posts/' . $post['id']);
         $body = $this->body($response);
 
         self::assertSame(200, $response->getStatusCode());
@@ -43,7 +43,7 @@ final class PostShowTest extends WebTestCase
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
         $post = $app->postService()->create($acl, 'free', ['title' => '제목', 'content' => '본문']);
 
-        $this->get($app, '/p/' . $post['id']);
+        $this->get($app, '/posts/' . $post['id']);
 
         self::assertSame(1, (int) $app->posts()->find((int) $post['id'])['view_count']);
     }
@@ -59,7 +59,7 @@ final class PostShowTest extends WebTestCase
             'content' => '<script>alert(1)</script>',
         ]);
 
-        $body = $this->body($this->get($app, '/p/' . $post['id']));
+        $body = $this->body($this->get($app, '/posts/' . $post['id']));
 
         self::assertStringNotContainsString('<script>alert(1)</script>', $body);
         self::assertStringContainsString('&lt;script&gt;', $body);
@@ -70,7 +70,18 @@ final class PostShowTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
 
-        self::assertSame(404, $this->get($app, '/p/99999')->getStatusCode());
+        self::assertSame(404, $this->get($app, '/posts/99999')->getStatusCode());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testLegacyPostUrlRedirectsPermanentlyToCanonicalUrl(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+
+        $response = $this->get($app, '/p/2', ['from' => 'bookmark']);
+
+        self::assertSame(301, $response->getStatusCode());
+        self::assertSame('/posts/2?from=bookmark', $response->getHeaderLine('Location'));
     }
 
     /**
@@ -95,7 +106,7 @@ final class PostShowTest extends WebTestCase
             'is_secret' => true,
         ]);
 
-        $response = $this->get($app, '/p/' . $post['id']);
+        $response = $this->get($app, '/posts/' . $post['id']);
 
         self::assertSame(403, $response->getStatusCode());
     }
@@ -118,7 +129,7 @@ final class PostShowTest extends WebTestCase
         ]);
         $post = $app->postService()->create($acl, 'secret', ['title' => '제목', 'content' => '본문']);
 
-        $response = $this->get($app, '/p/' . $post['id']);
+        $response = $this->get($app, '/posts/' . $post['id']);
 
         self::assertSame(401, $response->getStatusCode());
     }

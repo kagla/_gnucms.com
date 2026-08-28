@@ -20,16 +20,16 @@ final class BasePathTest extends TestCase
         return [
             // 문서 루트, mod_rewrite 있음: 요청 경로에 index.php 가 나타나지 않는다.
             'root, rewrite, /'          => ['/index.php', '/', ''],
-            'root, rewrite, /b/free'    => ['/index.php', '/b/free', ''],
+            'root, rewrite, /boards/free'    => ['/index.php', '/boards/free', ''],
 
             // 문서 루트, mod_rewrite 없음: /index.php 를 그대로 적어 넣는다.
             'root, no rewrite, bare, no trailing slash' => ['/index.php', '/index.php', '/index.php'],
             'root, no rewrite, bare, trailing slash'    => ['/index.php', '/index.php/', '/index.php'],
-            'root, no rewrite, with path'                => ['/index.php', '/index.php/b/free', '/index.php'],
+            'root, no rewrite, with path'                => ['/index.php', '/index.php/boards/free', '/index.php'],
 
             // 서브디렉터리, mod_rewrite 있음.
             'subdir, rewrite, /board/'        => ['/board/public/index.php', '/board/', '/board/public'],
-            'subdir, rewrite, /board/b/free'  => ['/board/public/index.php', '/board/b/free', '/board/public'],
+            'subdir, rewrite, /board/boards/free'  => ['/board/public/index.php', '/board/boards/free', '/board/public'],
 
             // 서브디렉터리, mod_rewrite 없음.
             'subdir, no rewrite, bare, no trailing slash' => [
@@ -58,7 +58,7 @@ final class BasePathTest extends TestCase
         return [
             // 문서 루트, mod_rewrite 있음: 이미 "/" 경로로 들어오므로 리다이렉트 불필요.
             'root, rewrite, /'          => ['/index.php', '/', null],
-            'root, rewrite, /b/free'    => ['/index.php', '/b/free', null],
+            'root, rewrite, /boards/free'    => ['/index.php', '/boards/free', null],
 
             // 문서 루트, mod_rewrite 없음, 슬래시 없이: 리다이렉트 대상은 슬래시가 붙은 자기 자신.
             'root, no rewrite, bare, no trailing slash' => [
@@ -67,7 +67,7 @@ final class BasePathTest extends TestCase
             // 이미 슬래시가 붙어 있으면(=위 리다이렉트의 도착지) 리다이렉트하지 않는다 — 무한 루프 방지.
             'root, no rewrite, bare, trailing slash' => ['/index.php', '/index.php/', null],
             // 슬래시 뒤에 경로가 더 있으면 이미 올바른 요청이라 리다이렉트하지 않는다.
-            'root, no rewrite, with path' => ['/index.php', '/index.php/b/free', null],
+            'root, no rewrite, with path' => ['/index.php', '/index.php/boards/free', null],
             // 쿼리스트링은 리다이렉트 대상에 그대로 살아 있어야 한다.
             'root, no rewrite, bare, with query string' => [
                 '/index.php', '/index.php?page=2', '/index.php/?page=2',
@@ -75,7 +75,7 @@ final class BasePathTest extends TestCase
 
             // 서브디렉터리, mod_rewrite 있음: 이미 올바른 경로라 리다이렉트 불필요.
             'subdir, rewrite, /board/'        => ['/board/public/index.php', '/board/', null],
-            'subdir, rewrite, /board/b/free'  => ['/board/public/index.php', '/board/b/free', null],
+            'subdir, rewrite, /board/boards/free'  => ['/board/public/index.php', '/board/boards/free', null],
 
             // 서브디렉터리, mod_rewrite 없음, 슬래시 없이.
             'subdir, no rewrite, bare, no trailing slash' => [

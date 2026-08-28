@@ -38,9 +38,5 @@ if ($redirectTarget !== null) {
     exit;
 }
 
-$cacheDir = __DIR__ . '/../storage/cache/twig';
-if (!empty($config['debug'])) {
-    $cacheDir = null;
-}
-
-Kernel::create(new App($config), __DIR__ . '/../templates', $cacheDir, $basePath)->run();
+// 템플릿 변경이 즉시 반영되도록 운영 환경에서도 파일 캐시를 사용하지 않는다.
+Kernel::create(new App($config), __DIR__ . '/../templates', $basePath)->run();

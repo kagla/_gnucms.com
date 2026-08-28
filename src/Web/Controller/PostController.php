@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace ApiBoard\Web\Controller;
 
 use ApiBoard\App;
+use ApiBoard\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Slim\Routing\RouteContext;
 use Slim\Views\Twig;
 
 final class PostController
@@ -26,16 +28,61 @@ final class PostController
         $query = $request->getQueryParams();
 
         $board = $this->app->boardService()->get($acl, $key);
+        $boardEntity = $this->app->boardService()->getEntity($acl, $key);
         $list = $this->app->postService()->listPosts($acl, $key, $query);
 
         return Twig::fromRequest($request)->render($response, 'posts/index.html.twig', [
             'board' => $board,
             'list'  => $list,
+            'can_write' => $acl->canWrite($boardEntity),
             'query' => [
                 'q'        => isset($query['q']) ? (string) $query['q'] : null,
                 'category' => isset($query['category']) ? (string) $query['category'] : null,
             ],
         ]);
+    }
+
+    public function createForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $key = (string) $args['key'];
+        $entity = $this->app->boardService()->getEntity($acl, $key);
+        $acl->assertCanWrite($entity);
+
+        return Twig::fromRequest($request)->render($response, 'posts/create.html.twig', [
+            'board' => $this->app->boardService()->get($acl, $key),
+            'errors' => [],
+            'values' => [],
+        ]);
+    }
+
+    public function create(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $acl = $this->app->guestAcl();
+        $key = (string) $args['key'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $this->assertCsrf($input);
+
+        try {
+            $post = $this->app->postService()->create($acl, $key, $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            return Twig::fromRequest($request)->render(
+                $response->withStatus(422),
+                'posts/create.html.twig',
+                [
+                    'board' => $this->app->boardService()->get($acl, $key),
+                    'errors' => $e->details(),
+                    'values' => $input,
+                ]
+            );
+        }
+
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('posts.show', ['id' => (string) $post['id']]);
+        return $response->withHeader('Location', $url)->withStatus(303);
     }
 
     public function show(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -57,5 +104,14 @@ final class PostController
             'board'    => $board,
             'comments' => $comments,
         ]);
+    }
+
+    private function assertCsrf(array $input): void
+    {
+        $expected = isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
+        $given = isset($input['csrf_token']) && is_scalar($input['csrf_token']) ? (string) $input['csrf_token'] : '';
+        if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
+            throw DomainError::forbidden('요청을 확인할 수 없습니다. 다시 시도해 주세요.');
+        }
     }
 }

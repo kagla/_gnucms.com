@@ -16,8 +16,13 @@
 /storage/logs/*
 !/storage/logs/.gitkeep
 
-# Twig 캐시
-/storage/cache/twig/
+# Twig 캐시와 작업 중 만든 캐시 스냅샷
+/storage/cache/*
+!/storage/cache/.gitkeep
+
+# CMS 편집기에서 업로드한 이미지
+/storage/editor/*
+!/storage/editor/.gitkeep
 
 .DS_Store
 

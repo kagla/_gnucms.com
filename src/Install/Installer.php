@@ -14,8 +14,6 @@ use Throwable;
 
 final class Installer
 {
-    public const ADMIN_PASSWORD_MIN = 8;
-
     /** @var string */
     private $configPath;
 
@@ -41,11 +39,16 @@ final class Installer
         }
 
         $v = new Validator($input);
+        $appUrl = rtrim($v->requiredString('app_url', 500), '/');
+        $mailFrom = strtolower($v->requiredString('mail_from', 254));
         $dsn = $v->requiredString('dsn', 500);
-        $adminId = $v->requiredString('admin_id', 64);
-        $adminPassword = (string) ($input['admin_password'] ?? '');
-        if (mb_strlen($adminPassword) < self::ADMIN_PASSWORD_MIN) {
-            $v->fail('admin_password', self::ADMIN_PASSWORD_MIN . '자 이상이어야 합니다.');
+        if ($appUrl !== '' && filter_var($appUrl, FILTER_VALIDATE_URL) === false) {
+            $v->fail('app_url', '올바른 http 또는 https 주소를 입력해 주세요.');
+        } elseif ($appUrl !== '' && !in_array((string) parse_url($appUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
+            $v->fail('app_url', '사이트 주소는 http 또는 https로 시작해야 합니다.');
+        }
+        if ($mailFrom !== '' && filter_var($mailFrom, FILTER_VALIDATE_EMAIL) === false) {
+            $v->fail('mail_from', '올바른 이메일 주소를 입력해 주세요.');
         }
         $v->check();
 
@@ -75,15 +78,23 @@ final class Installer
         $this->ensureStorageDirectories();
 
         $config = [
+            'app' => [
+                'url' => $appUrl,
+            ],
+            'mail' => [
+                'from' => $mailFrom,
+            ],
+            'oauth' => [
+                'google' => ['client_id' => '', 'client_secret' => ''],
+                'naver' => ['client_id' => '', 'client_secret' => ''],
+                'kakao' => ['client_id' => '', 'client_secret' => ''],
+                'github' => ['client_id' => '', 'client_secret' => ''],
+            ],
             'db'   => $dbConfig,
             'auth' => [
                 'secret' => Base64Url::encode(random_bytes(32)),
                 'ttl'    => 3600,
                 'leeway' => 60,
-            ],
-            'bootstrap_admin' => [
-                'id'            => $adminId,
-                'password_hash' => password_hash($adminPassword, PASSWORD_DEFAULT),
             ],
             'uploads' => [
                 'dir'         => $this->storageDir . '/uploads',
@@ -92,6 +103,10 @@ final class Installer
                     'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'txt',
                     'hwp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
                 ],
+            ],
+            'editor' => [
+                'dir'       => $this->storageDir . '/editor',
+                'max_bytes' => 5 * 1024 * 1024,
             ],
             'cors' => [
                 'allowed_origins' => $this->parseOrigins((string) ($input['cors_origins'] ?? '')),
@@ -131,7 +146,7 @@ final class Installer
 
     private function ensureStorageDirectories(): void
     {
-        foreach ([$this->storageDir . '/uploads', $this->storageDir . '/logs'] as $directory) {
+        foreach ([$this->storageDir . '/uploads', $this->storageDir . '/editor', $this->storageDir . '/logs'] as $directory) {
             if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
                 throw DomainError::internal('디렉터리를 만들 수 없습니다: ' . $directory);
             }

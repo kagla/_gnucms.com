@@ -14,15 +14,15 @@ final class Identity
     private $sub;
 
     /** @var string|null */
-    private $name;
+    private $displayName;
 
     /** @var bool */
     private $admin;
 
-    private function __construct(?string $sub, ?string $name, bool $admin)
+    private function __construct(?string $sub, ?string $displayName, bool $admin)
     {
         $this->sub = $sub;
-        $this->name = $name;
+        $this->displayName = $displayName;
         $this->admin = $admin;
     }
 
@@ -31,9 +31,9 @@ final class Identity
         return new self(null, null, false);
     }
 
-    public static function user(string $sub, string $name, bool $admin): self
+    public static function user(string $sub, string $displayName, bool $admin): self
     {
-        return new self($sub, $name, $admin);
+        return new self($sub, $displayName, $admin);
     }
 
     public function sub(): ?string
@@ -41,9 +41,9 @@ final class Identity
         return $this->sub;
     }
 
-    public function name(): ?string
+    public function displayName(): ?string
     {
-        return $this->name;
+        return $this->displayName;
     }
 
     public function isAdmin(): bool

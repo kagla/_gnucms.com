@@ -28,11 +28,22 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 1);
 
-        $response = $this->get($app, '/b/free');
+        $response = $this->get($app, '/boards/free');
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('글 제목 1', $this->body($response));
         self::assertStringContainsString('자유게시판', $this->body($response));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testLegacyBoardUrlRedirectsToClearCanonicalUrl(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+
+        $response = $this->get($app, '/b/free', ['page' => '2']);
+
+        self::assertSame(301, $response->getStatusCode());
+        self::assertSame('/boards/free?page=2', $response->getHeaderLine('Location'));
     }
 
     /** @dataProvider connectionProvider */
@@ -41,7 +52,7 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 3);
 
-        $body = $this->body($this->get($app, '/b/free', ['page' => '2']));
+        $body = $this->body($this->get($app, '/boards/free', ['page' => '2']));
 
         self::assertStringContainsString('글 제목 1', $body);
         self::assertStringNotContainsString('글 제목 3', $body);
@@ -53,7 +64,7 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 3);
 
-        $body = $this->body($this->get($app, '/b/free', ['q' => '제목 2']));
+        $body = $this->body($this->get($app, '/boards/free', ['q' => '제목 2']));
 
         self::assertStringContainsString('글 제목 2', $body);
         self::assertStringNotContainsString('글 제목 1', $body);
@@ -78,7 +89,7 @@ final class PostListTest extends WebTestCase
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
         $app->postService()->create($acl, 'free', ['title' => 'Hello World', 'content' => '내용']);
 
-        $body = $this->body($this->get($app, '/b/free', ['q' => 'hello']));
+        $body = $this->body($this->get($app, '/boards/free', ['q' => 'hello']));
 
         self::assertStringContainsString('Hello World', $body);
     }
@@ -95,7 +106,7 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 1);
 
-        $response = $this->get($app, '/b/free', ['q' => ['x']]);
+        $response = $this->get($app, '/boards/free', ['q' => ['x']]);
 
         self::assertSame(422, $response->getStatusCode());
     }
@@ -113,7 +124,7 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 1);
 
-        $response = $this->get($app, '/b/free', ['include_deleted' => ['x']]);
+        $response = $this->get($app, '/boards/free', ['include_deleted' => ['x']]);
 
         self::assertSame(200, $response->getStatusCode());
     }
@@ -122,7 +133,7 @@ final class PostListTest extends WebTestCase
     public function testUnknownBoardRendersNotFoundPage(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $response = $this->get($app, '/b/없는게시판');
+        $response = $this->get($app, '/boards/없는게시판');
 
         self::assertSame(404, $response->getStatusCode());
     }
@@ -137,9 +148,21 @@ final class PostListTest extends WebTestCase
             'perm_read' => 'admin',
         ]);
 
-        $response = $this->get($app, '/b/secret');
+        $response = $this->get($app, '/boards/secret');
 
         self::assertSame(401, $response->getStatusCode());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testGuestCannotOpenMemberWriteForm(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
+
+        $response = $this->get($app, '/boards/free/write');
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertStringContainsString('로그인이 필요합니다', $this->body($response));
     }
 
     /**
@@ -159,7 +182,7 @@ final class PostListTest extends WebTestCase
             $app->postService()->create($acl, 'free', ['title' => '글 ' . $i, 'content' => '내용 ' . $i]);
         }
 
-        $body = $this->body($this->get($app, '/b/free'));
+        $body = $this->body($this->get($app, '/boards/free'));
 
         // total_pages 는 40 이지만, 창(앞뒤 5개) + 첫/끝 페이지만 링크가 되어야 한다.
         // 예전처럼 1..total_pages 를 통째로 그렸다면 "?page=" 가 40번 가까이 나온다.

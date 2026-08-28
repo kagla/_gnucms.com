@@ -115,6 +115,19 @@ final class PostRepository
         return array_map([$this, 'hydrate'], $rows);
     }
 
+    /** 메인 화면에 표시할 게시판별 최신 글을 가져온다. */
+    public function latest(int $boardId, int $limit = 5): array
+    {
+        $limit = max(1, min(10, $limit));
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            . ' WHERE board_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ' . $limit,
+            [$boardId]
+        );
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
     public function create(array $data): int
     {
         $now = Clock::now();

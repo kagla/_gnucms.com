@@ -21,6 +21,7 @@ final class BoardListTest extends WebTestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('자유게시판', $this->body($response));
+        self::assertStringContainsString('/boards/free', $this->body($response));
     }
 
     /** @dataProvider connectionProvider */
@@ -44,5 +45,36 @@ final class BoardListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
 
         self::assertStringContainsString('게시판이 없습니다', $this->body($this->get($app, '/')));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testHomeExplainsFoundationCommunityAndOffersThemeToggle(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $body = $this->body($this->get($app, '/'));
+
+        self::assertStringContainsString('가볍게 시작하고, 오래 이어지는 공간', $body);
+        self::assertStringContainsString('기초 커뮤니티', $body);
+        self::assertStringContainsString('class="theme-toggle"', $body);
+        self::assertStringContainsString('aboard-theme', $body);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testLatestFivePostsAreShownOnHome(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+
+        for ($i = 1; $i <= 6; $i++) {
+            $app->postService()->create($acl, 'free', ['title' => '홈 최신글 ' . $i, 'content' => '내용']);
+        }
+
+        $body = $this->body($this->get($app, '/'));
+
+        self::assertStringContainsString('홈 최신글 6', $body);
+        self::assertStringContainsString('홈 최신글 2', $body);
+        self::assertStringNotContainsString('홈 최신글 1', $body);
+        self::assertStringContainsString('aboard · 가볍게 시작하는 기초 커뮤니티', $body);
     }
 }

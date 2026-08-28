@@ -79,7 +79,7 @@ final class CommentService
             $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
         } else {
             $data['author_id'] = $identity->sub();
-            $data['author_name'] = (string) $identity->name();
+            $data['author_name'] = (string) $identity->displayName();
             $data['guest_password'] = null;
         }
 

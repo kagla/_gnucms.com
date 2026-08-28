@@ -71,6 +71,19 @@ final class PostService
         ];
     }
 
+    /** 메인 화면용으로 게시판의 최신 글 요약을 제한된 개수만 돌려준다. */
+    public function latestPosts(Acl $acl, string $boardKey, int $limit = 5): array
+    {
+        $board = $this->boards->getEntity($acl, $boardKey);
+        $summaries = [];
+
+        foreach ($this->posts->latest((int) $board['id'], $limit) as $row) {
+            $summaries[] = $this->summary($row);
+        }
+
+        return $summaries;
+    }
+
     /** @return array{post: array, board: array} */
     public function loadForRead(Acl $acl, int $id, ?string $password): array
     {
@@ -129,7 +142,7 @@ final class PostService
         } else {
             // 로그인 사용자는 요청의 author_name 을 무시한다. 사칭 방지.
             $data['author_id'] = $identity->sub();
-            $data['author_name'] = (string) $identity->name();
+            $data['author_name'] = (string) $identity->displayName();
             $data['guest_password'] = null;
         }
 

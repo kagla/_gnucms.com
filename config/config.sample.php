@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 return [
+    'app' => [
+        'url' => 'https://example.com',
+    ],
+
+    'mail' => [
+        'from' => 'no-reply@example.com',
+    ],
+
+    // 사용할 프로바이더만 client_id 와 client_secret 을 채운다.
+    // 각 콜백 주소: https://example.com/auth/{provider}/callback
+    'oauth' => [
+        'google' => ['client_id' => '', 'client_secret' => ''],
+        'naver' => ['client_id' => '', 'client_secret' => ''],
+        'kakao' => ['client_id' => '', 'client_secret' => ''],
+        'github' => ['client_id' => '', 'client_secret' => ''],
+    ],
+
     // DSN 은 sqlite: / mysql: / pgsql: 중 하나로 시작한다.
     'db' => [
         'dsn'      => 'sqlite:' . __DIR__ . '/../storage/board.sqlite',
@@ -30,6 +47,11 @@ return [
             'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'txt',
             'hwp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
         ],
+    ],
+
+    'editor' => [
+        'dir'       => __DIR__ . '/../storage/editor',
+        'max_bytes' => 5 * 1024 * 1024,
     ],
 
     // 브라우저가 직접 호출하는 호스트 앱의 출처를 정확히 적는다.

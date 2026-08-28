@@ -12,15 +12,15 @@ use ApiBoard\Tests\Support\DatabaseTestCase;
 final class SchemaTest extends DatabaseTestCase
 {
     #[DataProvider('connectionProvider')]
-    public function testCreatesAllThreeTables(array $config): void
+    public function testCreatesAllTables(array $config): void
     {
         $db = $this->freshDatabase($config);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
-                0,
+                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 5 : 0),
                 (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table))['c'],
-                $table . ' 테이블이 비어 있는 채로 존재해야 한다'
+                $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );
         }
     }
@@ -78,6 +78,34 @@ final class SchemaTest extends DatabaseTestCase
 
         $this->expectException(\ApiBoard\Error\DomainError::class);
         $db->insert('boards', $this->boardRow('dup'));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAccountMigrationRenamesLegacyNameWithoutLosingItsValue(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        if ($db->dialect()->name() === 'mysql') {
+            $db->execute('ALTER TABLE users CHANGE display_name name VARCHAR(100) NOT NULL');
+        } else {
+            $db->execute('ALTER TABLE users RENAME COLUMN display_name TO name');
+        }
+
+        $id = $db->insert('users', [
+            'email' => 'legacy@example.com',
+            'email_verified' => 1,
+            'password_hash' => null,
+            'name' => '기존 표시 이름',
+            'is_admin' => 0,
+            'status' => 'active',
+            'session_epoch' => 0,
+            'created_at' => '2026-08-28 01:02:03',
+            'updated_at' => '2026-08-28 01:02:03',
+        ]);
+
+        (new Schema($db))->migrateAccounts();
+
+        $user = $db->selectOne('SELECT display_name FROM users WHERE id = ?', [$id]);
+        self::assertSame('기존 표시 이름', $user['display_name']);
     }
 
     private function boardRow(string $key): array

@@ -26,7 +26,7 @@ final class AttachmentDownloadTest extends WebTestCase
             'attachments' => [$descriptor],
         ]);
 
-        $response = $this->get($app, '/p/' . $post['id'] . '/files/0');
+        $response = $this->get($app, '/posts/' . $post['id'] . '/files/0');
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('안녕하세요', $this->body($response));
@@ -48,7 +48,18 @@ final class AttachmentDownloadTest extends WebTestCase
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
         $post = $app->postService()->create($acl, 'free', ['title' => '글', 'content' => '본문']);
 
-        self::assertSame(404, $this->get($app, '/p/' . $post['id'] . '/files/7')->getStatusCode());
+        self::assertSame(404, $this->get($app, '/posts/' . $post['id'] . '/files/7')->getStatusCode());
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testLegacyAttachmentUrlRedirectsPermanentlyToCanonicalUrl(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+
+        $response = $this->get($app, '/p/2/files/0');
+
+        self::assertSame(301, $response->getStatusCode());
+        self::assertSame('/posts/2/files/0', $response->getHeaderLine('Location'));
     }
 
     /**
@@ -76,7 +87,7 @@ final class AttachmentDownloadTest extends WebTestCase
             'attachments' => [$descriptor],
         ]);
 
-        self::assertSame(403, $this->get($app, '/p/' . $post['id'] . '/files/0')->getStatusCode());
+        self::assertSame(403, $this->get($app, '/posts/' . $post['id'] . '/files/0')->getStatusCode());
     }
 
     /**
@@ -104,7 +115,7 @@ final class AttachmentDownloadTest extends WebTestCase
             'attachments' => [$descriptor],
         ]);
 
-        self::assertSame(401, $this->get($app, '/p/' . $post['id'] . '/files/0')->getStatusCode());
+        self::assertSame(401, $this->get($app, '/posts/' . $post['id'] . '/files/0')->getStatusCode());
     }
 
     protected function tearDown(): void
