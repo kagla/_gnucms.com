@@ -16,6 +16,7 @@ final class CmsService
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
         'registration_enabled' => '1',
+        'theme' => 'default',
     ];
 
     private CmsRepository $cms;
@@ -137,12 +138,17 @@ final class CmsService
     {
         $acl->assertGlobalAdmin();
         $v = new Validator($input);
+        $theme = strtolower($v->requiredString('theme', 50));
+        if ($theme !== '' && preg_match('/^[a-z0-9][a-z0-9_-]*$/D', $theme) !== 1) {
+            $v->fail('theme', '템플릿 이름이 올바르지 않습니다.');
+        }
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
             'home_title' => $v->requiredString('home_title', 120),
             'home_intro' => $v->requiredString('home_intro', 500),
             'registration_enabled' => $v->bool('registration_enabled', false) ? '1' : '0',
+            'theme' => $theme,
         ];
         $v->check();
         $this->cms->saveSettings($settings);

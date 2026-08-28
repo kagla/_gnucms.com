@@ -99,6 +99,7 @@ final class Schema
                 $this->db->execute($this->expand($sql));
             }
         }
+        $this->ensureSiteSetting('theme', 'default');
 
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('pages'));
@@ -307,7 +308,23 @@ final class Schema
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_title', '가볍게 시작하고, 오래 이어지는 공간', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_intro', '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('registration_enabled', '1', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'default', '2026-01-01 00:00:00')",
         ];
+    }
+
+    private function ensureSiteSetting(string $key, string $value): void
+    {
+        $existing = $this->db->selectOne(
+            'SELECT setting_key FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+            [$key]
+        );
+        if ($existing === null) {
+            $this->db->execute(
+                'INSERT INTO ' . $this->db->q('site_settings')
+                . ' (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
+                [$key, $value, '2026-08-28 00:00:00']
+            );
+        }
     }
 
     private function pageStatements(): array

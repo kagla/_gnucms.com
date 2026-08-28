@@ -57,7 +57,21 @@ final class CmsPageTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com', 'password' => 'owner-password-123',
         ]);
 
-        self::assertSame(200, $this->get($app, '/admin/settings')->getStatusCode());
+        $settingsPage = $this->get($app, '/admin/settings');
+        self::assertSame(200, $settingsPage->getStatusCode());
+        self::assertStringContainsString('name="theme"', $this->body($settingsPage));
+        self::assertStringContainsString('default (기본)', $this->body($settingsPage));
+        $settingsSaved = $this->post($app, '/admin/settings', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'site_name' => 'aboard',
+            'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
+            'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
+            'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
+            'theme' => 'default',
+            'registration_enabled' => '1',
+        ]);
+        self::assertSame(303, $settingsSaved->getStatusCode());
+        self::assertSame('default', $app->cms()->settings()['theme']);
         $documents = $this->get($app, '/admin/content');
         self::assertSame(200, $documents->getStatusCode());
         self::assertStringContainsString('<h1>내용 관리</h1>', $this->body($documents));

@@ -18,7 +18,7 @@ final class SchemaTest extends DatabaseTestCase
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
-                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 5 : 0),
+                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 6 : 0),
                 (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table))['c'],
                 $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );
@@ -106,6 +106,21 @@ final class SchemaTest extends DatabaseTestCase
 
         $user = $db->selectOne('SELECT display_name FROM users WHERE id = ?', [$id]);
         self::assertSame('기존 표시 이름', $user['display_name']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCmsMigrationAddsDefaultThemeToExistingSettings(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->delete('site_settings', 'setting_key = :key', ['key' => 'theme']);
+
+        (new Schema($db))->migrateCms();
+
+        $setting = $db->selectOne(
+            'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+            ['theme']
+        );
+        self::assertSame('default', $setting['setting_value']);
     }
 
     private function boardRow(string $key): array

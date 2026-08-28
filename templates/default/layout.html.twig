@@ -4,6 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f7f8fb">
 <title>{% block title %}{{ site.site_name }}{% endblock %}</title>
 {% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
+<link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
 <script>
 try{var savedTheme=localStorage.getItem('aboard-theme');if(savedTheme){document.documentElement.dataset.theme=savedTheme}if(localStorage.getItem('aboard-admin-sidebar')==='collapsed'){document.documentElement.dataset.adminSidebar='collapsed'}}catch(e){}
 </script>
