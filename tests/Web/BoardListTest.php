@@ -22,7 +22,9 @@ final class BoardListTest extends WebTestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('자유게시판', $this->body($response));
         self::assertStringContainsString('/boards/free', $this->body($response));
-        self::assertStringContainsString('/themes/default/theme.css', $this->body($response));
+        self::assertStringContainsString('/themes/codex-preline/theme.css', $this->body($response));
+        self::assertStringContainsString('/vendor/preline/preline.js', $this->body($response));
+        self::assertStringContainsString('theme-codex-preline', $this->body($response));
     }
 
     /** @dataProvider connectionProvider */

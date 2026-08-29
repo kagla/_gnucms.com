@@ -120,7 +120,7 @@ final class SchemaTest extends DatabaseTestCase
             'SELECT setting_value FROM site_settings WHERE setting_key = ?',
             ['theme']
         );
-        self::assertSame('default', $setting['setting_value']);
+        self::assertSame('codex-preline', $setting['setting_value']);
     }
 
     private function boardRow(string $key): array

@@ -44,7 +44,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '4';
+    public const VERSION = '5';
 
     /**
      * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
@@ -77,6 +77,7 @@ final class Schema
     {
         $this->migrateAccounts();
         $this->migrateCms();
+        $this->migrateDefaultTheme();
         $this->migrateBoards();
         $this->migrateEditorImages();
         $this->migrateNotifications();
@@ -200,7 +201,7 @@ final class Schema
                 $this->db->execute($this->expand($sql));
             }
         }
-        $this->ensureSiteSetting('theme', 'default');
+        $this->ensureSiteSetting('theme', 'codex-preline');
 
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('pages'));
@@ -413,8 +414,18 @@ final class Schema
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_title', '가볍게 시작하고, 오래 이어지는 공간', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_intro', '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('registration_enabled', '1', '2026-01-01 00:00:00')",
-            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'default', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'codex-preline', '2026-01-01 00:00:00')",
         ];
+    }
+
+    /** 기존 기본 테마 사용자만 새 기본 디자인으로 옮기고, 직접 고른 테마는 보존한다. */
+    private function migrateDefaultTheme(): void
+    {
+        $this->db->execute(
+            'UPDATE ' . $this->db->q('site_settings')
+            . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ? AND setting_value = ?',
+            ['codex-preline', '2026-08-28 00:00:00', 'theme', 'default']
+        );
     }
 
     private function ensureSiteSetting(string $key, string $value): void

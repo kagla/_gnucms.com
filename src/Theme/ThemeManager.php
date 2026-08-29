@@ -89,9 +89,11 @@ final class ThemeManager
         $file = $this->assetRoot . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . $path;
         $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
         $url = rtrim($basePath, '/') . '/themes/' . rawurlencode($theme) . '/' . $encodedPath;
-        $modifiedAt = is_file($file) ? filemtime($file) : false;
+        $version = is_file($file) ? hash_file('sha256', $file) : false;
 
-        return $modifiedAt === false ? $url : $url . '?v=' . $modifiedAt;
+        // 초 단위 수정 시각은 짧은 시간에 같은 파일을 여러 번 고치면 값이 같을 수 있다.
+        // 내용 해시를 쓰면 브라우저나 프록시가 이전 CSS/JS를 재사용하지 않는다.
+        return $version === false ? $url : $url . '?v=' . substr($version, 0, 12);
     }
 
     private function isAvailable(string $theme): bool

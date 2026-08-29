@@ -16,7 +16,7 @@ final class CmsService
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
         'registration_enabled' => '1',
-        'theme' => 'default',
+        'theme' => 'codex-preline',
     ];
 
     private CmsRepository $cms;

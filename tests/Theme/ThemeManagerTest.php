@@ -57,12 +57,12 @@ final class ThemeManagerTest extends TestCase
 
         self::assertSame(
             '/community/themes/modern/theme.css?v='
-                . filemtime($this->root . '/public/themes/modern/theme.css'),
+                . substr(hash_file('sha256', $this->root . '/public/themes/modern/theme.css'), 0, 12),
             $themes->assetUrl('theme.css', '/community')
         );
         self::assertSame(
             '/community/themes/default/logo.png?v='
-                . filemtime($this->root . '/public/themes/default/logo.png'),
+                . substr(hash_file('sha256', $this->root . '/public/themes/default/logo.png'), 0, 12),
             $themes->assetUrl('logo.png', '/community')
         );
     }
