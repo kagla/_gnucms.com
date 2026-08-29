@@ -1,0 +1,29 @@
+{% import '_icons.html.twig' as ico %}
+{# 목록형: 표. 정보 밀도가 가장 높다. 좁은 화면에서는 카드로 접힌다. #}
+<section class="card">
+  <div class="table-wrap">
+    <table class="table table-zebra">
+      <thead>
+        <tr>
+          {% if board.use_category %}<th>분류</th>{% endif %}
+          <th>제목</th><th>글쓴이</th><th>날짜</th><th class="right">조회</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for post in list.data %}
+        <tr>
+          {% if board.use_category %}<td data-label="분류">{% if post.category %}<span class="badge badge-ghost badge-sm">{{ post.category }}</span>{% else %}<span class="cell-sub">—</span>{% endif %}</td>{% endif %}
+          <td data-label="제목">
+            {% if post.is_secret %}<span class="post-row-lock" title="비밀글" aria-label="비밀글">{{ ico.i('lock', 12) }}</span>{% endif %}
+            <a class="cell-title link link-hover" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }} {% include 'posts/_count.html.twig' %}</a>
+            {% if post.file_count > 0 %}<span class="post-row-clip" title="첨부파일 있음" aria-label="첨부파일 있음">{{ ico.i('clip', 12) }}</span>{% endif %}
+          </td>
+          <td data-label="글쓴이">{{ post.author_name }}</td>
+          <td data-label="날짜"><time datetime="{{ post.created_at }}">{{ post.created_at|date('Y.m.d') }}</time></td>
+          <td data-label="조회" class="right">{{ post.view_count }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

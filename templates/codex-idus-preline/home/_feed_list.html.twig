@@ -1,0 +1,14 @@
+{% import '_icons.html.twig' as ico %}
+{# 목록형: 제목과 날짜만. 가장 조밀하다. 공지·자료 게시판에 맞는다. #}
+<ul class="list card feed-lines">
+  {% for post in board.latest_posts %}
+    <li class="list-row">
+      {% if post.is_notice %}<span class="badge badge-primary badge-soft badge-sm">공지</span>
+      {% elseif post.category %}<span class="badge badge-ghost badge-sm">{{ post.category }}</span>{% endif %}
+      <a class="feed-line-title" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }}</a>
+      {% include 'posts/_count.html.twig' %}
+      {% if post.is_secret %}<span class="feed-line-lock" title="비밀글" aria-label="비밀글">{{ ico.i('lock', 12) }}</span>{% endif %}
+      <time class="feed-line-date" datetime="{{ post.created_at }}">{{ post.created_at|date('m.d') }}</time>
+    </li>
+  {% endfor %}
+</ul>

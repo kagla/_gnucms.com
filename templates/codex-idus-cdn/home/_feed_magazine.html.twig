@@ -1,0 +1,15 @@
+{# 매거진형: 작은 썸네일과 발췌문. 읽을거리 중심 게시판에 맞는다. #}
+<ul class="list card post-rows feed-rows">
+  {% for post in board.latest_posts|slice(0, 3) %}
+    <li class="list-row">
+      <a class="post-row-thumb" href="{{ url_for('posts.show', {'id': post.id}) }}" tabindex="-1" aria-hidden="true">
+        {% include 'posts/_thumb.html.twig' %}
+      </a>
+      <div class="post-row-body">
+        <a class="post-row-title" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }} {% include 'posts/_count.html.twig' %}</a>
+        {% if post.excerpt|default(null) %}<p class="post-row-excerpt">{{ post.excerpt }}</p>{% endif %}
+        {% include 'posts/_meta.html.twig' %}
+      </div>
+    </li>
+  {% endfor %}
+</ul>

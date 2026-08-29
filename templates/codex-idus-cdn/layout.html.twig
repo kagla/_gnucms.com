@@ -1,0 +1,307 @@
+{% import '_icons.html.twig' as ico %}
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1d232a" media="(prefers-color-scheme: dark)">
+<title>{% block title %}{{ site.site_name }}{% endblock %}</title>
+{% block meta_description %}<meta name="description" content="{{ site.site_tagline }}">{% endblock %}
+<script>
+(function(){
+  var d=document.documentElement,t=null;
+  try{t=localStorage.getItem('{{ GNUCMS_ID }}-theme')}catch(e){}
+  if(t==='light'||t==='dark'){d.setAttribute('data-theme',t)}
+  var dark=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+  d.setAttribute('data-theme-mode',dark?'dark':'light');
+  try{if(localStorage.getItem('{{ GNUCMS_ID }}-admin-sidebar')==='collapsed'){d.dataset.adminSidebar='collapsed'}}catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="{{ theme_asset('theme.css') }}">
+</head>
+<body class="theme-codex-idus-cdn {% block body_class %}{% endblock %}" data-section="{% block nav_section %}{% endblock %}">
+<a class="skip-link btn btn-primary btn-sm" href="#main">본문 바로가기</a>
+{% block chrome %}
+<div class="drawer">
+  <input id="nav-drawer" type="checkbox" class="drawer-toggle" aria-label="전체 메뉴 열기">
+  <div class="drawer-content">
+
+    {% block site_header %}
+    <header class="site-header">
+      <div class="utility-bar">
+        <div class="wrap utility-inner">
+          <span>좋아하는 이야기를 발견하는 공간</span>
+          <nav aria-label="사용자 메뉴">
+            {% if current_user.is_guest %}
+              <a href="{{ url_for('auth.login') }}">로그인</a>
+              {% if registration_available %}<a href="{{ url_for('auth.register') }}">회원가입</a>{% endif %}
+            {% else %}
+              <a href="{{ url_for('notifications.index') }}">알림{% if unread_notifications > 0 %} {{ unread_notifications }}{% endif %}</a>
+            {% endif %}
+            {% if not current_user.is_guest and current_user.is_admin %}<a href="{{ url_for('admin.index') }}">관리자</a>{% endif %}
+          </nav>
+        </div>
+      </div>
+      <div class="navbar wrap">
+        <div class="navbar-start">
+          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기">{{ ico.i('menu', 20) }}</label>
+          <a class="brand" href="{{ url_for('boards.index') }}" aria-label="{{ site.site_name }} 홈">
+            <span class="brand-logo" aria-hidden="true">{{ ico.i('brand', 18) }}</span>
+            <span class="brand-name">{{ site.site_name }}</span>
+          </a>
+        </div>
+
+        <div class="navbar-center">{% block header_search %}{% endblock %}</div>
+
+        <div class="navbar-end">
+          {% if current_user.is_guest %}
+            <a class="btn btn-ghost btn-sm hide-sm" href="{{ url_for('auth.login') }}">로그인</a>
+            {% if registration_available %}<a class="btn btn-primary btn-sm hide-sm" href="{{ url_for('auth.register') }}">회원가입</a>{% endif %}
+          {% else %}
+            {% if current_user.is_admin %}
+              <a class="btn btn-ghost btn-sm admin-link hide-sm" href="{{ url_for('admin.index') }}">{{ ico.i('cog', 18) }} <span class="admin-link-text">관리</span></a>
+            {% endif %}
+            <a class="btn btn-ghost btn-circle bell-link" href="{{ url_for('notifications.index') }}"
+               aria-label="알림{% if unread_notifications > 0 %} {{ unread_notifications }}개{% endif %}">
+              {{ ico.i('bell', 19) }}
+              {% if unread_notifications > 0 %}<span class="bell-dot" aria-hidden="true">{{ unread_notifications > 99 ? '99+' : unread_notifications }}</span>{% endif %}
+            </a>
+            <div class="dropdown dropdown-end hide-sm">
+              <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar avatar-placeholder" aria-label="{{ current_user.display_name }} 메뉴">
+                <div class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}"><span>{{ current_user.display_name|slice(0, 1)|upper }}</span></div>
+              </div>
+              <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg user-menu">
+                <li class="menu-title">{{ current_user.display_name }}</li>
+                <li>
+                  <form method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit">{{ ico.i('logout', 17) }} 로그아웃</button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+          {% endif %}
+
+          <button class="btn btn-ghost btn-circle theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
+            <span class="theme-ico theme-ico-light">{{ ico.i('sun', 19) }}</span>
+            <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 19) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="header-tabs">
+        <div class="wrap">
+          <nav class="tabs tabs-border" aria-label="주요 메뉴">
+            <a class="tab category-tab{% if block('nav_section')|trim == 'home' %} tab-active{% endif %}" href="{{ url_for('boards.index') }}"{% if block('nav_section')|trim == 'home' %} aria-current="page"{% endif %}>{{ ico.i('menu', 16) }} 전체 게시판</a>
+            {% block extra_tabs %}{% endblock %}
+            {% for item in site_menu %}<a class="tab" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
+          </nav>
+        </div>
+      </div>
+    </header>
+    {% endblock %}
+
+    {% block subnav %}{% endblock %}
+
+    <main class="wrap main-area" id="main">{% block body %}{% endblock %}</main>
+
+    {% block site_footer %}
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <aside class="footer-brand">
+          <span class="brand-logo brand-logo-sm" aria-hidden="true">{{ ico.i('brand', 15) }}</span>
+          <div>
+            <strong>{{ site.site_name }}</strong>
+            <p>{{ site.site_tagline }}</p>
+          </div>
+        </aside>
+        <nav class="footer-nav" aria-label="사이트 메뉴">
+          <a class="link link-hover" href="{{ url_for('boards.index') }}">홈</a>
+          {% for item in site_menu %}<a class="link link-hover" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
+          {% if legal_documents %}
+            <a class="link link-hover" href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
+            <a class="link link-hover" href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+          {% endif %}
+        </nav>
+      </div>
+    </footer>
+    {% endblock %}
+
+    <nav class="dock" aria-label="빠른 이동">
+      <a href="{{ url_for('boards.index') }}"{% if block('nav_section')|trim == 'home' %} class="dock-active" aria-current="page"{% endif %}>
+        {{ ico.i('home', 21) }}<span class="dock-label">홈</span>
+      </a>
+      <label for="nav-drawer" role="button" tabindex="0">
+        {{ ico.i('menu', 21) }}<span class="dock-label">메뉴</span>
+      </label>
+      {% if current_user.is_guest %}
+        <a href="{{ url_for('auth.login') }}">{{ ico.i('user', 21) }}<span class="dock-label">로그인</span></a>
+      {% else %}
+        <a href="{{ current_user.is_admin ? url_for('admin.index') : url_for('boards.index') }}">
+          {{ ico.i(current_user.is_admin ? 'cog' : 'user', 21) }}<span class="dock-label">{{ current_user.is_admin ? '관리' : '내 계정' }}</span>
+        </a>
+      {% endif %}
+    </nav>
+  </div>
+
+  <div class="drawer-side">
+    <label for="nav-drawer" class="drawer-overlay" aria-label="메뉴 닫기"></label>
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <span class="brand">
+          <span class="brand-logo" aria-hidden="true">{{ ico.i('brand', 18) }}</span>
+          <span class="brand-name">{{ site.site_name }}</span>
+        </span>
+        <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기">{{ ico.i('close', 18) }}</label>
+      </div>
+
+      {% if not current_user.is_guest %}
+        <div class="drawer-user">
+          <div class="avatar avatar-placeholder">
+            <div class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}"><span>{{ current_user.display_name|slice(0, 1)|upper }}</span></div>
+          </div>
+          <div>
+            <strong>{{ current_user.display_name }}</strong>
+            <span class="badge badge-soft badge-sm">{{ current_user.is_admin ? '사이트 소유자' : '회원' }}</span>
+          </div>
+        </div>
+      {% endif %}
+
+      <ul class="menu">
+        <li class="menu-title">메뉴</li>
+        <li><a href="{{ url_for('boards.index') }}">{{ ico.i('home', 18) }} 홈</a></li>
+        {% for item in site_menu %}<li><a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ ico.i('document', 18) }} {{ item.title }}</a></li>{% endfor %}
+        {% if not current_user.is_guest %}
+          <li><a href="{{ url_for('notifications.index') }}">{{ ico.i('bell', 18) }} 알림{% if unread_notifications > 0 %} <span class="badge badge-primary badge-sm">{{ unread_notifications }}</span>{% endif %}</a></li>
+        {% endif %}
+        {% if not current_user.is_guest and current_user.is_admin %}<li><a href="{{ url_for('admin.index') }}">{{ ico.i('cog', 18) }} 관리 콘솔</a></li>{% endif %}
+      </ul>
+
+      <div class="drawer-theme">
+        <span class="drawer-theme-label">화면 테마</span>
+        <button class="btn btn-outline btn-block theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
+          <span class="theme-ico theme-ico-light">{{ ico.i('sun', 16) }} 라이트 모드</span>
+          <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 16) }} 다크 모드</span>
+        </button>
+      </div>
+
+      <div class="drawer-foot">
+        {% if current_user.is_guest %}
+          <a class="btn btn-outline btn-block" href="{{ url_for('auth.login') }}">로그인</a>
+          {% if registration_available %}<a class="btn btn-primary btn-block" href="{{ url_for('auth.register') }}">회원가입</a>{% endif %}
+        {% else %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-outline btn-block" type="submit">{{ ico.i('logout', 16) }} 로그아웃</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+<button class="btn btn-circle to-top" type="button" hidden aria-label="맨 위로 이동">{{ ico.i('arrow-up', 18) }}</button>
+
+<script>
+(function(){
+  var root=document.documentElement,mq=window.matchMedia('(prefers-color-scheme: dark)');
+  function stored(){try{return localStorage.getItem('{{ GNUCMS_ID }}-theme')}catch(e){return null}}
+  /* 저장된 값이 없으면 첫 방문 동안만 OS 설정을 따르고,
+     한 번이라도 아이콘을 누르면 그때부터 라이트/다크로 고정된다. */
+  function isDark(){var t=stored();return t==='dark'||(t!=='light'&&mq.matches)}
+  function apply(){
+    var t=stored(),dark=isDark();
+    if(t==='light'||t==='dark'){root.setAttribute('data-theme',t)}else{root.removeAttribute('data-theme')}
+    root.setAttribute('data-theme-mode',dark?'dark':'light');
+    var btns=document.querySelectorAll('[data-theme-toggle]');
+    for(var i=0;i<btns.length;i++){
+      var label=dark?'라이트 모드로 전환':'다크 모드로 전환';
+      btns[i].setAttribute('aria-label',label);
+      btns[i].setAttribute('aria-pressed',dark?'true':'false');
+      btns[i].title=label;
+    }
+    document.dispatchEvent(new CustomEvent('{{ GNUCMS_ID }}:theme',{detail:{dark:dark}}));
+  }
+  var toggles=document.querySelectorAll('[data-theme-toggle]');
+  for(var j=0;j<toggles.length;j++){
+    toggles[j].addEventListener('click',function(){
+      var next=isDark()?'light':'dark';
+      try{localStorage.setItem('{{ GNUCMS_ID }}-theme',next)}catch(e){}
+      apply();
+    });
+  }
+  if(!stored()){
+    if(mq.addEventListener){mq.addEventListener('change',apply)}else if(mq.addListener){mq.addListener(apply)}
+  }
+  apply();
+
+  var drawer=document.getElementById('nav-drawer');
+  if(drawer){
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&drawer.checked){drawer.checked=false}});
+    drawer.addEventListener('change',function(){document.body.classList.toggle('is-locked',drawer.checked)});
+  }
+
+  var toTop=document.querySelector('.to-top'),tick=false;
+  if(toTop){
+    function upd(){toTop.hidden=window.scrollY<560;tick=false}
+    window.addEventListener('scroll',function(){if(!tick){tick=true;requestAnimationFrame(upd)}},{passive:true});
+    toTop.addEventListener('click',function(){
+      window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    });
+    upd();
+  }
+
+  /* 본문 사진은 축소본이다. 누르면 원본을 덮개로 띄운다.
+     스크립트가 없어도 링크가 새 창으로 원본을 열어 주므로 기능은 남는다. */
+  var lens=null,lensImg=null,lastFocus=null;
+  function closeLens(){
+    if(!lens){return}
+    lens.hidden=true;
+    lensImg.removeAttribute('src');
+    document.body.classList.remove('is-locked');
+    if(lastFocus){lastFocus.focus()}
+  }
+  function openLens(href,alt){
+    if(!lens){
+      lens=document.createElement('div');
+      lens.className='lens';
+      lens.setAttribute('role','dialog');
+      lens.setAttribute('aria-modal','true');
+      lens.setAttribute('aria-label','원본 사진');
+      lens.innerHTML='<button class="lens-close" type="button" aria-label="닫기">&times;</button><img class="lens-img" alt="">';
+      lensImg=lens.querySelector('.lens-img');
+      lens.addEventListener('click',function(e){
+        if(e.target===lens||e.target.classList.contains('lens-close')){closeLens()}
+      });
+      document.body.appendChild(lens);
+    }
+    lensImg.alt=alt||'';
+    lensImg.src=href;
+    lens.hidden=false;
+    document.body.classList.add('is-locked');
+    lens.querySelector('.lens-close').focus();
+  }
+  document.addEventListener('click',function(e){
+    var link=e.target.closest?e.target.closest('a[data-zoom]'):null;
+    if(!link||e.metaKey||e.ctrlKey||e.shiftKey||e.button){return}
+    e.preventDefault();
+    lastFocus=link;
+    openLens(link.getAttribute('href'),(link.querySelector('img')||{}).alt);
+  });
+
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&lens&&!lens.hidden){closeLens();return}
+    if(e.key!=='/'||e.metaKey||e.ctrlKey||e.altKey){return}
+    var t=(e.target.tagName||'').toLowerCase();
+    if(t==='input'||t==='textarea'||t==='select'||e.target.isContentEditable){return}
+    var s=document.querySelector('[data-search-input]');
+    if(s){e.preventDefault();s.focus();s.select()}
+  });
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

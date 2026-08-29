@@ -1,0 +1,15 @@
+{% import '_icons.html.twig' as ico %}
+{# 갤러리형: 커버 카드 캐러셀. 사진 게시판에 맞는다. #}
+<div class="carousel">
+  {% for post in board.latest_posts %}
+    <div class="carousel-item">
+      <a class="card card-compact post-card" href="{{ url_for('posts.show', {'id': post.id}) }}">
+        {% include 'posts/_thumb.html.twig' %}
+        <div class="card-body">
+          <h3 class="card-title">{{ post.title }} {% include 'posts/_count.html.twig' %}</h3>
+          {% include 'posts/_meta.html.twig' %}
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+</div>

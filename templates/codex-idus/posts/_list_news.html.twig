@@ -1,0 +1,17 @@
+{% import '_icons.html.twig' as ico %}
+{# 뉴스형: 사진 없이 제목과 발췌문 위주. 공지·소식 게시판에 맞는다. #}
+<ul class="list card post-rows post-rows-text">
+  {% for post in list.data %}
+    <li class="list-row">
+      <div class="post-row-body">
+        <p class="post-row-head">
+          {% if board.use_category and post.category %}<span class="badge badge-ghost badge-sm">{{ post.category }}</span>{% endif %}
+          {% if post.is_secret %}<span class="post-row-lock" title="비밀글" aria-label="비밀글">{{ ico.i('lock', 12) }}</span>{% endif %}
+          <a class="post-row-title" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }} {% include 'posts/_count.html.twig' %}</a>
+        </p>
+        {% if post.excerpt|default(null) %}<p class="post-row-excerpt">{{ post.excerpt }}</p>{% endif %}
+        {% include 'posts/_meta.html.twig' %}
+      </div>
+    </li>
+  {% endfor %}
+</ul>

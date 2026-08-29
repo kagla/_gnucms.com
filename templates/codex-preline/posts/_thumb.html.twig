@@ -1,0 +1,14 @@
+{% import '_icons.html.twig' as ico %}
+{# 목록 썸네일. 이미지 첨부를 먼저 쓰고, 없으면 본문에 넣은 첫 사진을,
+   그것도 없으면 제목 첫 글자를 쓴다. #}
+<figure class="post-cover" data-tone="{{ post.id % 6 }}">
+  {% if post.thumbnail_index|default(null) is not null %}
+    <img class="post-cover-img" src="{{ url_for('files.image_variant', {'id': post.id, 'index': post.thumbnail_index, 'variant': 'thumb'}) }}" alt="" loading="lazy" decoding="async" width="480" height="300">
+  {% elseif post.thumbnail_url|default(null) is not null %}
+    <img class="post-cover-img" src="{{ post.thumbnail_url }}" alt="" loading="lazy" decoding="async" width="480" height="300">
+  {% else %}
+    <span class="post-cover-mark" aria-hidden="true">{{ post.title|slice(0, 1) }}</span>
+  {% endif %}
+  <span class="badge post-cover-badge">{% if board.use_category and post.category %}{{ post.category }}{% else %}{{ board.name }}{% endif %}</span>
+  {% if post.is_secret %}<span class="post-cover-lock" title="비밀글" aria-label="비밀글">{{ ico.i('lock', 13) }}</span>{% endif %}
+</figure>

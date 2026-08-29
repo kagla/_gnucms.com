@@ -1,0 +1,157 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ create ? '게시판 만들기' : '게시판 설정' }} · {{ site.site_name }}{% endblock %}
+{% block admin_section %}boards{% endblock %}
+{% block body %}
+<div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li><a href="{{ url_for('admin.boards') }}">게시판</a></li><li aria-current="page">{{ create ? '게시판 만들기' : values.name }}</li></ul></div>
+<section class="card">
+  <div class="card-body">
+    <div class="card-head-row card-head-row-flush">
+      <div>
+        <h1 class="card-title">{{ create ? '게시판 만들기' : '게시판 설정' }}</h1>
+        <p class="card-sub">기본 정보와 이용 권한을 설정합니다.</p>
+      </div>
+      {% if not create %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('posts.index', {'key': board_key}) }}" target="_blank" rel="noopener">
+          {{ ico.i('external', 15) }} 게시판 보기
+        </a>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ create ? url_for('admin.boards.create') : url_for('admin.boards.edit', {key: board_key}) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="form-section">
+        <h2 class="form-section-title">기본 정보</h2>
+        {% if create %}
+          <fieldset class="fieldset{% if errors.board_key is defined %} is-invalid{% endif %}">
+            <legend class="fieldset-legend">게시판 키 <span class="legend-hint">주소에 쓰이는 영문 소문자</span></legend>
+            <input class="input input-bordered input-block" type="text" name="board_key" value="{{ values.board_key|default('') }}" maxlength="50" pattern="[a-z0-9_-]+" required>
+            {% if errors.board_key is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.board_key }}</p>{% endif %}
+          </fieldset>
+        {% else %}
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">게시판 키 <span class="legend-hint">만든 뒤에는 바꿀 수 없습니다</span></legend>
+            <input class="input input-bordered input-block" type="text" value="{{ board_key }}" readonly aria-describedby="board-key-help">
+            <p class="fieldset-label" id="board-key-help">공개 주소: <code class="kbd kbd-sm">/boards/{{ board_key }}</code></p>
+          </fieldset>
+        {% endif %}
+        <fieldset class="fieldset{% if errors.name is defined %} is-invalid{% endif %}">
+          <legend class="fieldset-legend">게시판 이름</legend>
+          <input class="input input-bordered input-block" type="text" name="name" value="{{ values.name|default('') }}" maxlength="100" required>
+          {% if errors.name is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.name }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">설명 <span class="legend-hint">한 줄 요약. 카드와 검색 결과 설명에 쓰입니다</span></legend>
+          <input class="input input-bordered input-block" type="text" name="description" value="{{ values.description|default('') }}" maxlength="200" placeholder="이 게시판을 한 줄로 소개해 주세요">
+        </fieldset>
+      </div>
+
+      <div class="form-section">
+        <h2 class="form-section-title">이용 권한</h2>
+        <div class="grid-3">
+          <fieldset class="fieldset"><legend class="fieldset-legend">읽기</legend>
+            <select class="select select-bordered select-block" name="perm_read">{% for p in ['guest','member','admin'] %}<option value="{{ p }}"{{ values.perm_read == p ? ' selected' : '' }}>{{ p }}</option>{% endfor %}</select></fieldset>
+          <fieldset class="fieldset"><legend class="fieldset-legend">쓰기</legend>
+            <select class="select select-bordered select-block" name="perm_write">{% for p in ['guest','member','admin'] %}<option value="{{ p }}"{{ values.perm_write == p ? ' selected' : '' }}>{{ p }}</option>{% endfor %}</select></fieldset>
+          <fieldset class="fieldset"><legend class="fieldset-legend">댓글</legend>
+            <select class="select select-bordered select-block" name="perm_comment">{% for p in ['guest','member','admin'] %}<option value="{{ p }}"{{ values.perm_comment == p ? ' selected' : '' }}>{{ p }}</option>{% endfor %}</select></fieldset>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h2 class="form-section-title">기능과 노출</h2>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">분류 <span class="legend-hint">추가하면 칩으로 쌓입니다</span></legend>
+          {# JS 가 켜지면 칩 UI 를 보이고 textarea 를 숨긴다. 꺼져 있으면 textarea 그대로 쓴다. #}
+          <div class="tag-input" data-tag-input hidden>
+            <div class="tag-input-list" data-tag-list></div>
+            <div class="tag-input-add">
+              <input class="input input-bordered" type="text" data-tag-new placeholder="분류 이름을 입력하고 Enter" aria-label="분류 추가" maxlength="50">
+              <button type="button" class="btn btn-outline" data-tag-add>추가</button>
+            </div>
+          </div>
+          <textarea class="textarea textarea-bordered textarea-block" name="categories_text" rows="3" data-tag-store aria-label="분류 (한 줄에 하나씩)">{{ values.categories_text|default('') }}</textarea>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">목록 형태</legend>
+          {% set list_labels = {'list': '목록형 (표)', 'gallery': '갤러리형 (사진 격자)', 'magazine': '매거진형 (사진 + 발췌)', 'news': '뉴스형 (제목 + 발췌)'} %}
+          <select class="select select-bordered select-block" name="list_type">
+            {% for name, label in list_labels %}<option value="{{ name }}"{{ values.list_type|default('list') == name ? ' selected' : '' }}>{{ label }}</option>{% endfor %}
+          </select>
+          <p class="fieldset-label">보는 사람이 주소에 ?view= 를 붙여 잠시 다른 형태로 볼 수 있습니다.</p>
+        </fieldset>
+        <div class="grid-2">
+          <fieldset class="fieldset"><legend class="fieldset-legend">페이지당 글 수</legend>
+            <input class="input input-bordered input-block" type="number" name="per_page" value="{{ values.per_page|default(20) }}" min="1" max="100"></fieldset>
+          <fieldset class="fieldset"><legend class="fieldset-legend">정렬 순서 <span class="legend-hint">작을수록 위</span></legend>
+            <input class="input input-bordered input-block" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999"></fieldset>
+        </div>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">메인에 낼 최신 글 수 <span class="legend-hint">0 이면 메인에서 뺍니다</span></legend>
+          <input class="input input-bordered input-block" type="number" name="home_limit" value="{{ values.home_limit|default(5) }}" min="0" max="10">
+          <p class="fieldset-label">첫 화면에 이 게시판의 최신 글을 몇 개 보일지 정합니다. 0 으로 두면 게시판은 그대로 열리되 첫 화면에는 나오지 않습니다.</p>
+        </fieldset>
+        <fieldset class="fieldset toggle-list">
+          <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_category" value="1"{{ values.use_category|default(false) ? ' checked' : '' }}><span><strong>분류 사용</strong></span></label>
+          <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_secret" value="1"{{ values.use_secret|default(false) ? ' checked' : '' }}><span><strong>비밀글 사용</strong></span></label>
+          <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_file" value="1"{{ values.use_file|default(false) ? ' checked' : '' }}><span><strong>첨부파일 사용</strong></span></label>
+        </fieldset>
+      </div>
+
+      <div class="card-actions form-actions">
+        <a class="btn btn-ghost" href="{{ url_for('admin.boards') }}">취소</a>
+        <button class="btn btn-primary" type="submit">{{ create ? '게시판 만들기' : '변경사항 저장' }}</button>
+      </div>
+    </form>
+  </div>
+  {% if not create %}
+    <form class="danger-zone" method="post" action="{{ url_for('admin.boards.delete', {key: board_key}) }}" onsubmit="return confirm('게시판의 글과 댓글도 함께 삭제됩니다. 정말 삭제할까요?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div><strong>{{ ico.i('warning', 15) }} 게시판 삭제</strong><p>게시글과 댓글을 포함해 되돌릴 수 없이 삭제합니다.</p></div>
+      <button class="btn btn-error btn-outline" type="submit">{{ ico.i('trash', 15) }} 삭제</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var box=document.querySelector('[data-tag-input]'),store=document.querySelector('[data-tag-store]');
+  if(!box||!store){return}
+  var list=box.querySelector('[data-tag-list]'),input=box.querySelector('[data-tag-new]'),addBtn=box.querySelector('[data-tag-add]');
+  box.hidden=false;store.hidden=true;
+  function items(){return store.value.split('\n').map(function(s){return s.trim()}).filter(Boolean)}
+  function save(v){store.value=v.join('\n')}
+  function render(){
+    var v=items();list.textContent='';
+    if(!v.length){
+      var empty=document.createElement('p');empty.className='tag-input-empty';
+      empty.textContent='아직 분류가 없습니다. 비워 두면 분류 없이 운영합니다.';
+      list.appendChild(empty);return;
+    }
+    v.forEach(function(name,i){
+      var chip=document.createElement('span');chip.className='tag-chip';
+      var label=document.createElement('span');label.textContent=name;chip.appendChild(label);
+      var del=document.createElement('button');del.type='button';del.className='tag-chip-remove';
+      del.setAttribute('aria-label',name+' 분류 삭제');del.title=del.getAttribute('aria-label');
+      del.textContent='\u00d7';
+      del.addEventListener('click',function(){var cur=items();cur.splice(i,1);save(cur);render();input.focus()});
+      chip.appendChild(del);list.appendChild(chip);
+    });
+  }
+  function add(){
+    var name=(input.value||'').trim();
+    if(!name){input.focus();return}
+    var cur=items();
+    if(cur.indexOf(name)!==-1){input.select();return}
+    cur.push(name);save(cur);input.value='';render();input.focus();
+  }
+  addBtn.addEventListener('click',add);
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();add()}
+    else if(e.key==='Backspace'&&input.value===''){var cur=items();if(cur.length){cur.pop();save(cur);render()}}
+  });
+  render();
+})();
+</script>
+{% endblock %}
