@@ -83,16 +83,18 @@ final class AuthPageTest extends WebTestCase
             $app->cms()->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+                // 가입 동의 항목이라는 표시. 이 표시가 붙은 내용만 가입 화면에 나온다.
+                'consent_key' => $legal[0], 'consent_order' => 0,
             ]);
         }
 
         $form = $this->body($this->get($app, '/register'));
         self::assertStringContainsString('name="agree_terms"', $form);
         self::assertStringContainsString('name="agree_privacy"', $form);
-        self::assertStringContainsString('href="/terms/service"', $form);
-        self::assertStringContainsString('href="/terms/privacy"', $form);
-        self::assertSame(200, $this->get($app, '/terms/service')->getStatusCode());
-        self::assertSame(200, $this->get($app, '/terms/privacy')->getStatusCode());
+        self::assertStringContainsString('href="/content/terms"', $form);
+        self::assertStringContainsString('href="/content/privacy"', $form);
+        self::assertSame(200, $this->get($app, '/content/terms')->getStatusCode());
+        self::assertSame(200, $this->get($app, '/content/privacy')->getStatusCode());
         $response = $this->post($app, '/register', [
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
             'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',

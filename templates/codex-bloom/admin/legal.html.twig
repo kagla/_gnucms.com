@@ -36,7 +36,7 @@
           <tr>
             <td><strong>{{ label }}</strong></td>
             {% if page %}
-              <td class="codex-bloom-table-meta">/terms/{{ type }}</td>
+              <td class="codex-bloom-table-meta">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</td>
               <td><span class="codex-bloom-status-pill {{ page.status == 'published' ? 'is-active' : 'is-blocked' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
               <td class="codex-bloom-table-meta">{{ page.updated_at|date('Y.m.d') }}</td>
               <td>
@@ -46,7 +46,7 @@
                 </div>
               </td>
             {% else %}
-              <td class="codex-bloom-table-meta">/terms/{{ type }}</td>
+              <td class="codex-bloom-table-meta">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</td>
               <td><span class="codex-bloom-status-pill is-blocked">미생성</span></td>
               <td class="codex-bloom-table-meta">-</td>
               <td><span class="muted">초안을 만들어 주세요.</span></td>

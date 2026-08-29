@@ -138,8 +138,8 @@
       <a href="{{ url_for('boards.index') }}">홈</a>
       {% for item in site_menu %}<a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
       {% if legal_documents %}
-        <a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
-        <a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+        <a href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a>
+        <a href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a>
       {% endif %}
     </nav>
   </div>

@@ -37,8 +37,8 @@
   <p class="nova-colophon"><strong>{{ site.site_name }}</strong>{% if site.site_tagline %} · {{ site.site_tagline }}{% endif %}</p>
   {% if legal_documents %}
     <nav class="nova-legal" aria-label="정책">
-      <a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
-      <a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+      <a href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a>
+      <a href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a>
     </nav>
   {% endif %}
 </footer>

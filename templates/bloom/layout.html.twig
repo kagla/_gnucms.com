@@ -78,7 +78,7 @@ try{
   <div class="bloom-footer-inner hz-container">
     <div class="bloom-footer-col">{{ ic.logo(28) }}<strong>{{ site.site_name }}</strong><p>{{ site.site_tagline }}</p></div>
     <nav class="bloom-footer-col" aria-label="바로가기"><strong>{{ ic.grid() }} 탐색</strong><a href="{{ url_for('boards.index') }}">{{ ic.board() }} 커뮤니티</a>{% for item in site_menu|slice(0, 4) %}<a href="{{ url_for('content.show', {slug: item.slug}) }}">{{ ic.doc() }} {{ item.title }}</a>{% endfor %}</nav>
-    {% if legal_documents %}<nav class="bloom-footer-col" aria-label="정책"><strong>{{ ic.shield() }} 고객센터</strong><a href="{{ url_for('terms.show', {type: 'service'}) }}">{{ ic.doc() }} 이용약관</a><a href="{{ url_for('terms.show', {type: 'privacy'}) }}">{{ ic.shield() }} 개인정보 처리방침</a></nav>{% endif %}
+    {% if legal_documents %}<nav class="bloom-footer-col" aria-label="정책"><strong>{{ ic.shield() }} 고객센터</strong><a href="{{ url_for('content.show', {slug: 'terms'}) }}">{{ ic.doc() }} 이용약관</a><a href="{{ url_for('content.show', {slug: 'privacy'}) }}">{{ ic.shield() }} 개인정보 처리방침</a></nav>{% endif %}
   </div>
   <p class="bloom-footer-copy">© {{ "now"|date("Y") }} {{ site.site_name }}</p>
 </footer>

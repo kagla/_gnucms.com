@@ -66,7 +66,7 @@ try{var savedTheme=localStorage.getItem('{{ GNUCMS_ID }}-theme');if(savedTheme){
 <footer class="site-footer">
   <div class="footer-brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><div><strong>{{ site.site_name }}</strong><p>{{ site.site_tagline }}</p></div></div>
   <p class="footer-message">좋은 대화가 시작되는<br>가장 단순한 공간.</p>
-  <nav aria-label="정책">{% if legal_documents %}<a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a><a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>{% endif %}<a href="#main-content">맨 위로 ↑</a></nav>
+  <nav aria-label="정책">{% if legal_documents %}<a href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a><a href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a>{% endif %}<a href="#main-content">맨 위로 ↑</a></nav>
 </footer>
 {% endif %}
 {% endblock %}

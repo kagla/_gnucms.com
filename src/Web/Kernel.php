@@ -65,6 +65,8 @@ final class Kernel
         $twig->getEnvironment()->addGlobal('site', $site);
         $twig->getEnvironment()->addGlobal('registration_available', $registrationAvailable);
         $twig->getEnvironment()->addGlobal('legal_documents', $legalDocuments);
+        // 가입 화면에 붙는 동의 항목 전부. 개수 제한이 없고, 없으면 빈 배열이다.
+        $twig->getEnvironment()->addGlobal('consent_documents', $app->cmsService()->consentDocuments());
         $twig->getEnvironment()->addGlobal('site_menu', $app->cmsService()->menu());
         $twig->getEnvironment()->addGlobal('base_path', $basePath);
         $twig->getEnvironment()->addGlobal('active_theme', $themes->name());

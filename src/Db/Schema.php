@@ -14,7 +14,7 @@ final class Schema
 {
     public const TABLES = [
         'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities', 'site_state',
-        'site_settings', 'mail_settings', 'pages', 'user_consents',
+        'site_settings', 'mail_settings', 'contents', 'user_consents',
     ];
 
     /** @var Connection */
@@ -44,7 +44,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '5';
+    public const VERSION = '7';
 
     /**
      * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
@@ -76,6 +76,8 @@ final class Schema
     public function migrateAll(): void
     {
         $this->migrateAccounts();
+        // 표 이름을 먼저 옮겨야 migrateCms() 가 빈 표를 새로 만들지 않는다.
+        $this->migrateContentTableName();
         $this->migrateCms();
         $this->migrateDefaultTheme();
         $this->migrateBoards();
@@ -204,9 +206,9 @@ final class Schema
         $this->ensureSiteSetting('theme', 'codex-preline');
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('pages'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('contents'));
         } catch (DomainError $e) {
-            foreach ($this->pageStatements() as $sql) {
+            foreach ($this->contentStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
@@ -219,16 +221,40 @@ final class Schema
             }
         }
         try {
-            $this->db->selectOne('SELECT deleted_at FROM ' . $this->db->q('pages') . ' LIMIT 1');
+            $this->db->selectOne('SELECT deleted_at FROM ' . $this->db->q('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('pages') . ' ADD COLUMN deleted_at '
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents') . ' ADD COLUMN deleted_at '
                 . $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
         }
         try {
-            $this->db->selectOne('SELECT image_key FROM ' . $this->db->q('pages') . ' LIMIT 1');
+            $this->db->selectOne('SELECT image_key FROM ' . $this->db->q('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('pages')
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
                 . ' ADD COLUMN image_key VARCHAR(32) NULL');
+        }
+
+        // 약관을 내용과 한 표에서 다루기 위한 표시. 값이 있으면 가입 화면의 동의 항목이 된다.
+        try {
+            $this->db->selectOne('SELECT consent_key FROM ' . $this->db->q('contents') . ' LIMIT 1');
+        } catch (DomainError $e) {
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+                . ' ADD COLUMN consent_key VARCHAR(20) NULL');
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+                . ' ADD COLUMN consent_order INTEGER NOT NULL DEFAULT 0');
+            // 이미 있던 이용약관·개인정보 처리방침을 그대로 동의 항목으로 삼는다.
+            foreach ([['terms', 10], ['privacy', 20]] as [$slug, $order]) {
+                $this->db->execute(
+                    'UPDATE ' . $this->db->q('contents')
+                    . ' SET consent_key = ?, consent_order = ? WHERE slug = ?',
+                    [$slug, $order, $slug]
+                );
+            }
+            try {
+                $this->db->execute('CREATE UNIQUE INDEX ux_contents_consent ON '
+                    . $this->db->q('contents') . ' (consent_key)');
+            } catch (DomainError $e) {
+                // 이미 있으면 그대로 둔다
+            }
         }
 
         try {
@@ -328,7 +354,7 @@ final class Schema
 
             'CREATE INDEX ix_comments_post ON comments (post_id, id)',
         ], $this->accountStatements(), $this->settingsStatements(), $this->mailSettingsStatements(),
-            $this->pageStatements(), $this->consentStatements(), $this->notificationStatements());
+            $this->contentStatements(), $this->consentStatements(), $this->notificationStatements());
     }
 
     private function accountStatements(): array
@@ -418,6 +444,51 @@ final class Schema
         ];
     }
 
+    /**
+     * pages 표를 contents 로 옮긴다.
+     * 관리 화면(내용 관리)도 주소(/content/{slug})도 이미 '내용' 인데 표만 pages 였다.
+     * 표 이름만 바꾸면 인덱스는 그대로 따라오지만, 새로 설치한 곳과 이름이 갈리므로
+     * 인덱스도 새 이름으로 다시 만든다. 여러 번 돌려도 안전하다.
+     */
+    private function migrateContentTableName(): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('contents'));
+            return; // 이미 새 이름이다
+        } catch (DomainError $e) {
+            // 아직 옛 이름이거나, 둘 다 없다
+        }
+
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('pages'));
+        } catch (DomainError $e) {
+            return; // 옛 표도 없다. migrateCms() 가 새로 만든다
+        }
+
+        $this->db->execute(
+            'ALTER TABLE ' . $this->db->q('pages') . ' RENAME TO ' . $this->db->q('contents')
+        );
+
+        $mysql = $this->db->dialect()->name() === 'mysql';
+        foreach ([
+            ['ux_pages_slug', 'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)'],
+            ['ix_pages_public', 'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)'],
+        ] as [$oldIndex, $createSql]) {
+            try {
+                $this->db->execute($mysql
+                    ? 'DROP INDEX ' . $this->db->q($oldIndex) . ' ON ' . $this->db->q('contents')
+                    : 'DROP INDEX ' . $this->db->q($oldIndex));
+            } catch (DomainError $e) {
+                // 옛 인덱스가 없으면 그대로 둔다
+            }
+            try {
+                $this->db->execute($this->expand($createSql));
+            } catch (DomainError $e) {
+                // 이미 새 이름이면 그대로 둔다
+            }
+        }
+    }
+
     /** 기존 기본 테마 사용자만 새 기본 디자인으로 옮기고, 직접 고른 테마는 보존한다. */
     private function migrateDefaultTheme(): void
     {
@@ -443,10 +514,10 @@ final class Schema
         }
     }
 
-    private function pageStatements(): array
+    private function contentStatements(): array
     {
         return [
-            'CREATE TABLE pages (
+            'CREATE TABLE contents (
                 id              {AUTO_PK},
                 slug            VARCHAR(100) NOT NULL,
                 title           VARCHAR(200) NOT NULL,
@@ -459,10 +530,13 @@ final class Schema
                 updated_at      {DATETIME}   NOT NULL,
                 published_at    {DATETIME}   NULL,
                 deleted_at      {DATETIME}   NULL,
-                image_key       VARCHAR(32)  NULL
+                image_key       VARCHAR(32)  NULL,
+                consent_key     VARCHAR(20)  NULL,
+                consent_order   INTEGER      NOT NULL DEFAULT 0
             ){SUFFIX}',
-            'CREATE UNIQUE INDEX ux_pages_slug ON pages (slug)',
-            'CREATE INDEX ix_pages_public ON pages (status, show_in_menu, sort_order, id)',
+            'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)',
+            'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)',
+            'CREATE UNIQUE INDEX ux_contents_consent ON contents (consent_key)',
         ];
     }
 

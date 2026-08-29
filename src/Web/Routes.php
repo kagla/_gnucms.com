@@ -121,21 +121,19 @@ final class Routes
 
         $slim->get('/', [new BoardController($app), 'index'])->setName('boards.index');
         $pageController = new PageController($app);
-        $slim->get('/terms/{type:service|privacy}', [$pageController, 'legal'])->setName('terms.show');
-        foreach (['terms' => 'service', 'privacy' => 'privacy'] as $legacyLegalSlug => $newType) {
-            $legacyLegalRedirect = static function (
+        $slim->get('/content/{slug:[a-z0-9][a-z0-9_-]*}', [$pageController, 'show'])->setName('content.show');
+        // 약관도 이제 그냥 내용이라 /content/{slug} 가 정식 주소다. 예전 주소는 그리로 보낸다.
+        foreach (['/terms/service' => 'terms', '/terms' => 'terms', '/privacy' => 'privacy',
+                  '/terms/privacy' => 'privacy'] as $legacyPath => $slug) {
+            $slim->get($legacyPath, static function (
                 ServerRequestInterface $request,
                 ResponseInterface $response
-            ) use ($newType): ResponseInterface {
-                $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('terms.show', [
-                    'type' => $newType,
-                ]);
+            ) use ($slug): ResponseInterface {
+                $url = RouteContext::fromRequest($request)->getRouteParser()
+                    ->urlFor('content.show', ['slug' => $slug]);
                 return $response->withHeader('Location', $url)->withStatus(301);
-            };
-            $slim->get('/' . $legacyLegalSlug, $legacyLegalRedirect);
-            $slim->get('/content/' . $legacyLegalSlug, $legacyLegalRedirect);
+            });
         }
-        $slim->get('/content/{slug:[a-z0-9][a-z0-9_-]*}', [$pageController, 'show'])->setName('content.show');
         // 파일 이름 뒤의 -thumb / -view 는 줄여서 내보내는 크기다 (ContentImageService::VARIANTS).
         $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'showOwned'])->setName('editor.owned_image');

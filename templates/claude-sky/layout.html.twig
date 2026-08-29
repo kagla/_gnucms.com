@@ -81,8 +81,8 @@
                 <li><a href="{{ url_for('notifications.index') }}">{{ ico.i('bell', 17) }} 알림</a></li>
                 {% if current_user.is_admin %}<li><a href="{{ url_for('admin.index') }}">{{ ico.i('cog', 17) }} 관리 콘솔</a></li>{% endif %}
                 {% if legal_documents %}
-                  <li><a href="{{ url_for('terms.show', {type: 'service'}) }}">{{ ico.i('scale', 17) }} 이용약관</a></li>
-                  <li><a href="{{ url_for('terms.show', {type: 'privacy'}) }}">{{ ico.i('shield', 17) }} 개인정보 처리방침</a></li>
+                  <li><a href="{{ url_for('content.show', {slug: 'terms'}) }}">{{ ico.i('scale', 17) }} 이용약관</a></li>
+                  <li><a href="{{ url_for('content.show', {slug: 'privacy'}) }}">{{ ico.i('shield', 17) }} 개인정보 처리방침</a></li>
                 {% endif %}
                 <li>
                   <form method="post" action="{{ url_for('auth.logout') }}">
@@ -161,8 +161,8 @@
           <a class="link link-hover" href="{{ url_for('boards.index') }}">홈</a>
           {% for item in site_menu %}<a class="link link-hover" href="{{ url_for('content.show', {slug: item.slug}) }}">{{ item.title }}</a>{% endfor %}
           {% if legal_documents %}
-            <a class="link link-hover" href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
-            <a class="link link-hover" href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+            <a class="link link-hover" href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a>
+            <a class="link link-hover" href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a>
           {% endif %}
         </nav>
         <p class="footer-note">

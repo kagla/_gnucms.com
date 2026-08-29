@@ -13,12 +13,7 @@
       {% if errors.password is defined %}<p class="field-error">{{ errors.password }}</p>{% endif %}
       <label>비밀번호 확인<input type="password" name="password_confirmation" minlength="8" placeholder="한 번 더 입력" autocomplete="new-password" required></label>
       {% if errors.password_confirmation is defined %}<p class="field-error">{{ errors.password_confirmation }}</p>{% endif %}
-      {% if legal %}<div class="agreement-box">
-        <label class="check-label"><input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required><span><a class="text-link" href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener">이용약관</a>에 동의합니다. <span class="required-mark">필수</span></span></label>
-        {% if errors.agree_terms is defined %}<p class="field-error">{{ errors.agree_terms }}</p>{% endif %}
-        <label class="check-label"><input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required><span><a class="text-link" href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener">개인정보 수집·이용 안내</a>에 동의합니다. <span class="required-mark">필수</span></span></label>
-        {% if errors.agree_privacy is defined %}<p class="field-error">{{ errors.agree_privacy }}</p>{% endif %}
-      </div>{% endif %}
+      {% include "auth/_consents.html.twig" %}
       <button class="auth-submit" type="submit">가입하고 시작하기</button>
     </form>
     {% include "auth/_social.html.twig" %}

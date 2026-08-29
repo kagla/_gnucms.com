@@ -48,8 +48,8 @@ try{var t=localStorage.getItem('{{ GNUCMS_ID }}-theme');if(t){document.documentE
     <span>{{ site.site_tagline }}</span>
     {% if legal_documents %}
       <nav class="footer-links" aria-label="정책">
-        <a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a>
-        <a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a>
+        <a href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a>
+        <a href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a>
       </nav>
     {% endif %}
   </div>

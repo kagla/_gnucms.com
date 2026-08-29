@@ -35,7 +35,7 @@
           <tr>
             <td><strong>{{ label }}</strong></td>
             {% if page %}
-              <td class="harbor-table-meta">/terms/{{ type }}</td>
+              <td class="harbor-table-meta">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</td>
               <td><span class="harbor-status-pill {{ page.status == 'published' ? 'is-active' : 'is-blocked' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
               <td class="harbor-table-meta">{{ page.updated_at|date('Y.m.d') }}</td>
               <td>
@@ -45,7 +45,7 @@
                 </div>
               </td>
             {% else %}
-              <td class="harbor-table-meta">/terms/{{ type }}</td>
+              <td class="harbor-table-meta">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</td>
               <td><span class="harbor-status-pill is-blocked">미생성</span></td>
               <td class="harbor-table-meta">-</td>
               <td><span class="muted">초안을 만들어 주세요.</span></td>

@@ -35,22 +35,7 @@
         </div>
         {% if errors.password_confirmation is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.password_confirmation }}</p>{% endif %}
       </div>
-      {% if legal %}
-        <div class="consent">
-          <label class="checkbox{% if errors.agree_terms is defined %} has-error{% endif %}">
-            <input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required>
-            <span class="checkbox-ui" aria-hidden="true"></span>
-            <span><a class="link" href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener">이용약관</a> 동의 <em class="required">필수</em></span>
-          </label>
-          {% if errors.agree_terms is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.agree_terms }}</p>{% endif %}
-          <label class="checkbox{% if errors.agree_privacy is defined %} has-error{% endif %}">
-            <input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required>
-            <span class="checkbox-ui" aria-hidden="true"></span>
-            <span><a class="link" href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener">개인정보 수집·이용</a> 동의 <em class="required">필수</em></span>
-          </label>
-          {% if errors.agree_privacy is defined %}<p class="error-text">{{ ico.i('warning', 14) }} {{ errors.agree_privacy }}</p>{% endif %}
-        </div>
-      {% endif %}
+      {% include "auth/_consents.html.twig" %}
       <button class="btn btn-primary btn-lg btn-block" type="submit">가입하기</button>
     </form>
     {% include "auth/_social.html.twig" %}

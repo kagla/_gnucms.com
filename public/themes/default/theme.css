@@ -1050,6 +1050,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:600}
 .auth-mark-ok{background:color-mix(in srgb,var(--color-success) 16%,var(--color-base-100));color:var(--color-success)}
 .auth-switch{margin-top:1.25rem;text-align:center;color:var(--bc-mid);font-size:13.5px}
 .social-list{display:grid;gap:.5rem}
+.social-consent{margin-top:.75rem;text-align:center;font-size:12px;line-height:1.6;color:var(--bc-mid)}
 .social-mark{display:grid;place-items:center;width:1.375rem;height:1.375rem;flex:none;border-radius:.35rem;background:var(--bc-10);font-size:11.5px;font-weight:700}
 .social-google .social-mark{background:#fff;border:var(--border) solid var(--bc-20);color:#4285f4}
 .social-naver .social-mark{background:#03c75a;color:#fff}

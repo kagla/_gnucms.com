@@ -27,22 +27,7 @@
         <input id="join-password2" type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
         {% if errors.password_confirmation is defined %}<p class="field-msg">{{ errors.password_confirmation }}</p>{% endif %}
       </div>
-      {% if legal %}
-        <div class="agree-box">
-          <label class="agree{% if errors.agree_terms is defined %} is-bad{% endif %}">
-            <input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required>
-            <span class="agree-check" aria-hidden="true"></span>
-            <span><a class="link" href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener">이용약관</a> 동의 <em class="need">필수</em></span>
-          </label>
-          {% if errors.agree_terms is defined %}<p class="field-msg">{{ errors.agree_terms }}</p>{% endif %}
-          <label class="agree{% if errors.agree_privacy is defined %} is-bad{% endif %}">
-            <input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required>
-            <span class="agree-check" aria-hidden="true"></span>
-            <span><a class="link" href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener">개인정보 수집·이용</a> 동의 <em class="need">필수</em></span>
-          </label>
-          {% if errors.agree_privacy is defined %}<p class="field-msg">{{ errors.agree_privacy }}</p>{% endif %}
-        </div>
-      {% endif %}
+      {% include "auth/_consents.html.twig" %}
       <button class="btn btn-brand btn-lg btn-block" type="submit">가입하기</button>
     </form>
     {% include "auth/_social.html.twig" %}

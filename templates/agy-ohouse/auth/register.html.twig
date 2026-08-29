@@ -33,21 +33,7 @@
         {% if errors.password_confirmation is defined %}<p class="badge badge-error-soft" style="margin-top: 0.4rem;">{{ errors.password_confirmation }}</p>{% endif %}
       </div>
 
-      {% if legal %}
-        <div style="padding: 1rem; background: var(--base-200); border-radius: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
-          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-            <input type="checkbox" name="agree_terms" value="1"{{ values.agree_terms|default(false) ? ' checked' : '' }} required style="accent-color: var(--primary);">
-            <span><a href="{{ url_for('terms.show', {type: 'service'}) }}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 750; text-decoration: underline;">이용약관</a>에 동의합니다. <span style="color: var(--error); font-weight: 800;">(필수)</span></span>
-          </label>
-          {% if errors.agree_terms is defined %}<p class="badge badge-error-soft">{{ errors.agree_terms }}</p>{% endif %}
-
-          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-            <input type="checkbox" name="agree_privacy" value="1"{{ values.agree_privacy|default(false) ? ' checked' : '' }} required style="accent-color: var(--primary);">
-            <span><a href="{{ url_for('terms.show', {type: 'privacy'}) }}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 750; text-decoration: underline;">개인정보 처리방침</a>에 동의합니다. <span style="color: var(--error); font-weight: 800;">(필수)</span></span>
-          </label>
-          {% if errors.agree_privacy is defined %}<p class="badge badge-error-soft">{{ errors.agree_privacy }}</p>{% endif %}
-        </div>
-      {% endif %}
+      {% include "auth/_consents.html.twig" %}
 
       <button class="btn btn-primary btn-block" type="submit" style="margin-top: 0.5rem; height: 3rem;">
         {{ ico.i('check', 16) }} 가입하고 시작하기

@@ -29,6 +29,6 @@
 <footer class="site-footer modern-footer">
   <div><strong>{{ site.site_name }}</strong><p>{{ site.site_tagline }}</p></div>
   <p class="modern-footer-note">작은 이야기들이 오래 이어지는 곳.</p>
-  {% if legal_documents %}<nav aria-label="정책"><a href="{{ url_for('terms.show', {type: 'service'}) }}">이용약관</a><a href="{{ url_for('terms.show', {type: 'privacy'}) }}">개인정보 처리방침</a></nav>{% endif %}
+  {% if legal_documents %}<nav aria-label="정책"><a href="{{ url_for('content.show', {slug: 'terms'}) }}">이용약관</a><a href="{{ url_for('content.show', {slug: 'privacy'}) }}">개인정보 처리방침</a></nav>{% endif %}
 </footer>
 {% endblock %}

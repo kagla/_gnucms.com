@@ -55,7 +55,16 @@ final class CmsService
         }
     }
 
-    /** @return array{terms: array, privacy: array} */
+    /**
+     * 가입 화면에 붙는 동의 항목. consent_key 가 있고 공개된 내용만, 정한 차례대로.
+     * 개수 제한이 없다. 이용약관·개인정보는 그중 씨앗으로 심어 둔 둘일 뿐이다.
+     */
+    public function consentDocuments(): array
+    {
+        return $this->cms->listConsentDocuments(true);
+    }
+
+    /** 바닥글 등이 쓰는 필수 약관 두 개. 없으면 가입을 받지 않는다. */
     public function legalDocuments(): array
     {
         $terms = $this->cms->findPublishedBySlug('terms');
@@ -74,6 +83,7 @@ final class CmsService
             $this->cms->createPage([
                 'slug' => 'terms', 'title' => '이용약관', 'seo_description' => $siteName . ' 서비스 이용약관',
                 'content' => $this->termsDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 900,
+                'consent_key' => 'terms', 'consent_order' => 10,
             ]);
         }
         if ($this->cms->findBySlug('privacy') === null) {
@@ -81,6 +91,7 @@ final class CmsService
                 'slug' => 'privacy', 'title' => '개인정보 처리방침',
                 'seo_description' => $siteName . ' 개인정보 처리방침',
                 'content' => $this->privacyDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 910,
+                'consent_key' => 'privacy', 'consent_order' => 20,
             ]);
         }
     }
@@ -91,19 +102,16 @@ final class CmsService
         return $this->cms->listPages();
     }
 
+    /** 약관도 이제 여기에 함께 나온다. 따로 걸러 내지 않는다. */
     public function contents(Acl $acl): array
     {
-        return array_values(array_filter($this->pages($acl), static function (array $page): bool {
-            return !in_array($page['slug'], ['terms', 'privacy'], true);
-        }));
+        return $this->pages($acl);
     }
 
     public function trash(Acl $acl): array
     {
         $acl->assertGlobalAdmin();
-        return array_values(array_filter($this->cms->listDeletedPages(), static function (array $page): bool {
-            return !in_array($page['slug'], ['terms', 'privacy'], true);
-        }));
+        return $this->cms->listDeletedPages();
     }
 
     public function legalOverview(Acl $acl): array
@@ -180,7 +188,13 @@ final class CmsService
 
     public function deletePage(Acl $acl, int $id): void
     {
-        $this->page($acl, $id);
+        $page = $this->page($acl, $id);
+        // 가입 동의 항목을 지우면 그때부터 가입이 막힌다. 표시를 먼저 떼도록 안내한다.
+        if (($page['consent_key'] ?? null) !== null) {
+            throw DomainError::validation([
+                'consent_key' => '가입 동의 항목으로 쓰는 내용은 지울 수 없습니다. 먼저 동의 항목 표시를 떼어 주세요.',
+            ]);
+        }
         $this->cms->deletePage($id);
     }
 
@@ -188,7 +202,7 @@ final class CmsService
     {
         $acl->assertGlobalAdmin();
         $page = $this->cms->findDeletedPageById($id);
-        if ($page === null || in_array($page['slug'], ['terms', 'privacy'], true)) {
+        if ($page === null) {
             throw DomainError::notFound('휴지통에서 내용을 찾을 수 없습니다.');
         }
         $this->cms->restorePage($id);
@@ -198,7 +212,7 @@ final class CmsService
     {
         $acl->assertGlobalAdmin();
         $page = $this->cms->findDeletedPageById($id);
-        if ($page === null || in_array($page['slug'], ['terms', 'privacy'], true)) {
+        if ($page === null) {
             throw DomainError::notFound('휴지통에서 내용을 찾을 수 없습니다.');
         }
         $key = (string) ($page['image_key'] ?? '');
@@ -210,9 +224,7 @@ final class CmsService
 
     public function countPages(): int
     {
-        return count(array_filter($this->cms->listPages(), static function (array $page): bool {
-            return !in_array($page['slug'], ['terms', 'privacy'], true);
-        }));
+        return count($this->cms->listPages());
     }
 
     private function validatePage(array $input): array
@@ -242,6 +254,16 @@ final class CmsService
             'sort_order' => $v->int('sort_order', 0, -9999, 9999),
             'image_key' => $imageKey,
         ];
+        // 동의 항목 칸은 폼에 있을 때만 반영한다. 그 칸이 없는 화면에서 저장해도
+        // 이미 정해 둔 동의 설정이 조용히 지워지지 않는다.
+        if (array_key_exists('consent_key', $input)) {
+            $key = strtolower(trim((string) $input['consent_key']));
+            if ($key !== '' && preg_match('/^[a-z][a-z0-9_-]{0,19}$/D', $key) !== 1) {
+                $v->fail('consent_key', '영문 소문자로 시작하고 소문자·숫자·밑줄·하이픈만 쓸 수 있습니다.');
+            }
+            $data['consent_key'] = $key === '' ? null : $key;
+            $data['consent_order'] = $v->int('consent_order', 0, -9999, 9999);
+        }
         if (preg_match('/^[a-f0-9]{32}$/D', $data['image_key']) !== 1) {
             $v->fail('image_key', '이미지 저장 정보를 확인할 수 없습니다.');
         }

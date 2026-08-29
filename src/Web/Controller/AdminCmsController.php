@@ -209,7 +209,6 @@ final class AdminCmsController
     public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $page = $this->app->cmsService()->page($this->app->guestAcl(), (int) $args['id']);
-        $this->assertRegularContent($page);
         return $this->renderPageForm($request, $response, $this->withImageKey($page), [], false, (int) $args['id'],
             $this->isLegal($page));
     }
@@ -220,7 +219,6 @@ final class AdminCmsController
         $this->assertCsrf($input);
         $id = (int) $args['id'];
         $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
-        $this->assertRegularContent($page);
         $legal = false;
         try {
             $this->app->cmsService()->updatePage($this->app->guestAcl(), $id, $input);
@@ -237,7 +235,6 @@ final class AdminCmsController
     public function preview(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $page = $this->app->cmsService()->page($this->app->guestAcl(), (int) $args['id']);
-        $this->assertRegularContent($page);
         return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
             'page' => $page,
             'preview' => true,
@@ -252,7 +249,6 @@ final class AdminCmsController
         $this->assertCsrf($input);
         $id = (int) $args['id'];
         $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
-        $this->assertRegularContent($page);
         $legal = false;
         $this->app->cmsService()->deletePage($this->app->guestAcl(), $id);
         return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['deleted' => '1']);
@@ -284,13 +280,6 @@ final class AdminCmsController
     private function legalSlug(string $type): string
     {
         return $type === 'service' ? 'terms' : 'privacy';
-    }
-
-    private function assertRegularContent(array $page): void
-    {
-        if ($this->isLegal($page)) {
-            throw DomainError::notFound('약관은 약관 관리에서 수정해 주세요.');
-        }
     }
 
     private function defaults(): array

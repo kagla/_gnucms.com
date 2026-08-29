@@ -35,7 +35,7 @@
         {% set page = type == 'service' ? legal.terms : legal.privacy %}
         <tr>
           <td data-label="구분"><strong class="cell-title">{{ label }}</strong></td>
-          <td data-label="공개 주소"><code class="code">/terms/{{ type }}</code></td>
+          <td data-label="공개 주소"><code class="code">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</code></td>
           {% if page %}
             <td data-label="상태"><span class="pill pill-{{ page.status == 'published' ? 'ok' : 'muted' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
             <td data-label="수정일">{{ page.updated_at|date('Y.m.d') }}</td>

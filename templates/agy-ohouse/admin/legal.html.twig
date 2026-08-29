@@ -57,7 +57,7 @@
         {% set page = type == 'service' ? legal.terms : legal.privacy %}
         <tr>
           <td style="font-weight: 800;">{{ label }}</td>
-          <td><code style="background: var(--base-200); padding: 0.2rem 0.4rem; border-radius: 0.35rem; font-size: 0.78rem;">/terms/{{ type }}</code></td>
+          <td><code style="background: var(--base-200); padding: 0.2rem 0.4rem; border-radius: 0.35rem; font-size: 0.78rem;">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</code></td>
           {% if page %}
             <td>
               <span class="badge badge-sm {{ page.status == 'published' ? 'badge-success-soft' : 'badge-ghost' }}">

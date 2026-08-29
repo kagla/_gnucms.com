@@ -152,12 +152,13 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('<h1>약관 관리</h1>', $this->body($legalPage));
         self::assertStringContainsString('이용약관', $this->body($legalPage));
         self::assertStringContainsString('/admin/terms/service', $this->body($legalPage));
-        self::assertStringContainsString('>/terms/service<', $this->body($legalPage));
-        self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
+        self::assertStringContainsString('>/content/terms<', $this->body($legalPage));
+        // 약관도 이제 내용 관리에 함께 나오고, 거기서 바로 고칠 수 있다.
+        self::assertStringContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
         $terms = $app->cms()->findBySlug('terms');
         self::assertSame(200, $this->get($app, '/admin/terms/service')->getStatusCode());
         self::assertSame(200, $this->get($app, '/admin/terms/service/preview')->getStatusCode());
-        self::assertSame(404, $this->get($app, '/admin/content/' . $terms['id'] . '/edit')->getStatusCode());
+        self::assertSame(200, $this->get($app, '/admin/content/' . $terms['id'] . '/edit')->getStatusCode());
         $termsSaved = $this->post($app, '/admin/terms/service', [
             'csrf_token' => $_SESSION['csrf_token'], 'title' => '이용약관',
             'content' => '검토를 마친 이용약관', 'seo_description' => '약관', 'status' => 'published',
@@ -165,9 +166,9 @@ final class CmsPageTest extends WebTestCase
         ]);
         self::assertSame(303, $termsSaved->getStatusCode(), $this->body($termsSaved));
         self::assertSame('/admin/terms?saved=1', $termsSaved->getHeaderLine('Location'));
-        self::assertSame(200, $this->get($app, '/terms/service')->getStatusCode());
-        self::assertSame(301, $this->get($app, '/content/terms')->getStatusCode());
-        self::assertSame('/terms/service', $this->get($app, '/content/terms')->getHeaderLine('Location'));
+        self::assertSame(200, $this->get($app, '/content/terms')->getStatusCode());
+        self::assertSame(301, $this->get($app, '/terms/service')->getStatusCode());
+        self::assertSame('/content/terms', $this->get($app, '/terms/service')->getHeaderLine('Location'));
         self::assertSame(301, $this->get($app, '/admin/legal')->getStatusCode());
         self::assertSame('/admin/terms', $this->get($app, '/admin/legal')->getHeaderLine('Location'));
 

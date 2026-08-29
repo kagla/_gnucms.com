@@ -184,6 +184,8 @@ final class AccountServiceTest extends DatabaseTestCase
             $cmsRepository->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+                // 가입 동의 항목이라는 표시. 이 표시가 붙은 내용만 가입 화면에 나온다.
+                'consent_key' => $legal[0], 'consent_order' => 0,
             ]);
         }
         $consents = new ConsentRepository($db);

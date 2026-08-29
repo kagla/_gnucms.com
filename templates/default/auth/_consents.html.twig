@@ -1,0 +1,14 @@
+{# 가입 동의 항목. consent_key 가 붙고 공개된 내용이 정한 차례대로 나온다.
+   개수 제한이 없다. 테마가 따로 이 파일을 두지 않으면 default 의 이 화면을 쓴다. #}
+{% if consent_documents is not empty %}
+  <fieldset class="fieldset consent">
+    {% for doc in consent_documents %}
+      {% set field = 'agree_' ~ doc.consent_key %}
+      <label class="label check-row{% if errors[field] is defined %} is-invalid{% endif %}">
+        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" name="{{ field }}" value="1"{{ values[field]|default(false) ? ' checked' : '' }} required>
+        <span><a class="link" href="{{ url_for('content.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a> 동의 <span class="badge badge-error badge-soft badge-xs">필수</span></span>
+      </label>
+      {% if errors[field] is defined %}<p class="validator-hint">{{ errors[field] }}</p>{% endif %}
+    {% endfor %}
+  </fieldset>
+{% endif %}

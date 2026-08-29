@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Cms\CmsService;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Oauth\SocialProfile;
@@ -13,12 +14,21 @@ final class LinkingService
     private Connection $db;
     private UserRepository $users;
     private IdentityRepository $identities;
+    private CmsService $cms;
+    private ConsentRepository $consents;
 
-    public function __construct(Connection $db, UserRepository $users, IdentityRepository $identities)
-    {
+    public function __construct(
+        Connection $db,
+        UserRepository $users,
+        IdentityRepository $identities,
+        CmsService $cms,
+        ConsentRepository $consents
+    ) {
         $this->db = $db;
         $this->users = $users;
         $this->identities = $identities;
+        $this->cms = $cms;
+        $this->consents = $consents;
     }
 
     public function resolve(SocialProfile $profile): ?array
@@ -54,6 +64,8 @@ final class LinkingService
             if ($user === null) {
                 $id = $this->users->createSocial($email, $profile->name);
                 $user = $this->users->findById($id);
+                // 소셜로 처음 가입하는 사람. 여기서 동의를 남기지 않으면 기록이 아예 없다.
+                $this->recordConsents($user);
             } elseif (!(bool) $user['email_verified']) {
                 $this->users->verifyEmail((int) $user['id']);
                 $user = $this->users->findById((int) $user['id']);
@@ -63,6 +75,21 @@ final class LinkingService
 
             return $this->publicUser($user);
         });
+    }
+
+    /**
+     * 소셜 가입은 폼이 없어 체크박스를 받을 수 없다. 로그인 화면의 소셜 단추 옆에
+     * "계속하면 동의로 봅니다" 를 적어 두고, 어느 판을 보고 가입했는지를 남긴다.
+     * 남기지 않으면 동의 기록이 통째로 비어 나중에 확인할 길이 없다.
+     */
+    private function recordConsents(array $user): void
+    {
+        if ((bool) $user['is_admin']) {
+            return;
+        }
+        foreach ($this->cms->consentDocuments() as $doc) {
+            $this->consents->record((int) $user['id'], (string) $doc['consent_key'], $doc);
+        }
     }
 
     private function assertProfile(SocialProfile $profile): void

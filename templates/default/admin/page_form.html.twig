@@ -41,6 +41,20 @@
           <input class="input input-bordered input-block" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
         </fieldset>
       </div>
+      {# 가입 동의 항목. 키를 적으면 회원가입 화면에 이 내용이 필수 동의로 붙는다.
+         비우면 그냥 내용이다. 개수 제한은 없다. #}
+      <div class="grid-2">
+        <fieldset class="fieldset{% if errors.consent_key is defined %} is-invalid{% endif %}">
+          <legend class="fieldset-legend">가입 동의 항목 <span class="legend-hint">비우면 그냥 내용</span></legend>
+          <input class="input input-bordered input-block" type="text" name="consent_key" value="{{ values.consent_key|default('') }}" maxlength="20" pattern="[a-z][a-z0-9_-]*" placeholder="예: marketing, location">
+          {% if errors.consent_key is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.consent_key }}</p>{% endif %}
+          <p class="fieldset-label">키를 적으면 회원가입 화면에 필수 동의로 나옵니다. 공개 상태여야 붙습니다.</p>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">동의 항목 차례 <span class="legend-hint">작을수록 위</span></legend>
+          <input class="input input-bordered input-block" type="number" name="consent_order" value="{{ values.consent_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
+        </fieldset>
+      </div>
       <fieldset class="fieldset toggle-list">
         <label class="label toggle-row">
           <input class="toggle toggle-primary" type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }}>

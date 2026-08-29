@@ -50,30 +50,44 @@ final class CmsRepository
     public function listPages(): array
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('pages') . ' WHERE deleted_at IS NULL ORDER BY sort_order ASC, id ASC'
+            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL ORDER BY sort_order ASC, id ASC'
         ));
     }
 
     public function listDeletedPages(): array
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('pages') . ' WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC'
+            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC'
         ));
     }
 
     public function publishedMenuPages(): array
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('pages')
+            'SELECT * FROM ' . $this->db->q('contents')
             . " WHERE status = 'published' AND show_in_menu = 1 AND deleted_at IS NULL"
             . ' ORDER BY sort_order ASC, id ASC'
         ));
     }
 
+    /**
+     * 동의 항목으로 표시된 내용. 정한 차례대로 준다.
+     * @param bool $publishedOnly 가입 화면에는 공개된 것만 붙는다.
+     */
+    public function listConsentDocuments(bool $publishedOnly = false): array
+    {
+        $sql = 'SELECT * FROM ' . $this->db->q('contents')
+            . ' WHERE consent_key IS NOT NULL AND deleted_at IS NULL';
+        if ($publishedOnly) {
+            $sql .= " AND status = 'published'";
+        }
+        return $this->db->select($sql . ' ORDER BY consent_order ASC, id ASC');
+    }
+
     public function findPageById(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('pages') . ' WHERE id = ? AND deleted_at IS NULL', [$id]
+            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE id = ? AND deleted_at IS NULL', [$id]
         );
         return $row === null ? null : $this->hydratePage($row);
     }
@@ -81,7 +95,7 @@ final class CmsRepository
     public function findDeletedPageById(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('pages') . ' WHERE id = ? AND deleted_at IS NOT NULL', [$id]
+            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE id = ? AND deleted_at IS NOT NULL', [$id]
         );
         return $row === null ? null : $this->hydratePage($row);
     }
@@ -89,7 +103,7 @@ final class CmsRepository
     public function findPublishedBySlug(string $slug): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('pages')
+            'SELECT * FROM ' . $this->db->q('contents')
             . " WHERE slug = ? AND status = 'published' AND deleted_at IS NULL",
             [$slug]
         );
@@ -98,14 +112,14 @@ final class CmsRepository
 
     public function findBySlug(string $slug): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('pages') . ' WHERE slug = ?', [$slug]);
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('contents') . ' WHERE slug = ?', [$slug]);
         return $row === null ? null : $this->hydratePage($row);
     }
 
     public function createPage(array $data): int
     {
         $now = Clock::now();
-        return (int) $this->db->insert('pages', array_merge($data, [
+        return (int) $this->db->insert('contents', array_merge($data, [
             'created_at' => $now,
             'updated_at' => $now,
             'published_at' => $data['status'] === 'published' ? $now : null,
@@ -116,12 +130,12 @@ final class CmsRepository
     {
         $data['updated_at'] = Clock::now();
         $data['published_at'] = $data['status'] === 'published' ? ($publishedAt ?? Clock::now()) : null;
-        $this->db->update('pages', $data, 'id = :id', ['id' => $id]);
+        $this->db->update('contents', $data, 'id = :id', ['id' => $id]);
     }
 
     public function deletePage(int $id): void
     {
-        $this->db->update('pages', [
+        $this->db->update('contents', [
             'status' => 'draft', 'show_in_menu' => 0, 'published_at' => null,
             'deleted_at' => Clock::now(), 'updated_at' => Clock::now(),
         ], 'id = :id', ['id' => $id]);
@@ -129,20 +143,20 @@ final class CmsRepository
 
     public function restorePage(int $id): void
     {
-        $this->db->update('pages', [
+        $this->db->update('contents', [
             'deleted_at' => null, 'updated_at' => Clock::now(),
         ], 'id = :id', ['id' => $id]);
     }
 
     public function permanentlyDeletePage(int $id): void
     {
-        $this->db->delete('pages', 'id = :id AND deleted_at IS NOT NULL', ['id' => $id]);
+        $this->db->delete('contents', 'id = :id AND deleted_at IS NOT NULL', ['id' => $id]);
     }
 
     public function countPages(): int
     {
         $row = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('pages') . ' WHERE deleted_at IS NULL'
+            'SELECT COUNT(*) AS c FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL'
         );
         return (int) ($row['c'] ?? 0);
     }

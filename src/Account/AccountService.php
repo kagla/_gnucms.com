@@ -50,14 +50,17 @@ final class AccountService
             $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
         }
 
-        $legal = null;
+        // 첫 사람(사이트 소유자)은 약관을 만들기 전이라 동의를 받지 않는다.
+        $consents = [];
         if ($this->users->countAll() > 0) {
-            $legal = $this->cms->legalDocuments();
-            if (!$v->bool('agree_terms', false)) {
-                $v->fail('agree_terms', '이용약관에 동의해야 가입할 수 있습니다.');
-            }
-            if (!$v->bool('agree_privacy', false)) {
-                $v->fail('agree_privacy', '개인정보 수집·이용에 동의해야 가입할 수 있습니다.');
+            // 필수 두 개가 공개돼 있는지 먼저 확인한다. 없으면 가입 자체를 받지 않는다.
+            $this->cms->legalDocuments();
+            $consents = $this->cms->consentDocuments();
+            foreach ($consents as $doc) {
+                if (!$v->bool('agree_' . $doc['consent_key'], false)) {
+                    $v->fail('agree_' . $doc['consent_key'],
+                        $doc['title'] . '에 동의해야 가입할 수 있습니다.');
+                }
             }
         }
         $v->check();
@@ -80,9 +83,10 @@ final class AccountService
         );
 
         $user = $this->users->findById($id);
-        if (!(bool) $user['is_admin'] && $legal !== null) {
-            $this->consents->record($id, 'terms', $legal['terms']);
-            $this->consents->record($id, 'privacy', $legal['privacy']);
+        if (!(bool) $user['is_admin']) {
+            foreach ($consents as $doc) {
+                $this->consents->record($id, (string) $doc['consent_key'], $doc);
+            }
         }
         if (!(bool) $user['email_verified']) {
             $this->sendVerification($user);

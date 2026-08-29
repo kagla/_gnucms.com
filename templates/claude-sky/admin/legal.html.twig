@@ -31,7 +31,7 @@
         {% set page = type == 'service' ? legal.terms : legal.privacy %}
         <tr>
           <td data-label="구분"><span class="cell-title">{{ label }}</span></td>
-          <td data-label="공개 주소"><code class="kbd kbd-sm">/terms/{{ type }}</code></td>
+          <td data-label="공개 주소"><code class="kbd kbd-sm">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</code></td>
           {% if page %}
             <td data-label="상태"><span class="badge badge-sm badge-soft {{ page.status == 'published' ? 'badge-success' : 'badge-ghost' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
             <td data-label="수정일">{{ page.updated_at|date('Y.m.d') }}</td>

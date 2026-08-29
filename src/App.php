@@ -308,7 +308,10 @@ final class App
                 $this->identities = new IdentityRepository($this->db());
             }
             if ($this->linkingService === null) {
-                $this->linkingService = new LinkingService($this->db(), $this->users(), $this->identities);
+                $this->linkingService = new LinkingService(
+                    $this->db(), $this->users(), $this->identities,
+                    $this->cmsService(), $this->consents()
+                );
             }
             $this->socialAuthService = new SocialAuthService(
                 $this->providerRegistry(), $this->linkingService, $this->mailer(),
