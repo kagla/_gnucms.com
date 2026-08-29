@@ -11,4 +11,5 @@
 <dl class="member-facts"><div><dt>권한</dt><dd>{{ values.is_admin ? '소유자' : '일반 회원' }}</dd></div><div><dt>이메일 인증</dt><dd>{{ values.email_verified ? '완료' : '대기' }}</dd></div><div><dt>가입일</dt><dd>{{ values.created_at|date('Y.m.d H:i') }}</dd></div></dl>
 <div class="form-actions"><a class="nav-link" href="{{ url_for('admin.members') }}">취소</a><button type="submit">변경사항 저장</button></div>
 </form></section>
+{% include "admin/_member_consents.html.twig" %}
 {% endblock %}

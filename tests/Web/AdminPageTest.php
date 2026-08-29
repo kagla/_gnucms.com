@@ -243,4 +243,47 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('현재 로그인한 관리자 계정은 차단할 수 없습니다.', $this->body($blockedOwner));
         self::assertSame('active', $app->users()->findById($adminId)['status']);
     }
+
+    /** 회원 수정 화면에 가입 동의 내역이 붙는다. 동의하지 않은 항목도 함께 나온다. */
+    #[DataProvider('connectionProvider')]
+    public function testMemberFormShowsConsentHistory(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com',
+            password_hash('admin-password-123', PASSWORD_DEFAULT),
+            '관리자',
+            true
+        );
+        $app->users()->verifyEmail($adminId);
+        foreach ([['terms', '이용약관', 1], ['marketing', '마케팅 정보 수신', 0]] as $doc) {
+            $app->cms()->createPage([
+                'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
+                'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+                'consent_key' => $doc[0], 'consent_order' => 0, 'consent_required' => $doc[2],
+            ]);
+        }
+        $memberId = $app->users()->create(
+            'member@example.com',
+            password_hash('member-password-123', PASSWORD_DEFAULT),
+            'member',
+            false
+        );
+        $app->users()->verifyEmail($memberId);
+        $app->consents()->record($memberId, 'terms', $app->cms()->findBySlug('terms'), true);
+        $app->consents()->record($memberId, 'marketing', $app->cms()->findBySlug('marketing'), false);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $body = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('가입 동의 내역', $body);
+        self::assertStringContainsString('이용약관', $body);
+        self::assertStringContainsString('마케팅 정보 수신', $body);
+        self::assertStringContainsString('안 함', $body);
+    }
 }

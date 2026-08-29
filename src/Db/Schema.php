@@ -47,6 +47,20 @@ final class Schema
     public const VERSION = '8';
 
     /**
+     * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
+     *
+     * 판 번호만 적어 두면, 판을 올린 뒤 마이그레이션을 더 손볼 때 그 사이 들어온 요청이
+     * '다 됐다' 도장을 먼저 찍어 버린다. 그러면 나중에 추가한 칸은 영영 건너뛴다.
+     * 파일이 바뀌면 도장도 달라지므로 그런 어긋남이 스스로 풀린다.
+     * migrate* 는 모두 멱등이라 한 번 더 도는 값은 싸다.
+     */
+    private function stamp(): string
+    {
+        $hash = hash_file('xxh128', __FILE__);
+        return self::VERSION . '.' . substr($hash === false ? '' : $hash, 0, 12);
+    }
+
+    /**
      * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
      *
      * 컬럼이 늘어난 뒤 마이그레이션을 잊으면 목록 조회가 통째로 실패해 사이트가 멈춘다.
@@ -65,7 +79,7 @@ final class Schema
             $row = null;
         }
 
-        if ($row !== null && (string) $row['setting_value'] === self::VERSION) {
+        if ($row !== null && (string) $row['setting_value'] === $this->stamp()) {
             return;
         }
 
@@ -83,11 +97,12 @@ final class Schema
         $this->migrateBoards();
         $this->migrateEditorImages();
         $this->migrateNotifications();
-        $this->ensureSiteSetting('schema_version', self::VERSION);
+        $stamp = $this->stamp();
+        $this->ensureSiteSetting('schema_version', $stamp);
         $this->db->execute(
             'UPDATE ' . $this->db->q('site_settings')
             . ' SET setting_value = ? WHERE setting_key = ?',
-            [self::VERSION, 'schema_version']
+            [$stamp, 'schema_version']
         );
     }
 
@@ -102,7 +117,7 @@ final class Schema
         }
 
         // 새로 만든 스키마는 이미 최신이다. 첫 요청에서 헛돌지 않게 표시해 둔다.
-        $this->ensureSiteSetting('schema_version', self::VERSION);
+        $this->ensureSiteSetting('schema_version', $this->stamp());
     }
 
     /** 기존 게시판 설치에 회원 테이블만 안전하게 추가한다. */

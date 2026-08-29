@@ -44,6 +44,23 @@ final class ConsentRepository
         );
     }
 
+    /**
+     * 관리 화면에 보여 줄 동의 내역. 그때 본 문서가 무엇이었는지, 그 뒤로 문서가
+     * 바뀌었는지까지 같이 읽는다. 문서가 지워졌으면 제목 칸이 비어 온다.
+     */
+    public function forUserWithDocument(int $userId): array
+    {
+        return $this->db->select(
+            'SELECT uc.consent_type, uc.agreed, uc.agreed_at, uc.content_updated_at,'
+            . ' c.title AS content_title, c.slug AS content_slug,'
+            . ' c.updated_at AS content_current_updated_at'
+            . ' FROM ' . $this->db->q('user_consents') . ' uc'
+            . ' LEFT JOIN ' . $this->db->q('contents') . ' c ON c.id = uc.content_id'
+            . ' WHERE uc.user_id = ? ORDER BY c.consent_order ASC, uc.id ASC',
+            [$userId]
+        );
+    }
+
     public function forUser(int $userId): array
     {
         return $this->db->select(
