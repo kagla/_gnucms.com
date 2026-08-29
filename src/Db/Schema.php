@@ -44,7 +44,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '7';
+    public const VERSION = '8';
 
     /**
      * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
@@ -257,12 +257,29 @@ final class Schema
             }
         }
 
+        // 동의를 다 필수로 받던 시절의 표. 마케팅 수신처럼 선택으로 받아야 하는 항목이 있다.
+        try {
+            $this->db->selectOne('SELECT consent_required FROM ' . $this->db->q('contents') . ' LIMIT 1');
+        } catch (DomainError $e) {
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+                . ' ADD COLUMN consent_required INTEGER NOT NULL DEFAULT 1');
+        }
+
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('user_consents'));
         } catch (DomainError $e) {
             foreach ($this->consentStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
+        }
+
+        // 선택 동의가 생기면서 '동의함' 뿐 아니라 '동의 안 함' 도 남겨야 한다.
+        // 예전 줄은 동의한 것만 있었으니 기본값 1 이 그대로 맞다.
+        try {
+            $this->db->selectOne('SELECT agreed FROM ' . $this->db->q('user_consents') . ' LIMIT 1');
+        } catch (DomainError $e) {
+            $this->db->execute('ALTER TABLE ' . $this->db->q('user_consents')
+                . ' ADD COLUMN agreed SMALLINT NOT NULL DEFAULT 1');
         }
     }
 
@@ -531,8 +548,9 @@ final class Schema
                 published_at    {DATETIME}   NULL,
                 deleted_at      {DATETIME}   NULL,
                 image_key       VARCHAR(32)  NULL,
-                consent_key     VARCHAR(20)  NULL,
-                consent_order   INTEGER      NOT NULL DEFAULT 0
+                consent_key      VARCHAR(20)  NULL,
+                consent_order    INTEGER      NOT NULL DEFAULT 0,
+                consent_required INTEGER      NOT NULL DEFAULT 1
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)',
             'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)',
@@ -583,6 +601,7 @@ final class Schema
                 consent_type        VARCHAR(20)  NOT NULL,
                 content_id          BIGINT       NOT NULL,
                 content_updated_at  {DATETIME}   NOT NULL,
+                agreed              SMALLINT     NOT NULL DEFAULT 1,
                 agreed_at           {DATETIME}   NOT NULL
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_user_consents_type ON user_consents (user_id, consent_type)',

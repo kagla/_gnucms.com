@@ -57,7 +57,9 @@ final class AccountService
             $this->cms->legalDocuments();
             $consents = $this->cms->consentDocuments();
             foreach ($consents as $doc) {
-                if (!$v->bool('agree_' . $doc['consent_key'], false)) {
+                // 선택 항목은 체크를 안 해도 가입을 막지 않는다. 대신 안 했다는 사실을 남긴다.
+                if ((int) $doc['consent_required'] === 1
+                    && !$v->bool('agree_' . $doc['consent_key'], false)) {
                     $v->fail('agree_' . $doc['consent_key'],
                         $doc['title'] . '에 동의해야 가입할 수 있습니다.');
                 }
@@ -85,7 +87,9 @@ final class AccountService
         $user = $this->users->findById($id);
         if (!(bool) $user['is_admin']) {
             foreach ($consents as $doc) {
-                $this->consents->record($id, (string) $doc['consent_key'], $doc);
+                $agreed = (int) $doc['consent_required'] === 1
+                    || $v->bool('agree_' . $doc['consent_key'], false);
+                $this->consents->record($id, (string) $doc['consent_key'], $doc, $agreed);
             }
         }
         if (!(bool) $user['email_verified']) {

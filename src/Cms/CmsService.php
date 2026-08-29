@@ -83,7 +83,7 @@ final class CmsService
             $this->cms->createPage([
                 'slug' => 'terms', 'title' => '이용약관', 'seo_description' => $siteName . ' 서비스 이용약관',
                 'content' => $this->termsDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 900,
-                'consent_key' => 'terms', 'consent_order' => 10,
+                'consent_key' => 'terms', 'consent_order' => 10, 'consent_required' => 1,
             ]);
         }
         if ($this->cms->findBySlug('privacy') === null) {
@@ -91,7 +91,7 @@ final class CmsService
                 'slug' => 'privacy', 'title' => '개인정보 처리방침',
                 'seo_description' => $siteName . ' 개인정보 처리방침',
                 'content' => $this->privacyDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 910,
-                'consent_key' => 'privacy', 'consent_order' => 20,
+                'consent_key' => 'privacy', 'consent_order' => 20, 'consent_required' => 1,
             ]);
         }
     }
@@ -263,6 +263,8 @@ final class CmsService
             }
             $data['consent_key'] = $key === '' ? null : $key;
             $data['consent_order'] = $v->int('consent_order', 0, -9999, 9999);
+            // 체크를 풀면 선택 동의가 된다. 마케팅 수신처럼 안 해도 가입은 되는 항목이다.
+            $data['consent_required'] = $v->bool('consent_required', false) ? 1 : 0;
         }
         if (preg_match('/^[a-f0-9]{32}$/D', $data['image_key']) !== 1) {
             $v->fail('image_key', '이미지 저장 정보를 확인할 수 없습니다.');

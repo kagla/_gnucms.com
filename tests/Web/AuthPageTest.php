@@ -102,4 +102,44 @@ final class AuthPageTest extends WebTestCase
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('이용약관에 동의', $this->body($response));
     }
+
+    /** 마케팅 수신처럼 안 해도 가입되는 항목. 동의하지 않았다는 사실도 기록에 남는다. */
+    #[DataProvider('connectionProvider')]
+    public function testOptionalConsentDoesNotBlockSignupButIsRecorded(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        // 첫 사람은 실제 가입 경로로 만든다. 그래야 '첫 관리자' 자리가 채워져
+        // 다음 가입자가 관리자로 올라가지 않고 동의 기록을 정상으로 남긴다.
+        $app->accountService()->register([
+            'email' => 'owner@example.com',
+            'password' => 'owner-password-123', 'password_confirmation' => 'owner-password-123',
+        ]);
+        foreach ([['terms', '이용약관', 1], ['privacy', '개인정보 처리방침', 1], ['marketing', '마케팅 정보 수신', 0]] as $doc) {
+            $app->cms()->createPage([
+                'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
+                'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+                'consent_key' => $doc[0], 'consent_order' => 0, 'consent_required' => $doc[2],
+            ]);
+        }
+
+        $form = $this->body($this->get($app, '/register'));
+        self::assertStringContainsString('name="agree_marketing"', $form);
+        self::assertStringContainsString('선택', $form);
+
+        // 선택 항목을 비운 채로도 가입이 된다.
+        $response = $this->post($app, '/register', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
+            'agree_terms' => '1', 'agree_privacy' => '1',
+        ]);
+        self::assertSame(200, $response->getStatusCode(), $this->body($response));
+        self::assertStringContainsString('이메일을 확인해', $this->body($response));
+
+        $member = $app->users()->findByEmail('member@example.com');
+        $agreed = [];
+        foreach ($app->consents()->forUser((int) $member['id']) as $row) {
+            $agreed[$row['consent_type']] = (int) $row['agreed'];
+        }
+        self::assertSame(['terms' => 1, 'privacy' => 1, 'marketing' => 0], $agreed);
+    }
 }
