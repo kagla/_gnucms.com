@@ -11,6 +11,9 @@ use GnuCms\Account\UserRepository;
 use GnuCms\Account\ConsentRepository;
 use GnuCms\Cms\CmsRepository;
 use GnuCms\Cms\CmsService;
+use GnuCms\Cms\ConsentUseRepository;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Error\DomainError;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\DatabaseTestCase;
@@ -180,13 +183,18 @@ final class AccountServiceTest extends DatabaseTestCase
         $mailer = new CollectingMailer();
         $users = new UserRepository($db);
         $cmsRepository = new CmsRepository($db);
-        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $legal) {
-            $cmsRepository->createPage([
+        $consentUses = new ConsentUseRepository($db);
+        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
+            $id = $cmsRepository->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
-                // 가입 동의 항목이라는 표시. 이 표시가 붙은 내용만 가입 화면에 나온다.
-                'consent_key' => $legal[0], 'consent_order' => 0,
+                // 약관이라는 표시. 이 표시가 붙고 회원가입 자리에 붙은 내용만 가입 화면에 나온다.
+                'is_consent' => 1,
+                // AccountService::register() 는 아직(5·6 과제 전) 옛 칸으로 폼 이름을
+                // 만들고 필수 여부를 읽으므로, 옛 칸도 함께 채워 둔다.
+                'consent_key' => $legal[0], 'consent_order' => $order, 'consent_required' => 1,
             ]);
+            $consentUses->attach('signup', $id, true, $order);
         }
         $consents = new ConsentRepository($db);
         $service = new AccountService(
@@ -194,7 +202,13 @@ final class AccountServiceTest extends DatabaseTestCase
             new TokenService(new TokenRepository($db)),
             $mailer,
             'https://example.test',
-            new CmsService($cmsRepository),
+            new CmsService(
+                $cmsRepository,
+                new HtmlSanitizer(),
+                new ContentImageService(sys_get_temp_dir() . '/' . GNUCMS_ID . '-account-test'),
+                $consentUses,
+                $consents
+            ),
             $consents
         );
 

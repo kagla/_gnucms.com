@@ -47,10 +47,18 @@ final class CmsRepository
         });
     }
 
-    public function listPages(): array
+    /** @param bool|null $consentOnly null 이면 전부, true 면 약관만, false 면 약관 말고 */
+    public function listPages(?bool $consentOnly = null): array
     {
+        $sql = 'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL';
+        if ($consentOnly === true) {
+            $sql .= ' AND is_consent = 1';
+        } elseif ($consentOnly === false) {
+            $sql .= ' AND is_consent = 0';
+        }
+
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL ORDER BY sort_order ASC, id ASC'
+            $sql . ' ORDER BY sort_order ASC, id ASC'
         ));
     }
 

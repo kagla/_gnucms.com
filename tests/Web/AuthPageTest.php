@@ -79,13 +79,16 @@ final class AuthPageTest extends WebTestCase
         $app->users()->verifyEmail($ownerId);
 
         self::assertSame(403, $this->get($app, '/register')->getStatusCode());
-        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $legal) {
-            $app->cms()->createPage([
+        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
+            $id = $app->cms()->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
-                // 가입 동의 항목이라는 표시. 이 표시가 붙은 내용만 가입 화면에 나온다.
-                'consent_key' => $legal[0], 'consent_order' => 0,
+                // 약관이라는 표시. 옛 화면(가입 폼 템플릿)은 아직 옛 칸으로 이름과 필수
+                // 여부를 읽으므로 함께 채워 둔다.
+                'is_consent' => 1, 'consent_key' => $legal[0], 'consent_order' => $order,
+                'consent_required' => 1,
             ]);
+            $app->consentUses()->attach('signup', $id, true, $order);
         }
 
         $form = $this->body($this->get($app, '/register'));
@@ -114,12 +117,16 @@ final class AuthPageTest extends WebTestCase
             'email' => 'owner@example.com',
             'password' => 'owner-password-123', 'password_confirmation' => 'owner-password-123',
         ]);
-        foreach ([['terms', '이용약관', 1], ['privacy', '개인정보 처리방침', 1], ['marketing', '마케팅 정보 수신', 0]] as $doc) {
-            $app->cms()->createPage([
+        foreach ([['terms', '이용약관', 1], ['privacy', '개인정보 처리방침', 1], ['marketing', '마케팅 정보 수신', 0]] as $order => $doc) {
+            $id = $app->cms()->createPage([
                 'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
-                'consent_key' => $doc[0], 'consent_order' => 0, 'consent_required' => $doc[2],
+                // 약관이라는 표시. 옛 화면(가입 폼 템플릿)은 아직 옛 칸으로 이름과 필수
+                // 여부를 읽으므로 함께 채워 둔다.
+                'is_consent' => 1, 'consent_key' => $doc[0], 'consent_order' => $order,
+                'consent_required' => $doc[2],
             ]);
+            $app->consentUses()->attach('signup', $id, (bool) $doc[2], $order);
         }
 
         $form = $this->body($this->get($app, '/register'));

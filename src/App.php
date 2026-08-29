@@ -392,7 +392,10 @@ final class App
     public function cmsService(): CmsService
     {
         if ($this->cmsService === null) {
-            $this->cmsService = new CmsService($this->cms(), $this->htmlSanitizer(), $this->contentImages());
+            $this->cmsService = new CmsService(
+                $this->cms(), $this->htmlSanitizer(), $this->contentImages(),
+                $this->consentUses(), $this->consents()
+            );
         }
         return $this->cmsService;
     }

@@ -86,8 +86,14 @@ final class LinkingServiceTest extends DatabaseTestCase
         $db = $this->freshDatabase($config);
         $users = new UserRepository($db);
         $identities = new IdentityRepository($db);
-        $cms = new \GnuCms\Cms\CmsService(new \GnuCms\Cms\CmsRepository($db));
         $consents = new \GnuCms\Account\ConsentRepository($db);
+        $cms = new \GnuCms\Cms\CmsService(
+            new \GnuCms\Cms\CmsRepository($db),
+            new \GnuCms\Cms\HtmlSanitizer(),
+            new \GnuCms\Cms\ContentImageService(sys_get_temp_dir() . '/' . GNUCMS_ID . '-linking-test'),
+            new \GnuCms\Cms\ConsentUseRepository($db),
+            $consents
+        );
         return [new LinkingService($db, $users, $identities, $cms, $consents), $users, $identities];
     }
 }

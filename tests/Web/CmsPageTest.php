@@ -153,8 +153,8 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('이용약관', $this->body($legalPage));
         self::assertStringContainsString('/admin/terms/service', $this->body($legalPage));
         self::assertStringContainsString('>/content/terms<', $this->body($legalPage));
-        // 약관도 이제 내용 관리에 함께 나오고, 거기서 바로 고칠 수 있다.
-        self::assertStringContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
+        // 약관은 약관 관리에서 다루므로 내용 관리 목록에는 나오지 않는다.
+        self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
         $terms = $app->cms()->findBySlug('terms');
         self::assertSame(200, $this->get($app, '/admin/terms/service')->getStatusCode());
         self::assertSame(200, $this->get($app, '/admin/terms/service/preview')->getStatusCode());

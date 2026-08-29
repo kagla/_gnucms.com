@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Cms;
 
+use GnuCms\Account\ConsentRepository;
 use GnuCms\Auth\Acl;
 use GnuCms\Error\DomainError;
 use GnuCms\Validation\Validator;
@@ -24,12 +25,22 @@ final class CmsService
     private HtmlSanitizer $sanitizer;
     private ?ContentImageService $images;
 
-    public function __construct(CmsRepository $cms, ?HtmlSanitizer $sanitizer = null,
-        ?ContentImageService $images = null)
-    {
+    private ConsentUseRepository $uses;
+
+    private ConsentRepository $consents;
+
+    public function __construct(
+        CmsRepository $cms,
+        HtmlSanitizer $sanitizer,
+        ContentImageService $images,
+        ConsentUseRepository $uses,
+        ConsentRepository $consents
+    ) {
         $this->cms = $cms;
-        $this->sanitizer = $sanitizer ?? new HtmlSanitizer();
+        $this->sanitizer = $sanitizer;
         $this->images = $images;
+        $this->uses = $uses;
+        $this->consents = $consents;
     }
 
     public function settings(): array
@@ -56,12 +67,12 @@ final class CmsService
     }
 
     /**
-     * 가입 화면에 붙는 동의 항목. consent_key 가 있고 공개된 내용만, 정한 차례대로.
-     * 개수 제한이 없다. 이용약관·개인정보는 그중 씨앗으로 심어 둔 둘일 뿐이다.
+     * 한 자리에 붙은 동의 항목. 공개된 것만, 정한 차례대로. 개수 제한이 없다.
+     * 필수·선택은 약관이 아니라 붙임이 갖는다.
      */
-    public function consentDocuments(): array
+    public function consentDocuments(string $scope = 'signup'): array
     {
-        return $this->cms->listConsentDocuments(true);
+        return $this->uses->listForScope($scope, true);
     }
 
     /** 바닥글 등이 쓰는 필수 약관 두 개. 없으면 가입을 받지 않는다. */
@@ -79,20 +90,24 @@ final class CmsService
     {
         $acl->assertGlobalAdmin();
         $siteName = (string) $this->settings()['site_name'];
-        if ($this->cms->findBySlug('terms') === null) {
-            $this->cms->createPage([
-                'slug' => 'terms', 'title' => '이용약관', 'seo_description' => $siteName . ' 서비스 이용약관',
-                'content' => $this->termsDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 900,
-                'consent_key' => 'terms', 'consent_order' => 10, 'consent_required' => 1,
-            ]);
-        }
-        if ($this->cms->findBySlug('privacy') === null) {
-            $this->cms->createPage([
-                'slug' => 'privacy', 'title' => '개인정보 처리방침',
-                'seo_description' => $siteName . ' 개인정보 처리방침',
-                'content' => $this->privacyDraft($siteName), 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 910,
-                'consent_key' => 'privacy', 'consent_order' => 20, 'consent_required' => 1,
-            ]);
+        $seeds = [
+            ['terms', '이용약관', $siteName . ' 서비스 이용약관', $this->termsDraft($siteName), 900, 10],
+            ['privacy', '개인정보 처리방침', $siteName . ' 개인정보 처리방침',
+             $this->privacyDraft($siteName), 910, 20],
+        ];
+        foreach ($seeds as [$slug, $title, $seo, $body, $sort, $order]) {
+            $page = $this->cms->findBySlug($slug);
+            if ($page === null) {
+                $id = $this->cms->createPage([
+                    'slug' => $slug, 'title' => $title, 'seo_description' => $seo,
+                    'content' => $body, 'status' => 'draft', 'show_in_menu' => 0,
+                    'sort_order' => $sort, 'is_consent' => 1,
+                ]);
+            } else {
+                $id = (int) $page['id'];
+            }
+            // 씨앗 둘은 회원가입에 반드시 붙는다. 없으면 가입 자체를 받지 않는다.
+            $this->uses->attach('signup', $id, true, $order);
         }
     }
 
@@ -102,10 +117,38 @@ final class CmsService
         return $this->cms->listPages();
     }
 
-    /** 약관도 이제 여기에 함께 나온다. 따로 걸러 내지 않는다. */
+    /** 내용 관리 목록. 약관은 약관 관리에서 다루므로 여기서 뺀다. */
     public function contents(Acl $acl): array
     {
-        return $this->pages($acl);
+        $acl->assertGlobalAdmin();
+        return $this->cms->listPages(false);
+    }
+
+    /**
+     * 약관 관리 목록. 그 자리의 붙임과 동의 수를 합쳐 준다.
+     *
+     * 붙임을 여기서 골라 주는 이유는 Twig 의 {% set %} 이 for 밖으로 새지 않아
+     * 템플릿 안에서 "이 약관이 이 자리에 붙었나" 를 고를 수 없기 때문이다.
+     */
+    public function consentPages(Acl $acl, string $scope = 'signup'): array
+    {
+        $acl->assertGlobalAdmin();
+        $rows = [];
+        foreach ($this->cms->listPages(true) as $page) {
+            $id = (int) $page['id'];
+            $uses = $this->uses->listForContent($id);
+            $page['uses'] = $uses;
+            $page['use'] = null;
+            foreach ($uses as $use) {
+                if ((string) $use['scope'] === $scope) {
+                    $page['use'] = $use;
+                    break;
+                }
+            }
+            $page['counts'] = $this->consents->countsForContent($id);
+            $rows[] = $page;
+        }
+        return $rows;
     }
 
     public function trash(Acl $acl): array
@@ -189,10 +232,10 @@ final class CmsService
     public function deletePage(Acl $acl, int $id): void
     {
         $page = $this->page($acl, $id);
-        // 가입 동의 항목을 지우면 그때부터 가입이 막힌다. 표시를 먼저 떼도록 안내한다.
-        if (($page['consent_key'] ?? null) !== null) {
+        // 붙어 있는 약관을 지우면 그 자리의 가입·신청이 그때부터 막힌다.
+        if ($this->uses->listForContent($id) !== []) {
             throw DomainError::validation([
-                'consent_key' => '가입 동의 항목으로 쓰는 내용은 지울 수 없습니다. 먼저 동의 항목 표시를 떼어 주세요.',
+                'is_consent' => '어딘가에 붙어 있는 약관은 지울 수 없습니다. 먼저 붙임을 떼어 주세요.',
             ]);
         }
         $this->cms->deletePage($id);
@@ -254,17 +297,10 @@ final class CmsService
             'sort_order' => $v->int('sort_order', 0, -9999, 9999),
             'image_key' => $imageKey,
         ];
-        // 동의 항목 칸은 폼에 있을 때만 반영한다. 그 칸이 없는 화면에서 저장해도
-        // 이미 정해 둔 동의 설정이 조용히 지워지지 않는다.
-        if (array_key_exists('consent_key', $input)) {
-            $key = strtolower(trim((string) $input['consent_key']));
-            if ($key !== '' && preg_match('/^[a-z][a-z0-9_-]{0,19}$/D', $key) !== 1) {
-                $v->fail('consent_key', '영문 소문자로 시작하고 소문자·숫자·밑줄·하이픈만 쓸 수 있습니다.');
-            }
-            $data['consent_key'] = $key === '' ? null : $key;
-            $data['consent_order'] = $v->int('consent_order', 0, -9999, 9999);
-            // 체크를 풀면 선택 동의가 된다. 마케팅 수신처럼 안 해도 가입은 되는 항목이다.
-            $data['consent_required'] = $v->bool('consent_required', false) ? 1 : 0;
+        // 약관 여부는 폼에 있을 때만 반영한다. 그 칸이 없는 화면에서 저장해도
+        // 이미 정해 둔 표시가 조용히 지워지지 않는다.
+        if (array_key_exists('is_consent', $input)) {
+            $data['is_consent'] = $v->bool('is_consent', false) ? 1 : 0;
         }
         if (preg_match('/^[a-f0-9]{32}$/D', $data['image_key']) !== 1) {
             $v->fail('image_key', '이미지 저장 정보를 확인할 수 없습니다.');
@@ -306,6 +342,12 @@ final class CmsService
             . "7. 정보주체의 권리\n이용자는 개인정보 열람, 정정, 삭제, 처리정지 및 동의 철회를 요청할 수 있습니다.\n\n"
             . "8. 안전성 확보 조치\n접근 권한 관리, 비밀번호 암호화, 보안 업데이트 등 필요한 보호조치를 시행합니다.\n\n"
             . "9. 개인정보 보호 문의\n담당자: [이름 또는 담당 부서]\n연락처: [이메일]\n\n"
-            . "시행일: [YYYY-MM-DD]";
+            . '<h2>자동으로 수집하는 정보</h2>'
+            . '<p>회원가입과 각종 신청에서 동의를 받을 때, 동의를 받았다는 사실을 증명하기 위해'
+            . ' 접속 IP 주소와 접속 일시, 브라우저 정보를 함께 기록합니다. 이 정보는 동의 사실'
+            . ' 증명과 부정 이용 방지 목적으로만 쓰며, 다른 목적으로 이용하지 않습니다.</p>'
+            . '<p>보관기간: 회원 동의 기록은 탈퇴 시 함께 파기하고, 비회원 신청 건의 동의 기록은'
+            . ' 해당 신청 건의 보관기간이 지나면 파기합니다.</p>'
+            . "\n\n시행일: [YYYY-MM-DD]";
     }
 }
