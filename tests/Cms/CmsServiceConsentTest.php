@@ -6,12 +6,32 @@ namespace GnuCms\Tests\Cms;
 
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
+use GnuCms\Cms\CmsService;
+use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Error\DomainError;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionMethod;
 
 final class CmsServiceConsentTest extends WebTestCase
 {
+    // 개인정보 초안이 자동 수집 안내(HTML) 문단을 이어 붙이면서 문서 전체가 태그를
+    // 포함하게 됐다. HtmlSanitizer::clean() 은 태그가 하나라도 있으면 순수 텍스트용
+    // 줄바꿈 처리를 건너뛰므로, 앞쪽 1~9항도 직접 <p> 로 나눠 두지 않으면 정제 후
+    // 한 문단으로 뭉개진다. 이 회귀를 잡는다.
+    public function testPrivacyDraftRendersAsMultipleBlocks(): void
+    {
+        $method = new ReflectionMethod(CmsService::class, 'privacyDraft');
+        $method->setAccessible(true);
+        $service = (new \ReflectionClass(CmsService::class))->newInstanceWithoutConstructor();
+        $draft = $method->invoke($service, '테스트');
+
+        $clean = (new HtmlSanitizer())->clean($draft);
+
+        self::assertStringContainsString('<h2>', $clean);
+        self::assertGreaterThan(1, substr_count($clean, '<p>'), '개인정보 초안은 여러 문단으로 나뉘어야 한다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testConsentPagesAreSeparatedFromContents(array $dbConfig): void
     {
