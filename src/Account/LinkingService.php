@@ -91,7 +91,8 @@ final class LinkingService
             // 필수는 '계속하면 동의' 고지로 받은 것으로 본다. 선택은 물어본 적이 없으니
             // 동의로 볼 수 없다. 나중에 회원이 직접 켤 수 있게 안 함으로 남겨 둔다.
             $agreed = (int) $doc['consent_required'] === 1;
-            $this->consents->record((int) $user['id'], (string) $doc['consent_key'], $doc, $agreed);
+            // 시그니처만 우선 맞춘다. subject_type/scope 를 제대로 쓰는 개편은 다음 작업에서 한다.
+            $this->consents->record('user', (int) $user['id'], 'signup', $doc, $agreed, null);
         }
     }
 

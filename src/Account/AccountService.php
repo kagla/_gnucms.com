@@ -89,7 +89,8 @@ final class AccountService
             foreach ($consents as $doc) {
                 $agreed = (int) $doc['consent_required'] === 1
                     || $v->bool('agree_' . $doc['consent_key'], false);
-                $this->consents->record($id, (string) $doc['consent_key'], $doc, $agreed);
+                // 시그니처만 우선 맞춘다. subject_type/scope 를 제대로 쓰는 개편은 다음 작업에서 한다.
+                $this->consents->record('user', $id, 'signup', $doc, $agreed, null);
             }
         }
         if (!(bool) $user['email_verified']) {

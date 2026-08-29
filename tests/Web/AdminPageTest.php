@@ -270,8 +270,8 @@ final class AdminPageTest extends WebTestCase
             false
         );
         $app->users()->verifyEmail($memberId);
-        $app->consents()->record($memberId, 'terms', $app->cms()->findBySlug('terms'), true);
-        $app->consents()->record($memberId, 'marketing', $app->cms()->findBySlug('marketing'), false);
+        $app->consents()->record('user', $memberId, 'signup', $app->cms()->findBySlug('terms'), true, null);
+        $app->consents()->record('user', $memberId, 'signup', $app->cms()->findBySlug('marketing'), false, null);
 
         $this->get($app, '/login');
         $this->post($app, '/login', [
