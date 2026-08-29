@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Db;
 
 use GnuCms\Error\DomainError;
+use GnuCms\Support\Clock;
 
 /**
  * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고
@@ -14,7 +15,8 @@ final class Schema
 {
     public const TABLES = [
         'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities', 'site_state',
-        'site_settings', 'mail_settings', 'contents', 'user_consents',
+        'site_settings', 'mail_settings', 'contents', 'user_consents', 'consent_uses',
+        'consents_given',
     ];
 
     /** @var Connection */
@@ -44,7 +46,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '8';
+    public const VERSION = '9';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -296,6 +298,66 @@ final class Schema
             $this->db->execute('ALTER TABLE ' . $this->db->q('user_consents')
                 . ' ADD COLUMN agreed SMALLINT NOT NULL DEFAULT 1');
         }
+
+        // 약관 여부를 토글 한 칸으로 옮긴다. 옛 칸은 되돌릴 길로 한 판 동안 남긴다.
+        try {
+            $this->db->selectOne('SELECT is_consent FROM ' . $this->db->q('contents') . ' LIMIT 1');
+        } catch (DomainError $e) {
+            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+                . ' ADD COLUMN is_consent SMALLINT NOT NULL DEFAULT 0');
+            $this->db->execute('UPDATE ' . $this->db->q('contents')
+                . ' SET is_consent = 1 WHERE consent_key IS NOT NULL');
+            try {
+                $this->db->execute('CREATE INDEX ix_contents_is_consent ON '
+                    . $this->db->q('contents') . ' (is_consent)');
+            } catch (DomainError $e) {
+                // 이미 있으면 그대로 둔다
+            }
+        }
+
+        // 붙임 표. 옛 필수·차례를 회원가입 자리의 붙임으로 옮긴다.
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consent_uses'));
+        } catch (DomainError $e) {
+            foreach ($this->consentUseStatements() as $sql) {
+                $this->db->execute($this->expand($sql));
+            }
+            $rows = $this->db->select('SELECT id, consent_required, consent_order FROM '
+                . $this->db->q('contents') . ' WHERE is_consent = 1');
+            foreach ($rows as $row) {
+                $this->db->insert('consent_uses', [
+                    'scope' => 'signup',
+                    'content_id' => (int) $row['id'],
+                    'required' => (int) $row['consent_required'],
+                    'sort_order' => (int) $row['consent_order'],
+                    'created_at' => Clock::now(),
+                ]);
+            }
+        }
+
+        // 동의 기록을 회원 밖으로 넓힌 표로 옮긴다. 옛 표는 남겨 둔다.
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consents_given'));
+        } catch (DomainError $e) {
+            foreach ($this->consentsGivenStatements() as $sql) {
+                $this->db->execute($this->expand($sql));
+            }
+            $rows = $this->db->select('SELECT * FROM ' . $this->db->q('user_consents'));
+            foreach ($rows as $row) {
+                $this->db->insert('consents_given', [
+                    'subject_type' => 'user',
+                    'subject_id' => (int) $row['user_id'],
+                    'scope' => 'signup',
+                    'content_id' => (int) $row['content_id'],
+                    'consent_type' => (string) $row['consent_type'],
+                    'content_updated_at' => (string) $row['content_updated_at'],
+                    'agreed' => (int) ($row['agreed'] ?? 1),
+                    'agreed_at' => (string) $row['agreed_at'],
+                    'agreed_ip' => null,
+                    'agreed_ua' => null,
+                ]);
+            }
+        }
     }
 
     public function drop(): void
@@ -386,7 +448,9 @@ final class Schema
 
             'CREATE INDEX ix_comments_post ON comments (post_id, id)',
         ], $this->accountStatements(), $this->settingsStatements(), $this->mailSettingsStatements(),
-            $this->contentStatements(), $this->consentStatements(), $this->notificationStatements());
+            $this->contentStatements(), $this->consentStatements(),
+            $this->consentUseStatements(), $this->consentsGivenStatements(),
+            $this->notificationStatements());
     }
 
     private function accountStatements(): array
@@ -565,11 +629,13 @@ final class Schema
                 image_key       VARCHAR(32)  NULL,
                 consent_key      VARCHAR(20)  NULL,
                 consent_order    INTEGER      NOT NULL DEFAULT 0,
-                consent_required INTEGER      NOT NULL DEFAULT 1
+                consent_required INTEGER      NOT NULL DEFAULT 1,
+                is_consent       SMALLINT     NOT NULL DEFAULT 0
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)',
             'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)',
             'CREATE UNIQUE INDEX ux_contents_consent ON contents (consent_key)',
+            'CREATE INDEX ix_contents_is_consent ON contents (is_consent)',
         ];
     }
 
@@ -621,6 +687,50 @@ final class Schema
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_user_consents_type ON user_consents (user_id, consent_type)',
             'CREATE INDEX ix_user_consents_content ON user_consents (content_id)',
+        ];
+    }
+
+    /** 약관을 어디에 붙였는지. 필수·선택과 차례는 약관이 아니라 이 붙임이 갖는다. */
+    private function consentUseStatements(): array
+    {
+        return [
+            'CREATE TABLE consent_uses (
+                id          {AUTO_PK},
+                scope       VARCHAR(40)  NOT NULL,
+                content_id  BIGINT       NOT NULL,
+                required    SMALLINT     NOT NULL DEFAULT 1,
+                sort_order  INTEGER      NOT NULL DEFAULT 0,
+                created_at  {DATETIME}   NOT NULL
+            ){SUFFIX}',
+            'CREATE UNIQUE INDEX ux_consent_uses ON consent_uses (scope, content_id)',
+            'CREATE INDEX ix_consent_uses_content ON consent_uses (content_id)',
+        ];
+    }
+
+    /**
+     * 동의 기록. 회원뿐 아니라 비회원 제출 건에도 달 수 있게 subject 로 받는다.
+     * agreed_ip / agreed_ua 는 '동의를 받았다'를 입증하기 위한 증적이라
+     * 동의 대상이 아니다. 대신 처리방침에 고지하고 보관기간을 지킨다.
+     */
+    private function consentsGivenStatements(): array
+    {
+        return [
+            'CREATE TABLE consents_given (
+                id                  {AUTO_PK},
+                subject_type        VARCHAR(20)  NOT NULL,
+                subject_id          BIGINT       NOT NULL,
+                scope               VARCHAR(40)  NOT NULL,
+                content_id          BIGINT       NOT NULL,
+                consent_type        VARCHAR(100) NOT NULL,
+                content_updated_at  {DATETIME}   NOT NULL,
+                agreed              SMALLINT     NOT NULL DEFAULT 1,
+                agreed_at           {DATETIME}   NOT NULL,
+                agreed_ip           VARCHAR(45)  NULL,
+                agreed_ua           VARCHAR(255) NULL
+            ){SUFFIX}',
+            'CREATE UNIQUE INDEX ux_consents_given ON consents_given'
+                . ' (subject_type, subject_id, scope, content_id)',
+            'CREATE INDEX ix_consents_given_content ON consents_given (content_id)',
         ];
     }
 

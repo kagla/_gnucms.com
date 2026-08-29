@@ -7,9 +7,10 @@ namespace GnuCms\Tests\Db;
 use PHPUnit\Framework\Attributes\DataProvider;
 use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
-use GnuCms\Tests\Support\DatabaseTestCase;
+use GnuCms\Error\DomainError;
+use GnuCms\Tests\Support\WebTestCase;
 
-final class SchemaTest extends DatabaseTestCase
+final class SchemaTest extends WebTestCase
 {
     #[DataProvider('connectionProvider')]
     public function testCreatesAllTables(array $config): void
@@ -121,6 +122,67 @@ final class SchemaTest extends DatabaseTestCase
             ['theme']
         );
         self::assertSame('codex-preline', $setting['setting_value']);
+    }
+
+    /** 옛 판에서 올라와도 새 칸과 새 표가 빠짐없이 생기고, 기존 동의가 그대로 옮겨진다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrationAddsConsentUsesAndMovesRecords(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $db = $app->db();
+
+        // 옛 칸이 없던 시절부터 있던 약관 글을 미리 만들어 둔다.
+        $id = $app->cms()->createPage([
+            'slug' => 'terms', 'title' => '이용약관', 'content' => '본문',
+            'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+            'consent_key' => 'terms', 'consent_order' => 10, 'consent_required' => 1,
+        ]);
+
+        // 옛 모양을 되살린다. DROP COLUMN 을 못 쓰는 판이면 이 단언은 건너뛴다.
+        $canDropColumn = true;
+        try {
+            $db->execute('ALTER TABLE ' . $db->q('contents') . ' DROP COLUMN is_consent');
+        } catch (DomainError $e) {
+            $canDropColumn = false;
+        }
+        if (!$canDropColumn) {
+            // 칸을 못 지웠으니 마이그레이션이 채울 값을 미리 손으로 채워, 나머지 갈래는 그대로 돈다.
+            $db->execute('UPDATE ' . $db->q('contents')
+                . ' SET is_consent = 1 WHERE consent_key IS NOT NULL');
+        }
+
+        // 옛 모양으로 되돌린다: 붙임 표를 지우고 판 도장을 낮춘다.
+        $db->execute('DROP TABLE IF EXISTS ' . $db->q('consent_uses'));
+        $db->execute('DROP TABLE IF EXISTS ' . $db->q('consents_given'));
+        $db->execute('UPDATE ' . $db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'schema_version']);
+
+        $userId = $app->users()->create('a@example.com', password_hash('x', PASSWORD_DEFAULT), 'A', false);
+        $db->insert('user_consents', [
+            'user_id' => $userId, 'consent_type' => 'terms', 'content_id' => $id,
+            'content_updated_at' => '2026-01-01 00:00:00', 'agreed' => 1,
+            'agreed_at' => '2026-01-01 00:00:00',
+        ]);
+
+        (new Schema($db))->ensureCurrent();
+
+        if ($canDropColumn) {
+            $page = $db->selectOne('SELECT is_consent FROM ' . $db->q('contents') . ' WHERE id = ?', [$id]);
+            self::assertSame(1, (int) $page['is_consent']);
+        }
+
+        $use = $db->selectOne('SELECT * FROM ' . $db->q('consent_uses')
+            . ' WHERE scope = ? AND content_id = ?', ['signup', $id]);
+        self::assertNotNull($use);
+        self::assertSame(1, (int) $use['required']);
+        self::assertSame(10, (int) $use['sort_order']);
+
+        $given = $db->selectOne('SELECT * FROM ' . $db->q('consents_given')
+            . ' WHERE subject_type = ? AND subject_id = ?', ['user', $userId]);
+        self::assertNotNull($given);
+        self::assertSame('signup', $given['scope']);
+        self::assertSame('terms', $given['consent_type']);
+        self::assertSame(1, (int) $given['agreed']);
     }
 
     private function boardRow(string $key): array
