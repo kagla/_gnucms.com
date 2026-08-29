@@ -34,6 +34,7 @@ use GnuCms\Mail\SmtpMailer;
 use GnuCms\Oauth\ProviderRegistry;
 use GnuCms\Cms\CmsRepository;
 use GnuCms\Cms\CmsService;
+use GnuCms\Cms\ConsentUseRepository;
 use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\ContentRenderer;
 use GnuCms\Cms\HtmlSanitizer;
@@ -107,6 +108,8 @@ final class App
     private ?CmsService $cmsService = null;
 
     private ?ConsentRepository $consents = null;
+
+    private ?ConsentUseRepository $consentUses = null;
 
     private ?HtmlSanitizer $htmlSanitizer = null;
 
@@ -429,6 +432,14 @@ final class App
             $this->consents = new ConsentRepository($this->db());
         }
         return $this->consents;
+    }
+
+    public function consentUses(): ConsentUseRepository
+    {
+        if ($this->consentUses === null) {
+            $this->consentUses = new ConsentUseRepository($this->db());
+        }
+        return $this->consentUses;
     }
 
     public function setIdentity(Identity $identity): void
