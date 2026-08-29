@@ -1,0 +1,27 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ page.title }} · {{ site.site_name }}{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ page.seo_description ?: site.site_tagline }}">{% endblock %}
+{% block body %}
+<div class="read-progress" aria-hidden="true"></div>
+<article class="card article article-page">
+  {# 관리자에게만 보이는 편집 길. 보기 화면이든 미리보기든 문구 없이 톱니 하나로 둔다.
+     미리보기에서 아직 공개 전인 초안이면, 공개된 화면과 헷갈리지 않게 톱니만 경고색으로 둔다.
+     자세한 설명은 도움말과 화면 낭독기에 남긴다. #}
+  {% if not current_user.is_guest and current_user.is_admin %}
+    {% set page_draft = preview and page.status != 'published' %}
+    {% set page_edit_label = preview
+        ? (page_draft ? '아직 공개되지 않은 초안 미리보기 · 편집으로 돌아가기' : '공개된 내용 미리보기 · 편집으로 돌아가기')
+        : '이 내용 수정' %}
+    <a class="btn btn-outline btn-sm btn-square page-edit{{ page_draft ? ' page-edit-draft' : '' }}"
+       href="{{ legal_type ? url_for('admin.terms.edit', {type: legal_type}) : url_for('admin.content.edit', {id: page.id}) }}"
+       title="{{ page_edit_label }}" aria-label="{{ page_edit_label }}">{{ ico.i('cog', 15) }}</a>
+  {% endif %}
+  <div class="card-body article-head">
+    <h1 class="card-title article-title">{{ page.title }}</h1>
+    {% if page.seo_description %}<p class="article-summary">{{ page.seo_description }}</p>{% endif %}
+  </div>
+  <div class="divider divider-flush"></div>
+  <div class="card-body article-body prose rich-content">{{ page.content|cms_html }}</div>
+</article>
+{% endblock %}
