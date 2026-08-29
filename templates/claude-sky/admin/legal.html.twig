@@ -36,9 +36,9 @@
             <td data-label="상태"><span class="badge badge-sm badge-soft {{ page.status == 'published' ? 'badge-success' : 'badge-ghost' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
             <td data-label="수정일">{{ page.updated_at|date('Y.m.d') }}</td>
             <td data-label="관리" class="right">
-              <div class="join">
-                <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.terms.preview', {type: type}) }}" target="_blank" rel="noopener">미리보기</a>
-                <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.terms.edit', {type: type}) }}">수정</a>
+              <div class="row-actions">
+                <a class="btn btn-outline btn-sm" href="{{ url_for('admin.terms.preview', {type: type}) }}" target="_blank" rel="noopener">미리보기</a>
+                <a class="btn btn-outline btn-sm" href="{{ url_for('admin.terms.edit', {type: type}) }}">수정</a>
               </div>
             </td>
           {% else %}

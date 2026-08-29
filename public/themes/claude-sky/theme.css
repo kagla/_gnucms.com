@@ -649,15 +649,10 @@ select.select:-webkit-autofill:focus{
 .test-mail{margin-top:1rem}
 
 /* --- 08 join · breadcrumbs · pager -------------------------- */
-/* join 은 daisyUI 것을 쓴다. 다만 daisyUI 는 바로 아래 자식의 모서리만 다듬는데,
-   관리 화면 몇 곳(내용 관리·회원 관리·휴지통)은 form 을 join-item 으로 쓰고 그 안에
-   단추가 들어 있다. 그대로 두면 안쪽 단추가 제 모서리와 테두리를 들고 나온다.
-   daisyUI 와 같은 변수로 한 단계 더 내려가 준다. */
-.join > form{display:inline-flex}
-.join > form > .btn{--join-ss:0;--join-se:0;--join-es:0;--join-ee:0}
-.join > form:first-child > .btn{--join-ss:var(--radius-field);--join-es:var(--radius-field)}
-.join > form:last-child > .btn{--join-se:var(--radius-field);--join-ee:var(--radius-field)}
-.join > form:not(:first-child) > .btn{margin-inline-start:calc(var(--border) * -1)}
+/* 표 한 줄의 단추 묶음. 붙이지 않고 사이를 띄운다.
+   (daisyUI 의 join 은 붙여 놓는 컴포넌트라 여기서는 쓰지 않는다. 쪽 번호에만 쓴다) */
+.row-actions{display:inline-flex;align-items:center;justify-content:flex-end;gap:.375rem;flex-wrap:wrap}
+.row-actions form{display:inline-flex}
 
 .breadcrumbs{margin-bottom:1rem;padding-block:0;font-size:12.5px;overflow-x:auto;scrollbar-width:none}
 .breadcrumbs::-webkit-scrollbar{display:none}

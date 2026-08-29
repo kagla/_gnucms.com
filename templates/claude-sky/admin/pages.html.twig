@@ -28,9 +28,9 @@
           <td data-label="상태"><span class="badge badge-sm badge-soft {{ page.status == 'published' ? 'badge-success' : 'badge-ghost' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
           <td data-label="메뉴">{{ page.show_in_menu ? '표시' : '숨김' }}</td>
           <td data-label="관리" class="right">
-            <div class="join">
-              <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.content.preview', {id: page.id}) }}" target="_blank" rel="noopener">미리보기</a>
-              <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.content.edit', {id: page.id}) }}">수정</a>
+            <div class="row-actions">
+              <a class="btn btn-outline btn-sm" href="{{ url_for('admin.content.preview', {id: page.id}) }}" target="_blank" rel="noopener">미리보기</a>
+              <a class="btn btn-outline btn-sm" href="{{ url_for('admin.content.edit', {id: page.id}) }}">수정</a>
             </div>
           </td>
         </tr>
