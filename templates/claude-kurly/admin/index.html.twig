@@ -1,0 +1,75 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}dashboard{% endblock %}
+{% block body %}
+<div class="admin-hello">
+  <div>
+    <h1>{{ current_user.display_name }}님, 오늘도 반가워요</h1>
+    <p>{{ site.site_name }} 의 게시판과 내용, 회원을 이곳에서 관리합니다.</p>
+  </div>
+  <div class="admin-hello-actions">
+    <a class="btn" href="{{ url_for('boards.index') }}">{{ ico.i('external', 15) }} 사이트 보기</a>
+    <a class="btn btn-primary" href="{{ url_for('admin.content.create') }}">{{ ico.i('plus', 16) }} 내용 만들기</a>
+  </div>
+</div>
+
+{% if query.saved|default('') == '1' %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>변경사항을 저장했습니다.</span></div>{% endif %}
+{% if query.deleted|default('') == '1' %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>게시판을 삭제했습니다.</span></div>{% endif %}
+
+<div class="stats stats-grid">
+  <a class="stat" href="{{ url_for('admin.boards') }}">
+    <div class="stat-figure" data-tone="0" aria-hidden="true">{{ ico.i('board', 20) }}</div>
+    <div class="stat-title">게시판</div>
+    <div class="stat-value">{{ board_count }}</div>
+    <div class="stat-desc">관리하기 {{ ico.i('arrow-right', 12) }}</div>
+  </a>
+  <a class="stat" href="{{ url_for('admin.content') }}">
+    <div class="stat-figure" data-tone="2" aria-hidden="true">{{ ico.i('document', 20) }}</div>
+    <div class="stat-title">내용</div>
+    <div class="stat-value">{{ page_count }}</div>
+    <div class="stat-desc">관리하기 {{ ico.i('arrow-right', 12) }}</div>
+  </a>
+  <a class="stat" href="{{ url_for('admin.posts') }}">
+    <div class="stat-figure" data-tone="3" aria-hidden="true">{{ ico.i('comment', 20) }}</div>
+    <div class="stat-title">게시글</div>
+    <div class="stat-value">{{ post_count }}</div>
+    <div class="stat-desc">전체 글 보기 {{ ico.i('arrow-right', 12) }}</div>
+  </a>
+  <a class="stat" href="{{ url_for('admin.members') }}">
+    <div class="stat-figure" data-tone="4" aria-hidden="true">{{ ico.i('users', 20) }}</div>
+    <div class="stat-title">회원</div>
+    <div class="stat-value">{{ user_count }}</div>
+    <div class="stat-desc">관리하기 {{ ico.i('arrow-right', 12) }}</div>
+  </a>
+</div>
+
+<section class="card">
+  <div class="card-body card-body-flush">
+    <div class="card-head-row">
+      <h2 class="card-title">게시판 바로가기</h2>
+      <a class="link link-hover" href="{{ url_for('admin.boards') }}">전체 관리 {{ ico.i('arrow-right', 13) }}</a>
+    </div>
+    {% if boards is empty %}
+      <div class="empty-inline">
+        <span class="empty-icon" aria-hidden="true">{{ ico.i('board', 22) }}</span>
+        <p>아직 게시판이 없습니다</p>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('admin.boards.create') }}">{{ ico.i('plus', 15) }} 첫 게시판 만들기</a>
+      </div>
+    {% else %}
+      <ul class="list">
+        {% for board in boards %}
+          <li class="list-row">
+            <span class="list-icon" data-tone="{{ loop.index0 % 6 }}" aria-hidden="true">{{ ico.i('board', 17) }}</span>
+            <div class="list-copy">
+              <a class="list-title link link-hover" href="{{ url_for('admin.boards.edit', {key: board.board_key}) }}">{{ board.name }}</a>
+              <div class="list-sub">/boards/{{ board.board_key }}</div>
+            </div>
+            <a class="btn btn-ghost btn-square btn-sm" href="{{ url_for('admin.boards.edit', {key: board.board_key}) }}" aria-label="{{ board.name }} 설정">{{ ico.i('chevron-right', 16) }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block nav_section %}home{% endblock %}
+
+{# 검색은 게시판 단위라 첫 게시판을 기본 대상으로 삼는다. #}
+{% block header_search %}
+{% if boards is not empty %}
+<form class="header-search" method="get" action="{{ url_for('posts.index', {'key': boards[0].board_key}) }}" role="search">
+  <label class="input">
+    <input type="search" name="q" value="" placeholder="{{ boards[0].name }}에서 검색" aria-label="게시글 검색" data-search-input>
+    <button class="header-search-go" type="submit" aria-label="검색">{{ ico.i('search', 19) }}</button>
+  </label>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block body %}
+{% set recent = boards|reduce((c, b) => c + b.latest_posts|length, 0) %}
+{# 게시판을 가로질러 많이 본 글을 모은다. 홈 목록에 이미 실려 온 값만 쓴다. #}
+{% set pool = [] %}
+{% for b in boards %}{% for p in b.latest_posts %}{% if not p.is_secret %}{% set pool = pool|merge([{'post': p, 'board': b}]) %}{% endif %}{% endfor %}{% endfor %}
+{% set hot = pool|sort((x, y) => y.post.view_count <=> x.post.view_count)|slice(0, 6) %}
+
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-copy">
+      <span class="hero-eyebrow">{{ ico.i('sparkle', 13) }} {{ site.site_tagline }}</span>
+      <h1>{{ site.home_title }}</h1>
+      <p>{{ site.home_intro }}</p>
+      <div class="hero-actions">
+        {% if boards is not empty %}
+          <a class="btn btn-primary btn-lg" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">둘러보기 {{ ico.i('arrow-right', 16) }}</a>
+        {% endif %}
+        {% if current_user.is_guest and registration_available %}
+          <a class="btn btn-outline btn-lg" href="{{ url_for('auth.register') }}">회원가입</a>
+        {% elseif boards is not empty %}
+          <a class="btn btn-outline btn-lg" href="{{ url_for('posts.create', {'key': boards[0].board_key}) }}">{{ ico.i('pencil', 16) }} 글쓰기</a>
+        {% endif %}
+      </div>
+    </div>
+    <dl class="hero-stats">
+      <div class="hero-stat"><dt>게시판</dt><dd>{{ boards|length }}</dd></div>
+      <div class="hero-stat"><dt>최근 글</dt><dd>{{ recent }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+{% if boards is not empty %}
+  {# 전체 카테고리 타일. 게시판마다 아이콘과 색을 돌려 가며 붙인다. #}
+  {% set cat_icons = ['board', 'ticket', 'star', 'heart', 'truck', 'document'] %}
+  <nav class="cat-strip" aria-label="게시판 바로가기">
+    {% for board in boards %}
+      <a class="cat-tile" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+        <span class="cat-tile-ico" data-tone="{{ loop.index0 % 6 }}" aria-hidden="true">{{ ico.i(cat_icons[loop.index0 % 6], 20) }}</span>
+        <span class="cat-tile-name">{{ board.name }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+{% endif %}
+
+{% if boards is empty %}
+  <div class="card empty-card">
+    <div class="card-body">
+      <span class="empty-icon" aria-hidden="true">{{ ico.i('board', 26) }}</span>
+      <h2 class="card-title">아직 만들어진 게시판이 없습니다</h2>
+      <p>관리 콘솔에서 첫 게시판을 만들어 보세요.</p>
+      {% if not current_user.is_guest and current_user.is_admin %}
+        <div class="card-actions"><a class="btn btn-primary" href="{{ url_for('admin.boards.create') }}">{{ ico.i('plus', 16) }} 게시판 만들기</a></div>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+
+  {% if hot|length > 2 %}
+    <section class="feed" aria-labelledby="feed-hot">
+      <div class="feed-head">
+        <div>
+          <h2 id="feed-hot">지금 많이 보는 글</h2>
+          <p class="feed-sub">최근 올라온 글 가운데 가장 많이 열어 본 순서입니다</p>
+        </div>
+      </div>
+      <ul class="list rank-list">
+        {% for item in hot %}
+          <li class="list-row">
+            <span class="badge badge-soft badge-sm">{{ item.board.name }}</span>
+            <a class="rank-title" href="{{ url_for('posts.show', {'id': item.post.id}) }}">{{ item.post.title }}</a>
+            <span class="rank-meta">{{ ico.i('eye', 13) }} {{ item.post.view_count }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% for board in boards %}
+    <section class="feed" aria-labelledby="feed-{{ board.board_key }}">
+      <div class="feed-head">
+        <div>
+          <h2 id="feed-{{ board.board_key }}">{{ board.name }}</h2>
+          <p class="feed-sub">{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요' }}</p>
+        </div>
+        <a class="feed-more" href="{{ url_for('posts.index', {'key': board.board_key}) }}">더보기 {{ ico.i('chevron-right', 14) }}</a>
+      </div>
+
+      {% if board.latest_posts is empty %}
+        <div class="card empty-card empty-card-sm">
+          <div class="card-body">
+            <span class="empty-icon" aria-hidden="true">{{ ico.i('document', 22) }}</span>
+            <p>아직 등록된 글이 없습니다</p>
+          </div>
+        </div>
+      {% else %}
+        {# 홈 표시 방식은 게시판의 목록 형태 설정을 그대로 따른다.
+           값은 BoardService 가 허용 목록으로 걸러서 내려준다. #}
+        {% include ['home/_feed_' ~ board.list_type|default('list') ~ '.html.twig', 'home/_feed_list.html.twig'] %}
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  {# 컬리가 첫 화면 아래에 두는 안내 띠 자리. 셋 다 이 사이트에서 실제로 되는 일이다. #}
+  <section class="guide" aria-labelledby="guide-title">
+    <h2 class="guide-title" id="guide-title">{{ site.site_name }} 이렇게 이용하세요</h2>
+    <div class="guide-grid">
+      <div class="guide-card">
+        <span class="guide-ico" data-tone="0" aria-hidden="true">{{ ico.i('grid', 22) }}</span>
+        <strong>전체 카테고리에서 골라보기</strong>
+        <p>머리글 왼쪽의 전체 카테고리를 누르면 게시판을 한눈에 볼 수 있어요.</p>
+      </div>
+      <div class="guide-card">
+        <span class="guide-ico" data-tone="2" aria-hidden="true">{{ ico.i('pencil', 22) }}</span>
+        <strong>사진과 함께 남기기</strong>
+        <p>글쓰기에서 사진을 여러 장 끌어놓으면 본문에 그대로 들어갑니다.</p>
+      </div>
+      <div class="guide-card">
+        <span class="guide-ico" data-tone="1" aria-hidden="true">{{ ico.i('bell', 22) }}</span>
+        <strong>답글은 알림으로</strong>
+        <p>내 글과 댓글에 답이 달리면 머리글의 종 아이콘에 표시됩니다.</p>
+      </div>
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

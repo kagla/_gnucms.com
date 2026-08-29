@@ -1,0 +1,87 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% import _self as h %}
+{% macro pageUrl(query, p) %}
+{%- set params = [] -%}
+{%- if query.q %}{% set params = params|merge(['q=' ~ query.q|url_encode]) %}{% endif -%}
+{%- if query.board %}{% set params = params|merge(['board=' ~ query.board|url_encode]) %}{% endif -%}
+{%- if p > 1 %}{% set params = params|merge(['page=' ~ p]) %}{% endif -%}
+{{- url_for('admin.posts') }}{% if params is not empty %}?{{ params|join('&amp;')|raw }}{% endif %}
+{%- endmacro %}
+{% block title %}전체 글 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}posts{% endblock %}
+{% block body %}
+<div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li aria-current="page">전체 글</li></ul></div>
+<div class="page-head">
+  <div>
+    <h1>전체 글</h1>
+    <p class="page-sub">게시판을 가로질러 글을 훑어봅니다. 전체 {{ list.total }}개</p>
+  </div>
+</div>
+
+<form class="post-filter" method="get" action="{{ url_for('admin.posts') }}" role="search">
+  <select class="select select-bordered" name="board" aria-label="게시판 선택">
+    <option value="">전체 게시판</option>
+    {% for board in boards %}
+      <option value="{{ board.board_key }}"{% if query.board == board.board_key %} selected{% endif %}>{{ board.name }}</option>
+    {% endfor %}
+  </select>
+  <label class="input input-bordered">
+    <span class="input-icon" aria-hidden="true">{{ ico.i('search', 16) }}</span>
+    <input type="search" name="q" value="{{ query.q }}" placeholder="제목이나 내용 검색" aria-label="글 검색" data-search-input>
+  </label>
+  <button class="btn btn-primary" type="submit">검색</button>
+  {% if query.q or query.board %}<a class="btn btn-ghost" href="{{ url_for('admin.posts') }}">초기화</a>{% endif %}
+</form>
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table table-zebra">
+      <thead><tr><th>게시판</th><th>제목</th><th>글쓴이</th><th>날짜</th><th class="right">조회</th><th class="right">댓글</th></tr></thead>
+      <tbody>
+      {% for post in list.data %}
+        <tr>
+          <td data-label="게시판">
+            {% if post.board_key %}
+              <a class="link link-hover" href="{{ url_for('posts.index', {'key': post.board_key}) }}">{{ post.board_name }}</a>
+            {% else %}
+              <span class="cell-sub">{{ post.board_name }}</span>
+            {% endif %}
+          </td>
+          <td data-label="제목">
+            {% if post.is_notice %}<span class="badge badge-primary badge-soft badge-sm">공지</span>{% endif %}
+            {% if post.is_secret %}<span class="post-row-lock" title="비밀글" aria-label="비밀글">{{ ico.i('lock', 12) }}</span>{% endif %}
+            <a class="cell-title link link-hover" href="{{ url_for('posts.show', {'id': post.id}) }}">{{ post.title }}</a>
+            {% if post.file_count > 0 %}<span class="post-row-clip" title="첨부파일 있음" aria-label="첨부파일 있음">{{ ico.i('clip', 12) }}</span>{% endif %}
+          </td>
+          <td data-label="글쓴이">{{ post.author_name }}</td>
+          <td data-label="날짜"><time datetime="{{ post.created_at }}">{{ post.created_at|date('Y.m.d H:i') }}</time></td>
+          <td data-label="조회" class="right">{{ post.view_count }}</td>
+          <td data-label="댓글" class="right">{{ post.comment_count }}</td>
+        </tr>
+      {% else %}
+        <tr class="table-empty"><td colspan="6">{% if query.q or query.board %}조건에 맞는 글이 없습니다.{% else %}아직 등록된 글이 없습니다.{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if list.total_pages > 1 %}
+  {% set window = 3 %}
+  {% set start = max(1, list.page - window) %}
+  {% set end = min(list.total_pages, list.page + window) %}
+  <nav class="pager" aria-label="페이지 이동">
+    <div class="join">
+      {% if list.page > 1 %}<a class="join-item btn btn-sm" rel="prev" href="{{ h.pageUrl(query, list.page - 1)|trim }}" aria-label="이전 페이지">{{ ico.i('chevron-left', 15) }}</a>{% endif %}
+      {% if start > 1 %}<a class="join-item btn btn-sm" href="{{ h.pageUrl(query, 1)|trim }}" aria-label="1 페이지">1</a>{% if start > 2 %}<span class="join-item btn btn-sm btn-disabled" aria-hidden="true">…</span>{% endif %}{% endif %}
+      {% for p in start..end %}
+        {% if p == list.page %}<span class="join-item btn btn-sm btn-active" aria-current="page">{{ p }}</span>
+        {% else %}<a class="join-item btn btn-sm" href="{{ h.pageUrl(query, p)|trim }}" aria-label="{{ p }} 페이지">{{ p }}</a>{% endif %}
+      {% endfor %}
+      {% if end < list.total_pages %}{% if end < list.total_pages - 1 %}<span class="join-item btn btn-sm btn-disabled" aria-hidden="true">…</span>{% endif %}<a class="join-item btn btn-sm" href="{{ h.pageUrl(query, list.total_pages)|trim }}" aria-label="{{ list.total_pages }} 페이지">{{ list.total_pages }}</a>{% endif %}
+      {% if list.page < list.total_pages %}<a class="join-item btn btn-sm" rel="next" href="{{ h.pageUrl(query, list.page + 1)|trim }}" aria-label="다음 페이지">{{ ico.i('chevron-right', 15) }}</a>{% endif %}
+    </div>
+  </nav>
+{% endif %}
+{% endblock %}
