@@ -7,7 +7,7 @@
 <section class="card">
   <div class="card-body">
     <h1 class="card-title">{{ create ? (legal ? '약관 만들기' : '내용 만들기') : (legal ? values.title ~ ' 수정' : '내용 수정') }}</h1>
-    <p class="card-sub">내용을 작성하고 공개 여부와 메뉴 표시만 정하세요.</p>
+    <p class="card-sub">{{ legal ? '약관 내용을 작성하고 어디에 쓸지 정하세요. 공개된 약관은 사이트 하단에 나옵니다.' : '내용을 작성하고 공개 여부와 메뉴 표시만 정하세요.' }}</p>
     <form method="post" action="{{ create ? url_for(legal ? 'admin.terms.create' : 'admin.content.create') : url_for('admin.content.edit', {id: page_id}) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="image_key" value="{{ values.image_key }}">
@@ -41,11 +41,35 @@
           <input class="input input-bordered input-block" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
         </fieldset>
       </div>
+      {% if legal %}
+      {# 사용처는 약관에만 있다. 회원가입 동의로 정하면 가입 화면에 필수·선택으로 붙는다. #}
+      <div class="grid-2">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">사용처</legend>
+          <select class="select select-bordered select-block" name="consent_usage">
+            <option value="signup"{{ values.consent_usage|default('none') == 'signup' ? ' selected' : '' }}>회원가입 동의</option>
+            <option value="form"{{ values.consent_usage|default('none') == 'form' ? ' selected' : '' }}>신청서·등록 동의</option>
+            <option value="none"{{ values.consent_usage|default('none') == 'none' ? ' selected' : '' }}>안내만</option>
+          </select>
+          <p class="fieldset-label">공개 상태여야 화면에 붙습니다. 안내만 하는 약관은 하단에만 나옵니다.</p>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">동의 차례 <span class="legend-hint">작을수록 위</span></legend>
+          <input class="input input-bordered input-block" type="number" name="consent_order" value="{{ values.consent_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
+        </fieldset>
+      </div>
+      {% endif %}
       <fieldset class="fieldset toggle-list">
         <label class="label toggle-row">
           <input class="toggle toggle-primary" type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }}>
           <span><strong>상단 메뉴에 표시</strong></span>
         </label>
+        {% if legal %}
+        <label class="label toggle-row">
+          <input class="toggle toggle-primary" type="checkbox" name="consent_required" value="1"{{ values.consent_required|default(1) ? ' checked' : '' }}>
+          <span><strong>가입할 때 반드시 동의</strong><small>풀면 선택 동의가 됩니다. 안 해도 가입은 됩니다.</small></span>
+        </label>
+        {% endif %}
       </fieldset>
       <div class="card-actions form-actions">
         {% if not create %}<a class="btn btn-outline" href="{{ url_for('admin.content.preview', {id: page_id}) }}" target="_blank" rel="noopener">{{ ico.i('eye', 15) }} 미리보기</a>{% endif %}

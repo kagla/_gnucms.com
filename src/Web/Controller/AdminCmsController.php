@@ -229,7 +229,12 @@ final class AdminCmsController
     public function termsCreateForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        return $this->renderPageForm($request, $response, $this->withImageKey($this->defaults()), [], true, 0, true);
+        $values = $this->withImageKey($this->defaults());
+        // 약관을 새로 만드는 까닭은 대개 가입 동의라, 회원가입 동의를 기본으로 둔다.
+        $values['consent_usage'] = 'signup';
+        $values['consent_required'] = 1;
+        $values['consent_order'] = 0;
+        return $this->renderPageForm($request, $response, $values, [], true, 0, true);
     }
 
     /** 새 약관. 여기서 만든 내용에만 약관 표시가 붙는다. */
@@ -240,7 +245,7 @@ final class AdminCmsController
         $input['is_consent'] = '1';
         $acl = $this->app->guestAcl();
         try {
-            $this->app->cmsService()->createPage($acl, $input);
+            $id = $this->app->cmsService()->createPage($acl, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -248,14 +253,20 @@ final class AdminCmsController
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), true, 0, true);
         }
+        $this->applyConsentUsage($id, $input);
         return $this->redirect($request, $response, 'admin.terms', ['created' => '1']);
     }
 
     public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $page = $this->app->cmsService()->page($this->app->guestAcl(), (int) $args['id']);
-        return $this->renderPageForm($request, $response, $this->withImageKey($page), [], false, (int) $args['id'],
-            $this->isLegal($page));
+        $id = (int) $args['id'];
+        $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
+        $legal = $this->isLegal($page);
+        $values = $this->withImageKey($page);
+        if ($legal) {
+            $values = $this->withConsentUsage($values, $id);
+        }
+        return $this->renderPageForm($request, $response, $values, [], false, $id, $legal);
     }
 
     public function update(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -277,6 +288,9 @@ final class AdminCmsController
             }
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), false, $id, $legal);
+        }
+        if ($legal) {
+            $this->applyConsentUsage($id, $input);
         }
         return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['saved' => '1']);
     }
@@ -307,6 +321,30 @@ final class AdminCmsController
         return Twig::fromRequest($request)->render($response, 'admin/page_form.html.twig', [
             'values' => $values, 'errors' => $errors, 'create' => $create, 'page_id' => $id, 'legal' => $legal,
         ]);
+    }
+
+    /** 편집 폼에 보여 줄 사용처. 붙임이 없으면 안내만 하는 약관이다. */
+    private function withConsentUsage(array $values, int $id): array
+    {
+        $use = $id > 0 ? ($this->app->consentUses()->listForContent($id)[0] ?? null) : null;
+        $values['consent_usage'] = $use === null ? 'none'
+            : ((string) $use['scope'] === 'signup' ? 'signup' : 'form');
+        $values['consent_required'] = $use === null ? 1 : (int) $use['required'];
+        $values['consent_order'] = $use === null ? 0 : (int) $use['sort_order'];
+        return $values;
+    }
+
+    /** 저장이 끝난 약관에 폼에서 고른 사용처를 반영한다. 한 약관은 한 용도만 갖는다. */
+    private function applyConsentUsage(int $id, array $input): void
+    {
+        $choice = isset($input['consent_usage']) && is_string($input['consent_usage'])
+            ? $input['consent_usage'] : 'none';
+        $uses = $this->app->consentUses();
+        $uses->detachContent($id);
+        if ($choice === 'signup' || $choice === 'form') {
+            $uses->attach($choice, $id, !empty($input['consent_required']),
+                (int) ($input['consent_order'] ?? 0));
+        }
     }
 
     /** 약관 여부는 슬러그가 아니라 is_consent 표시가 가른다. 슬러그는 누구나 바꿀 수 있지만

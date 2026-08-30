@@ -78,7 +78,7 @@ final class CmsService
     /** 바닥글 등이 쓰는 필수 약관 두 개. 없으면 가입을 받지 않는다. */
     public function legalDocuments(): array
     {
-        $terms = $this->cms->findPublishedBySlug('terms');
+        $terms = $this->cms->findPublishedBySlug('service');
         $privacy = $this->cms->findPublishedBySlug('privacy');
         if ($terms === null || $privacy === null) {
             throw DomainError::forbidden('회원가입을 받으려면 이용약관과 개인정보 처리방침을 먼저 작성하고 공개해야 합니다.');
@@ -91,7 +91,8 @@ final class CmsService
         $acl->assertGlobalAdmin();
         $siteName = (string) $this->settings()['site_name'];
         $seeds = [
-            ['terms', '이용약관', $siteName . ' 서비스 이용약관', $this->termsDraft($siteName), 900, 10],
+            // 주소가 /terms/{slug} 라서 slug 가 terms 면 /terms/terms 가 된다. service 로 둔다.
+            ['service', '이용약관', $siteName . ' 서비스 이용약관', $this->termsDraft($siteName), 900, 10],
             ['privacy', '개인정보 처리방침', $siteName . ' 개인정보 처리방침',
              $this->privacyDraft($siteName), 910, 20],
         ];

@@ -335,6 +335,19 @@ final class Schema
             }
         }
 
+        // 이용약관의 slug 를 terms -> service 로 옮긴다. 정식 주소가 /terms/{slug} 가 되면서
+        // /terms/terms 라는 어색한 주소가 생기기 때문이다. service 자리가 이미 차 있으면 건드리지 않는다.
+        $termsRow = $this->db->selectOne('SELECT id FROM ' . $this->db->q('contents')
+            . " WHERE slug = 'terms' AND is_consent = 1 AND deleted_at IS NULL");
+        if ($termsRow !== null) {
+            $taken = $this->db->selectOne('SELECT id FROM ' . $this->db->q('contents')
+                . " WHERE slug = 'service'");
+            if ($taken === null) {
+                $this->db->execute('UPDATE ' . $this->db->q('contents')
+                    . " SET slug = 'service' WHERE id = ?", [(int) $termsRow['id']]);
+            }
+        }
+
         // 동의 기록을 회원 밖으로 넓힌 표로 옮긴다. 옛 표는 남겨 둔다.
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consents_given'));

@@ -130,14 +130,14 @@ final class CmsServiceConsentTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $acl = new Acl(Identity::user('1', '관리자', true));
         $id = $app->cms()->createPage([
-            'slug' => 'terms', 'title' => '옛 이용약관', 'content' => '옛 본문', 'seo_description' => null,
+            'slug' => 'service', 'title' => '옛 이용약관', 'content' => '옛 본문', 'seo_description' => null,
             'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0, 'is_consent' => 0,
         ]);
 
         $app->cmsService()->ensureLegalDrafts($acl);
 
         self::assertSame(1, (int) $app->cms()->findPageById($id)['is_consent']);
-        self::assertContains('terms', array_column($app->cmsService()->consentPages($acl), 'slug'));
-        self::assertContains('terms', array_column($app->cmsService()->consentDocuments('signup'), 'slug'));
+        self::assertContains('service', array_column($app->cmsService()->consentPages($acl), 'slug'));
+        self::assertContains('service', array_column($app->cmsService()->consentDocuments('signup'), 'slug'));
     }
 }

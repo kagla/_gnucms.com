@@ -82,7 +82,7 @@ final class AuthPageTest extends WebTestCase
 
         self::assertSame(403, $this->get($app, '/register')->getStatusCode());
         $ids = [];
-        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
+        foreach ([['service', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
             $ids[$legal[0]] = $app->cms()->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
@@ -92,15 +92,15 @@ final class AuthPageTest extends WebTestCase
         }
 
         $form = $this->body($this->get($app, '/register'));
-        self::assertStringContainsString('name="agree_' . $ids['terms'] . '"', $form);
+        self::assertStringContainsString('name="agree_' . $ids['service'] . '"', $form);
         self::assertStringContainsString('name="agree_' . $ids['privacy'] . '"', $form);
-        self::assertStringContainsString('href="/terms/terms"', $form);
+        self::assertStringContainsString('href="/terms/service"', $form);
         self::assertStringContainsString('href="/terms/privacy"', $form);
-        self::assertSame(200, $this->get($app, '/terms/terms')->getStatusCode());
+        self::assertSame(200, $this->get($app, '/terms/service')->getStatusCode());
         self::assertSame(200, $this->get($app, '/terms/privacy')->getStatusCode());
         // 옛 주소로 들어와도 정식 주소로 보낸다.
         self::assertSame(301, $this->get($app, '/content/terms')->getStatusCode());
-        self::assertSame('/terms/terms', $this->get($app, '/content/terms')->getHeaderLine('Location'));
+        self::assertSame('/terms/service', $this->get($app, '/content/terms')->getHeaderLine('Location'));
         $response = $this->post($app, '/register', [
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
             'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
@@ -135,7 +135,7 @@ final class AuthPageTest extends WebTestCase
             'sort_order' => 0, 'is_consent' => 1,
         ]);
         $ids = [];
-        foreach ([['terms', '이용약관', true, 10], ['marketing', '마케팅 정보 수신', false, 30]] as $doc) {
+        foreach ([['service', '이용약관', true, 10], ['marketing', '마케팅 정보 수신', false, 30]] as $doc) {
             $ids[$doc[0]] = $app->cms()->createPage([
                 'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0,
@@ -156,7 +156,7 @@ final class AuthPageTest extends WebTestCase
             ]);
             self::fail('필수 동의 없이 가입되면 안 된다.');
         } catch (DomainError $e) {
-            self::assertArrayHasKey('agree_' . $ids['terms'], $e->details());
+            self::assertArrayHasKey('agree_' . $ids['service'], $e->details());
         }
 
         // 필수만 체크하고 선택(marketing)은 비운 채로 가입한다. 증적도 함께 남긴다.
@@ -164,7 +164,7 @@ final class AuthPageTest extends WebTestCase
         $app->accountService()->register([
             'email' => 'member@example.com',
             'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
-            'agree_' . $ids['terms'] => '1',
+            'agree_' . $ids['service'] => '1',
         ], $trace);
 
         $member = $app->users()->findByEmail('member@example.com');
@@ -175,6 +175,6 @@ final class AuthPageTest extends WebTestCase
             self::assertSame('203.0.113.7', $row['agreed_ip']);
             self::assertSame('PHPUnit-Agent/1.0', $row['agreed_ua']);
         }
-        self::assertSame(['terms' => 1, 'marketing' => 0], $agreed);
+        self::assertSame(['service' => 1, 'marketing' => 0], $agreed);
     }
 }

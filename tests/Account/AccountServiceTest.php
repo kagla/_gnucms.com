@@ -41,7 +41,7 @@ final class AccountServiceTest extends DatabaseTestCase
         $created = $service->register([
             'email' => 'USER@example.com', 'password' => 'member-password-123',
             'password_confirmation' => 'member-password-123',
-            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
+            'agree_' . $ids['service'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
         self::assertFalse($created['email_verified']);
         self::assertFalse($created['is_admin']);
@@ -76,7 +76,7 @@ final class AccountServiceTest extends DatabaseTestCase
         $second = $service->register([
             'email' => 'second@example.com', 'password' => 'password-456',
             'password_confirmation' => 'password-456',
-            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
+            'agree_' . $ids['service'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
 
         self::assertTrue($first['is_admin']);
@@ -93,7 +93,7 @@ final class AccountServiceTest extends DatabaseTestCase
             'password_confirmation' => 'safe-password-123',
         ];
         $first = $service->register($input);
-        $input['agree_' . $ids['terms']] = '1';
+        $input['agree_' . $ids['service']] = '1';
         $input['agree_' . $ids['privacy']] = '1';
         $second = $service->register($input);
 
@@ -171,7 +171,7 @@ final class AccountServiceTest extends DatabaseTestCase
         $service->register([
             'email' => 'member@example.com', 'password' => 'member-password-123',
             'password_confirmation' => 'member-password-123',
-            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
+            'agree_' . $ids['service'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
 
         self::assertCount(1, $mailer->messages);
@@ -188,7 +188,7 @@ final class AccountServiceTest extends DatabaseTestCase
         $cmsRepository = new CmsRepository($db);
         $consentUses = new ConsentUseRepository($db);
         $ids = [];
-        foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
+        foreach ([['service', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
             $id = $cmsRepository->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,

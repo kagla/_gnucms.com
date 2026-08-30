@@ -145,13 +145,13 @@ final class CmsPageTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'],
         ]);
         self::assertSame(303, $legalSetup->getStatusCode());
-        self::assertSame('draft', $app->cms()->findBySlug('terms')['status']);
+        self::assertSame('draft', $app->cms()->findBySlug('service')['status']);
         self::assertSame('draft', $app->cms()->findBySlug('privacy')['status']);
         // 약관 관리에는 약관 전부가 나오고, 내용 관리에는 안 나온다.
         $legalPage = $this->get($app, '/admin/terms');
         self::assertSame(200, $legalPage->getStatusCode());
         self::assertStringContainsString('이용약관', $this->body($legalPage));
-        self::assertStringContainsString('>/terms/terms<', $this->body($legalPage));
+        self::assertStringContainsString('>/terms/service<', $this->body($legalPage));
         self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
 
         // 옛 주소는 없어졌다.
@@ -159,7 +159,7 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(404, $this->get($app, '/admin/legal')->getStatusCode());
 
         // 붙임을 화면에서 저장할 수 있다.
-        $terms = $app->cms()->findBySlug('terms');
+        $terms = $app->cms()->findBySlug('service');
         $termsEditForm = $this->get($app, '/admin/content/' . $terms['id'] . '/edit');
         self::assertSame(200, $termsEditForm->getStatusCode());
         self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $this->body($termsEditForm), $termsKeyMatch));
@@ -198,7 +198,7 @@ final class CmsPageTest extends WebTestCase
 
         // 약관을 폼에서 고쳐 저장하면 약관 관리로 돌아가야 한다.
         $termsEdit = $this->post($app, '/admin/content/' . $terms['id'] . '/edit', [
-            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'terms', 'title' => $terms['title'],
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'service', 'title' => $terms['title'],
             'content' => $terms['content'], 'status' => $terms['status'],
             'show_in_menu' => $terms['show_in_menu'] ? '1' : '0',
             'sort_order' => (string) $terms['sort_order'], 'image_key' => $termsImageKey,
@@ -230,14 +230,16 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('마케팅 활용 동의', $this->body($this->get($app, '/admin/terms')));
 
         // 한 약관에 누가 동의했는지 따로 볼 수 있다.
-        $app->consents()->record('user', 1, 'signup', $app->cms()->findBySlug('terms'), true, null);
+        $app->consents()->record('user', 1, 'signup', $app->cms()->findBySlug('service'), true, null);
         $view = $this->get($app, '/admin/terms/' . $terms['id'] . '/consents');
         self::assertSame(200, $view->getStatusCode());
         self::assertStringContainsString('동의 현황', $this->body($view));
 
-        // 약관의 옛 공개 주소는 그대로 /content/{slug} 로 보낸다.
-        self::assertSame(301, $this->get($app, '/terms/service')->getStatusCode());
-        self::assertSame('/terms/terms', $this->get($app, '/terms/service')->getHeaderLine('Location'));
+        // 옛 주소들은 새 정식 주소로 보낸다. 되돌림은 공개 여부와 무관하다.
+        self::assertSame(301, $this->get($app, '/terms/terms')->getStatusCode());
+        self::assertSame('/terms/service', $this->get($app, '/terms/terms')->getHeaderLine('Location'));
+        self::assertSame('/terms/service', $this->get($app, '/content/terms')->getHeaderLine('Location'));
+        self::assertSame('/terms/service', $this->get($app, '/terms')->getHeaderLine('Location'));
 
         // 약관이 아닌 내용을 /terms 밑으로 열면 정식 주소인 /content 로 보낸다.
         $app->cms()->createPage([
