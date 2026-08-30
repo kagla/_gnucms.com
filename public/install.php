@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use GnuCms\Error\DomainError;
@@ -75,7 +78,8 @@ function page(int $step, string $title, string $body): void
 
 function redirectTo(int $step): void
 {
-    header('Location: ' . strtok((string) $_SERVER['REQUEST_URI'], '?') . '?step=' . $step, true, 303);
+    $self = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'install.php')) ?: 'install.php';
+    header('Location: ' . $self . '?step=' . $step, true, 303);
     exit;
 }
 
@@ -85,7 +89,13 @@ if ($installer->isInstalled()) {
 }
 
 session_name('gnucms_install');
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'path' => '/',
+    'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+]);
 session_start();
 $session = new InstallSession($_SESSION);
 
@@ -98,7 +108,9 @@ if ($requested !== $step && $method === 'GET') {
     redirectTo($step);
 }
 $errors = [];
-$post = $method === 'POST' ? $_POST : [];
+// 재출력(re-render)에 쓸 값. name="x[]" 처럼 배열로 온 값이 있어도 화면을 깨지 않도록
+// 문자열로 눌러 둔다. 실제 검증에는 원본 $_POST 를 쓴다(각자 타입을 확인한다).
+$post = $method === 'POST' ? array_map(static fn ($v): string => is_scalar($v) ? (string) $v : '', $_POST) : [];
 
 // ---------- 1. 서버 점검 ----------
 if ($step === 1) {
@@ -133,7 +145,7 @@ if ($step === 2) {
     $probe = null;
     if ($method === 'POST') {
         try {
-            $dbConfig = DbSetup::dsnFrom($post);
+            $dbConfig = DbSetup::dsnFrom($_POST);
             $probe = DbSetup::probe($dbConfig);
             if ($probe['has_tables'] && (string) ($post['reuse'] ?? '') !== '1') {
                 $errors['reuse'] = '이 DB 에는 이미 ' . h(GNUCMS) . ' 표가 있습니다. 이어 쓰려면 아래를 확인하세요.';
@@ -167,6 +179,8 @@ if ($step === 2) {
         . field('DB 비밀번호', 'password', '', $errors, 'password', '', 'autocomplete="off"')
         . '</div>';
     if (isset($errors['reuse'])) {
+        // $errors['reuse'] 는 위에서 h() 로 이미 이스케이프해 만든 문자열이다. 여기서 또
+        // h() 를 씌우면 두 번 이스케이프된다.
         $body .= '<div class="notice"><p>' . $errors['reuse'] . '</p><label style="margin:0;font-weight:600"><input type="checkbox" name="reuse" value="1" style="width:auto;margin-right:6px">기존 데이터베이스를 이어 씁니다 (표를 새로 만들지 않고 새 판으로 옮깁니다)</label></div>';
     }
     $body .= '<div class="actions"><a href="?step=1">← 이전</a><button type="submit">접속 시험 후 다음</button></div></form>'
@@ -190,7 +204,7 @@ if ($step === 3) {
     ], $session->get('site') ?? [], $post);
     if ($method === 'POST') {
         try {
-            $session->set('site', Installer::siteFrom($post));
+            $session->set('site', Installer::siteFrom($_POST));
             $session->complete(3);
             $db = $session->get('db') ?? [];
             redirectTo(!empty($db['probe']['has_admin']) ? 5 : 4);
@@ -217,7 +231,7 @@ if ($step === 4) {
     $values = array_merge(['email' => '', 'display_name' => ''], $session->get('admin') ?? [], $post);
     if ($method === 'POST') {
         try {
-            $session->set('admin', Installer::adminFrom($post));
+            $session->set('admin', Installer::adminFrom($_POST));
             $session->complete(4);
             redirectTo(5);
         } catch (DomainError $e) {
@@ -238,6 +252,10 @@ if ($step === 4) {
 $db = $session->get('db') ?? [];
 $site = $session->get('site') ?? [];
 $admin = $session->get('admin');
+if ($admin === null && empty($db['probe']['has_admin'])) {
+    // 관리자 없는 빈 DB 인데 4단계를 건너뛰고 왔다. 관리자 정보부터 받는다.
+    redirectTo(4);
+}
 $reuse = !empty($db['reuse']);
 if ($method === 'POST') {
     try {

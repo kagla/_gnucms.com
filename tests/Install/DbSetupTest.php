@@ -45,6 +45,14 @@ final class DbSetupTest extends TestCase
         $this->assertValidation(['type' => 'sqlite', 'sqlite_path' => '/nonexistent-' . bin2hex(random_bytes(3)) . '/board.sqlite'], 'sqlite_path');
     }
 
+    public function testSqliteRejectsPathUnderPublic(): void
+    {
+        $this->assertValidation(
+            ['type' => 'sqlite', 'sqlite_path' => dirname(__DIR__, 2) . '/public/board.sqlite'],
+            'sqlite_path'
+        );
+    }
+
     public function testMysqlDsnIsAssembled(): void
     {
         $db = DbSetup::dsnFrom(['type' => 'mysql', 'host' => 'db.local', 'port' => '3307', 'name' => 'site', 'user' => 'u', 'password' => 'p']);

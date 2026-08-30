@@ -58,6 +58,11 @@ final class DbSetup
             if (!is_dir($folder) || !is_writable($folder)) {
                 throw DomainError::validation(['sqlite_path' => '그 폴더에 쓸 수 없습니다: ' . $folder]);
             }
+            $public = realpath(dirname(__DIR__, 2) . '/public');
+            $realFolder = realpath($folder);
+            if ($public !== false && $realFolder !== false && str_starts_with($realFolder . '/', $public . '/')) {
+                throw DomainError::validation(['sqlite_path' => '웹에서 접근할 수 있는 public/ 아래에는 둘 수 없습니다.']);
+            }
 
             return ['dsn' => 'sqlite:' . $path, 'username' => null, 'password' => null];
         }
