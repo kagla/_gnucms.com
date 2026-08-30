@@ -36,16 +36,16 @@ final class AccountPageTest extends WebTestCase
 
         // 이름만 바꾼다. 비밀번호 칸은 비워 둔다.
         $renamed = $this->post($app, '/account', [
-            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새 이름',
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새이름',
             'current_password' => '', 'password' => '', 'password_confirmation' => '',
         ]);
         self::assertSame(303, $renamed->getStatusCode(), $this->body($renamed));
-        self::assertSame('새 이름', $app->users()->findById($id)['display_name']);
-        self::assertStringContainsString('새 이름', $this->body($this->get($app, '/')), '머리글의 이름이 바뀌어야 한다');
+        self::assertSame('새이름', $app->users()->findById($id)['display_name']);
+        self::assertStringContainsString('새이름', $this->body($this->get($app, '/')), '머리글의 이름이 바뀌어야 한다');
 
         // 현재 비밀번호가 틀리면 막힌다.
         $wrong = $this->post($app, '/account', [
-            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새 이름',
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새이름',
             'current_password' => 'nope', 'password' => 'new-password-456', 'password_confirmation' => 'new-password-456',
         ]);
         self::assertSame(422, $wrong->getStatusCode());
@@ -53,7 +53,7 @@ final class AccountPageTest extends WebTestCase
 
         // 맞으면 바뀌고, 지금 세션은 살아 있다.
         $changed = $this->post($app, '/account', [
-            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새 이름',
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새이름',
             'current_password' => 'old-password-123', 'password' => 'new-password-456', 'password_confirmation' => 'new-password-456',
         ]);
         self::assertSame(303, $changed->getStatusCode(), $this->body($changed));
@@ -100,6 +100,20 @@ final class AccountPageTest extends WebTestCase
             self::assertArrayHasKey('display_name', $e->details());
         }
         // 한글 2자·영문 4자 미만은 안 된다. 자동 이름이 짧으면 '회원' 으로 대신한다.
+        // 공백·기호는 안 된다.
+        foreach (['홍 길동', 'kagla!', '홍길동_', 'kim lee', '홍길동.'] as $bad) {
+            try {
+                $app->accountService()->updateProfile($b, ['display_name' => $bad]);
+                self::fail($bad . ' 은 막아야 한다');
+            } catch (DomainError $e) {
+                self::assertArrayHasKey('display_name', $e->details(), $bad);
+            }
+        }
+        // 자동 이름은 허용되지 않는 글자를 걷어 낸다.
+        $e = $users->createRegistered('kim.lee@e.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'kim.lee');
+        self::assertSame('kimlee', $users->findById($e)['display_name']);
+        $f = $users->createSocial('hong@f.example', '홍 길동');
+        self::assertSame('홍길동', $users->findById($f)['display_name']);
         foreach (['가', 'ab', 'kim', '김a'] as $short) {
             try {
                 $app->accountService()->updateProfile($b, ['display_name' => $short]);

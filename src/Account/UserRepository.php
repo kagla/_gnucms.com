@@ -15,6 +15,20 @@ final class UserRepository
      */
     public const DISPLAY_NAME_MIN_WIDTH = 4;
 
+    /** 허용 글자: 한글·영문 대소문자·숫자. 공백과 기호는 안 된다(사칭·가장 방지, 겹침 판정 단순화). */
+    public const DISPLAY_NAME_PATTERN = '/^[가-힣A-Za-z0-9]+$/u';
+
+    public static function displayNameHasBadChars(string $name): bool
+    {
+        return preg_match(self::DISPLAY_NAME_PATTERN, $name) !== 1;
+    }
+
+    /** 자동으로 짓는 이름에서 허용되지 않는 글자를 걷어 낸다 (kim.lee → kimlee, "홍 길동" → 홍길동). */
+    public static function stripBadDisplayNameChars(string $name): string
+    {
+        return (string) preg_replace('/[^가-힣A-Za-z0-9]+/u', '', $name);
+    }
+
     public static function displayNameTooShort(string $name): bool
     {
         return mb_strwidth($name, 'UTF-8') < self::DISPLAY_NAME_MIN_WIDTH;
@@ -88,7 +102,7 @@ final class UserRepository
     public function uniqueDisplayName(string $base): string
     {
         // 너무 짧은 자동 이름(a@x.com 의 'a')은 '회원' 으로 대신한다.
-        $base = trim($base);
+        $base = self::stripBadDisplayNameChars($base);
         $base = mb_substr(self::displayNameTooShort($base) ? '회원' : $base, 0, 100);
         if ($this->findByDisplayName($base) === null) {
             return $base;

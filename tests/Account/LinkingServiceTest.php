@@ -50,7 +50,8 @@ final class LinkingServiceTest extends DatabaseTestCase
 
         self::assertNull($stored['password_hash']);
         self::assertSame(1, (int) $stored['email_verified']);
-        self::assertSame('새 회원', $stored['display_name']);
+        // 소셜 프로필 이름의 공백은 걷어 낸다 — 표시 이름은 한글·영문·숫자만 받는다.
+        self::assertSame('새회원', $stored['display_name']);
         self::assertSame(1, (int) $stored['is_admin']);
     }
 

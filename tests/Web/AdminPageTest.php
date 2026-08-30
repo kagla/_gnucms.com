@@ -137,14 +137,14 @@ final class AdminPageTest extends WebTestCase
         $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
             'csrf_token' => $_SESSION['csrf_token'],
             'email' => 'new-member@example.com',
-            'display_name' => '새 표시 이름',
+            'display_name' => '새표시이름',
             'status' => 'blocked',
         ]);
         self::assertSame(303, $saved->getStatusCode());
         self::assertSame('/admin/members?saved=1', $saved->getHeaderLine('Location'));
         $updated = $app->users()->findById($memberId);
         self::assertSame('new-member@example.com', $updated['email']);
-        self::assertSame('새 표시 이름', $updated['display_name']);
+        self::assertSame('새표시이름', $updated['display_name']);
         self::assertSame('blocked', $updated['status']);
 
         $blockedOwner = $this->post($app, '/admin/members/' . $adminId . '/edit', [

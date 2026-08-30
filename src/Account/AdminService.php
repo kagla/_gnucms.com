@@ -86,7 +86,9 @@ final class AdminService
         $v = new Validator($input);
         $email = strtolower($v->requiredString('email', 191));
         $displayName = $v->requiredString('display_name', 100);
-        if ($displayName !== '' && UserRepository::displayNameTooShort($displayName)) {
+        if ($displayName !== '' && UserRepository::displayNameHasBadChars($displayName)) {
+            $v->fail('display_name', '한글·영문·숫자만 쓸 수 있습니다. 공백과 기호는 안 됩니다.');
+        } elseif ($displayName !== '' && UserRepository::displayNameTooShort($displayName)) {
             $v->fail('display_name', UserRepository::displayNameRule());
         }
         if ($displayName !== '' && $this->users->findByDisplayName($displayName, $id) !== null) {
