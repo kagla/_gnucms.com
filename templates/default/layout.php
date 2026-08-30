@@ -203,7 +203,14 @@
           <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 18) ?></span>
           <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
         </span>
-        <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기"><?= $this->icon('close', 18) ?></label>
+        <div class="drawer-head-actions">
+          <?php // 화면 테마는 글자 단추가 아니라 머리글과 같은 아이콘 하나로. 스크립트가 aria-label 을 갈아 준다. ?>
+          <button class="btn btn-ghost btn-square btn-sm theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
+            <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 18) ?></span>
+            <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 18) ?></span>
+          </button>
+          <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기"><?= $this->icon('close', 18) ?></label>
+        </div>
       </div>
 
       <?php if (!$current_user['is_guest']): ?>
@@ -234,13 +241,6 @@
         <?php endif ?>
       </ul>
 
-      <div class="drawer-theme">
-        <span class="drawer-theme-label">화면 테마</span>
-        <button class="btn btn-outline btn-block theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
-          <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 16) ?> 라이트 모드</span>
-          <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 16) ?> 다크 모드</span>
-        </button>
-      </div>
 
       <div class="drawer-foot">
         <?php if ($current_user['is_guest']): ?>
