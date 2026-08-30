@@ -15,14 +15,12 @@
     <li class="menu-title">운영</li>
     <li><a href="{{ url_for('admin.index') }}"{% if section == 'dashboard' %} class="menu-active" aria-current="page"{% endif %} title="대시보드">{{ ico.i('dashboard', 18) }}<span class="menu-text">대시보드</span></a></li>
     <li><a href="{{ url_for('admin.boards') }}"{% if section == 'boards' %} class="menu-active" aria-current="page"{% endif %} title="게시판 관리">{{ ico.i('board', 18) }}<span class="menu-text">게시판 관리</span></a></li>
-    <li><a href="{{ url_for('admin.posts') }}"{% if section == 'posts' %} class="menu-active" aria-current="page"{% endif %} title="전체 글">{{ ico.i('comment', 18) }}<span class="menu-text">전체 글</span></a></li>
     <li><a href="{{ url_for('admin.content') }}"{% if section == 'content' %} class="menu-active" aria-current="page"{% endif %} title="내용 관리">{{ ico.i('document', 18) }}<span class="menu-text">내용 관리</span></a></li>
+    <li><a href="{{ url_for('admin.terms') }}"{% if section == 'legal' %} class="menu-active" aria-current="page"{% endif %} title="약관 관리">{{ ico.i('scale', 18) }}<span class="menu-text">약관 관리</span></a></li>
     <li><a href="{{ url_for('admin.members') }}"{% if section == 'members' %} class="menu-active" aria-current="page"{% endif %} title="회원 관리">{{ ico.i('users', 18) }}<span class="menu-text">회원 관리</span></a></li>
     <li class="menu-title">설정</li>
     <li><a href="{{ url_for('admin.settings') }}"{% if section == 'site' %} class="menu-active" aria-current="page"{% endif %} title="사이트 설정">{{ ico.i('cog', 18) }}<span class="menu-text">사이트 설정</span></a></li>
     <li><a href="{{ url_for('admin.mail') }}"{% if section == 'mail' %} class="menu-active" aria-current="page"{% endif %} title="메일 설정">{{ ico.i('mail', 18) }}<span class="menu-text">메일 설정</span></a></li>
-    <li><a href="{{ url_for('admin.terms') }}"{% if section == 'legal' %} class="menu-active" aria-current="page"{% endif %} title="약관 관리">{{ ico.i('scale', 18) }}<span class="menu-text">약관 관리</span></a></li>
-    <li><a href="{{ url_for('admin.password') }}"{% if section == 'security' %} class="menu-active" aria-current="page"{% endif %} title="계정 보안">{{ ico.i('shield', 18) }}<span class="menu-text">계정 보안</span></a></li>
   </ul>
 
   <div class="admin-sidebar-foot">
@@ -31,6 +29,8 @@
         <span class="avatar-inner" data-tone="{{ current_user.display_name|length % 6 }}" aria-hidden="true"><span>{{ current_user.display_name|slice(0, 1)|upper }}</span></span>
       </span>
       <span class="admin-user-name">{{ current_user.display_name }}</span>
+      {# 계정 보안은 메뉴를 차지할 만큼 자주 쓰지 않는다. 로그아웃 옆에 아이콘으로만 둔다. #}
+      <a class="btn btn-ghost btn-square btn-sm{% if section == 'security' %} menu-active{% endif %}" href="{{ url_for('admin.password') }}" aria-label="계정 보안" title="계정 보안">{{ ico.i('shield', 17) }}</a>
       <form method="post" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn btn-ghost btn-square btn-sm" type="submit" aria-label="로그아웃" title="로그아웃">{{ ico.i('logout', 17) }}</button>
