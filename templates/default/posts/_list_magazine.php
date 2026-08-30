@@ -3,7 +3,7 @@
   <?php foreach ($list['data'] as $post): ?>
     <li class="list-row">
       <a class="post-row-thumb" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>" tabindex="-1" aria-hidden="true">
-        <?php $this->insert('posts/_thumb', ['post' => $post]) ?>
+        <?php $this->insert('posts/_thumb', ['post' => $post, 'board_badge' => false]) ?>
       </a>
       <div class="post-row-body">
         <a class="post-row-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></a>
