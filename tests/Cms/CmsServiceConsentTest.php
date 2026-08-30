@@ -92,4 +92,52 @@ final class CmsServiceConsentTest extends WebTestCase
         $app->cmsService()->deletePage($acl, $id);
         self::assertCount(0, $app->cmsService()->consentPages($acl));
     }
+
+    /** 약관 표시를 끄면 붙임도 함께 걷힌다. 안 그러면 뗄 길 없는 유령 붙임이 남는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTurningConsentOffDetachesUses(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = new Acl(Identity::user('1', '관리자', true));
+        $imageKey = bin2hex(random_bytes(16));
+        $id = $app->cmsService()->createPage($acl, [
+            'title' => '마케팅 수신 동의', 'slug' => 'marketing', 'content' => '<p>본문</p>',
+            'status' => 'published', 'show_in_menu' => '0', 'sort_order' => '0',
+            'image_key' => $imageKey, 'is_consent' => '1',
+        ]);
+        $app->consentUses()->attach('signup', $id, false, 30);
+        self::assertCount(1, $app->consentUses()->listForContent($id));
+        self::assertContains('marketing', array_column($app->cmsService()->consentDocuments('signup'), 'slug'));
+
+        $app->cmsService()->updatePage($acl, $id, [
+            'title' => '마케팅 수신 동의', 'slug' => 'marketing', 'content' => '<p>본문</p>',
+            'status' => 'published', 'show_in_menu' => '0', 'sort_order' => '0',
+            'image_key' => $imageKey, 'is_consent' => '0',
+        ]);
+
+        self::assertSame([], $app->consentUses()->listForContent($id), '표시를 끄면 붙임이 남지 않는다');
+        self::assertNotContains(
+            'marketing',
+            array_column($app->cmsService()->consentDocuments('signup'), 'slug'),
+            '표시를 끈 약관은 가입 화면에서 사라진다'
+        );
+    }
+
+    /** 옛 판에서 손수 만든 terms 페이지에는 약관 표시가 없다. 씨앗 붙이기가 켜 줘야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testEnsureLegalDraftsMarksExistingPageAsConsent(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = new Acl(Identity::user('1', '관리자', true));
+        $id = $app->cms()->createPage([
+            'slug' => 'terms', 'title' => '옛 이용약관', 'content' => '옛 본문', 'seo_description' => null,
+            'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0, 'is_consent' => 0,
+        ]);
+
+        $app->cmsService()->ensureLegalDrafts($acl);
+
+        self::assertSame(1, (int) $app->cms()->findPageById($id)['is_consent']);
+        self::assertContains('terms', array_column($app->cmsService()->consentPages($acl), 'slug'));
+        self::assertContains('terms', array_column($app->cmsService()->consentDocuments('signup'), 'slug'));
+    }
 }

@@ -175,7 +175,7 @@ final class CmsPageTest extends WebTestCase
         $uses = $app->consentUses()->listForScope('signup');
         self::assertCount(1, $uses);
         self::assertSame(1, (int) $uses[0]['required']);
-        self::assertSame(10, (int) $uses[0]['sort_order']);
+        self::assertSame(10, (int) $uses[0]['use_sort_order']);
 
         // 체크를 풀고 다시 보내면 그 자리에서 완전히 떨어진다.
         $detached = $this->post($app, '/admin/terms/uses', [
@@ -281,6 +281,36 @@ final class CmsPageTest extends WebTestCase
         @rmdir($editorRoot);
     }
 
+    /** 약관 붙이기와 동의 현황은 관리자만 열 수 있고, 표를 지나온 요청만 받는다. */
+    #[DataProvider('connectionProvider')]
+    public function testGuestCannotReachConsentRoutes(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $pageId = $app->cms()->createPage([
+            'slug' => 'terms', 'title' => '이용약관', 'content' => '본문', 'seo_description' => null,
+            'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0, 'is_consent' => 1,
+        ]);
+
+        // 표를 받아 두고 손님인 채로 보낸다. 표가 맞아도 관리자가 아니면 막힌다.
+        $this->get($app, '/login');
+        $uses = $this->post($app, '/admin/terms/uses', [
+            'csrf_token' => $_SESSION['csrf_token'], 'scope' => 'signup',
+        ]);
+        self::assertSame(401, $uses->getStatusCode(), $this->body($uses));
+        self::assertSame(401, $this->get($app, '/admin/terms')->getStatusCode());
+        self::assertSame(401, $this->get($app, '/admin/terms/' . $pageId . '/consents')->getStatusCode());
+
+        // 관리자로 들어와도 표가 없는 요청은 받지 않는다.
+        $ownerId = $app->users()->create('owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '소유자', true);
+        $app->users()->verifyEmail($ownerId);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com', 'password' => 'owner-password-123',
+        ]);
+        self::assertSame(200, $this->get($app, '/admin/terms')->getStatusCode());
+        self::assertSame(403, $this->post($app, '/admin/terms/uses', ['scope' => 'signup'])->getStatusCode());
+    }
+
     #[DataProvider('connectionProvider')]
     public function testConsentToggleRoundTrip(array $dbConfig): void
     {
@@ -321,5 +351,32 @@ final class CmsPageTest extends WebTestCase
         $afterEdit = $app->cms()->findPageById((int) $saved['id']);
         self::assertSame('환불 규정 (수정)', $afterEdit['title']);
         self::assertSame(1, (int) $afterEdit['is_consent'], '옛 테마 폼처럼 is_consent 를 보내지 않아도 값이 남아야 한다.');
+
+        // 일반 내용을 이번 저장에서 약관으로 바꾸면, 고치기 전 값이 아니라 저장된 값을
+        // 보고 약관 관리로 보내야 한다.
+        $plainForm = $this->body($this->get($app, '/admin/content/new'));
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $plainForm, $plainKey));
+        $this->post($app, '/admin/content/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
+            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '0',
+        ]);
+        $plain = $app->cms()->findPublishedBySlug('notice-page');
+        $toConsent = $this->post($app, '/admin/content/' . $plain['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
+            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '1',
+        ]);
+        self::assertSame(303, $toConsent->getStatusCode(), $this->body($toConsent));
+        self::assertSame('/admin/terms?saved=1', $toConsent->getHeaderLine('Location'));
+
+        // 반대로 약관 표시를 끄면 내용 관리로 돌아간다.
+        $backToPlain = $this->post($app, '/admin/content/' . $plain['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
+            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '0',
+        ]);
+        self::assertSame(303, $backToPlain->getStatusCode(), $this->body($backToPlain));
+        self::assertSame('/admin/content?saved=1', $backToPlain->getHeaderLine('Location'));
     }
 }

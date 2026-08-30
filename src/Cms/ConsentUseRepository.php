@@ -20,13 +20,20 @@ final class ConsentUseRepository
         $this->db = $db;
     }
 
-    /** 한 자리에 붙은 약관을 차례대로. 내용 칸과 붙임 칸을 합쳐 준다. */
+    /**
+     * 한 자리에 붙은 약관을 차례대로. 내용 칸과 붙임 칸을 합쳐 준다.
+     *
+     * 붙임의 차례는 use_sort_order 로 따로 준다. 두 표가 같은 이름의 칸을 가져서,
+     * sort_order 를 그냥 실으면 어느 쪽 값인지 SQL 판마다 달라진다.
+     * is_consent 를 한 번 더 보는 것은 표시를 뗀 뒤 남은 붙임이 있어도
+     * 가입 화면에는 절대 나오지 않게 하려는 빗장이다.
+     */
     public function listForScope(string $scope, bool $publishedOnly = false): array
     {
-        $sql = 'SELECT c.*, u.required, u.sort_order, u.scope'
+        $sql = 'SELECT c.*, u.required, u.sort_order AS use_sort_order, u.scope'
             . ' FROM ' . $this->db->q('consent_uses') . ' u'
             . ' JOIN ' . $this->db->q('contents') . ' c ON c.id = u.content_id'
-            . ' WHERE u.scope = ? AND c.deleted_at IS NULL';
+            . ' WHERE u.scope = ? AND c.deleted_at IS NULL AND c.is_consent = 1';
         if ($publishedOnly) {
             $sql .= " AND c.status = 'published'";
         }

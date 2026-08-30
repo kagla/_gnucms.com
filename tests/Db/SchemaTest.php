@@ -163,6 +163,13 @@ final class SchemaTest extends WebTestCase
             'content_updated_at' => '2026-01-01 00:00:00', 'agreed' => 1,
             'agreed_at' => '2026-01-01 00:00:00',
         ]);
+        // 옮기기는 한 줄만 되는 게 아니다. 동의 안 함(0) 도 그대로 넘어와야 한다.
+        $otherId = $app->users()->create('b@example.com', password_hash('x', PASSWORD_DEFAULT), 'B', false);
+        $db->insert('user_consents', [
+            'user_id' => $otherId, 'consent_type' => 'terms', 'content_id' => $id,
+            'content_updated_at' => '2026-01-01 00:00:00', 'agreed' => 0,
+            'agreed_at' => '2026-01-02 00:00:00',
+        ]);
 
         (new Schema($db))->ensureCurrent();
 
@@ -183,6 +190,13 @@ final class SchemaTest extends WebTestCase
         self::assertSame('signup', $given['scope']);
         self::assertSame('terms', $given['consent_type']);
         self::assertSame(1, (int) $given['agreed']);
+
+        $other = $db->selectOne('SELECT * FROM ' . $db->q('consents_given')
+            . ' WHERE subject_type = ? AND subject_id = ?', ['user', $otherId]);
+        self::assertNotNull($other, '두 번째 줄도 함께 넘어와야 한다');
+        self::assertSame('signup', $other['scope']);
+        self::assertSame(0, (int) $other['agreed'], '동의 안 함은 안 함 그대로 남는다');
+        self::assertSame(2, (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q('consents_given'))['c']);
     }
 
     private function boardRow(string $key): array

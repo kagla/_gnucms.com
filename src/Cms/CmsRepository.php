@@ -78,20 +78,6 @@ final class CmsRepository
         ));
     }
 
-    /**
-     * 동의 항목으로 표시된 내용. 정한 차례대로 준다.
-     * @param bool $publishedOnly 가입 화면에는 공개된 것만 붙는다.
-     */
-    public function listConsentDocuments(bool $publishedOnly = false): array
-    {
-        $sql = 'SELECT * FROM ' . $this->db->q('contents')
-            . ' WHERE consent_key IS NOT NULL AND deleted_at IS NULL';
-        if ($publishedOnly) {
-            $sql .= " AND status = 'published'";
-        }
-        return $this->db->select($sql . ' ORDER BY consent_order ASC, id ASC');
-    }
-
     public function findPageById(int $id): ?array
     {
         $row = $this->db->selectOne(
@@ -139,6 +125,15 @@ final class CmsRepository
         $data['updated_at'] = Clock::now();
         $data['published_at'] = $data['status'] === 'published' ? ($publishedAt ?? Clock::now()) : null;
         $this->db->update('contents', $data, 'id = :id', ['id' => $id]);
+    }
+
+    /** 약관 표시만 켠다. 씨앗 붙이기가 옛 판에서 손수 만든 페이지를 만났을 때 쓴다. */
+    public function markConsent(int $id): void
+    {
+        $this->db->execute(
+            'UPDATE ' . $this->db->q('contents') . ' SET is_consent = 1 WHERE id = ?',
+            [$id]
+        );
     }
 
     public function deletePage(int $id): void

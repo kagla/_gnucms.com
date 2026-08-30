@@ -105,6 +105,11 @@ final class CmsService
                 ]);
             } else {
                 $id = (int) $page['id'];
+                // 옛 판에서 손수 만든 terms 페이지는 표시가 없어서, 붙이기만 하면
+                // 약관 관리 목록에도 가입 화면에도 안 보이는 유령 붙임이 된다.
+                if ((int) ($page['is_consent'] ?? 0) !== 1) {
+                    $this->cms->markConsent($id);
+                }
             }
             // 씨앗 둘은 회원가입에 반드시 붙는다. 없으면 가입 자체를 받지 않는다.
             $this->uses->attach('signup', $id, true, $order);
@@ -211,6 +216,12 @@ final class CmsService
             throw DomainError::validation(['slug' => '이미 사용 중인 주소입니다.']);
         }
         $this->cms->updatePage($id, $data, $page['published_at']);
+        // 약관 표시를 껐으면 붙임도 함께 걷는다. 붙임이 남으면 약관 관리 목록에서
+        // 사라져 화면에서 뗄 길이 없고, 가입 화면에 유령 항목이 남는다.
+        if (array_key_exists('is_consent', $data)
+            && (int) $data['is_consent'] === 0 && (int) ($page['is_consent'] ?? 0) === 1) {
+            $this->uses->detachContent($id);
+        }
         $this->syncImages($data);
     }
 

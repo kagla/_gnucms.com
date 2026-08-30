@@ -149,6 +149,10 @@ final class AdminCmsController
         $acl = $this->app->guestAcl();
         $scope = isset($input['scope']) && is_string($input['scope']) && $input['scope'] !== ''
             ? $input['scope'] : 'signup';
+        // 자리 이름은 VARCHAR(40) 이다. 넘치거나 엉뚱한 글자가 오면 MySQL 이 500 을 낸다.
+        if (preg_match('/^[a-z][a-z0-9:_-]{0,39}$/D', $scope) !== 1) {
+            $scope = 'signup';
+        }
         $use = is_array($input['use'] ?? null) ? $input['use'] : [];
         $required = is_array($input['required'] ?? null) ? $input['required'] : [];
         $order = is_array($input['sort_order'] ?? null) ? $input['sort_order'] : [];
@@ -223,17 +227,22 @@ final class AdminCmsController
         $input = $this->input($request);
         $this->assertCsrf($input);
         $id = (int) $args['id'];
-        $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
+        $acl = $this->app->guestAcl();
+        $page = $this->app->cmsService()->page($acl, $id);
         $legal = $this->isLegal($page);
         try {
-            $this->app->cmsService()->updatePage($this->app->guestAcl(), $id, $input);
+            $this->app->cmsService()->updatePage($acl, $id, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
             }
+            // 저장이 엎어졌으니 폼은 고치기 전 표시를 그대로 다시 그린다.
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), false, $id, $legal);
         }
+        // 이번 저장에서 약관 표시가 켜지거나 꺼졌을 수 있으므로, 저장된 행을 다시 읽어
+        // 돌아갈 곳을 정한다. 고치기 전 값으로 정하면 엉뚱한 목록으로 보낸다.
+        $legal = $this->isLegal($this->app->cmsService()->page($acl, $id));
         return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['saved' => '1']);
     }
 
