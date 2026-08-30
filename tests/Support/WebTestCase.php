@@ -35,6 +35,7 @@ abstract class WebTestCase extends DatabaseTestCase
                 'max_bytes'   => 1024 * 1024,
                 'allowed_ext' => ['txt', 'png', 'pdf'],
             ],
+            'storage' => ['dir' => sys_get_temp_dir() . '/' . GNUCMS_ID . '-test-storage'],
             'log'   => ['file' => null],
             'debug' => true,
         ], $configOverrides);
