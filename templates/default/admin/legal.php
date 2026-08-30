@@ -24,7 +24,7 @@
       <form method="post" action="<?= $this->url('admin.terms.uses') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <div class="table-wrap">
-          <table class="table table-zebra">
+          <table class="table table-zebra terms-table">
             <thead><tr><th>약관</th><th>공개 주소</th><th>사용처</th><th>필수</th><th>차례</th><th>동의</th><th class="right">관리</th></tr></thead>
             <tbody>
             <?php foreach ($pages as $page): ?>
