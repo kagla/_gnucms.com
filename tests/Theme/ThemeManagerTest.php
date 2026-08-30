@@ -97,6 +97,22 @@ final class ThemeManagerTest extends TestCase
         }
     }
 
+    public function testThrowingManifestDoesNotKillKernelCreate(): void
+    {
+        $root = sys_get_temp_dir() . '/gnucms-theme-throw-' . getmypid();
+        @mkdir($root . '/default', 0777, true);
+        @mkdir($root . '/broken', 0777, true);
+        file_put_contents($root . '/broken/theme.php', "<?php throw new \\RuntimeException('boom');");
+        try {
+            self::assertSame('twig', (new ThemeManager($root, $root, 'broken'))->engine());
+        } finally {
+            @unlink($root . '/broken/theme.php');
+            @rmdir($root . '/broken');
+            @rmdir($root . '/default');
+            @rmdir($root);
+        }
+    }
+
     private function manager(string $theme): ThemeManager
     {
         return new ThemeManager(

@@ -122,15 +122,18 @@ final class PhpTemplate
         return trim($this->blocks[$name] ?? '') !== '';
     }
 
-    public function insert(string $template, array $data = []): void
+    public function insert(string $template, array $data = [], bool $only = false): void
     {
-        echo $this->fetch($template, $data);
+        echo $this->fetch($template, $data, $only);
     }
 
-    public function fetch(string $template, array $data = []): string
+    public function fetch(string $template, array $data = [], bool $only = false): string
     {
         // 조각은 자기 블록 저장소를 갖는 새 렌더다. 변수는 지금 것에 덧붙여 물려준다.
-        return (new self($this->view, $data + $this->vars, $this->base))->run($template);
+        // $only 는 Twig 의 `with ... only` 와 같다: 지금 화면의 지역 변수는 끊지만,
+        // 전역(site, current_user 등)은 Twig 도 끊지 않으므로 여기서도 계속 물려준다.
+        $vars = $only ? $data + $this->view->globals() : $data + $this->vars;
+        return (new self($this->view, $vars, $this->base))->run($template);
     }
 
     public function url(string $route, array $params = [], array $query = []): string
@@ -157,7 +160,8 @@ final class PhpTemplate
             . ' width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none"'
             . ' stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'
             . ' aria-hidden="true" focusable="false">'
-            . ($paths[$name] ?? '')
+            // 모르는 이름이면 Twig 매크로의 else 분기(원)와 같은 걸 낸다.
+            . ($paths[$name] ?? '<circle cx="12" cy="12" r="8.6"/>')
             . '</svg>';
     }
 

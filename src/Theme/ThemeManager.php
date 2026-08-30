@@ -54,7 +54,12 @@ final class ThemeManager
         if (!is_file($file)) {
             return [];
         }
-        $loaded = include $file;
+        try {
+            $loaded = include $file;
+        } catch (\Throwable $e) {
+            // 매니페스트가 깨졌다고 사이트 전체가 죽으면 안 된다. Twig 테마로 본다.
+            return [];
+        }
         return is_array($loaded) ? $loaded : [];
     }
 

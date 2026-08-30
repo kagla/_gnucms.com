@@ -65,6 +65,12 @@ final class PhpView implements ViewInterface
         $this->globals[$name] = $value;
     }
 
+    /** @return array<string,mixed> */
+    public function globals(): array
+    {
+        return $this->globals;
+    }
+
     public function bindRequest(ServerRequestInterface $request): void
     {
         // 주소 만들기에 요청이 필요 없다. RouteParser 가 기준 경로까지 붙여 준다.

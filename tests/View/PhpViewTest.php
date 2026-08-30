@@ -122,6 +122,25 @@ final class PhpViewTest extends TestCase
         self::assertStringContainsString('<svg class="icon x" width="18" height="18"', $out);
         self::assertStringContainsString('<path d="M1 1"/>', $out);
         self::assertStringContainsString('|<svg class="icon" width="20" height="20"', $out);
+        self::assertStringContainsString('<circle cx="12" cy="12" r="8.6"/></svg>', $out, '모르는 이름은 Twig 매크로의 else 분기(원)와 같아야 한다');
+    }
+
+    public function testInsertOnlyDropsOuterLocalsButKeepsGlobals(): void
+    {
+        $this->write('part', '<?= isset($x) ? $this->e($x) : \'-\' ?>/<?= $this->e($site) ?>');
+        $this->write('page', "<?php \$this->insert('part', [], true) ?>;<?php \$this->insert('part', ['x' => 'inner'], true) ?>");
+        $view = $this->view();
+        $view->addGlobal('site', 'S');
+        self::assertSame('-/S;inner/S', $view->fetch('page', ['x' => 'outer']));
+    }
+
+    public function testInsertWithoutOnlyStillPassesOuterLocals(): void
+    {
+        $this->write('part', '<?= isset($x) ? $this->e($x) : \'-\' ?>/<?= $this->e($site) ?>');
+        $this->write('page', "<?php \$this->insert('part') ?>");
+        $view = $this->view();
+        $view->addGlobal('site', 'S');
+        self::assertSame('outer/S', $view->fetch('page', ['x' => 'outer']));
     }
 
     public function testMissingTemplateThrows(): void
