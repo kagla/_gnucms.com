@@ -51,11 +51,15 @@
             <option value="form"{{ values.consent_usage|default('none') == 'form' ? ' selected' : '' }}>신청서·등록 동의</option>
             <option value="none"{{ values.consent_usage|default('none') == 'none' ? ' selected' : '' }}>안내만</option>
           </select>
-          <ul class="fieldset-label usage-guide">
-            <li><strong>회원가입 동의</strong> — 회원가입 화면에 동의 체크박스로 나옵니다. 아래 토글로 필수·선택을 정합니다.</li>
-            <li><strong>신청서·등록 동의</strong> — 신청서 같은 제출 기능이 생기면 그 화면에 붙습니다. 아직 쓰는 곳이 없으니 미리 정해 두는 용도이고, 아래 자리 이름으로 어느 폼의 약관인지 가릅니다.</li>
-            <li><strong>안내만</strong> — 어디에도 붙지 않습니다. 청소년 보호정책처럼 하단 목록에서 읽기만 하는 약관입니다.</li>
-          </ul>
+          {# 안내는 처음 한두 번만 필요하다. 접어 두고 필요할 때만 편다. #}
+          <details class="usage-help">
+            <summary>사용처가 각각 어디에 쓰이나요?</summary>
+            <ul class="usage-guide">
+              <li><strong>회원가입 동의</strong> — 회원가입 화면에 동의 체크박스로 나옵니다. 아래 토글로 필수·선택을 정합니다.</li>
+              <li><strong>신청서·등록 동의</strong> — 신청서 같은 제출 기능이 생기면 그 화면에 붙습니다. 아직 쓰는 곳이 없으니 미리 정해 두는 용도이고, 아래 자리 이름으로 어느 폼의 약관인지 가릅니다.</li>
+              <li><strong>안내만</strong> — 어디에도 붙지 않습니다. 청소년 보호정책처럼 하단 목록에서 읽기만 하는 약관입니다.</li>
+            </ul>
+          </details>
           <p class="fieldset-label">공개 상태여야 화면에 붙습니다.</p>
         </fieldset>
         <fieldset class="fieldset">
