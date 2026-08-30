@@ -389,7 +389,6 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 }
 
 .drawer-panel{display:flex;flex-direction:column;gap:1rem;padding:1rem;border-right:var(--border) solid var(--bc-10)}
-.drawer-head-actions{display:flex;align-items:center;gap:.25rem;margin-left:auto}
 .drawer-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .drawer-user{
   display:flex;align-items:center;gap:.75rem;padding:.875rem;

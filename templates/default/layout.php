@@ -203,14 +203,8 @@
           <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 18) ?></span>
           <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
         </span>
-        <div class="drawer-head-actions">
-          <?php // 화면 테마는 글자 단추가 아니라 머리글과 같은 아이콘 하나로. 스크립트가 aria-label 을 갈아 준다. ?>
-          <button class="btn btn-ghost btn-square btn-sm theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
-            <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 18) ?></span>
-            <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 18) ?></span>
-          </button>
-          <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기"><?= $this->icon('close', 18) ?></label>
-        </div>
+        <?php // 화면 테마 토글은 머리글에 있다. 서랍은 머리글 위에 열리므로 여기 또 두면 둘이 나란히 보인다. ?>
+        <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기"><?= $this->icon('close', 18) ?></label>
       </div>
 
       <?php if (!$current_user['is_guest']): ?>
