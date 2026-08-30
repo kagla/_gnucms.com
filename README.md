@@ -18,7 +18,8 @@ SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시�
    그 위 디렉터리에 둔다. `storage/` 가 웹으로 접근 가능한 위치에 있으면 안 된다.
 2. 브라우저로 사이트를 연다. 설정 파일이 없으면 `install.php` 로 자동 이동한다.
 3. 다섯 단계를 따라간다: 서버 점검 → 데이터베이스(종류를 고르고 접속 시험) → 사이트 이름·주소·발신 메일
-   → 첫 관리자 → 완료. `config/config.php` 는 마지막에 쓰인다.
+   → 첫 관리자 → 완료. `config/config.php` 는 마지막에 쓰인다. 파일을 올린 뒤에는 바로 설치를
+   끝낸다. 설정 파일이 생기기 전에는 누구나 설치기를 열어 첫 관리자가 될 수 있다.
 4. 설치가 끝나면 `public/install.php` 는 스스로 삭제된다. 못 지웠다고 나오면 손으로 지운다.
 5. 로그인해 관리 콘솔에서 게시판을 만든다.
 
@@ -218,10 +219,6 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 3. 글의 `author_id` 가 토큰의 `sub` 와 같음 → **본인**
 4. 비회원 글이고 비밀번호가 맞음 → **비회원 본인**. 3번과 같은 권한
 5. 그 외 → 게시판의 `perm_read` / `perm_write` / `perm_comment` 설정
-
-호스트 앱이 아직 없다면 `config.php` 의 `bootstrap_admin` 계정으로 `admin.php` 에 로그인해
-전역 관리자 토큰을 발급받는다. 호스트를 붙인 뒤에는 `bootstrap_admin` 을 `null` 로 두어
-이 경로를 닫는다.
 
 ## API
 
