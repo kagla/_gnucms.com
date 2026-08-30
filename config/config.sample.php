@@ -27,17 +27,9 @@ return [
         'password' => null,
     ],
 
-    // 호스트 앱과 공유하는 시크릿. 32바이트 이상 임의 문자열.
+    // 세션·메일 비밀번호 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.
     'auth' => [
         'secret' => 'CHANGE-ME-32-BYTES-OR-LONGER-RANDOM-STRING',
-        'ttl'    => 3600,
-        'leeway' => 60,
-    ],
-
-    // 호스트 앱을 붙인 뒤에는 null 로 두어 이 경로를 닫는다.
-    'bootstrap_admin' => [
-        'id'            => 'root',
-        'password_hash' => '',
     ],
 
     'uploads' => [
@@ -52,14 +44,6 @@ return [
     'editor' => [
         'dir'       => __DIR__ . '/../storage/editor',
         'max_bytes' => 5 * 1024 * 1024,
-    ],
-
-    // 브라우저가 직접 호출하는 호스트 앱의 출처를 정확히 적는다.
-    // 와일드카드는 지원하지 않는다.
-    'cors' => [
-        'allowed_origins' => [
-            // 'https://app.example.com',
-        ],
     ],
 
     'log' => [

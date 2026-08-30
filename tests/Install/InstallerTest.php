@@ -4,138 +4,173 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Install;
 
-use PHPUnit\Framework\TestCase;
 use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
 use GnuCms\Install\Installer;
+use PHPUnit\Framework\TestCase;
 
 final class InstallerTest extends TestCase
 {
-    /** @var string */
-    private $workDir;
+    private string $workDir;
 
     protected function setUp(): void
     {
         $this->workDir = sys_get_temp_dir() . '/' . GNUCMS_ID . '-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
+        mkdir($this->workDir . '/public', 0775, true);
+        file_put_contents($this->workDir . '/public/install.php', '<?php // 설치기');
     }
 
     protected function tearDown(): void
     {
-        foreach (['config/config.php', 'storage/board.sqlite'] as $file) {
+        foreach (['config/config.php', 'storage/board.sqlite', 'public/install.php'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
-        @rmdir($this->workDir . '/config');
-        @rmdir($this->workDir . '/storage/uploads');
-        @rmdir($this->workDir . '/storage/editor');
-        @rmdir($this->workDir . '/storage/logs');
-        @rmdir($this->workDir . '/storage');
-        @rmdir($this->workDir);
+        foreach (['config', 'storage/uploads', 'storage/editor', 'storage/logs', 'storage', 'public', ''] as $dir) {
+            @rmdir(rtrim($this->workDir . '/' . $dir, '/'));
+        }
     }
 
     public function testNotInstalledInitially(): void
     {
-        $this->assertFalse($this->installer()->isInstalled());
+        self::assertFalse($this->installer()->isInstalled());
     }
 
-    public function testRunCreatesSchemaAndConfig(): void
+    public function testFinishCreatesSchemaAdminConfigAndDeletesItself(): void
     {
-        $result = $this->installer()->run($this->input());
+        $result = $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
 
-        $this->assertSame('sqlite', $result['dialect']);
-        $this->assertFileExists($this->configPath());
-        $this->assertTrue($this->installer()->isInstalled());
+        self::assertSame('sqlite', $result['dialect']);
+        self::assertSame('owner@example.com', $result['admin_email']);
+        self::assertTrue($result['self_deleted']);
+        self::assertFileDoesNotExist($this->workDir . '/public/install.php');
+        self::assertTrue($this->installer()->isInstalled());
 
         $config = require $this->configPath();
         $db = Connection::create($config['db']);
-        $this->assertTrue((new Schema($db))->exists());
+        self::assertTrue((new Schema($db))->exists());
+        self::assertSame('내 커뮤니티', $db->selectOne("SELECT setting_value FROM site_settings WHERE setting_key = 'site_name'")['setting_value']);
+
+        $user = $db->selectOne('SELECT * FROM users WHERE email = ?', ['owner@example.com']);
+        self::assertSame(1, (int) $user['is_admin']);
+        self::assertSame(1, (int) $user['email_verified']);
+        self::assertSame('사이트지기', $user['display_name']);
+        self::assertTrue(password_verify('secret-pass-123', (string) $user['password_hash']));
+        self::assertSame('1', $db->selectOne("SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'")['state_value']);
     }
 
-    public function testGeneratedConfigHasStrongSecretAndNoPrecreatedUser(): void
+    public function testGeneratedConfigHasOnlyLiveKeys(): void
     {
-        $this->installer()->run($this->input());
+        $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
         $config = require $this->configPath();
 
-        $this->assertGreaterThanOrEqual(43, strlen($config['auth']['secret']));
-        $db = Connection::create($config['db']);
-        $this->assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
-        $this->assertSame('0', $db->selectOne(
-            "SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'"
-        )['state_value']);
-        $this->assertArrayNotHasKey('bootstrap_admin', $config);
-        $this->assertSame('https://community.example.com', $config['app']['url']);
-        $this->assertSame('no-reply@example.com', $config['mail']['from']);
-        $this->assertSame($this->workDir . '/storage/editor', $config['editor']['dir']);
-        $this->assertDirectoryExists($config['editor']['dir']);
-        $this->assertFalse($config['debug']);
+        self::assertGreaterThanOrEqual(43, strlen($config['auth']['secret']));
+        self::assertSame(['secret'], array_keys($config['auth']));
+        self::assertArrayNotHasKey('cors', $config);
+        self::assertArrayNotHasKey('bootstrap_admin', $config);
+        self::assertSame('https://community.example.com', $config['app']['url']);
+        self::assertSame('no-reply@example.com', $config['mail']['from']);
+        self::assertSame($this->workDir . '/storage/editor', $config['editor']['dir']);
+        self::assertDirectoryExists($config['editor']['dir']);
+        self::assertFalse($config['debug']);
+        self::assertSame('0640', substr(sprintf('%o', fileperms($this->configPath())), -4));
     }
 
-    public function testInvalidAppUrlAndMailFromAreRejected(): void
+    public function testReuseKeepsExistingTablesAndSkipsAdmin(): void
     {
+        $db = Connection::create($this->dbConfig());
+        (new Schema($db))->create();
+        $db->execute("UPDATE site_settings SET setting_value = '9.old' WHERE setting_key = 'schema_version'");
+        $db->insert('boards', [
+            'board_key' => 'free', 'name' => '자유', 'description' => '', 'list_type' => 'list', 'perm_read' => 'all',
+            'perm_write' => 'member', 'perm_comment' => 'member', 'managers' => '[]', 'sort_order' => 1,
+            'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+        ]);
+
+        $result = $this->installer()->finish($this->dbConfig(), $this->site(), null, true);
+
+        self::assertNull($result['admin_email']);
+        self::assertSame(1, (int) $db->selectOne('SELECT COUNT(*) AS c FROM boards')['c']);
+        self::assertSame((new Schema($db))->stamp(), (new Schema($db))->storedStamp());
+        self::assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
+    }
+
+    public function testSecondFinishIsRefused(): void
+    {
+        $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
+
         try {
-            $this->installer()->run($this->input([
-                'app_url' => 'javascript:alert(1)',
-                'mail_from' => "bad\naddress",
-            ]));
-            $this->fail('422 가 나와야 한다');
+            $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
+            self::fail('두 번째 설치는 거부되어야 한다');
         } catch (DomainError $e) {
-            $this->assertSame(422, $e->status());
-            $this->assertArrayHasKey('app_url', $e->details());
-            $this->assertArrayHasKey('mail_from', $e->details());
+            self::assertSame(403, $e->status());
         }
     }
 
-    public function testCorsOriginsAreParsedLineByLine(): void
+    public function testUnreachableDatabaseIsReported(): void
     {
-        $this->installer()->run($this->input([
-            'cors_origins' => "https://a.example.com\n  \nhttps://b.example.com  ",
-        ]));
-        $config = require $this->configPath();
-
-        $this->assertSame(['https://a.example.com', 'https://b.example.com'], $config['cors']['allowed_origins']);
+        try {
+            $this->installer()->finish(['dsn' => 'mysql:host=127.0.0.1;port=1;dbname=nope', 'username' => 'x', 'password' => 'y'], $this->site(), $this->admin());
+            self::fail('422 가 나와야 한다');
+        } catch (DomainError $e) {
+            self::assertSame(422, $e->status());
+            self::assertArrayHasKey('_', $e->details());
+        }
+        self::assertFileDoesNotExist($this->configPath());
     }
 
-    public function testSecondRunIsRefused(): void
+    public function testWithoutInstallScriptSelfDeletedIsNull(): void
     {
-        $this->installer()->run($this->input());
+        $installer = new Installer($this->configPath(), $this->workDir . '/storage');
+
+        $result = $installer->finish($this->dbConfig(), $this->site(), $this->admin());
+
+        self::assertNull($result['self_deleted']);
+        self::assertFileExists($this->workDir . '/public/install.php');
+    }
+
+    public function testSiteFromValidatesUrlAndMail(): void
+    {
+        self::assertSame(
+            ['site_name' => '내 커뮤니티', 'app_url' => 'https://community.example.com', 'mail_from' => 'no-reply@example.com'],
+            Installer::siteFrom(['site_name' => '내 커뮤니티', 'app_url' => 'https://community.example.com/', 'mail_from' => 'No-Reply@example.com'])
+        );
 
         try {
-            $this->installer()->run($this->input());
-            $this->fail('두 번째 설치는 거부되어야 한다');
+            Installer::siteFrom(['site_name' => '', 'app_url' => 'javascript:alert(1)', 'mail_from' => "bad\naddress"]);
+            self::fail('422 가 나와야 한다');
         } catch (DomainError $e) {
-            $this->assertSame(403, $e->status());
+            self::assertSame(['site_name', 'app_url', 'mail_from'], array_keys($e->details()));
         }
     }
 
-    public function testUnsupportedDriverIsRejected(): void
+    public function testAdminFromValidatesLikeRegistration(): void
     {
-        try {
-            $this->installer()->run($this->input(['dsn' => 'oracle:host=localhost']));
-            $this->fail('422 가 나와야 한다');
-        } catch (DomainError $e) {
-            $this->assertSame(422, $e->status());
-            $this->assertArrayHasKey('dsn', $e->details());
-        }
-    }
+        self::assertSame(
+            ['email' => 'owner@example.com', 'display_name' => '사이트지기', 'password' => 'secret-pass-123'],
+            Installer::adminFrom($this->admin() + ['password_confirmation' => 'secret-pass-123'])
+        );
 
-    public function testUnreachableDatabaseIsReportedOnTheDsnField(): void
-    {
         try {
-            $this->installer()->run($this->input([
-                'dsn' => 'mysql:host=127.0.0.1;port=1;dbname=nope',
-            ]));
-            $this->fail('422 가 나와야 한다');
+            Installer::adminFrom(['email' => 'nope', 'display_name' => 'a b', 'password' => 'short', 'password_confirmation' => 'other']);
+            self::fail('422 가 나와야 한다');
         } catch (DomainError $e) {
-            $this->assertSame(422, $e->status());
-            $this->assertArrayHasKey('dsn', $e->details());
+            self::assertSame(['email', 'display_name', 'password', 'password_confirmation'], array_keys($e->details()));
+        }
+
+        try {
+            Installer::adminFrom(['email' => 'a@example.com', 'display_name' => '김', 'password' => 'secret-pass-123', 'password_confirmation' => 'secret-pass-123']);
+            self::fail('짧은 표시 이름은 거부되어야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('display_name', $e->details());
         }
     }
 
     private function installer(): Installer
     {
-        return new Installer($this->configPath(), $this->workDir . '/storage');
+        return new Installer($this->configPath(), $this->workDir . '/storage', $this->workDir . '/public/install.php');
     }
 
     private function configPath(): string
@@ -143,15 +178,19 @@ final class InstallerTest extends TestCase
         return $this->workDir . '/config/config.php';
     }
 
-    private function input(array $overrides = []): array
+    /** @return array{dsn: string, username: ?string, password: ?string} */
+    private function dbConfig(): array
     {
-        return array_merge([
-            'app_url'        => 'https://community.example.com/',
-            'mail_from'      => 'no-reply@example.com',
-            'dsn'            => 'sqlite:' . $this->workDir . '/storage/board.sqlite',
-            'db_username'    => '',
-            'db_password'    => '',
-            'cors_origins'   => '',
-        ], $overrides);
+        return ['dsn' => 'sqlite:' . $this->workDir . '/storage/board.sqlite', 'username' => null, 'password' => null];
+    }
+
+    private function site(): array
+    {
+        return ['site_name' => '내 커뮤니티', 'app_url' => 'https://community.example.com', 'mail_from' => 'no-reply@example.com'];
+    }
+
+    private function admin(): array
+    {
+        return ['email' => 'owner@example.com', 'display_name' => '사이트지기', 'password' => 'secret-pass-123'];
     }
 }

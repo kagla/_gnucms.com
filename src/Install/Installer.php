@@ -4,26 +4,35 @@ declare(strict_types=1);
 
 namespace GnuCms\Install;
 
+use GnuCms\Account\UserRepository;
 use GnuCms\Db\Connection;
-use GnuCms\Db\DialectFactory;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
 use GnuCms\Support\Base64Url;
+use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
 use Throwable;
 
+/**
+ * 설치 3·4단계의 검증과 5단계의 마무리.
+ * 순서: 표 → 사이트 이름 → 관리자 → config.php → install.php 삭제.
+ * config.php 를 맨 마지막에 쓰므로 중간에 실패해도 "반쯤 설치된" 상태가 남지 않는다.
+ */
 final class Installer
 {
-    /** @var string */
-    private $configPath;
+    /** 회원가입과 같은 비밀번호 최소 길이. Validator::requiredPassword() 의 기준(4자)보다 세다. */
+    private const PASSWORD_MIN = 8;
 
-    /** @var string */
-    private $storageDir;
+    private string $configPath;
+    private string $storageDir;
+    /** @var string|null install.php 경로. null 이면 스스로 지우지 않는다 */
+    private ?string $installScript;
 
-    public function __construct(string $configPath, string $storageDir)
+    public function __construct(string $configPath, string $storageDir, ?string $installScript = null)
     {
         $this->configPath = $configPath;
         $this->storageDir = rtrim($storageDir, '/');
+        $this->installScript = $installScript;
     }
 
     public function isInstalled(): bool
@@ -31,17 +40,13 @@ final class Installer
         return is_file($this->configPath);
     }
 
-    /** @return array{dialect: string, config_path: string} */
-    public function run(array $input): array
+    /** @return array{site_name: string, app_url: string, mail_from: string} */
+    public static function siteFrom(array $input): array
     {
-        if ($this->isInstalled()) {
-            throw DomainError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
-        }
-
         $v = new Validator($input);
+        $siteName = trim($v->requiredString('site_name', 50));
         $appUrl = rtrim($v->requiredString('app_url', 500), '/');
         $mailFrom = strtolower($v->requiredString('mail_from', 254));
-        $dsn = $v->requiredString('dsn', 500);
         if ($appUrl !== '' && filter_var($appUrl, FILTER_VALIDATE_URL) === false) {
             $v->fail('app_url', '올바른 http 또는 https 주소를 입력해 주세요.');
         } elseif ($appUrl !== '' && !in_array((string) parse_url($appUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
@@ -52,49 +57,128 @@ final class Installer
         }
         $v->check();
 
-        if (strpos($dsn, ':') === false) {
-            throw DomainError::validation(['dsn' => 'DSN 형식이 올바르지 않습니다.']);
-        }
+        return ['site_name' => $siteName, 'app_url' => $appUrl, 'mail_from' => $mailFrom];
+    }
 
-        try {
-            DialectFactory::fromDsn($dsn);
-        } catch (DomainError $e) {
-            throw DomainError::validation(['dsn' => $e->getMessage()]);
+    /** 회원가입과 같은 규칙. @return array{email: string, display_name: string, password: string} */
+    public static function adminFrom(array $input): array
+    {
+        $v = new Validator($input);
+        $email = strtolower(trim($v->requiredString('email', 254)));
+        $name = trim($v->requiredString('display_name', 100));
+        $password = $v->requiredPassword('password');
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            $v->fail('email', '올바른 이메일 주소를 입력해 주세요.');
         }
+        if ($name !== '' && UserRepository::displayNameHasBadChars($name)) {
+            $v->fail('display_name', '표시 이름은 한글·영문·숫자만 쓸 수 있습니다.');
+        } elseif ($name !== '' && UserRepository::displayNameTooShort($name)) {
+            $v->fail('display_name', UserRepository::displayNameRule());
+        }
+        if ($password !== '' && mb_strlen($password) < self::PASSWORD_MIN) {
+            $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
+        }
+        if ((string) ($input['password_confirmation'] ?? '') !== (string) ($input['password'] ?? '')) {
+            $v->fail('password_confirmation', '비밀번호 확인이 다릅니다.');
+        }
+        $v->check();
 
-        $dbConfig = [
-            'dsn'      => $dsn,
-            'username' => ((string) ($input['db_username'] ?? '')) ?: null,
-            'password' => ((string) ($input['db_password'] ?? '')) ?: null,
-        ];
+        return ['email' => $email, 'display_name' => $name, 'password' => $password];
+    }
+
+    /**
+     * @param array{dsn: string, username: ?string, password: ?string} $dbConfig
+     * @param array{site_name: string, app_url: string, mail_from: string} $site
+     * @param array{email: string, display_name: string, password: string}|null $admin null 이면 관리자를 만들지 않는다(이어 쓰기)
+     * @param bool $reuse 이미 표가 있는 DB 를 이어 쓴다. 표를 새로 만들지 않고 새 판으로 옮긴다
+     * @return array{dialect: string, admin_email: ?string, config_path: string, self_deleted: ?bool}
+     */
+    public function finish(array $dbConfig, array $site, ?array $admin, bool $reuse = false): array
+    {
+        if ($this->isInstalled()) {
+            throw DomainError::forbidden('이미 설치되어 있습니다. 다시 설치하려면 config/config.php 를 지우세요.');
+        }
 
         try {
             $db = Connection::create($dbConfig);
-            (new Schema($db))->create();
+            $schema = new Schema($db);
+            if ($reuse) {
+                $schema->ensureCurrent();
+            } else {
+                $schema->create();
+            }
         } catch (Throwable $e) {
-            throw DomainError::validation(['dsn' => 'DB 에 연결하거나 테이블을 만들지 못했습니다: ' . $e->getMessage()]);
+            throw DomainError::validation(['_' => 'DB 에 연결하거나 표를 만들지 못했습니다: ' . $e->getMessage()]);
         }
 
         $this->ensureStorageDirectories();
 
+        $db->execute(
+            'UPDATE ' . $db->q('site_settings') . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+            [$site['site_name'], Clock::now(), 'site_name']
+        );
+
+        $adminEmail = null;
+        if ($admin !== null) {
+            $users = new UserRepository($db);
+            if ($users->findByEmail($admin['email']) !== null) {
+                throw DomainError::validation(['email' => '이미 있는 이메일입니다.']);
+            }
+            $id = $users->create(
+                $admin['email'],
+                password_hash($admin['password'], PASSWORD_DEFAULT),
+                $users->uniqueDisplayName($admin['display_name']),
+                true
+            );
+            $users->verifyEmail($id);
+            $db->execute(
+                'UPDATE ' . $db->q('site_state') . ' SET state_value = ? WHERE state_key = ?',
+                ['1', 'first_admin_claimed']
+            );
+            $adminEmail = $admin['email'];
+        }
+
+        $this->writeConfig($dbConfig, $site);
+
+        $selfDeleted = null;
+        if ($this->installScript !== null) {
+            $selfDeleted = !is_file($this->installScript) || @unlink($this->installScript);
+        }
+
+        return [
+            'dialect'      => $db->dialect()->name(),
+            'admin_email'  => $adminEmail,
+            'config_path'  => $this->configPath,
+            'self_deleted' => $selfDeleted,
+        ];
+    }
+
+    /**
+     * @param array{dsn: string, username: ?string, password: ?string} $dbConfig
+     * @param array{site_name: string, app_url: string, mail_from: string} $site
+     */
+    private function writeConfig(array $dbConfig, array $site): void
+    {
         $config = [
             'app' => [
-                'url' => $appUrl,
+                'url' => $site['app_url'],
             ],
             'mail' => [
-                'from' => $mailFrom,
+                'from' => $site['mail_from'],
             ],
             'oauth' => [
                 'google' => ['client_id' => '', 'client_secret' => ''],
-                'naver' => ['client_id' => '', 'client_secret' => ''],
-                'kakao' => ['client_id' => '', 'client_secret' => ''],
+                'naver'  => ['client_id' => '', 'client_secret' => ''],
+                'kakao'  => ['client_id' => '', 'client_secret' => ''],
                 'github' => ['client_id' => '', 'client_secret' => ''],
             ],
-            'db'   => $dbConfig,
+            'db' => [
+                'dsn'      => $dbConfig['dsn'],
+                'username' => ($dbConfig['username'] ?? '') === '' ? null : $dbConfig['username'],
+                'password' => ($dbConfig['password'] ?? '') === '' ? null : $dbConfig['password'],
+            ],
             'auth' => [
                 'secret' => Base64Url::encode(random_bytes(32)),
-                'ttl'    => 3600,
-                'leeway' => 60,
             ],
             'uploads' => [
                 'dir'         => $this->storageDir . '/uploads',
@@ -108,9 +192,6 @@ final class Installer
                 'dir'       => $this->storageDir . '/editor',
                 'max_bytes' => 5 * 1024 * 1024,
             ],
-            'cors' => [
-                'allowed_origins' => $this->parseOrigins((string) ($input['cors_origins'] ?? '')),
-            ],
             'log' => [
                 'file' => $this->storageDir . '/logs/error.log',
             ],
@@ -118,30 +199,10 @@ final class Installer
         ];
 
         $php = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n";
-
         if (file_put_contents($this->configPath, $php, LOCK_EX) === false) {
             throw DomainError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
         }
         @chmod($this->configPath, 0640);
-
-        return [
-            'dialect'     => $db->dialect()->name(),
-            'config_path' => $this->configPath,
-        ];
-    }
-
-    /** @return string[] */
-    private function parseOrigins(string $raw): array
-    {
-        $origins = [];
-        foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
-            $line = trim((string) $line);
-            if ($line !== '' && !in_array($line, $origins, true)) {
-                $origins[] = $line;
-            }
-        }
-
-        return $origins;
     }
 
     private function ensureStorageDirectories(): void

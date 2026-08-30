@@ -12,6 +12,11 @@
 *.sqlite
 *.sqlite3
 
+# 스키마를 옮기기 전 백업과 진행 표식
+/storage/backups/
+/storage/upgrade.lock
+/storage/upgrade-failed.json
+
 # 로그
 /storage/logs/*
 !/storage/logs/.gitkeep
