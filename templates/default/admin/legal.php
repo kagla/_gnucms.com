@@ -25,7 +25,7 @@
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <div class="table-wrap">
           <table class="table table-zebra terms-table">
-            <thead><tr><th>약관</th><th>공개 주소</th><th>사용처</th><th>필수</th><th>차례</th><th>동의</th><th class="right">관리</th></tr></thead>
+            <thead><tr><th>약관</th><th>공개 주소</th><th>사용처</th><th>필수</th><th>차례</th><th>동의</th><th>미동의</th><th class="right">관리</th></tr></thead>
             <tbody>
             <?php foreach ($pages as $page): ?>
               <tr>
@@ -44,7 +44,8 @@
                 </td>
                 <td data-label="필수"><input class="checkbox checkbox-sm" type="checkbox" name="required[<?= $this->e($page['id']) ?>]" value="1"<?= $page['usage_required'] ? ' checked' : '' ?>></td>
                 <td data-label="차례"><input class="input input-bordered input-sm" type="number" name="sort_order[<?= $this->e($page['id']) ?>]" value="<?= $this->e($page['usage_order']) ?>" min="-9999" max="9999"></td>
-                <td data-label="동의">동의 <?= $this->e($page['counts']['agreed']) ?> · 미동의 <?= $this->e($page['counts']['declined']) ?></td>
+                <td data-label="동의"><?= $this->e($page['counts']['agreed']) ?></td>
+                <td data-label="미동의"><?= $this->e($page['counts']['declined']) ?></td>
                 <td data-label="관리" class="right">
                   <div class="row-actions">
                     <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.content.edit', ['id' => $page['id']]) ?>">수정</a>
