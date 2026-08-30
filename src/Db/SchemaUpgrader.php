@@ -41,7 +41,12 @@ final class SchemaUpgrader
             if (!is_dir($dir)) {
                 @mkdir($dir, 0775, true);
             }
-            @file_put_contents($dir . '/error.log', '[' . gmdate('Y-m-d H:i:s') . '] ' . $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+            $wrote = is_dir($dir)
+                ? @file_put_contents($dir . '/error.log', '[' . gmdate('Y-m-d H:i:s') . '] ' . $line . PHP_EOL, FILE_APPEND | LOCK_EX)
+                : false;
+            if ($wrote === false) {
+                error_log($line);
+            }
         };
     }
 
@@ -61,11 +66,14 @@ final class SchemaUpgrader
         if (!is_dir($this->storageDir)) {
             @mkdir($this->storageDir, 0775, true);
         }
-        $lock = @fopen($this->storageDir . '/upgrade.lock', 'c');
-        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
-            if ($lock !== false) {
-                fclose($lock);
-            }
+        $lockPath = $this->storageDir . '/upgrade.lock';
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false) {
+            ($this->log)('[schema-upgrade] 잠금 파일을 만들 수 없습니다: ' . $lockPath);
+            throw new MaintenanceRequired(MaintenanceRequired::FAILED);
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
             throw new MaintenanceRequired(MaintenanceRequired::BUSY);
         }
 
@@ -78,7 +86,15 @@ final class SchemaUpgrader
 
             $backup = null;
             try {
-                $backup = $this->backup($stored);
+                // 실패 뒤 재시도라면, 그 실패 이전의 원본 스냅숏을 그대로 쓴다.
+                // 매번 새로 VACUUM 하면 5개까지만 남기는 정리 때문에 다섯 번
+                // 재시도한 뒤에는 첫 시도 이전의 깨끗한 백업이 사라진다.
+                $reusable = $failed['backup'] ?? null;
+                if (is_string($reusable) && $reusable !== '' && is_file($reusable)) {
+                    $backup = $reusable;
+                } else {
+                    $backup = $this->backup($stored);
+                }
                 ($this->migrate)();
                 $this->upsertSetting('schema_upgraded_at', Clock::now());
                 $this->upsertSetting('schema_backup', $backup ?? '');
@@ -141,7 +157,7 @@ final class SchemaUpgrader
         return $path;
     }
 
-    /** 최근 KEEP_BACKUPS 개만 남긴다. 이름에 일시가 들어 있어 이름 역순이 최신순이다. */
+    /** 최근 KEEP_BACKUPS 개만 남긴다. 이름이 판 번호 다음 일시 순이라 자연 정렬 역순이 최신순이다. */
     private function prune(): void
     {
         foreach (array_slice($this->backupFiles(), self::KEEP_BACKUPS) as $old) {
@@ -149,7 +165,7 @@ final class SchemaUpgrader
         }
     }
 
-    /** @return string[] 최신순 */
+    /** @return string[] 최신순. 이름을 판 번호(자연 정렬) 다음 일시로 내림차순 비교한다. */
     private function backupFiles(): array
     {
         $files = glob($this->storageDir . '/backups/board-v*.sqlite') ?: [];
@@ -176,11 +192,14 @@ final class SchemaUpgrader
 
     private function writeFailure(string $message, ?string $backup): void
     {
-        @file_put_contents(
+        $wrote = @file_put_contents(
             $this->failurePath(),
             json_encode(['at' => time(), 'message' => $message, 'backup' => $backup], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             LOCK_EX
         );
+        if ($wrote === false) {
+            ($this->log)('[schema-upgrade] 실패 표식을 쓸 수 없습니다: ' . $this->failurePath());
+        }
     }
 
     private function setting(string $key): ?string

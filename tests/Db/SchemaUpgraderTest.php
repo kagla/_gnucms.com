@@ -26,6 +26,7 @@ final class SchemaUpgraderTest extends TestCase
 
     protected function tearDown(): void
     {
+        @chmod($this->storage, 0775);
         foreach (glob($this->storage . '/backups/*') ?: [] as $f) {
             @unlink($f);
         }
@@ -153,6 +154,68 @@ final class SchemaUpgraderTest extends TestCase
             fclose($held);
         }
         self::assertSame(0, $calls);
+    }
+
+    public function testRetryReusesExistingBackup(): void
+    {
+        $this->setStoredStamp('9.oldhash');
+        mkdir($this->storage . '/backups', 0775, true);
+        $existing = $this->storage . '/backups/board-v9-20260101-000000.sqlite';
+        touch($existing);
+        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing]));
+
+        try {
+            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
+            self::fail('MaintenanceRequired 가 나와야 한다');
+        } catch (MaintenanceRequired $e) {
+            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
+            self::assertSame($existing, $e->backup());
+        }
+
+        $files = glob($this->storage . '/backups/*.sqlite') ?: [];
+        self::assertCount(1, $files);
+        self::assertSame($existing, $files[0]);
+    }
+
+    public function testRetryTakesNewBackupWhenMarkerBackupIsGone(): void
+    {
+        $this->setStoredStamp('9.oldhash');
+        $gone = $this->storage . '/backups/board-v9-20260101-000000.sqlite';
+        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $gone]));
+
+        try {
+            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
+            self::fail('MaintenanceRequired 가 나와야 한다');
+        } catch (MaintenanceRequired $e) {
+            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
+            self::assertNotNull($e->backup());
+            self::assertNotSame($gone, $e->backup());
+        }
+
+        $files = glob($this->storage . '/backups/board-v9-*.sqlite') ?: [];
+        self::assertCount(1, $files);
+        self::assertFileExists($files[0]);
+    }
+
+    public function testUnwritableStorageIsReportedAsFailure(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root 로는 권한 제한을 시험할 수 없다');
+        }
+        $this->setStoredStamp('9.oldhash');
+        chmod($this->storage, 0555);
+        $lines = [];
+
+        try {
+            $this->upgrader(null, static function (string $line) use (&$lines): void { $lines[] = $line; })->run();
+            self::fail('MaintenanceRequired 가 나와야 한다');
+        } catch (MaintenanceRequired $e) {
+            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
+        } finally {
+            chmod($this->storage, 0775);
+        }
+
+        self::assertStringContainsString('잠금 파일', implode("\n", $lines));
     }
 
     public function testStatusListsBackupsNewestFirst(): void
