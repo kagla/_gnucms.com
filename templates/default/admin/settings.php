@@ -67,11 +67,12 @@
     <dl class="schema-facts">
       <div><dt>판 번호</dt><dd><?= $this->e($schema['version']) ?> <small class="schema-stamp"><?= $this->e($schema['stamp']) ?></small></dd></div>
       <div><dt>마지막으로 옮긴 시각</dt><dd><?= $schema['upgraded_at'] !== null ? $this->e($schema['upgraded_at']) . ' UTC' : '설치 이후 없음' ?></dd></div>
+      <div><dt>마지막 백업</dt><dd><?= $schema['backup'] !== null ? $this->e(basename($schema['backup'])) : '없음' ?></dd></div>
     </dl>
     <?php if (!$schema['can_backup']): ?>
       <p class="schema-note">MySQL/PostgreSQL 은 앱이 백업하지 못합니다. mysqldump·pg_dump 같은 DB 도구로 백업하세요.</p>
     <?php elseif ($schema['backups'] === []): ?>
-      <p class="schema-note">아직 백업이 없습니다. 판이 바뀔 때 <code>storage/backups/</code> 에 최근 <?= (int) $schema['keep'] ?>개까지 남깁니다.</p>
+      <p class="schema-note">아직 백업이 없습니다. 판이 바뀔 때 <code>storage/backups/</code> 에 최근 <?= $this->e((string) $schema['keep']) ?>개까지 남깁니다.</p>
     <?php else: ?>
       <div class="overflow-x-auto">
         <table class="table table-sm schema-backups">

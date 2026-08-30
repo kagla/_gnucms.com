@@ -289,6 +289,10 @@ final class AdminPageTest extends WebTestCase
                 'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
                 ['schema_upgraded_at', '2026-08-30 01:02:03', '2026-08-30 01:02:03']
             );
+            $app->db()->execute(
+                'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
+                ['schema_backup', '/x/storage/backups/board-v9-20260201-000000.sqlite', '2026-08-30 01:02:03']
+            );
             $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
             $app->users()->verifyEmail($id);
             $this->get($app, '/login');
@@ -299,6 +303,7 @@ final class AdminPageTest extends WebTestCase
             $body = $this->body($this->get($app, '/admin/settings'));
 
             self::assertStringContainsString('2026-08-30 01:02:03 UTC', $body);
+            self::assertStringContainsString('<dt>마지막 백업</dt><dd>board-v9-20260201-000000.sqlite</dd>', $body);
 
             if ($app->db()->dialect()->name() !== 'sqlite') {
                 self::assertStringContainsString('앱이 백업하지 못합니다', $body);
