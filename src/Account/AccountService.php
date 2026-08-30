@@ -7,6 +7,7 @@ namespace GnuCms\Account;
 use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
+use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
 use GnuCms\Cms\CmsService;
 
@@ -156,6 +157,7 @@ final class AccountService
         $v->check();
         $userId = $this->tokens->consume($token, TokenService::RESET_PASSWORD);
         $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+        $this->notifyPasswordChanged($userId);
     }
 
     /**
@@ -216,6 +218,27 @@ final class AccountService
         }
         $v->check();
         $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+    }
+
+    /**
+     * 비밀번호가 바뀌었다고 본인에게 알린다. 남이 바꿨다면 이 메일로 알아채고 되찾는다.
+     * 메일이 실패해도 비밀번호 변경은 이미 끝난 일이라 막지 않는다. 실패 여부만 돌려준다.
+     */
+    public function notifyPasswordChanged(int $userId): bool
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null) {
+            return false;
+        }
+        try {
+            $this->mailer->send((string) $user['email'], '[' . $this->siteName() . '] 비밀번호가 변경되었습니다',
+                "회원님의 비밀번호가 방금 변경되었습니다.\n\n본인이 바꾼 것이 아니라면 아래에서 즉시 비밀번호를 다시 설정하세요.\n\n"
+                . "{$this->appUrl}/forgot-password\n\n변경 시각: " . Clock::now() . ' (UTC)');
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[' . GNUCMS_ID . '] 비밀번호 변경 알림 메일 실패: ' . $e->getMessage());
+            return false;
+        }
     }
 
     public function identityForSession(int $id, int $epoch): Identity

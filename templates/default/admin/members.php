@@ -7,6 +7,7 @@
   <div><h1>회원 관리</h1><p class="page-sub">회원 정보를 수정하거나 필요한 경우 이용을 차단합니다. 소유자 권한은 변경되지 않습니다.</p></div>
 </div>
 <?php if ($saved): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>회원 정보를 저장했습니다.</span></div><?php endif ?>
+<?php if ($mail_failed): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림 메일은 보내지 못했습니다. 메일 설정을 확인하세요.</span></div><?php endif ?>
 <form class="inline-search" method="get" action="<?= $this->url('admin.members') ?>" role="search">
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>

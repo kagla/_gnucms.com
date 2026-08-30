@@ -26,7 +26,7 @@ final class AccountController
         $user = $this->currentUser();
         return $this->render($request, $response, [
             'display_name' => $user['display_name'], 'email' => $user['email'],
-        ], [], ($request->getQueryParams()['saved'] ?? '') === '1');
+        ], [], ($request->getQueryParams()['saved'] ?? '') === '1', ($request->getQueryParams()['mail'] ?? '') === 'failed');
     }
 
     public function update(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -43,16 +43,20 @@ final class AccountController
             }
             return $this->render($request, $response->withStatus(422), [
                 'display_name' => $input['display_name'] ?? $user['display_name'], 'email' => $user['email'],
-            ], $e->details(), false);
+            ], $e->details(), false, false);
         }
+        $query = ['saved' => '1'];
         // 비밀번호를 바꾸면 session_epoch 가 올라가 다른 기기는 끊긴다. 방금 바꾼 이 세션은 이어 준다.
         if (isset($input['password']) && is_scalar($input['password']) && (string) $input['password'] !== '') {
             $fresh = $this->app->users()->findById($id);
             if ($fresh !== null) {
                 $_SESSION['session_epoch'] = (int) $fresh['session_epoch'];
             }
+            if (!$this->app->accountService()->notifyPasswordChanged($id)) {
+                $query['mail'] = 'failed';
+            }
         }
-        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('account.edit', [], ['saved' => '1']);
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('account.edit', [], $query);
         return $response->withHeader('Location', $url)->withStatus(303);
     }
 
@@ -67,10 +71,10 @@ final class AccountController
     }
 
     private function render(ServerRequestInterface $request, ResponseInterface $response, array $values,
-        array $errors, bool $saved): ResponseInterface
+        array $errors, bool $saved, bool $mailFailed): ResponseInterface
     {
         return View::fromRequest($request)->render($response, 'account/edit', [
-            'values' => $values, 'errors' => $errors, 'saved' => $saved,
+            'values' => $values, 'errors' => $errors, 'saved' => $saved, 'mail_failed' => $mailFailed,
         ]);
     }
 

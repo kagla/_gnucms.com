@@ -25,6 +25,8 @@ final class AdminController
         $data = $this->app->adminService()->dashboard($this->app->guestAcl());
         $data['page_count'] = $this->app->cmsService()->countPages();
         $data['query'] = $request->getQueryParams();
+        // SMTP 가 없으면 가입 인증·비밀번호 변경 알림이 서버 기본 메일로만 나가 안 닿기 쉽다. 늘 보여 준다.
+        $data['mail_configured'] = $this->app->mailSettingsService()->runtime() !== null;
         return View::fromRequest($request)->render($response, 'admin/index', $data);
     }
 
@@ -97,6 +99,7 @@ final class AdminController
             'members' => $this->app->adminService()->members($this->app->guestAcl(), $query),
             'query' => $query,
             'saved' => ($params['saved'] ?? '') === '1',
+            'mail_failed' => ($params['mail'] ?? '') === 'failed',
         ]);
     }
 
@@ -117,13 +120,15 @@ final class AdminController
             $this->app->adminService()->updateMember($this->app->guestAcl(), $id, $input);
             // 내 비밀번호를 바꾸면 session_epoch 가 올라가 지금 세션도 끊긴다. 방금 바꾼 사람은
             // 그대로 두고, 다른 기기만 끊기게 세션의 epoch 를 새 값으로 맞춘다.
+            $changedPassword = isset($input['password']) && is_scalar($input['password']) && (string) $input['password'] !== '';
             $me = (string) $this->app->guestAcl()->identity()->sub() === (string) $id;
-            if ($me && isset($input['password']) && is_scalar($input['password']) && (string) $input['password'] !== '') {
+            if ($me && $changedPassword) {
                 $fresh = $this->app->users()->findById($id);
                 if ($fresh !== null) {
                     $_SESSION['session_epoch'] = (int) $fresh['session_epoch'];
                 }
             }
+            $mailFailed = $changedPassword && !$this->app->accountService()->notifyPasswordChanged($id);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -135,7 +140,8 @@ final class AdminController
                 $e->details()
             );
         }
-        return $this->redirect($request, $response, 'admin.members', ['saved' => '1']);
+        return $this->redirect($request, $response, 'admin.members',
+            ['saved' => '1'] + ($mailFailed ? ['mail' => 'failed'] : []));
     }
 
 

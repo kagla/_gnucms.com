@@ -24,6 +24,7 @@
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('lock', 16) ?></span>
             <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+            <?php $this->insert('auth/_pw_toggle') ?>
           </label>
           <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
         </fieldset>
@@ -32,6 +33,7 @@
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('lock', 16) ?></span>
             <input type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
+            <?php $this->insert('auth/_pw_toggle') ?>
           </label>
           <?php if (array_key_exists('password_confirmation', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password_confirmation']) ?></p><?php endif ?>
         </fieldset>
@@ -43,4 +45,5 @@
     </div>
   </section>
 </div>
+<?php $this->insert('auth/_pw_toggle_script') ?>
 <?php $this->stop() ?>
