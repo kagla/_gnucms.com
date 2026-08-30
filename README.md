@@ -16,11 +16,21 @@ SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시�
 1. 파일 전체를 올린다. 문서 루트는 `public/` 을 가리키게 한다.
    문서 루트를 바꿀 수 없는 호스팅이라면 `public/` 안의 내용을 루트에 두고 나머지 폴더를
    그 위 디렉터리에 둔다. `storage/` 가 웹으로 접근 가능한 위치에 있으면 안 된다.
-2. 브라우저로 `install.php` 를 연다. DSN 과 관리자 계정을 입력한다.
-3. **설치가 끝나면 `public/install.php` 를 지운다.**
-4. `admin.php` 로 들어가 게시판을 만든다.
+2. 브라우저로 사이트를 연다. 설정 파일이 없으면 `install.php` 로 자동 이동한다.
+3. 다섯 단계를 따라간다: 서버 점검 → 데이터베이스(종류를 고르고 접속 시험) → 사이트 이름·주소·발신 메일
+   → 첫 관리자 → 완료. `config/config.php` 는 마지막에 쓰인다.
+4. 설치가 끝나면 `public/install.php` 는 스스로 삭제된다. 못 지웠다고 나오면 손으로 지운다.
+5. 로그인해 관리 콘솔에서 게시판을 만든다.
 
-DSN 을 어떻게 적는지는 아래 "데이터베이스" 에 DB 별로 정리해 두었다.
+### 코드를 새 판으로 올릴 때
+
+파일만 덮어쓰면 된다. 첫 요청에서 앱이 DB 의 스키마 판을 견주어 다르면 스스로 옮긴다.
+SQLite 는 옮기기 전에 `storage/backups/` 에 복사본을 남긴다(최근 5개). MySQL/PostgreSQL 은
+앱이 백업하지 못하므로 올리기 전에 `mysqldump`/`pg_dump` 로 받아 둔다.
+
+옮기지 못하면 방문자에게 503 점검 화면이 나가고 `storage/logs/error.log` 에 원인이 남는다.
+원인을 고치면 60초 뒤 요청에서 다시 시도한다. 되돌리려면 `storage/board.sqlite` 를 백업
+파일로 바꾼다. 관리 콘솔 > 사이트 설정 아래에서 판 번호와 백업 목록을 볼 수 있다.
 
 ## 데이터베이스
 
@@ -148,14 +158,12 @@ pgsql:host=127.0.0.1;port=5432;dbname=board
 첫 요청부터 `relation "boards" does not exist` 같은 500 이 난다. 설치 마법사를 다시 한 번
 돌려야 하고, 순서가 중요하다.
 
-1. **먼저 지금 `config/config.php` 의 `auth.secret` 과 `bootstrap_admin` 을 복사해 둔다.**
-   재설치는 시크릿을 새로 만든다. 그대로 두면 호스트 앱이 이미 발급해 둔 토큰이 전부
-   무효가 되고, 관리자 비밀번호도 바뀐다.
+1. **먼저 지금 `config/config.php` 의 `auth.secret` 을 복사해 둔다.** 재설치는 시크릿을
+   새로 만든다. 그대로 두면 저장된 메일 비밀번호를 풀 수 없게 된다.
 2. `config/config.php` 를 지운다.
-3. `public/install.php` 를 다시 올리고 새 DSN 으로 설치한다. 새 DB 에 테이블이 만들어진다.
-4. 새로 생긴 `config/config.php` 의 `auth.secret` 과 `bootstrap_admin` 을 1번에서 복사해
-   둔 값으로 되돌린다.
-5. `public/install.php` 를 다시 지운다.
+3. `public/install.php` 를 다시 올리고 새 DB 로 설치한다. 2단계에서 표가 없는 빈 DB 를
+   고른다.
+4. 새로 생긴 `config/config.php` 의 `auth.secret` 을 1번에서 복사해 둔 값으로 되돌린다.
 
 기존 데이터는 어느 쪽이든 따라오지 않는다. 옮기려면 `mysqldump`, `pg_dump`, 또는 SQLite
 파일 복사 같은 DB 별 도구를 쓴다.
