@@ -53,6 +53,21 @@
           </label>
         </fieldset>
       </div>
+      <div class="form-section">
+        <h2 class="form-section-title">파일 첨부</h2>
+        <fieldset class="fieldset<?php if (array_key_exists('attach_max_mb', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">파일당 최대 용량 (MB)</legend>
+          <input class="input input-bordered input-block" type="number" name="attach_max_mb" min="1" max="1024" value="<?= $this->e((string) ($values['attach_max_mb'] ?? 5)) ?>" required>
+          <?php if (array_key_exists('attach_max_mb', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['attach_max_mb']) ?></p><?php endif ?>
+          <p class="fieldset-label">서버 PHP 한계는 <?= $this->e((string) $server_max_mb) ?> MB 입니다. 그보다 크게 적어도 거기까지만 받습니다.</p>
+        </fieldset>
+        <fieldset class="fieldset<?php if (array_key_exists('attach_limit', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">글당 첨부 개수</legend>
+          <input class="input input-bordered input-block" type="number" name="attach_limit" min="0" max="999" value="<?= $this->e((string) ($values['attach_limit'] ?? 5)) ?>" required>
+          <?php if (array_key_exists('attach_limit', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['attach_limit']) ?></p><?php endif ?>
+          <p class="fieldset-label">0 = 무제한. 파일 첨부는 게시판 설정에서 게시판마다 켭니다.</p>
+        </fieldset>
+      </div>
       <div class="card-actions form-actions">
         <a class="btn btn-ghost" href="<?= $this->url('admin.index') ?>">취소</a>
         <button class="btn btn-primary" type="submit">설정 저장</button>

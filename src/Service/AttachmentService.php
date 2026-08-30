@@ -30,6 +30,37 @@ final class AttachmentService
     /** @var ImageResizer */
     private $resizer;
 
+    /** 서버 PHP 가 실제로 받아 주는 파일당 최대 크기(MB). 설정 화면의 힌트에 쓴다. */
+    public static function serverMaxMb(): int
+    {
+        return max(1, min(
+            self::iniToMb((string) ini_get('upload_max_filesize')),
+            self::iniToMb((string) ini_get('post_max_size'))
+        ));
+    }
+
+    /** php.ini 의 8M·1G 같은 축약 표기를 MB 정수로. 0·음수는 무제한이라는 뜻이다. */
+    public static function iniToMb(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return PHP_INT_MAX;
+        }
+        $unit = strtoupper(substr($value, -1));
+        $number = (float) $value;
+        $bytes = match ($unit) {
+            'G' => $number * 1073741824,
+            'M' => $number * 1048576,
+            'K' => $number * 1024,
+            default => $number,
+        };
+        if ($bytes <= 0) {
+            return PHP_INT_MAX;
+        }
+
+        return max(1, (int) floor($bytes / 1048576));
+    }
+
     public function __construct(
         BoardService $boards,
         PostService $posts,

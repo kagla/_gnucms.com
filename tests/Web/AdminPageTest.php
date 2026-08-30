@@ -325,4 +325,39 @@ final class AdminPageTest extends WebTestCase
         }
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testSettingsPageSavesAttachmentLimits(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $page = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringContainsString('파일 첨부', $page);
+        self::assertStringContainsString('name="attach_max_mb"', $page);
+        self::assertStringContainsString('name="attach_limit"', $page);
+        self::assertStringContainsString('0 = 무제한', $page);
+
+        $base = [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'site_name' => '사이트', 'site_tagline' => '소개', 'home_title' => '홈', 'home_intro' => '소개',
+            'registration_enabled' => '1', 'theme' => 'default',
+        ];
+        $saved = $this->post($app, '/admin/settings', $base + ['attach_max_mb' => '20', 'attach_limit' => '0']);
+        self::assertSame(303, $saved->getStatusCode());
+        $settings = $app->cmsService()->settings();
+        self::assertSame(20, $settings['attach_max_mb']);
+        self::assertSame(0, $settings['attach_limit']);
+
+        // Validator::int 는 범위를 벗어나면 실패가 아니라 잘라낸다(clamp)이므로
+        // 여기서는 422 가 아니라 1024 로 잘린 값을 확인한다.
+        $clamped = $this->post($app, '/admin/settings', $base + ['attach_max_mb' => '2000', 'attach_limit' => '5']);
+        self::assertSame(303, $clamped->getStatusCode());
+        self::assertSame(1024, $app->cmsService()->settings()['attach_max_mb']);
+    }
+
 }

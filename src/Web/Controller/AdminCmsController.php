@@ -6,6 +6,7 @@ namespace GnuCms\Web\Controller;
 
 use GnuCms\App;
 use GnuCms\Error\DomainError;
+use GnuCms\Service\AttachmentService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
@@ -27,6 +28,7 @@ final class AdminCmsController
             'values' => $this->app->cmsService()->settings(), 'errors' => [],
             'query' => $request->getQueryParams(),
             'schema' => $this->app->schemaUpgrader()->status(),
+            'server_max_mb' => AttachmentService::serverMaxMb(),
         ]);
     }
 
@@ -43,6 +45,7 @@ final class AdminCmsController
             return View::fromRequest($request)->render($response->withStatus(422), 'admin/settings', [
                 'values' => $input, 'errors' => $e->details(), 'query' => [],
                 'schema' => $this->app->schemaUpgrader()->status(),
+                'server_max_mb' => AttachmentService::serverMaxMb(),
             ]);
         }
         return $this->redirect($request, $response, 'admin.settings', ['saved' => '1']);
