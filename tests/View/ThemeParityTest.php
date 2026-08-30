@@ -15,6 +15,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
  *
  * native 로 아직 옮기지 않은 화면은 '템플릿을 찾을 수 없습니다' 로 떨어진다.
  * 그 실패가 곧 남은 일 목록이다.
+ *
+ * normalize() 는 네 가지만 정규화한다: ?v= 캐시 해시, /themes/{name}/ 경로,
+ * 공백, 그리고 image_key 입력에 담긴 32자리 16진 난수.
  */
 final class ThemeParityTest extends WebTestCase
 {
@@ -169,7 +172,7 @@ final class ThemeParityTest extends WebTestCase
         ]);
     }
 
-    /** 설계 3.7 의 세 가지만 정규화한다. */
+    /** 설계 3.7 의 네 가지만 정규화한다. */
     private function normalize(string $html, string $theme): string
     {
         $html = preg_replace('/\?v=[0-9a-f]{12}/', '?v=HASH', $html) ?? $html;
@@ -177,6 +180,16 @@ final class ThemeParityTest extends WebTestCase
         $html = preg_replace('/[ \t]+$/m', '', $html) ?? $html;
         $html = preg_replace('/\n{2,}/', "\n", $html) ?? $html;
         $html = preg_replace('/>\s+</', '><', $html) ?? $html;
+
+        // image_key 는 렌더마다 새로 만드는 난수(bin2hex(random_bytes(16)))라 두 엔진이 같을 수 없다.
+        // 값이 아니라 그 값이 있는 자리를 견준다: image_key 입력에 실제로 쓰인 32자리 16진수만 골라
+        // (아무 32자리 16진 문자열이 아니라) 문서 전체에서 그 값의 모든 자리를 IMAGEKEY 로 바꾼다.
+        // 인라인 JS(업로드 주소 등)에도 같은 값이 나올 수 있어 input 태그 밖도 함께 바꾼다.
+        if (preg_match_all('/name="image_key" value="([a-f0-9]{32})"/', $html, $matches)) {
+            foreach (array_unique($matches[1]) as $key) {
+                $html = str_replace($key, 'IMAGEKEY', $html);
+            }
+        }
 
         return trim($html);
     }
