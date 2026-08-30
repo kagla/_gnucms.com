@@ -166,8 +166,7 @@ final class CmsPageTest extends WebTestCase
         $termsImageKey = $termsKeyMatch[1];
         $saved = $this->post($app, '/admin/terms/uses', [
             'csrf_token' => $_SESSION['csrf_token'],
-            'scope' => 'signup',
-            'use' => [(string) $terms['id'] => '1'],
+            'usage' => [(string) $terms['id'] => 'signup'],
             'required' => [(string) $terms['id'] => '1'],
             'sort_order' => [(string) $terms['id'] => '10'],
         ]);
@@ -177,23 +176,50 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(1, (int) $uses[0]['required']);
         self::assertSame(10, (int) $uses[0]['use_sort_order']);
 
-        // 체크를 풀고 다시 보내면 그 자리에서 완전히 떨어진다.
+        // 사용처를 신청서·등록으로 바꾸면 회원가입 자리에서 떨어지고 form 자리에 붙는다.
+        $moved = $this->post($app, '/admin/terms/uses', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'usage' => [(string) $terms['id'] => 'form'],
+            'required' => [(string) $terms['id'] => '1'],
+            'sort_order' => [(string) $terms['id'] => '10'],
+        ]);
+        self::assertSame(303, $moved->getStatusCode(), $this->body($moved));
+        self::assertSame([], $app->consentUses()->listForScope('signup'));
+        self::assertCount(1, $app->consentUses()->listForScope('form'));
+
+        // 안내만 으로 바꾸면 어느 자리에도 붙지 않는다.
         $detached = $this->post($app, '/admin/terms/uses', [
             'csrf_token' => $_SESSION['csrf_token'],
-            'scope' => 'signup',
+            'usage' => [(string) $terms['id'] => 'none'],
         ]);
         self::assertSame(303, $detached->getStatusCode(), $this->body($detached));
         self::assertSame([], $app->consentUses()->listForScope('signup'));
+        self::assertSame([], $app->consentUses()->listForScope('form'));
 
         // 약관을 폼에서 고쳐 저장하면 약관 관리로 돌아가야 한다.
         $termsEdit = $this->post($app, '/admin/content/' . $terms['id'] . '/edit', [
             'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'terms', 'title' => $terms['title'],
             'content' => $terms['content'], 'status' => $terms['status'],
             'show_in_menu' => $terms['show_in_menu'] ? '1' : '0',
-            'sort_order' => (string) $terms['sort_order'], 'image_key' => $termsImageKey, 'is_consent' => '1',
+            'sort_order' => (string) $terms['sort_order'], 'image_key' => $termsImageKey,
         ]);
         self::assertSame(303, $termsEdit->getStatusCode(), $this->body($termsEdit));
         self::assertSame('/admin/terms?saved=1', $termsEdit->getHeaderLine('Location'));
+
+        // 약관 관리에서 새 약관을 바로 만들 수 있다.
+        $termsCreateForm = $this->body($this->get($app, '/admin/terms/new'));
+        self::assertStringContainsString('약관 만들기', $termsCreateForm);
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $termsCreateForm, $newTermsKey));
+        $termsCreated = $this->post($app, '/admin/terms/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'location', 'title' => '위치기반 서비스 약관',
+            'content' => '<p>위치 약관 본문입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '40', 'image_key' => $newTermsKey[1],
+        ]);
+        self::assertSame(303, $termsCreated->getStatusCode(), $this->body($termsCreated));
+        self::assertSame('/admin/terms?created=1', $termsCreated->getHeaderLine('Location'));
+        $location = $app->cms()->findBySlug('location');
+        self::assertSame(1, (int) $location['is_consent'], '약관 관리에서 만든 내용에는 약관 표시가 붙는다.');
+        self::assertStringContainsString('위치기반 서비스 약관', $this->body($this->get($app, '/admin/terms')));
 
         // 관리자 화면 밖에서 만든 약관도 약관 관리 목록에 나온다.
         $app->cms()->createPage([
@@ -326,57 +352,57 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $createForm, $keyMatch));
         $imageKey = $keyMatch[1];
 
+        // 내용 관리에서는 약관 표시를 실어 보내도 무시된다. 약관은 약관 관리에서만 만든다.
         $created = $this->post($app, '/admin/content/new', [
             'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'refund-policy', 'title' => '환불 규정',
             'content' => '<p>환불 규정 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '1',
             'sort_order' => '0', 'image_key' => $imageKey, 'is_consent' => '1',
         ]);
         self::assertSame(303, $created->getStatusCode());
+        self::assertSame('/admin/content?saved=1', $created->getHeaderLine('Location'));
 
         $saved = $app->cms()->findPublishedBySlug('refund-policy');
-        self::assertSame(1, (int) $saved['is_consent']);
+        self::assertSame(0, (int) $saved['is_consent'], '내용 관리로는 약관을 만들 수 없다.');
 
         $acl = $app->guestAcl();
-        self::assertNotContains('refund-policy', array_column($app->cmsService()->contents($acl), 'slug'));
-        self::assertContains('refund-policy', array_column($app->cmsService()->consentPages($acl), 'slug'));
+        self::assertContains('refund-policy', array_column($app->cmsService()->contents($acl), 'slug'));
+        self::assertNotContains('refund-policy', array_column($app->cmsService()->consentPages($acl), 'slug'));
 
-        // 옛 테마 폼처럼 is_consent 칸이 아예 없는 채로 수정 요청을 보내도 값이 지워지면 안 된다.
-        $edited = $this->post($app, '/admin/content/' . $saved['id'] . '/edit', [
-            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'refund-policy', 'title' => '환불 규정 (수정)',
-            'content' => '<p>환불 규정 내용을 고쳤습니다.</p>', 'status' => 'published', 'show_in_menu' => '1',
-            'sort_order' => '0', 'image_key' => $imageKey,
+        // 약관 관리에서 만들면 표시가 붙고 내용 관리 목록에서는 빠진다.
+        $legalForm = $this->body($this->get($app, '/admin/terms/new'));
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $legalForm, $legalKey));
+        $this->post($app, '/admin/terms/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'consent-doc', 'title' => '수집 동의',
+            'content' => '<p>수집 동의 본문입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '0', 'image_key' => $legalKey[1],
+        ]);
+        $consentDoc = $app->cms()->findPublishedBySlug('consent-doc');
+        self::assertSame(1, (int) $consentDoc['is_consent']);
+        self::assertNotContains('consent-doc', array_column($app->cmsService()->contents($acl), 'slug'));
+        self::assertContains('consent-doc', array_column($app->cmsService()->consentPages($acl), 'slug'));
+
+        // 수정 폼에는 약관 칸이 없다. 그래도 저장할 때 약관 표시가 지워지면 안 된다.
+        $edited = $this->post($app, '/admin/content/' . $consentDoc['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'consent-doc', 'title' => '수집 동의 (수정)',
+            'content' => '<p>수집 동의 본문을 고쳤습니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
+            'sort_order' => '0', 'image_key' => $legalKey[1],
         ]);
         self::assertSame(303, $edited->getStatusCode());
+        self::assertSame('/admin/terms?saved=1', $edited->getHeaderLine('Location'));
 
-        $afterEdit = $app->cms()->findPageById((int) $saved['id']);
-        self::assertSame('환불 규정 (수정)', $afterEdit['title']);
-        self::assertSame(1, (int) $afterEdit['is_consent'], '옛 테마 폼처럼 is_consent 를 보내지 않아도 값이 남아야 한다.');
+        $afterEdit = $app->cms()->findPageById((int) $consentDoc['id']);
+        self::assertSame('수집 동의 (수정)', $afterEdit['title']);
+        self::assertSame(1, (int) $afterEdit['is_consent'], 'is_consent 를 보내지 않아도 표시가 남아야 한다.');
 
-        // 일반 내용을 이번 저장에서 약관으로 바꾸면, 고치기 전 값이 아니라 저장된 값을
-        // 보고 약관 관리로 보내야 한다.
-        $plainForm = $this->body($this->get($app, '/admin/content/new'));
-        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $plainForm, $plainKey));
-        $this->post($app, '/admin/content/new', [
-            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
-            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
-            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '0',
+        // 수정 요청에 약관 표시를 실어 보내도 일반 내용이 약관이 되지 않는다.
+        $sneak = $this->post($app, '/admin/content/' . $saved['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'refund-policy', 'title' => '환불 규정',
+            'content' => '<p>환불 규정 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '1',
+            'sort_order' => '0', 'image_key' => $imageKey, 'is_consent' => '1',
         ]);
-        $plain = $app->cms()->findPublishedBySlug('notice-page');
-        $toConsent = $this->post($app, '/admin/content/' . $plain['id'] . '/edit', [
-            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
-            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
-            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '1',
-        ]);
-        self::assertSame(303, $toConsent->getStatusCode(), $this->body($toConsent));
-        self::assertSame('/admin/terms?saved=1', $toConsent->getHeaderLine('Location'));
-
-        // 반대로 약관 표시를 끄면 내용 관리로 돌아간다.
-        $backToPlain = $this->post($app, '/admin/content/' . $plain['id'] . '/edit', [
-            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'notice-page', 'title' => '안내',
-            'content' => '<p>안내 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '0',
-            'sort_order' => '0', 'image_key' => $plainKey[1], 'is_consent' => '0',
-        ]);
-        self::assertSame(303, $backToPlain->getStatusCode(), $this->body($backToPlain));
-        self::assertSame('/admin/content?saved=1', $backToPlain->getHeaderLine('Location'));
+        self::assertSame(303, $sneak->getStatusCode(), $this->body($sneak));
+        self::assertSame('/admin/content?saved=1', $sneak->getHeaderLine('Location'));
+        self::assertSame(0, (int) $app->cms()->findPageById((int) $saved['id'])['is_consent'],
+            '수정 요청으로는 약관 여부를 바꿀 수 없다.');
     }
 }

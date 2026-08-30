@@ -75,6 +75,9 @@ final class Routes
             ->setName('admin.content.permanent_delete');
         $slim->get('/admin/terms', [$cms, 'legal'])->setName('admin.terms');
         $slim->post('/admin/terms/uses', [$cms, 'consentUses'])->setName('admin.terms.uses');
+        // 약관은 여기서만 만든다. 내용 관리와 완전히 갈라 헷갈릴 일을 없앤다.
+        $slim->get('/admin/terms/new', [$cms, 'termsCreateForm'])->setName('admin.terms.create');
+        $slim->post('/admin/terms/new', [$cms, 'termsCreate']);
         // {id} 는 숫자만 받으므로 위의 /admin/terms/uses 와 겹치지 않는다.
         $slim->get('/admin/terms/{id:[0-9]+}/consents', [$cms, 'consents'])->setName('admin.terms.consents');
         $slim->get('/admin/content/new', [$cms, 'createForm'])->setName('admin.content.create');

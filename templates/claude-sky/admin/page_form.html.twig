@@ -1,14 +1,14 @@
 {% extends "admin/layout.html.twig" %}
 {% import '_icons.html.twig' as ico %}
-{% block title %}{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }} · {{ site.site_name }}{% endblock %}
+{% block title %}{{ create ? (legal ? '약관 만들기' : '내용 만들기') : (legal ? values.title ~ ' 수정' : '내용 수정') }} · {{ site.site_name }}{% endblock %}
 {% block admin_section %}content{% endblock %}
 {% block body %}
-<div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li><a href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">{{ legal ? '약관' : '내용' }}</a></li><li aria-current="page">{{ create ? '새 내용' : values.title }}</li></ul></div>
+<div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li><a href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">{{ legal ? '약관' : '내용' }}</a></li><li aria-current="page">{{ create ? (legal ? '새 약관' : '새 내용') : values.title }}</li></ul></div>
 <section class="card">
   <div class="card-body">
-    <h1 class="card-title">{{ create ? '내용 만들기' : (legal ? values.title ~ ' 수정' : '내용 수정') }}</h1>
+    <h1 class="card-title">{{ create ? (legal ? '약관 만들기' : '내용 만들기') : (legal ? values.title ~ ' 수정' : '내용 수정') }}</h1>
     <p class="card-sub">내용을 작성하고 공개 여부와 메뉴 표시만 정하세요.</p>
-    <form method="post" action="{{ create ? url_for('admin.content.create') : url_for('admin.content.edit', {id: page_id}) }}">
+    <form method="post" action="{{ create ? url_for(legal ? 'admin.terms.create' : 'admin.content.create') : url_for('admin.content.edit', {id: page_id}) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="image_key" value="{{ values.image_key }}">
       <input type="hidden" name="uploaded_images" value="{{ values.uploaded_images|default('') }}" data-uploaded-images>
@@ -18,8 +18,8 @@
         {% if errors.title is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.title }}</p>{% endif %}
       </fieldset>
       <fieldset class="fieldset{% if errors.slug is defined %} is-invalid{% endif %}">
-        <legend class="fieldset-legend">주소 <span class="legend-hint">{{ legal ? '회원가입 연결을 위해 고정됩니다.' : '예: about' }}</span></legend>
-        <input class="input input-bordered input-block" type="text" name="slug" value="{{ values.slug|default('') }}" maxlength="100" pattern="[a-z0-9][a-z0-9_-]*"{{ legal ? ' readonly' : '' }} required>
+        <legend class="fieldset-legend">주소 <span class="legend-hint">{{ legal and not create ? '동의 기록 연결을 위해 고정됩니다.' : '예: about' }}</span></legend>
+        <input class="input input-bordered input-block" type="text" name="slug" value="{{ values.slug|default('') }}" maxlength="100" pattern="[a-z0-9][a-z0-9_-]*"{{ legal and not create ? ' readonly' : '' }} required>
         {% if errors.slug is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.slug }}</p>{% endif %}
       </fieldset>
       <fieldset class="fieldset{% if errors.content is defined %} is-invalid{% endif %}">
@@ -46,16 +46,11 @@
           <input class="toggle toggle-primary" type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }}>
           <span><strong>상단 메뉴에 표시</strong></span>
         </label>
-        {# 켜면 약관 관리 목록으로 옮겨간다. 어디에 붙일지·필수인지는 거기서 정한다. #}
-        <label class="label toggle-row">
-          <input class="toggle toggle-primary" type="checkbox" name="is_consent" value="1"{{ (values.is_consent is defined ? values.is_consent : 0) ? ' checked' : '' }}>
-          <span><strong>이 내용은 약관이다</strong><small>켜면 동의 항목으로 고를 수 있게 됩니다.</small></span>
-        </label>
       </fieldset>
       <div class="card-actions form-actions">
         {% if not create %}<a class="btn btn-outline" href="{{ url_for('admin.content.preview', {id: page_id}) }}" target="_blank" rel="noopener">{{ ico.i('eye', 15) }} 미리보기</a>{% endif %}
         <a class="btn btn-ghost" href="{{ url_for(legal ? 'admin.terms' : 'admin.content') }}">취소</a>
-        <button class="btn btn-primary" type="submit">{{ create ? '내용 만들기' : '변경사항 저장' }}</button>
+        <button class="btn btn-primary" type="submit">{{ create ? (legal ? '약관 만들기' : '내용 만들기') : '변경사항 저장' }}</button>
       </div>
     </form>
   </div>

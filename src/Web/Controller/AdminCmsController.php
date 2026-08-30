@@ -134,37 +134,48 @@ final class AdminCmsController
     public function legal(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $acl = $this->app->guestAcl();
+        $pages = [];
+        foreach ($this->app->cmsService()->consentPages($acl) as $page) {
+            // 한 약관은 한 용도만 갖는다. 붙임이 없으면 안내만 하는 약관이다.
+            $use = $page['uses'][0] ?? null;
+            $page['usage'] = $use === null ? 'none'
+                : ((string) $use['scope'] === 'signup' ? 'signup' : 'form');
+            $page['usage_required'] = $use === null ? 1 : (int) $use['required'];
+            $page['usage_order'] = $use === null ? 0 : (int) $use['sort_order'];
+            $pages[] = $page;
+        }
+        $query = $request->getQueryParams();
         return Twig::fromRequest($request)->render($response, 'admin/legal.html.twig', [
-            'pages' => $this->app->cmsService()->consentPages($acl),
-            'scope' => 'signup',
-            'saved' => ($request->getQueryParams()['saved'] ?? '') === '1',
+            'pages' => $pages,
+            'saved' => ($query['saved'] ?? '') === '1',
+            'created' => ($query['created'] ?? '') === '1',
+            'deleted' => ($query['deleted'] ?? '') === '1',
         ]);
     }
 
-    /** 한 자리의 붙임을 통째로 다시 쓴다. 체크가 풀린 약관은 떼어 낸다. */
+    /**
+     * 약관마다 용도를 통째로 다시 쓴다. 회원가입 동의(signup)나 신청서·등록 동의(form)를
+     * 고르면 그 자리에만 붙고, 안내만 하는 약관은 어느 자리에도 붙지 않는다.
+     * 값을 요청에서 믿지 않고 서버가 가진 약관 목록만 돈다.
+     */
     public function consentUses(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
         $acl = $this->app->guestAcl();
-        $scope = isset($input['scope']) && is_string($input['scope']) && $input['scope'] !== ''
-            ? $input['scope'] : 'signup';
-        // 자리 이름은 VARCHAR(40) 이다. 넘치거나 엉뚱한 글자가 오면 MySQL 이 500 을 낸다.
-        if (preg_match('/^[a-z][a-z0-9:_-]{0,39}$/D', $scope) !== 1) {
-            $scope = 'signup';
-        }
-        $use = is_array($input['use'] ?? null) ? $input['use'] : [];
+        $usage = is_array($input['usage'] ?? null) ? $input['usage'] : [];
         $required = is_array($input['required'] ?? null) ? $input['required'] : [];
         $order = is_array($input['sort_order'] ?? null) ? $input['sort_order'] : [];
 
         $uses = $this->app->consentUses();
         foreach ($this->app->cmsService()->consentPages($acl) as $page) {
             $id = (int) $page['id'];
-            if (empty($use[$id])) {
-                $uses->detach($scope, $id);
-                continue;
+            $choice = isset($usage[$id]) && is_string($usage[$id]) ? $usage[$id] : 'none';
+            // 한 약관은 한 용도만 갖는다. 용도를 바꾸면 옛 자리 붙임부터 걷는다.
+            $uses->detachContent($id);
+            if ($choice === 'signup' || $choice === 'form') {
+                $uses->attach($choice, $id, !empty($required[$id]), (int) ($order[$id] ?? 0));
             }
-            $uses->attach($scope, $id, !empty($required[$id]), (int) ($order[$id] ?? 0));
         }
 
         return $this->redirect($request, $response, 'admin.terms', ['saved' => '1']);
@@ -200,9 +211,11 @@ final class AdminCmsController
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
+        // 약관은 약관 관리에서만 만든다. 여기로 약관 표시를 실어 보내도 무시한다.
+        unset($input['is_consent']);
         $acl = $this->app->guestAcl();
         try {
-            $id = $this->app->cmsService()->createPage($acl, $input);
+            $this->app->cmsService()->createPage($acl, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -210,9 +223,32 @@ final class AdminCmsController
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), true);
         }
-        // 방금 만든 값 그대로가 아니라 저장된 행을 다시 읽어 약관 여부를 판단한다.
-        $legal = $this->isLegal($this->app->cmsService()->page($acl, $id));
-        return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['saved' => '1']);
+        return $this->redirect($request, $response, 'admin.content', ['saved' => '1']);
+    }
+
+    public function termsCreateForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        return $this->renderPageForm($request, $response, $this->withImageKey($this->defaults()), [], true, 0, true);
+    }
+
+    /** 새 약관. 여기서 만든 내용에만 약관 표시가 붙는다. */
+    public function termsCreate(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $input['is_consent'] = '1';
+        $acl = $this->app->guestAcl();
+        try {
+            $this->app->cmsService()->createPage($acl, $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            return $this->renderPageForm($request, $response->withStatus(422),
+                $this->withImageKey($input), $e->details(), true, 0, true);
+        }
+        return $this->redirect($request, $response, 'admin.terms', ['created' => '1']);
     }
 
     public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -230,19 +266,18 @@ final class AdminCmsController
         $acl = $this->app->guestAcl();
         $page = $this->app->cmsService()->page($acl, $id);
         $legal = $this->isLegal($page);
+        // 약관 여부는 만들 때 정해진다. 수정 요청에 실려 온 표시는 무시해
+        // 일반 내용이 슬쩍 약관이 되거나 그 반대가 되는 길을 막는다.
+        unset($input['is_consent']);
         try {
             $this->app->cmsService()->updatePage($acl, $id, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
             }
-            // 저장이 엎어졌으니 폼은 고치기 전 표시를 그대로 다시 그린다.
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), false, $id, $legal);
         }
-        // 이번 저장에서 약관 표시가 켜지거나 꺼졌을 수 있으므로, 저장된 행을 다시 읽어
-        // 돌아갈 곳을 정한다. 고치기 전 값으로 정하면 엉뚱한 목록으로 보낸다.
-        $legal = $this->isLegal($this->app->cmsService()->page($acl, $id));
         return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['saved' => '1']);
     }
 
