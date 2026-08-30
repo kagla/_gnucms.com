@@ -80,6 +80,23 @@ final class ThemeManagerTest extends TestCase
         self::assertSame(['default', 'minimal', 'modern'], $this->manager('default')->availableThemes());
     }
 
+    public function testEngineComesFromManifest(): void
+    {
+        $root = sys_get_temp_dir() . '/gnucms-theme-' . getmypid();
+        @mkdir($root . '/default', 0777, true);
+        @mkdir($root . '/withphp', 0777, true);
+        file_put_contents($root . '/withphp/theme.php', "<?php return ['engine' => 'php'];");
+        try {
+            self::assertSame('twig', (new ThemeManager($root, $root, 'default'))->engine());
+            self::assertSame('php', (new ThemeManager($root, $root, 'withphp'))->engine());
+        } finally {
+            @unlink($root . '/withphp/theme.php');
+            @rmdir($root . '/withphp');
+            @rmdir($root . '/default');
+            @rmdir($root);
+        }
+    }
+
     private function manager(string $theme): ThemeManager
     {
         return new ThemeManager(

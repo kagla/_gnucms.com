@@ -11,6 +11,7 @@ use GnuCms\Web\Middleware\HtmlContentTypeMiddleware;
 use GnuCms\Web\Middleware\SessionGuard;
 use GnuCms\Error\DomainError;
 use GnuCms\Theme\ThemeManager;
+use GnuCms\View\PhpView;
 use GnuCms\View\TwigView;
 use GnuCms\Web\Middleware\ViewMiddleware;
 use Slim\App as SlimApp;
@@ -42,25 +43,37 @@ final class Kernel
         );
         $site['theme'] = $themes->name();
 
-        $twig = Twig::create($themes->templatePaths(), [
-            // 이 애플리케이션은 템플릿 파일 캐시를 사용하지 않는다.
-            'cache'            => false,
-            'strict_variables' => true,
-            'autoescape'       => 'html',
-        ]);
-        $twig->getEnvironment()->addFunction(new TwigFunction(
-            'theme_asset',
-            static fn (string $path): string => $themes->assetUrl($path, $basePath)
-        ));
-        // 정화한 뒤 본문 사진을 축소본 + 원본 링크로 바꿔 내보낸다.
-        $twig->getEnvironment()->addFilter(new TwigFilter(
-            'cms_html',
-            [$app->contentRenderer(), 'render'],
-            ['is_safe' => ['html']]
-        ));
         // 컨트롤러는 이 View 만 안다. Twig 를 아는 곳은 TwigView 와 이 조립 코드뿐이다.
-        $view = new TwigView($twig, $slim->getRouteCollector()->getRouteParser(), $basePath);
+        $routeParser = $slim->getRouteCollector()->getRouteParser();
+        if ($themes->engine() === 'php') {
+            $view = new PhpView(
+                $themes->phpTemplatePaths(),
+                $routeParser,
+                $basePath,
+                static fn (string $path): string => $themes->assetUrl($path, $basePath),
+                [$app->contentRenderer(), 'render']
+            );
+        } else {
+            $twig = Twig::create($themes->templatePaths(), [
+                // 이 애플리케이션은 템플릿 파일 캐시를 사용하지 않는다.
+                'cache'            => false,
+                'strict_variables' => true,
+                'autoescape'       => 'html',
+            ]);
+            $twig->getEnvironment()->addFunction(new TwigFunction(
+                'theme_asset',
+                static fn (string $path): string => $themes->assetUrl($path, $basePath)
+            ));
+            // 정화한 뒤 본문 사진을 축소본 + 원본 링크로 바꿔 내보낸다.
+            $twig->getEnvironment()->addFilter(new TwigFilter(
+                'cms_html',
+                [$app->contentRenderer(), 'render'],
+                ['is_safe' => ['html']]
+            ));
+            $view = new TwigView($twig, $routeParser, $basePath);
+        }
 
+        // 아래 addGlobal 들은 두 엔진에 공통이다.
         $view->addGlobal('current_user', [
             'is_guest' => true, 'id' => null, 'display_name' => null, 'is_admin' => false,
         ]);
@@ -98,7 +111,9 @@ final class Kernel
         $view->addGlobal('GNUCMS', GNUCMS);
         $view->addGlobal('GNUCMS_ID', GNUCMS_ID);
 
-        $slim->add(TwigMiddleware::create($slim, $twig));
+        if ($view instanceof TwigView) {
+            $slim->add(TwigMiddleware::create($slim, $view->twig()));
+        }
         $slim->add(new ViewMiddleware($view));
         $slim->addRoutingMiddleware();
         $slim->add(new ErrorPageMiddleware(

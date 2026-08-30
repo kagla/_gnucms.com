@@ -39,6 +39,12 @@ abstract class WebTestCase extends DatabaseTestCase
         $schema->drop();
         $schema->create();
 
+        // 전체 스위트를 다른 테마로 한 번 더 돌릴 때 쓴다: GNUCMS_TEST_THEME=native ./vendor/bin/phpunit
+        $theme = getenv('GNUCMS_TEST_THEME');
+        if (is_string($theme) && $theme !== '') {
+            $app->cms()->saveSettings(['theme' => $theme]);
+        }
+
         return $app;
     }
 

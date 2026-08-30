@@ -47,6 +47,29 @@ final class ThemeManager
         return $paths;
     }
 
+    /** 테마 폴더의 theme.php 가 돌려주는 배열. 없으면 빈 배열(= Twig 테마). */
+    public function manifest(): array
+    {
+        $file = $this->templateRoot . DIRECTORY_SEPARATOR . $this->name . DIRECTORY_SEPARATOR . 'theme.php';
+        if (!is_file($file)) {
+            return [];
+        }
+        $loaded = include $file;
+        return is_array($loaded) ? $loaded : [];
+    }
+
+    /** 'php' 또는 'twig'. 매니페스트가 php 라고 하지 않으면 Twig 다. */
+    public function engine(): string
+    {
+        return ($this->manifest()['engine'] ?? 'twig') === 'php' ? 'php' : 'twig';
+    }
+
+    /** PHP 엔진이 볼 템플릿 경로. 지금은 선택 테마 하나뿐이다. */
+    public function phpTemplatePaths(): array
+    {
+        return [$this->templateRoot . DIRECTORY_SEPARATOR . $this->name];
+    }
+
     /** @return string[] */
     public function availableThemes(): array
     {
