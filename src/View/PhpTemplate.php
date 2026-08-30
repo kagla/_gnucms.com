@@ -94,6 +94,14 @@ final class PhpTemplate
         return htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /** Twig 의 |default 와 같다. null·''·false·[] 이면 기본값. ?? 는 null 만 보므로 다르다. */
+    public function def(mixed $v, mixed $default): mixed
+    {
+        if ($v instanceof \Countable) { return count($v) === 0 ? $default : $v; }
+        if ($v instanceof \Stringable) { return (string) $v === '' ? $default : $v; }
+        return ($v === '' || $v === false || $v === null || $v === []) ? $default : $v;
+    }
+
     public function layout(string $name): void
     {
         $this->layout = $name;

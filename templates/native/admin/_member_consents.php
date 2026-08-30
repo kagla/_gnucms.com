@@ -13,7 +13,7 @@
         <tbody>
         <?php foreach ($member_consents as $row): ?>
           <tr>
-            <td data-label="항목"><span class="cell-title"><?= $this->e($row['content_title'] ?? $row['consent_type']) ?></span></td>
+            <td data-label="항목"><span class="cell-title"><?= $this->e($this->def($row['content_title'] ?? null, $row['consent_type'])) ?></span></td>
             <td data-label="자리"><code class="kbd kbd-sm"><?= $this->e($row['scope']) ?></code></td>
             <td data-label="동의"><span class="badge badge-sm badge-soft <?= $row['agreed'] ? 'badge-success' : 'badge-ghost' ?>"><?= $row['agreed'] ? '동의' : '안 함' ?></span></td>
             <td data-label="동의 시각"><?= $this->date($row['agreed_at'], 'Y.m.d H:i') ?></td>

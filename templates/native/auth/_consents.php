@@ -9,12 +9,12 @@
       $field = 'agree_' . $doc['id'];
       $is_required = (int) $doc['required'] === 1;
       ?>
-      <label class="label check-row<?php if (isset($errors[$field])): ?> is-invalid<?php endif ?>">
+      <label class="label check-row<?php if (array_key_exists($field, $errors)): ?> is-invalid<?php endif ?>">
         <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" name="<?= $this->e($field) ?>" value="1"<?= ($values[$field] ?? false) ? ' checked' : '' ?><?= $is_required ? ' required' : '' ?>>
         <span><a class="link" href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>" target="_blank" rel="noopener"><?= $this->e($doc['title']) ?></a> 동의
           <span class="badge <?= $is_required ? 'badge-error' : 'badge-ghost' ?> badge-soft badge-xs"><?= $is_required ? '필수' : '선택' ?></span></span>
       </label>
-      <?php if (isset($errors[$field])): ?><p class="validator-hint"><?= $this->e($errors[$field]) ?></p><?php endif ?>
+      <?php if (array_key_exists($field, $errors)): ?><p class="validator-hint"><?= $this->e($errors[$field]) ?></p><?php endif ?>
     <?php endforeach ?>
   </fieldset>
 <?php endif ?>

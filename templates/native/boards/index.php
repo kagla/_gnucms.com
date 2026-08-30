@@ -131,7 +131,7 @@ $hot = array_slice($pool, 0, 6);
       <?php else: ?>
         <?php // 홈 표시 방식은 게시판의 목록 형태 설정을 그대로 따른다.
               // 값은 BoardService 가 허용 목록으로 걸러서 내려준다.
-              $__type = $board['list_type'] ?? 'list';
+              $__type = $this->def($board['list_type'] ?? null, 'list');
               $this->insert(in_array($__type, ['list', 'gallery', 'news', 'magazine'], true) ? 'home/_feed_' . $__type : 'home/_feed_list', ['board' => $board]) ?>
       <?php endif ?>
     </section>

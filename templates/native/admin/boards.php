@@ -24,7 +24,7 @@
             <?php if ($board['description']): ?><div class="cell-sub"><?= $this->e($board['description']) ?></div><?php endif ?>
           </td>
           <td data-label="주소"><code class="kbd kbd-sm">/boards/<?= $this->e($board['board_key']) ?></code></td>
-          <td data-label="목록 형태"><span class="badge badge-ghost badge-sm"><?= $this->e($list_labels[$board['list_type']] ?? $board['list_type']) ?></span></td>
+          <td data-label="목록 형태"><span class="badge badge-ghost badge-sm"><?= $this->e($this->def($list_labels[$board['list_type']] ?? null, $board['list_type'])) ?></span></td>
           <td data-label="권한">
             <span class="badge-row">
               <span class="badge badge-ghost badge-sm"><em>읽기</em><?= $this->e($board['perm_read']) ?></span>

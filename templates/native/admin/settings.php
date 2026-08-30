@@ -41,7 +41,7 @@
         <fieldset class="fieldset<?php if (array_key_exists('theme', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">템플릿</legend>
           <select class="select select-bordered select-block" name="theme" required>
-            <?php foreach ($available_themes as $theme_name): ?><option value="<?= $this->e($theme_name) ?>"<?= ($values['theme'] ?? $active_theme) === $theme_name ? ' selected' : '' ?>><?= $this->e($theme_name === 'default' ? 'default (기본)' : $theme_name) ?></option><?php endforeach ?>
+            <?php foreach ($available_themes as $theme_name): ?><option value="<?= $this->e($theme_name) ?>"<?= $this->def($values['theme'] ?? null, $active_theme) === $theme_name ? ' selected' : '' ?>><?= $this->e($theme_name === 'default' ? 'default (기본)' : $theme_name) ?></option><?php endforeach ?>
           </select>
           <?php if (array_key_exists('theme', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['theme']) ?></p><?php endif ?>
           <p class="fieldset-label">선택한 템플릿에 없는 화면과 파일은 default 템플릿을 사용합니다.</p>

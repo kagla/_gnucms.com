@@ -18,7 +18,7 @@
             <tr>
               <td data-label="대상">
                 <?php if ($row['subject_type'] === 'user'): ?>
-                  <span class="cell-title"><?= $this->e($row['user_email'] ?? '지워진 회원') ?></span>
+                  <span class="cell-title"><?= $this->e($this->def($row['user_email'] ?? null, '지워진 회원')) ?></span>
                 <?php else: ?>
                   <span class="cell-title">제출 #<?= $this->e($row['subject_id']) ?></span>
                 <?php endif ?>
@@ -28,7 +28,7 @@
               <td data-label="시각"><?= $this->date($row['agreed_at'], 'Y.m.d H:i') ?></td>
               <td data-label="그때 본 판"><?= $this->date($row['content_updated_at'], 'Y.m.d H:i') ?>
                 <?php if ($page['updated_at'] > $row['content_updated_at']): ?><span class="badge badge-warning badge-soft badge-xs">그 뒤 바뀜</span><?php endif ?></td>
-              <td data-label="증적"><span class="cell-sub"><?= $this->e($row['agreed_ip'] ?? '-') ?></span></td>
+              <td data-label="증적"><span class="cell-sub"><?= $this->e($this->def($row['agreed_ip'] ?? null, '-')) ?></span></td>
             </tr>
           <?php endforeach ?>
           </tbody>

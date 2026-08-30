@@ -31,8 +31,8 @@
         <fieldset class="fieldset">
           <legend class="fieldset-legend">상태</legend>
           <select class="select select-bordered select-block" name="status">
-            <option value="draft"<?= ($values['status'] ?? 'draft') === 'draft' ? ' selected' : '' ?>>초안</option>
-            <option value="published"<?= ($values['status'] ?? 'draft') === 'published' ? ' selected' : '' ?>>공개</option>
+            <option value="draft"<?= $this->def($values['status'] ?? null, 'draft') === 'draft' ? ' selected' : '' ?>>초안</option>
+            <option value="published"<?= $this->def($values['status'] ?? null, 'draft') === 'published' ? ' selected' : '' ?>>공개</option>
           </select>
         </fieldset>
         <fieldset class="fieldset">
@@ -46,9 +46,9 @@
         <fieldset class="fieldset">
           <legend class="fieldset-legend">사용처</legend>
           <select class="select select-bordered select-block" name="consent_usage">
-            <option value="signup"<?= ($values['consent_usage'] ?? 'none') === 'signup' ? ' selected' : '' ?>>회원가입 동의</option>
-            <option value="form"<?= ($values['consent_usage'] ?? 'none') === 'form' ? ' selected' : '' ?>>신청서·등록 동의</option>
-            <option value="none"<?= ($values['consent_usage'] ?? 'none') === 'none' ? ' selected' : '' ?>>안내만</option>
+            <option value="signup"<?= $this->def($values['consent_usage'] ?? null, 'none') === 'signup' ? ' selected' : '' ?>>회원가입 동의</option>
+            <option value="form"<?= $this->def($values['consent_usage'] ?? null, 'none') === 'form' ? ' selected' : '' ?>>신청서·등록 동의</option>
+            <option value="none"<?= $this->def($values['consent_usage'] ?? null, 'none') === 'none' ? ' selected' : '' ?>>안내만</option>
           </select>
           <?php // 안내는 처음 한두 번만 필요하다. 접어 두고 필요할 때만 편다. ?>
           <details class="usage-help">
@@ -67,7 +67,7 @@
         </fieldset>
       </div>
       <?php // 자리 이름은 신청서·등록 동의에만 뜻이 있다. 다른 사용처에서는 숨긴다. ?>
-      <fieldset class="fieldset" data-scope-key<?= ($values['consent_usage'] ?? 'none') !== 'form' ? ' hidden' : '' ?>>
+      <fieldset class="fieldset" data-scope-key<?= $this->def($values['consent_usage'] ?? null, 'none') !== 'form' ? ' hidden' : '' ?>>
         <legend class="fieldset-legend">신청서 자리 이름 <span class="legend-hint">비우면 공용 자리</span></legend>
         <input class="input input-bordered input-block" type="text" name="consent_scope_key" value="<?= $this->e($values['consent_scope_key'] ?? '') ?>" maxlength="35" pattern="[a-z0-9][a-z0-9_-]*" placeholder="예: event-2026, rental">
         <p class="fieldset-label">나중에 신청서가 여럿일 때 어느 폼의 약관인지 이 이름으로 가릅니다.</p>
@@ -88,7 +88,7 @@
         </label>
         <?php if ($legal): ?>
         <label class="label toggle-row">
-          <input class="toggle toggle-primary" type="checkbox" name="consent_required" value="1"<?= ($values['consent_required'] ?? 1) ? ' checked' : '' ?>>
+          <input class="toggle toggle-primary" type="checkbox" name="consent_required" value="1"<?= $this->def($values['consent_required'] ?? null, 1) ? ' checked' : '' ?>>
           <span><strong>가입할 때 반드시 동의</strong><small>풀면 선택 동의가 됩니다. 안 해도 가입은 됩니다.</small></span>
         </label>
         <?php endif ?>

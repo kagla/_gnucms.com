@@ -75,19 +75,19 @@
           <legend class="fieldset-legend">목록 형태</legend>
           <?php $list_labels = ['list' => '목록형 (표)', 'gallery' => '갤러리형 (사진 격자)', 'magazine' => '매거진형 (사진 + 발췌)', 'news' => '뉴스형 (제목 + 발췌)']; ?>
           <select class="select select-bordered select-block" name="list_type">
-            <?php foreach ($list_labels as $name => $label): ?><option value="<?= $this->e($name) ?>"<?= ($values['list_type'] ?? 'list') === $name ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?>
+            <?php foreach ($list_labels as $name => $label): ?><option value="<?= $this->e($name) ?>"<?= $this->def($values['list_type'] ?? null, 'list') === $name ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?>
           </select>
           <p class="fieldset-label">보는 사람이 주소에 ?view= 를 붙여 잠시 다른 형태로 볼 수 있습니다.</p>
         </fieldset>
         <div class="grid-2">
           <fieldset class="fieldset"><legend class="fieldset-legend">페이지당 글 수</legend>
-            <input class="input input-bordered input-block" type="number" name="per_page" value="<?= $this->e($values['per_page'] ?? 20) ?>" min="1" max="100"></fieldset>
+            <input class="input input-bordered input-block" type="number" name="per_page" value="<?= $this->e($this->def($values['per_page'] ?? null, 20)) ?>" min="1" max="100"></fieldset>
           <fieldset class="fieldset"><legend class="fieldset-legend">정렬 순서 <span class="legend-hint">작을수록 위</span></legend>
             <input class="input input-bordered input-block" type="number" name="sort_order" value="<?= $this->e($values['sort_order'] ?? 0) ?>" min="-9999" max="9999"></fieldset>
         </div>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">메인에 낼 최신 글 수 <span class="legend-hint">0 이면 메인에서 뺍니다</span></legend>
-          <input class="input input-bordered input-block" type="number" name="home_limit" value="<?= $this->e($values['home_limit'] ?? 5) ?>" min="0" max="10">
+          <input class="input input-bordered input-block" type="number" name="home_limit" value="<?= $this->e($this->def($values['home_limit'] ?? null, 5)) ?>" min="0" max="10">
           <p class="fieldset-label">첫 화면에 이 게시판의 최신 글을 몇 개 보일지 정합니다. 0 으로 두면 게시판은 그대로 열리되 첫 화면에는 나오지 않습니다.</p>
         </fieldset>
         <fieldset class="fieldset toggle-list">

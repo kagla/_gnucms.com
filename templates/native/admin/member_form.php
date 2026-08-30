@@ -22,8 +22,8 @@
       <fieldset class="fieldset<?php if (array_key_exists('status', $errors)): ?> is-invalid<?php endif ?>">
         <legend class="fieldset-legend">이용 상태</legend>
         <select class="select select-bordered select-block" name="status">
-          <option value="active"<?= ($values['status'] ?? 'active') === 'active' ? ' selected' : '' ?>>활성</option>
-          <option value="blocked"<?= ($values['status'] ?? 'active') === 'blocked' ? ' selected' : '' ?>>차단</option>
+          <option value="active"<?= $this->def($values['status'] ?? null, 'active') === 'active' ? ' selected' : '' ?>>활성</option>
+          <option value="blocked"<?= $this->def($values['status'] ?? null, 'active') === 'blocked' ? ' selected' : '' ?>>차단</option>
         </select>
         <?php if (array_key_exists('status', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['status']) ?></p><?php endif ?>
       </fieldset>

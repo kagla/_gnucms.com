@@ -25,7 +25,7 @@
         <fieldset class="fieldset">
           <legend class="fieldset-legend">메일 서비스</legend>
           <select class="select select-bordered select-block" name="provider" data-mail-provider>
-            <option value="gmail"<?= ($values['provider'] ?? 'gmail') === 'gmail' ? ' selected' : '' ?>>Gmail</option>
+            <option value="gmail"<?= $this->def($values['provider'] ?? null, 'gmail') === 'gmail' ? ' selected' : '' ?>>Gmail</option>
             <option value="naver"<?= ($values['provider'] ?? '') === 'naver' ? ' selected' : '' ?>>네이버 메일</option>
             <option value="daum"<?= ($values['provider'] ?? '') === 'daum' ? ' selected' : '' ?>>다음 메일</option>
             <option value="custom"<?= ($values['provider'] ?? '') === 'custom' ? ' selected' : '' ?>>직접 설정</option>
@@ -34,18 +34,18 @@
         <div class="grid-2">
           <fieldset class="fieldset<?php if (array_key_exists('host', $errors)): ?> is-invalid<?php endif ?>">
             <legend class="fieldset-legend">SMTP 서버</legend>
-            <input class="input input-bordered input-block" type="text" name="host" value="<?= $this->e($values['host'] ?? 'smtp.gmail.com') ?>" maxlength="253" data-mail-host required>
+            <input class="input input-bordered input-block" type="text" name="host" value="<?= $this->e($this->def($values['host'] ?? null, 'smtp.gmail.com')) ?>" maxlength="253" data-mail-host required>
             <?php if (array_key_exists('host', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['host']) ?></p><?php endif ?>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">포트</legend>
-            <input class="input input-bordered input-block" type="number" name="port" value="<?= $this->e($values['port'] ?? 465) ?>" min="1" max="65535" data-mail-port required>
+            <input class="input input-bordered input-block" type="number" name="port" value="<?= $this->e($this->def($values['port'] ?? null, 465)) ?>" min="1" max="65535" data-mail-port required>
           </fieldset>
         </div>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">보안 연결</legend>
           <select class="select select-bordered select-block" name="encryption" data-mail-encryption>
-            <option value="ssl"<?= ($values['encryption'] ?? 'ssl') === 'ssl' ? ' selected' : '' ?>>SSL/TLS</option>
+            <option value="ssl"<?= $this->def($values['encryption'] ?? null, 'ssl') === 'ssl' ? ' selected' : '' ?>>SSL/TLS</option>
             <option value="tls"<?= ($values['encryption'] ?? '') === 'tls' ? ' selected' : '' ?>>STARTTLS</option>
           </select>
         </fieldset>
@@ -77,7 +77,7 @@
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">발신 이름</legend>
-            <input class="input input-bordered input-block" type="text" name="from_name" value="<?= $this->e($values['from_name'] ?? GNUCMS) ?>" maxlength="100" required>
+            <input class="input input-bordered input-block" type="text" name="from_name" value="<?= $this->e($this->def($values['from_name'] ?? null, GNUCMS)) ?>" maxlength="100" required>
           </fieldset>
         </div>
       </div>

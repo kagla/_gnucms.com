@@ -123,6 +123,24 @@ final class PhpViewTest extends TestCase
         self::assertSame('/r/x/a&quot;&amp;b|/themes/t/c&quot;&amp;d.css', $out);
     }
 
+    public function testDefMatchesTwigDefaultFilter(): void
+    {
+        // Twig 의 |default 는 '비었으면' 기본값이다. ?? 는 null 만 본다 — "0"·0 에서 갈린다.
+        $this->write('a', "<?= \$this->e(\$this->def('', 'd')) ?>|<?= \$this->e(\$this->def('0', 'd')) ?>"
+            . "|<?= \$this->e(\$this->def(false, 'd')) ?>|<?= \$this->e(\$this->def(0, 'd')) ?>"
+            . "|<?= \$this->e(\$this->def([], 'd')) ?>|<?= \$this->e(\$this->def(null, 'd')) ?>"
+            . "|<?= \$this->e(\$this->def('v', 'd')) ?>");
+        self::assertSame('d|0|d|0|d|d|v', $this->view()->fetch('a'));
+
+        $t = new \GnuCms\View\PhpTemplate($this->view(), [], '/base');
+        self::assertSame('d', $t->def('', 'd'));
+        self::assertSame('0', $t->def('0', 'd'), '문자열 "0" 은 Twig 에서 비어 있지 않다');
+        self::assertSame('d', $t->def(false, 'd'));
+        self::assertSame(0, $t->def(0, 'd'), '숫자 0 도 Twig 에서 비어 있지 않다');
+        self::assertSame('d', $t->def([], 'd'));
+        self::assertSame('d', $t->def(null, 'd'));
+    }
+
     public function testIconComesFromIconsFile(): void
     {
         $this->write('_icons', "<?php return ['home' => '<path d=\"M1 1\"/>'];");

@@ -50,8 +50,8 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 $filtered = ($query['q'] !== null && $query['q'] !== '') || ($query['category'] !== null && $query['category'] !== '');
 // 목록 형태는 게시판 설정이 기본, ?view= 로 잠시 바꾼다.
 // view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다.
-$view = $view ?? 'list';
-$view_param = $view !== ($board['list_type'] ?? 'list') ? $view : null;
+$view = $this->def($view ?? null, 'list');
+$view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view : null;
 ?>
 
 <div class="breadcrumbs">
@@ -119,9 +119,9 @@ $view_param = $view !== ($board['list_type'] ?? 'list') ? $view : null;
   <nav class="view-switch" aria-label="목록 형태 선택">
     <?php foreach ($view_types as $name): ?>
       <?php if ($name === $view): ?>
-        <span class="btn btn-sm btn-active" aria-current="true"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($view_labels[$name] ?? $name) ?></span>
+        <span class="btn btn-sm btn-active" aria-current="true"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></span>
       <?php else: ?>
-        <a class="btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], 1, $name) ?>"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($view_labels[$name] ?? $name) ?></a>
+        <a class="btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], 1, $name) ?>"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a>
       <?php endif ?>
     <?php endforeach ?>
   </nav>
