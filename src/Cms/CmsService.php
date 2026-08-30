@@ -101,7 +101,8 @@ final class CmsService
             if ($page === null) {
                 $id = $this->cms->createPage([
                     'slug' => $slug, 'title' => $title, 'seo_description' => $seo,
-                    'content' => $body, 'status' => 'draft', 'show_in_menu' => 0,
+                    // 약관에서 show_in_menu 는 '하단에 표시' 다. 켜 두어야 공개 때 하단에 나온다.
+                    'content' => $body, 'status' => 'draft', 'show_in_menu' => 1,
                     'sort_order' => $sort, 'is_consent' => 1,
                 ]);
             } else {

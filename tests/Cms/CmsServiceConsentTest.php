@@ -123,6 +123,31 @@ final class CmsServiceConsentTest extends WebTestCase
         );
     }
 
+    /** 약관의 show_in_menu 는 '하단에 표시' 다. 상단 메뉴에는 어떤 값이어도 나오지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testConsentShowInMenuControlsFooterNotTopMenu(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $on = $app->cms()->createPage([
+            'slug' => 'youth', 'title' => '청소년 보호정책', 'content' => '본문', 'seo_description' => null,
+            'status' => 'published', 'show_in_menu' => 1, 'sort_order' => 0, 'is_consent' => 1,
+        ]);
+        $app->cms()->createPage([
+            'slug' => 'hidden-terms', 'title' => '숨긴 약관', 'content' => '본문', 'seo_description' => null,
+            'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0, 'is_consent' => 1,
+        ]);
+
+        $footer = array_column($app->cmsService()->publishedConsentPages(), 'slug');
+        self::assertContains('youth', $footer);
+        self::assertNotContains('hidden-terms', $footer, '끈 약관은 하단에 나오지 않는다');
+
+        self::assertSame([], array_column($app->cmsService()->menu(), 'slug'),
+            '약관은 하단 표시를 켜도 상단 메뉴에는 나오지 않는다');
+
+        // 숨긴 약관도 주소로는 열린다.
+        self::assertSame('숨긴 약관', $app->cmsService()->publishedPage('hidden-terms')['title']);
+    }
+
     /** 옛 판에서 손수 만든 terms 페이지에는 약관 표시가 없다. 씨앗 붙이기가 켜 줘야 한다. */
     #[DataProvider('connectionProvider')]
     public function testEnsureLegalDraftsMarksExistingPageAsConsent(array $dbConfig): void

@@ -234,6 +234,8 @@ final class AdminCmsController
         $values['consent_usage'] = 'signup';
         $values['consent_required'] = 1;
         $values['consent_order'] = 0;
+        // 약관은 으레 하단에 나온다. 기본으로 켠다.
+        $values['show_in_menu'] = 1;
         return $this->renderPageForm($request, $response, $values, [], true, 0, true);
     }
 

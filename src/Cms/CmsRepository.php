@@ -73,17 +73,21 @@ final class CmsRepository
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
             'SELECT * FROM ' . $this->db->q('contents')
-            . " WHERE status = 'published' AND show_in_menu = 1 AND deleted_at IS NULL"
+            // 약관에서 show_in_menu 는 '하단에 표시' 라는 뜻이라 상단 메뉴에서는 뺀다.
+            . " WHERE status = 'published' AND show_in_menu = 1 AND is_consent = 0 AND deleted_at IS NULL"
             . ' ORDER BY sort_order ASC, id ASC'
         ));
     }
 
-    /** 사이트 하단에 늘어놓을 공개 약관 전부. 로그인 없이도 보이므로 ACL 을 타지 않는다. */
+    /**
+     * 사이트 하단에 늘어놓을 공개 약관. 로그인 없이도 보이므로 ACL 을 타지 않는다.
+     * 약관에서 show_in_menu 는 '하단에 표시' 토글이다. 끄면 주소로만 열 수 있다.
+     */
     public function listPublishedConsentPages(): array
     {
         return $this->db->select(
             'SELECT * FROM ' . $this->db->q('contents')
-            . " WHERE is_consent = 1 AND status = 'published' AND deleted_at IS NULL"
+            . " WHERE is_consent = 1 AND status = 'published' AND show_in_menu = 1 AND deleted_at IS NULL"
             . ' ORDER BY sort_order ASC, id ASC'
         );
     }

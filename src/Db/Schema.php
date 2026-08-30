@@ -348,6 +348,19 @@ final class Schema
             }
         }
 
+        // 약관의 show_in_menu 는 이제 '하단에 표시' 라는 뜻이다. 표시를 걸러 내기 시작하면
+        // 기존 약관이 하단에서 통째로 사라지므로, 처음 한 번만 전부 켜 준다.
+        // 파일이 바뀔 때마다 마이그레이션이 다시 도니, 관리자가 끈 것을 되켜지 않게 잠근다.
+        $footerDone = $this->db->selectOne('SELECT state_value FROM ' . $this->db->q('site_state')
+            . " WHERE state_key = 'consent_footer_defaulted'");
+        if ($footerDone === null) {
+            $this->db->execute('UPDATE ' . $this->db->q('contents')
+                . ' SET show_in_menu = 1 WHERE is_consent = 1');
+            $this->db->insert('site_state', [
+                'state_key' => 'consent_footer_defaulted', 'state_value' => '1',
+            ]);
+        }
+
         // 동의 기록을 회원 밖으로 넓힌 표로 옮긴다. 옛 표는 남겨 둔다.
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consents_given'));
