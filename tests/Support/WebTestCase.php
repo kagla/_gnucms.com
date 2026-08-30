@@ -19,7 +19,13 @@ abstract class WebTestCase extends DatabaseTestCase
      * @param array $configOverrides 기본 설정 위에 덮어쓸 값. 최상위 키 단위로 합쳐진다.
      *                                예: ['debug' => false] 로 프로덕션 오류 화면을 테스트한다.
      */
-    protected function makeApp(array $dbConfig, array $configOverrides = []): App
+    /**
+     * @param string|null $theme 이 테스트가 화면을 확인하려는 테마를 못박는다. 못박은
+     *   테스트는 GNUCMS_TEST_THEME 이 덮지 못한다 — 특정 테마의 마크업(자산 경로, 그
+     *   테마에만 있는 안내 문구)을 단언하는 테스트는 테마를 바꿔 돌리면 반드시 깨지는데,
+     *   그건 결함이 아니라 테스트가 보려던 대상이 사라진 것이기 때문이다.
+     */
+    protected function makeApp(array $dbConfig, array $configOverrides = [], ?string $theme = null): App
     {
         $config = array_replace([
             'db'   => $dbConfig,
@@ -40,7 +46,11 @@ abstract class WebTestCase extends DatabaseTestCase
         $schema->create();
 
         // 전체 스위트를 다른 테마로 한 번 더 돌릴 때 쓴다: GNUCMS_TEST_THEME=native ./vendor/bin/phpunit
-        $theme = getenv('GNUCMS_TEST_THEME');
+        // 테스트가 테마를 못박았으면 그쪽이 이긴다.
+        if ($theme === null) {
+            $env = getenv('GNUCMS_TEST_THEME');
+            $theme = is_string($env) && $env !== '' ? $env : null;
+        }
         if (is_string($theme) && $theme !== '') {
             $app->cms()->saveSettings(['theme' => $theme]);
         }

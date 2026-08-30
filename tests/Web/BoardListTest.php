@@ -11,7 +11,8 @@ final class BoardListTest extends WebTestCase
     /** @dataProvider connectionProvider */
     public function testReadableBoardsAreListed(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        // 아래에서 codex-preline 의 자산 경로와 본문 클래스를 단언하므로 테마를 못박는다.
+        $app = $this->makeApp($dbConfig, [], 'codex-preline');
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free',
             'name'      => '자유게시판',

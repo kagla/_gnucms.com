@@ -172,7 +172,7 @@ final class ThemeParityTest extends WebTestCase
         ]);
     }
 
-    /** 설계 3.7 의 네 가지만 정규화한다. */
+    /** 설계 3.7 의 다섯 가지만 정규화한다. */
     private function normalize(string $html, string $theme): string
     {
         $html = preg_replace('/\?v=[0-9a-f]{12}/', '?v=HASH', $html) ?? $html;
@@ -190,6 +190,14 @@ final class ThemeParityTest extends WebTestCase
                 $html = str_replace($key, 'IMAGEKEY', $html);
             }
         }
+
+        // 테마 선택 <select> 의 selected 표시. 이 테스트는 두 엔진을 가르려고 스스로
+        // theme 설정을 1회차 'default' / 2회차 'native' 로 다르게 저장한다(위 렌더 반복문).
+        // admin/settings 는 그 설정값을 정직하게 보여주므로, 하니스가 심은 그 선택이
+        // 화면에 그대로 새어 나온다 — image_key 난수와 같은 성격의, 하니스가 만든 차이다.
+        // 그래서 하니스가 넣는 두 이름의 <option> 에서만 selected 를 떼어낸다.
+        // 다른 테마 이름의 selected 는 건드리지 않는다 — 그건 진짜 차이다.
+        $html = preg_replace('/(<option value="(?:default|native)")\s+selected(?=[\s>])/', '$1', $html) ?? $html;
 
         return trim($html);
     }

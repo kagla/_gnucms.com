@@ -17,7 +17,10 @@ final class AdminShortcutTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testAdminSeesEditLinkOnLegalPageAndGuestDoesNot(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        // '관리자에게만 보입니다' 라는 안내 막대는 codex-preline 계열 테마의 디자인이다.
+        // default(claude-sky)와 그 PHP 이식본 native 는 같은 길을 문구 없는 톱니 하나로
+        // 두기로 한 테마라 그 문구가 없다. 그러니 이 단언이 보려는 화면을 못박는다.
+        $app = $this->makeApp($dbConfig, [], 'codex-preline');
         $app->cms()->createPage([
             'slug' => 'privacy', 'title' => '개인정보 처리방침', 'content' => '내용',
             'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
