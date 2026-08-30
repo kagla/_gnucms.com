@@ -49,4 +49,18 @@ final class BasePath
 
         return $basePath . '/' . ($query !== null && $query !== '' ? '?' . $query : '');
     }
+
+    /**
+     * 같은 폴더의 다른 스크립트 주소. index.php 가 설치기로 보낼 때 쓴다.
+     * "/board/index.php" + "install.php" → "/board/install.php". 스크립트 이름이 비면 루트로 본다.
+     */
+    public static function siblingUrl(string $scriptName, string $file): string
+    {
+        $dir = str_replace('\\', '/', dirname($scriptName));
+        if ($dir === '.' || $dir === '/' || $dir === '') {
+            return '/' . $file;
+        }
+
+        return rtrim($dir, '/') . '/' . $file;
+    }
 }

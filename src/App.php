@@ -16,6 +16,7 @@ use GnuCms\Account\ConsentRepository;
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
 use GnuCms\Db\Connection;
+use GnuCms\Db\SchemaUpgrader;
 use GnuCms\Repository\BoardRepository;
 use GnuCms\Repository\CommentRepository;
 use GnuCms\Repository\NotificationRepository;
@@ -147,6 +148,17 @@ final class App
         }
 
         return $this->db;
+    }
+
+    /** storage/ 절대 경로. 설정 storage.dir 가 있으면 그것을 쓴다(테스트·특수 배치용). */
+    public function storageDir(): string
+    {
+        return rtrim((string) $this->config('storage.dir', dirname(__DIR__) . '/storage'), '/');
+    }
+
+    public function schemaUpgrader(): SchemaUpgrader
+    {
+        return new SchemaUpgrader($this->db(), $this->storageDir());
     }
 
     public function boards(): BoardRepository

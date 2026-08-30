@@ -121,4 +121,12 @@ final class BasePathTest extends TestCase
             ],
         ];
     }
+
+    public function testSiblingUrlReplacesScriptFileName(): void
+    {
+        self::assertSame('/install.php', BasePath::siblingUrl('/index.php', 'install.php'));
+        self::assertSame('/board/install.php', BasePath::siblingUrl('/board/index.php', 'install.php'));
+        self::assertSame('/install.php', BasePath::siblingUrl('', 'install.php'));
+        self::assertSame('/install.php', BasePath::siblingUrl('index.php', 'install.php'));
+    }
 }
