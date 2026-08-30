@@ -224,31 +224,6 @@ final class BoardListViewTest extends WebTestCase
         self::assertSame('list', $board['list_type']);
     }
 
-    /**
-     * 테마가 자체 posts/index.html.twig 를 갖고 있으면 디스패처를 직접 넣어야 파셜이 불린다.
-     * classic(옛 default) 이 그렇게 만들어 둔 테마다 — 네 형태가 모두 살아 있는지 고정한다.
-     */
-    #[DataProvider('connectionProvider')]
-    public function testThemeWithItsOwnIndexStillDispatchesEveryView(array $dbConfig): void
-    {
-        $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['theme' => 'classic']);
-        $this->seed($app, 'gallery');
-
-        $markers = [
-            'list'     => '<table>',
-            'gallery'  => 'class="gallery-grid"',
-            'magazine' => 'class="magazine-list surface"',
-            'news'     => 'class="news-list surface"',
-        ];
-        foreach ($markers as $view => $marker) {
-            $body = $this->body($this->get($app, '/boards/free', ['view' => $view]));
-
-            self::assertStringContainsString('/themes/classic/theme.css', $body, $view);
-            self::assertStringContainsString($marker, $body, $view);
-        }
-    }
-
     /** 관리 콘솔의 게시판 목록에서 각 게시판이 어떤 형태로 보이는지 한눈에 확인할 수 있어야 한다. */
     #[DataProvider('connectionProvider')]
     public function testAdminBoardListShowsListType(array $dbConfig): void
@@ -268,7 +243,7 @@ final class BoardListViewTest extends WebTestCase
 
     /**
      * 배포에서 형태 파셜 하나가 빠지는 일이 실제로 있었다. strict_variables 가 켜져 있어
-     * 그때 화면이 통째로 500 이 됐다. 파셜이 없으면 목록형으로 떨어져야 한다.
+     * 그때 화면이 통째로 500 이 됐다. 조각이 없으면 목록형으로 떨어져야 한다.
      */
     #[DataProvider('connectionProvider')]
     public function testMissingViewPartialFallsBackToListInsteadOfFailing(array $dbConfig): void
@@ -276,7 +251,7 @@ final class BoardListViewTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $this->seed($app, 'list');
 
-        $partial = dirname(__DIR__, 2) . '/templates/default/posts/_list_magazine.html.twig';
+        $partial = dirname(__DIR__, 2) . '/templates/default/posts/_list_magazine.php';
         $hidden = $partial . '.hidden';
         self::assertFileExists($partial);
         rename($partial, $hidden);

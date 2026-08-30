@@ -23,7 +23,6 @@ final class ViewMiddleware implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $this->view->bindRequest($request);
         return $handler->handle($request->withAttribute(View::ATTRIBUTE, $this->view));
     }
 }

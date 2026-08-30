@@ -141,6 +141,12 @@ final class PhpTemplate
         return trim($this->blocks[$name] ?? '') !== '';
     }
 
+    /** 조각이 있는가. 배포에서 조각 하나가 빠져도 화면이 통째로 죽지 않게 고를 때 쓴다. */
+    public function exists(string $template): bool
+    {
+        return $this->view->exists($template);
+    }
+
     public function insert(string $template, array $data = [], bool $only = false): void
     {
         echo $this->fetch($template, $data, $only);

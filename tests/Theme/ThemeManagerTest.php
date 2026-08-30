@@ -6,7 +6,6 @@ namespace GnuCms\Tests\Theme;
 
 use GnuCms\Theme\ThemeManager;
 use PHPUnit\Framework\TestCase;
-use Slim\Views\Twig;
 
 final class ThemeManagerTest extends TestCase
 {
@@ -19,6 +18,9 @@ final class ThemeManagerTest extends TestCase
         mkdir($this->root . '/templates/modern', 0777, true);
         mkdir($this->root . '/public/themes/default', 0777, true);
         mkdir($this->root . '/public/themes/modern', 0777, true);
+        // theme.php 가 있어야 테마다.
+        file_put_contents($this->root . '/templates/default/theme.php', "<?php return ['label' => '기본'];");
+        file_put_contents($this->root . '/templates/modern/theme.php', "<?php return ['label' => '모던'];");
     }
 
     protected function tearDown(): void
@@ -33,18 +35,10 @@ final class ThemeManagerTest extends TestCase
         rmdir($this->root);
     }
 
-    public function testTwigUsesSelectedTemplateAndFallsBackToDefault(): void
+    public function testTemplatePathsPointAtTheSelectedThemeOnly(): void
     {
-        file_put_contents($this->root . '/templates/default/page.html.twig', 'default page');
-        file_put_contents($this->root . '/templates/default/layout.html.twig', 'default layout');
-        file_put_contents($this->root . '/templates/modern/page.html.twig', 'modern page');
-
-        $themes = $this->manager('modern');
-        $twig = Twig::create($themes->templatePaths(), ['cache' => false]);
-
-        self::assertSame('modern page', $twig->fetch('page.html.twig'));
-        self::assertSame('default layout', $twig->fetch('layout.html.twig'));
-        self::assertSame('default layout', $twig->fetch('@default/layout.html.twig'));
+        self::assertSame([$this->root . '/templates/modern'], $this->manager('modern')->templatePaths());
+        self::assertSame([$this->root . '/templates/default'], $this->manager('default')->templatePaths());
     }
 
     public function testAssetUsesSelectedFileAndFallsBackToDefault(): void
@@ -73,28 +67,19 @@ final class ThemeManagerTest extends TestCase
         self::assertSame('default', $this->manager('../modern')->name());
     }
 
-    public function testAvailableThemesAreDiscoveredFromTemplatesAndAssets(): void
+    public function testAvailableThemesNeedAManifest(): void
     {
+        // 화면 없이 폴더만 있는 것(옛 테마 보관본)은 목록에 오르지 않는다.
+        mkdir($this->root . '/templates/archive', 0777, true);
         mkdir($this->root . '/public/themes/minimal', 0777, true);
 
-        self::assertSame(['default', 'minimal', 'modern'], $this->manager('default')->availableThemes());
+        self::assertSame(['default', 'modern'], $this->manager('default')->availableThemes());
+        self::assertSame('default', $this->manager('archive')->name(), 'theme.php 없는 폴더는 고를 수 없다');
     }
 
-    public function testEngineComesFromManifest(): void
+    public function testManifestGivesTheLabel(): void
     {
-        $root = sys_get_temp_dir() . '/gnucms-theme-' . getmypid();
-        @mkdir($root . '/default', 0777, true);
-        @mkdir($root . '/withphp', 0777, true);
-        file_put_contents($root . '/withphp/theme.php', "<?php return ['engine' => 'php'];");
-        try {
-            self::assertSame('twig', (new ThemeManager($root, $root, 'default'))->engine());
-            self::assertSame('php', (new ThemeManager($root, $root, 'withphp'))->engine());
-        } finally {
-            @unlink($root . '/withphp/theme.php');
-            @rmdir($root . '/withphp');
-            @rmdir($root . '/default');
-            @rmdir($root);
-        }
+        self::assertSame('모던', $this->manager('modern')->manifest()['label']);
     }
 
     public function testThrowingManifestDoesNotKillKernelCreate(): void
@@ -102,11 +87,14 @@ final class ThemeManagerTest extends TestCase
         $root = sys_get_temp_dir() . '/gnucms-theme-throw-' . getmypid();
         @mkdir($root . '/default', 0777, true);
         @mkdir($root . '/broken', 0777, true);
+        file_put_contents($root . '/default/theme.php', "<?php return [];");
         file_put_contents($root . '/broken/theme.php', "<?php throw new \\RuntimeException('boom');");
         try {
-            self::assertSame('twig', (new ThemeManager($root, $root, 'broken'))->engine());
+            // 깨진 매니페스트는 빈 배열이고, 그 테마로는 화면을 그릴 수 없으니 이름도 default 로 떨어진다.
+            self::assertSame([], (new ThemeManager($root, $root, 'broken'))->manifest());
         } finally {
             @unlink($root . '/broken/theme.php');
+            @unlink($root . '/default/theme.php');
             @rmdir($root . '/broken');
             @rmdir($root . '/default');
             @rmdir($root);

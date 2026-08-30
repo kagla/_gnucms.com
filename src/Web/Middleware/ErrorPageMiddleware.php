@@ -23,11 +23,9 @@ use Throwable;
  * 스택의 가장 바깥은 아니다. HtmlContentTypeMiddleware 가 이 미들웨어가 만든
  * 응답까지 감싸야 해서 그보다 바깥(=더 나중에 add)에 등록되어 있다.
  *
- * 라우팅이 실패(404)하면 화면에 요청을 물려 주는 ViewMiddleware 가 한 번도 실행되지
- * 않는다. 그러면 `url_for()`·`base_path()` 처럼 지금 요청을 알아야 하는 헬퍼가 없는
- * 채로 오류 화면을 그리게 되어, 보여 줄 화면이 그리다 말고 죽는다. 그래서 여기서도
- * 맨 앞에서 `$view->bindRequest($request)` 를 직접 부른다. ViewMiddleware 가 나중에
- * 같은 요청으로 다시 불러도 결과가 같아 안전하다(엔진별 구현이 그렇게 되어 있다).
+ * 라우팅이 실패(404)하면 ViewMiddleware 가 한 번도 실행되지 않으므로 여기서는 요청
+ * 속성 대신 생성자로 받은 View 로 직접 그린다. PhpView 는 주소를 만들 때 요청이
+ * 필요 없어(RouteParser 가 기준 경로까지 붙인다) 그래도 안전하다.
  */
 final class ErrorPageMiddleware implements MiddlewareInterface
 {
@@ -52,7 +50,6 @@ final class ErrorPageMiddleware implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $this->view->bindRequest($request);
 
         try {
             return $handler->handle($request);

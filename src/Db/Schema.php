@@ -220,7 +220,7 @@ final class Schema
                 $this->db->execute($this->expand($sql));
             }
         }
-        $this->ensureSiteSetting('theme', 'codex-preline');
+        $this->ensureSiteSetting('theme', 'default');
 
         try {
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('contents'));
@@ -562,7 +562,7 @@ final class Schema
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_title', '가볍게 시작하고, 오래 이어지는 공간', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_intro', '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('registration_enabled', '1', '2026-01-01 00:00:00')",
-            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'codex-preline', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'default', '2026-01-01 00:00:00')",
         ];
     }
 
@@ -612,12 +612,18 @@ final class Schema
     }
 
     /** 기존 기본 테마 사용자만 새 기본 디자인으로 옮기고, 직접 고른 테마는 보존한다. */
+    /** Twig 시절 테마 이름이 설정에 남아 있으면 default 로 돌린다. 그 테마들은 더 없다. */
     private function migrateDefaultTheme(): void
     {
+        $gone = ['agy-ohouse', 'atlas', 'aurora', 'basic', 'bloom', 'classic', 'claude-idus', 'claude-kurly',
+            'claude-sky', 'claude-idus-cdn', 'codex-bloom', 'codex-idus', 'codex-idus-cdn', 'codex-idus-preline',
+            'codex-preline', 'compact', 'cozy', 'daylight', 'harbor', 'haus', 'horizon', 'lumen', 'modern',
+            'native', 'nova', 'studio', 'twig-sky'];
+        $marks = implode(',', array_fill(0, count($gone), '?'));
         $this->db->execute(
             'UPDATE ' . $this->db->q('site_settings')
-            . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ? AND setting_value = ?',
-            ['codex-preline', '2026-08-28 00:00:00', 'theme', 'default']
+            . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ? AND setting_value IN (' . $marks . ')',
+            array_merge(['default', '2026-08-30 00:00:00', 'theme'], $gone)
         );
     }
 

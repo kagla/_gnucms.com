@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace GnuCms\View;
 
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 use Slim\Interfaces\RouteParserInterface;
 
@@ -71,12 +70,19 @@ final class PhpView implements ViewInterface
         return $this->globals;
     }
 
-    public function bindRequest(ServerRequestInterface $request): void
+
+    /** 조각이 있는가. 목록 형태처럼 없을 수 있는 조각을 고를 때 쓴다. */
+    public function exists(string $template): bool
     {
-        // 주소 만들기에 요청이 필요 없다. RouteParser 가 기준 경로까지 붙여 준다.
+        try {
+            $this->resolve($template);
+            return true;
+        } catch (RuntimeException $e) {
+            return false;
+        }
     }
 
-    /** '{이름}.php' 의 실제 경로. 없으면 예외 — 다른 엔진으로 폴백하지 않는다. */
+    /** '{이름}.php' 의 실제 경로. 없으면 예외 — 다른 테마로 조용히 폴백하지 않는다. */
     public function resolve(string $template): string
     {
         if ($template === '' || str_contains($template, '..') || str_contains($template, "\0")) {

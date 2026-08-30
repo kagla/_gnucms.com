@@ -12,14 +12,9 @@ use GnuCms\Web\Middleware\SessionGuard;
 use GnuCms\Error\DomainError;
 use GnuCms\Theme\ThemeManager;
 use GnuCms\View\PhpView;
-use GnuCms\View\TwigView;
 use GnuCms\Web\Middleware\ViewMiddleware;
 use Slim\App as SlimApp;
 use Slim\Factory\AppFactory;
-use Slim\Views\Twig;
-use Slim\Views\TwigMiddleware;
-use Twig\TwigFilter;
-use Twig\TwigFunction;
 
 /**
  * Slim 앱을 조립한다. 미들웨어는 나중에 add 한 것이 바깥이므로
@@ -43,37 +38,15 @@ final class Kernel
         );
         $site['theme'] = $themes->name();
 
-        // 컨트롤러는 이 View 만 안다. Twig 를 아는 곳은 TwigView 와 이 조립 코드뿐이다.
-        $routeParser = $slim->getRouteCollector()->getRouteParser();
-        if ($themes->engine() === 'php') {
-            $view = new PhpView(
-                $themes->phpTemplatePaths(),
-                $routeParser,
-                $basePath,
-                static fn (string $path): string => $themes->assetUrl($path, $basePath),
-                [$app->contentRenderer(), 'render']
-            );
-        } else {
-            $twig = Twig::create($themes->templatePaths(), [
-                // 이 애플리케이션은 템플릿 파일 캐시를 사용하지 않는다.
-                'cache'            => false,
-                'strict_variables' => true,
-                'autoescape'       => 'html',
-            ]);
-            $twig->getEnvironment()->addFunction(new TwigFunction(
-                'theme_asset',
-                static fn (string $path): string => $themes->assetUrl($path, $basePath)
-            ));
-            // 정화한 뒤 본문 사진을 축소본 + 원본 링크로 바꿔 내보낸다.
-            $twig->getEnvironment()->addFilter(new TwigFilter(
-                'cms_html',
-                [$app->contentRenderer(), 'render'],
-                ['is_safe' => ['html']]
-            ));
-            $view = new TwigView($twig, $routeParser, $basePath);
-        }
+        // 컨트롤러는 이 View 만 안다. 템플릿은 PHP 파일이고 엔진은 PhpView 하나다.
+        $view = new PhpView(
+            $themes->templatePaths(),
+            $slim->getRouteCollector()->getRouteParser(),
+            $basePath,
+            static fn (string $path): string => $themes->assetUrl($path, $basePath),
+            [$app->contentRenderer(), 'render']
+        );
 
-        // 아래 addGlobal 들은 두 엔진에 공통이다.
         $view->addGlobal('current_user', [
             'is_guest' => true, 'id' => null, 'display_name' => null, 'is_admin' => false,
         ]);
@@ -111,9 +84,6 @@ final class Kernel
         $view->addGlobal('GNUCMS', GNUCMS);
         $view->addGlobal('GNUCMS_ID', GNUCMS_ID);
 
-        if ($view instanceof TwigView) {
-            $slim->add(TwigMiddleware::create($slim, $view->twig()));
-        }
         $slim->add(new ViewMiddleware($view));
         $slim->addRoutingMiddleware();
         $slim->add(new ErrorPageMiddleware(

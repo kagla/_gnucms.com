@@ -26,71 +26,48 @@ final class ThemeManager
         return $this->name;
     }
 
-    /** 선택 테마를 먼저 찾고, 파일이 없으면 default 에서 찾는다. */
+    /**
+     * 템플릿 경로. 지금은 선택 테마 하나뿐이다. 나중에 테마끼리 폴백하고 싶으면
+     * 여기에 default 를 뒤에 더하면 PhpView 가 차례로 찾는다.
+     */
     public function templatePaths(): array
     {
-        $paths = [];
-        if ($this->name !== self::DEFAULT_THEME) {
-            $selected = $this->templateRoot . DIRECTORY_SEPARATOR . $this->name;
-            if (is_dir($selected)) {
-                $paths[] = $selected;
-            }
-        }
-
-        $default = $this->templateRoot . DIRECTORY_SEPARATOR . self::DEFAULT_THEME;
-        if (!is_dir($default)) {
-            throw new InvalidArgumentException('기본 템플릿 디렉터리를 찾을 수 없습니다: ' . $default);
-        }
-        $paths[] = $default;
-        $paths['default'] = $default;
-
-        return $paths;
+        return [$this->templateRoot . DIRECTORY_SEPARATOR . $this->name];
     }
 
-    /** 테마 폴더의 theme.php 가 돌려주는 배열. 없으면 빈 배열(= Twig 테마). */
+    /**
+     * 테마 폴더의 theme.php 가 돌려주는 배열(label 등). 이 파일이 있어야 테마로 친다 —
+     * .php 화면 없이 폴더만 있는 것(옛 테마 보관본 등)을 골라 500 이 나는 일을 막는다.
+     */
     public function manifest(): array
     {
-        $file = $this->templateRoot . DIRECTORY_SEPARATOR . $this->name . DIRECTORY_SEPARATOR . 'theme.php';
+        return self::readManifest($this->templateRoot . DIRECTORY_SEPARATOR . $this->name);
+    }
+
+    private static function readManifest(string $dir): array
+    {
+        $file = $dir . DIRECTORY_SEPARATOR . 'theme.php';
         if (!is_file($file)) {
             return [];
         }
         try {
             $loaded = include $file;
         } catch (\Throwable $e) {
-            // 매니페스트가 깨졌다고 사이트 전체가 죽으면 안 된다. Twig 테마로 본다.
+            // 매니페스트가 깨졌다고 사이트 전체가 죽으면 안 된다. 테마가 없는 것으로 본다.
             return [];
         }
         return is_array($loaded) ? $loaded : [];
     }
 
-    /** 'php' 또는 'twig'. 매니페스트가 php 라고 하지 않으면 Twig 다. */
-    public function engine(): string
-    {
-        return ($this->manifest()['engine'] ?? 'twig') === 'php' ? 'php' : 'twig';
-    }
-
-    /** PHP 엔진이 볼 템플릿 경로. 지금은 선택 테마 하나뿐이다. */
-    public function phpTemplatePaths(): array
-    {
-        return [$this->templateRoot . DIRECTORY_SEPARATOR . $this->name];
-    }
-
-    /** @return string[] */
+    /** @return string[] theme.php 를 가진 템플릿 폴더. default 가 맨 앞이다. */
     public function availableThemes(): array
     {
         $themes = [self::DEFAULT_THEME => true];
-        foreach ([$this->templateRoot, $this->assetRoot] as $root) {
-            if (!is_dir($root)) {
-                continue;
-            }
-            $entries = scandir($root);
-            if ($entries === false) {
-                continue;
-            }
-            foreach ($entries as $entry) {
-                if ($this->isValidName($entry) && is_dir($root . DIRECTORY_SEPARATOR . $entry)) {
-                    $themes[$entry] = true;
-                }
+        $entries = is_dir($this->templateRoot) ? scandir($this->templateRoot) : false;
+        foreach ($entries === false ? [] : $entries as $entry) {
+            $dir = $this->templateRoot . DIRECTORY_SEPARATOR . $entry;
+            if ($this->isValidName($entry) && is_dir($dir) && is_file($dir . DIRECTORY_SEPARATOR . 'theme.php')) {
+                $themes[$entry] = true;
             }
         }
 
@@ -130,8 +107,8 @@ final class ThemeManager
             return false;
         }
 
-        return is_dir($this->templateRoot . DIRECTORY_SEPARATOR . $theme)
-            || is_dir($this->assetRoot . DIRECTORY_SEPARATOR . $theme);
+        // 화면(.php)을 가진 테마여야 한다. theme.php 가 그 표식이다.
+        return is_file($this->templateRoot . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'theme.php');
     }
 
     private function isValidName(string $theme): bool

@@ -121,7 +121,7 @@ final class SchemaTest extends WebTestCase
             'SELECT setting_value FROM site_settings WHERE setting_key = ?',
             ['theme']
         );
-        self::assertSame('codex-preline', $setting['setting_value']);
+        self::assertSame('default', $setting['setting_value']);
     }
 
     /** 옛 판에서 올라와도 새 칸과 새 표가 빠짐없이 생기고, 기존 동의가 그대로 옮겨진다. */
