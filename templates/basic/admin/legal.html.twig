@@ -1,0 +1,69 @@
+{% extends "admin/layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}약관 관리 · {{ site.site_name }}{% endblock %}
+{% block admin_section %}legal{% endblock %}
+{% block body %}
+<div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li aria-current="page">약관</li></ul></div>
+<div class="page-head">
+  <div><h1>약관 관리</h1><p class="page-sub">약관마다 사용처를 정합니다. 회원가입 동의는 가입 화면에 붙고, 신청서·등록 동의는 그런 기능이 생기면 그 화면에 붙습니다. 안내만 하는 약관은 어디에도 붙지 않습니다.</p></div>
+  <div class="page-head-actions">
+    <a class="btn btn-primary" href="{{ url_for('admin.terms.create') }}">{{ ico.i('plus', 16) }} 약관 만들기</a>
+  </div>
+</div>
+{% if saved %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>저장했습니다.</span></div>{% endif %}
+{% if created %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>약관을 만들었습니다.</span></div>{% endif %}
+{% if deleted %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>약관을 휴지통으로 옮겼습니다.</span></div>{% endif %}
+<section class="card">
+  <div class="card-body">
+    {% if pages is empty %}
+      <p class="cell-sub">아직 약관이 없습니다. 이용약관과 개인정보 처리방침 초안을 만들어 시작하세요.</p>
+      <form method="post" action="{{ url_for('admin.terms.setup') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-primary" type="submit">씨앗 약관 만들기</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('admin.terms.uses') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="table-wrap">
+          <table class="table table-zebra">
+            <thead><tr><th>약관</th><th>공개 주소</th><th>사용처</th><th>필수</th><th>차례</th><th>동의</th><th class="right">관리</th></tr></thead>
+            <tbody>
+            {% for page in pages %}
+              <tr>
+                <td data-label="약관"><span class="cell-title">{{ page.title }}</span>
+                  {% if page.status != 'published' %}<span class="badge badge-warning badge-soft badge-xs">초안</span>{% endif %}</td>
+                <td data-label="공개 주소"><code class="kbd kbd-sm">/terms/{{ page.slug }}</code></td>
+                <td data-label="사용처">
+                  <select class="select select-bordered select-sm" name="usage[{{ page.id }}]">
+                    <option value="signup"{{ page.usage == 'signup' ? ' selected' : '' }}>회원가입 동의</option>
+                    <option value="form"{{ page.usage == 'form' ? ' selected' : '' }}>신청서·등록 동의</option>
+                    <option value="none"{{ page.usage == 'none' ? ' selected' : '' }}>안내만</option>
+                  </select>
+                  {# 신청서 자리 이름은 편집 폼에서 정한다. 여기서는 보여만 준다. #}
+                  {% if page.usage == 'form' and page.uses[0].scope|default('') starts with 'form:' %}
+                    <div class="cell-sub"><code class="kbd kbd-sm">{{ page.uses[0].scope|slice(5) }}</code></div>
+                  {% endif %}
+                </td>
+                <td data-label="필수"><input class="checkbox checkbox-sm" type="checkbox" name="required[{{ page.id }}]" value="1"{{ page.usage_required ? ' checked' : '' }}></td>
+                <td data-label="차례"><input class="input input-bordered input-sm" type="number" name="sort_order[{{ page.id }}]" value="{{ page.usage_order }}" min="-9999" max="9999"></td>
+                <td data-label="동의">{{ page.counts.agreed }} · 미동의 {{ page.counts.declined }}</td>
+                <td data-label="관리" class="right">
+                  <div class="row-actions">
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('admin.content.edit', {id: page.id}) }}">수정</a>
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('admin.terms.consents', {id: page.id}) }}">동의 현황</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="fieldset-label">공개 상태의 약관만 화면에 붙습니다. 초안은 사용처를 정해 두어도 나오지 않습니다.</p>
+        <div class="card-actions form-actions">
+          <button class="btn btn-primary" type="submit">변경사항 저장</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -19,11 +19,10 @@
 <form class="header-search" method="get" action="{{ url_for('posts.index', {'key': board.board_key}) }}" role="search">
   {% if query.category is not empty %}<input type="hidden" name="category" value="{{ query.category }}">{% endif %}
   <label class="input input-bordered">
-    <span class="input-icon" aria-hidden="true">{{ ico.i('search', 17) }}</span>
-    <input type="search" name="q" value="{{ query.q }}" placeholder="{{ board.name }}에서 검색" aria-label="게시글 검색" data-search-input>
-    <kbd class="kbd kbd-sm" aria-hidden="true">/</kbd>
+    <span class="input-icon" aria-hidden="true">{{ ico.i('search', 18) }}</span>
+    <input type="search" name="q" value="{{ query.q }}" placeholder="{{ board.name }}에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
   </label>
-  <button class="btn btn-primary btn-sm header-search-btn" type="submit">검색</button>
+  <button class="btn btn-primary header-search-btn" type="submit">검색</button>
 </form>
 {% endblock %}
 
@@ -63,6 +62,7 @@
   <div>
     <h1>{{ board.name }}</h1>
     {% if board.description %}<p class="page-sub">{{ board.description }}</p>{% endif %}
+    <p class="page-count">글 <strong>{{ list.total }}</strong>개{% if list.notices is not empty %} · 공지 {{ list.notices|length }}개{% endif %}</p>
   </div>
   <div class="page-head-actions">
     {# 검색과 단추를 한 줄에 둔다. 넓은 화면에서는 머리글에 검색이 있으므로 여기서는 감춘다. #}
@@ -81,14 +81,14 @@
          title="게시판 설정" aria-label="게시판 설정">{{ ico.i('cog', 15) }}</a>
     {% endif %}
     {% if can_write %}
-      <a class="btn btn-primary btn-sm hide-sm" href="{{ url_for('posts.create', {'key': board.board_key}) }}">{{ ico.i('pencil', 15) }} 글쓰기</a>
+      <a class="btn btn-primary hide-sm" href="{{ url_for('posts.create', {'key': board.board_key}) }}">{{ ico.i('pencil', 15) }} 글쓰기</a>
     {% endif %}
   </div>
 </div>
 
 {% if filtered %}
   <div class="filter-note">
-    {% if query.category is not empty %}<span class="badge badge-soft">{{ query.category }}</span>{% endif %}
+    {% if query.category is not empty %}<span class="badge badge-primary badge-soft">{{ query.category }}</span>{% endif %}
     {% if query.q is not empty %}<span class="badge badge-soft">“{{ query.q }}”</span>{% endif %}
     <span>검색 결과 {{ list.total }}개</span>
     <a class="link link-hover" href="{{ url_for('posts.index', {'key': board.board_key}) }}">필터 지우기</a>
@@ -110,7 +110,7 @@
 
 {% if view_types is defined and view_types|length > 1 %}
   {% set view_labels = {'list': '목록', 'gallery': '갤러리', 'magazine': '매거진', 'news': '뉴스형'} %}
-  {% set view_icons = {'list': 'board', 'gallery': 'folder', 'magazine': 'document', 'news': 'megaphone'} %}
+  {% set view_icons = {'list': 'board', 'gallery': 'grid', 'magazine': 'document', 'news': 'megaphone'} %}
   <nav class="view-switch" aria-label="목록 형태 선택">
     {% for name in view_types %}
       {% if name == view %}

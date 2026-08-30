@@ -7,16 +7,19 @@
   <input id="admin-drawer" type="checkbox" class="drawer-toggle" aria-label="관리 메뉴 열기">
   <div class="drawer-content admin-content">
     <header class="navbar admin-navbar">
-      <div class="navbar-start">
-        <label for="admin-drawer" class="btn btn-ghost btn-square drawer-button admin-menu-btn" aria-label="관리 메뉴 열기">{{ ico.i('menu', 20) }}</label>
-        <a class="admin-navbar-title" href="{{ url_for('admin.index') }}">관리 콘솔</a>
-      </div>
-      <div class="navbar-end">
-        <a class="btn btn-ghost btn-sm" href="{{ url_for('boards.index') }}">{{ ico.i('external', 15) }} 사이트 보기</a>
-        <button class="btn btn-ghost btn-circle theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
-          <span class="theme-ico theme-ico-light">{{ ico.i('sun', 19) }}</span>
-          <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 19) }}</span>
-        </button>
+      {# 띠(배경·아래 선)는 화면 끝까지 가되, 안쪽 내용은 아래 본문과 같은 폭에서 멈춘다. #}
+      <div class="admin-navbar-inner">
+        <div class="navbar-start">
+          <label for="admin-drawer" class="btn btn-ghost btn-square drawer-button admin-menu-btn" aria-label="관리 메뉴 열기">{{ ico.i('menu', 20) }}</label>
+          <a class="admin-navbar-title" href="{{ url_for('admin.index') }}">{{ site.site_name }} 관리</a>
+        </div>
+        <div class="navbar-end">
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('boards.index') }}">{{ ico.i('external', 15) }} 사이트 보기</a>
+          <button class="btn btn-ghost btn-circle theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
+            <span class="theme-ico theme-ico-light">{{ ico.i('sun', 19) }}</span>
+            <span class="theme-ico theme-ico-dark">{{ ico.i('moon', 19) }}</span>
+          </button>
+        </div>
       </div>
     </header>
     <div class="admin-body" id="main">{{ block('body') }}</div>

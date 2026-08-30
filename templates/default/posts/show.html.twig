@@ -17,7 +17,11 @@
 
 <article class="card article">
   <div class="card-body article-head">
-    {% if post.category %}<span class="badge badge-ghost">{{ ico.i('tag', 13) }} {{ post.category }}</span>{% endif %}
+    <span class="article-tags">
+      <span class="badge badge-primary badge-soft">{{ ico.i('board', 13) }} {{ board.name }}</span>
+      {% if post.category %}<span class="badge badge-ghost">{{ ico.i('tag', 13) }} {{ post.category }}</span>{% endif %}
+      {% if post.is_secret %}<span class="badge badge-ghost">{{ ico.i('lock', 12) }} 비밀글</span>{% endif %}
+    </span>
     <h1 class="card-title article-title">{{ post.title }}</h1>
     <div class="article-writer">
       <span class="avatar avatar-placeholder avatar-sm">
@@ -132,7 +136,10 @@
 </section>
 
 <div class="article-actions">
-  <a class="btn btn-outline btn-lg" href="{{ url_for('posts.index', {'key': board.board_key}) }}">목록으로 돌아가기</a>
+  <a class="btn btn-outline btn-lg" href="{{ url_for('posts.index', {'key': board.board_key}) }}">{{ ico.i('arrow-left', 16) }} {{ board.name }} 목록으로</a>
+  {% if can_write|default(false) %}
+    <a class="btn btn-primary btn-lg" href="{{ url_for('posts.create', {'key': board.board_key}) }}">{{ ico.i('pencil', 16) }} 나도 글쓰기</a>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

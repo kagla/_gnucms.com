@@ -1,0 +1,86 @@
+{% extends "layout.html.twig" %}
+{% import '_icons.html.twig' as ico %}
+{% block title %}{{ site.site_name }} · {{ site.site_tagline }}{% endblock %}
+{% block nav_section %}home{% endblock %}
+{% block body %}
+{% set recent = boards|reduce((c, b) => c + b.latest_posts|length, 0) %}
+
+<section class="hero rounded-box">
+  <div class="hero-content">
+    <div class="hero-copy">
+      <span class="badge badge-primary badge-soft">{{ ico.i('sparkle', 13) }} {{ site.site_tagline }}</span>
+      <h1>{{ site.home_title }}</h1>
+      <p>{{ site.home_intro }}</p>
+      <div class="hero-actions">
+        {% if boards is not empty %}
+          <a class="btn btn-primary btn-lg" href="{{ url_for('posts.index', {'key': boards[0].board_key}) }}">둘러보기 {{ ico.i('arrow-right', 17) }}</a>
+        {% endif %}
+        {% if current_user.is_guest and registration_available %}
+          <a class="btn btn-outline btn-lg" href="{{ url_for('auth.register') }}">회원가입</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="stats stats-vertical">
+      <div class="stat">
+        <div class="stat-figure" aria-hidden="true">{{ ico.i('board', 20) }}</div>
+        <div class="stat-title">게시판</div>
+        <div class="stat-value">{{ boards|length }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-figure" aria-hidden="true">{{ ico.i('document', 20) }}</div>
+        <div class="stat-title">최근 글</div>
+        <div class="stat-value">{{ recent }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if boards is not empty %}
+  <nav class="shortcuts" aria-label="게시판 바로가기">
+    {% for board in boards %}
+      <a class="shortcut" href="{{ url_for('posts.index', {'key': board.board_key}) }}">
+        <span class="shortcut-icon" data-tone="{{ loop.index0 % 6 }}" aria-hidden="true">{{ ico.i('board', 20) }}</span>
+        <span class="shortcut-name">{{ board.name }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+{% endif %}
+
+{% if boards is empty %}
+  <div class="card empty-card">
+    <div class="card-body">
+      <span class="empty-icon" aria-hidden="true">{{ ico.i('board', 26) }}</span>
+      <h2 class="card-title">아직 만들어진 게시판이 없습니다</h2>
+      <p>관리 콘솔에서 첫 게시판을 만들어 보세요.</p>
+      {% if not current_user.is_guest and current_user.is_admin %}
+        <div class="card-actions"><a class="btn btn-primary" href="{{ url_for('admin.boards.create') }}">{{ ico.i('plus', 16) }} 게시판 만들기</a></div>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  {% for board in boards %}
+    <section class="feed" aria-labelledby="feed-{{ board.board_key }}">
+      <div class="feed-head">
+        <div>
+          <h2 id="feed-{{ board.board_key }}">{{ board.name }}</h2>
+          <p class="feed-sub">{{ board.description ?: '새로운 이야기와 소식을 확인해 보세요.' }}</p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('posts.index', {'key': board.board_key}) }}">전체보기 {{ ico.i('chevron-right', 15) }}</a>
+      </div>
+
+      {% if board.latest_posts is empty %}
+        <div class="card empty-card empty-card-sm">
+          <div class="card-body">
+            <span class="empty-icon" aria-hidden="true">{{ ico.i('document', 22) }}</span>
+            <p>아직 등록된 글이 없습니다</p>
+          </div>
+        </div>
+      {% else %}
+        {# 홈 표시 방식은 게시판의 목록 형태 설정을 그대로 따른다.
+           값은 BoardService 가 허용 목록으로 걸러서 내려준다. #}
+        {% include ['home/_feed_' ~ board.list_type|default('list') ~ '.html.twig', 'home/_feed_list.html.twig'] %}
+      {% endif %}
+    </section>
+  {% endfor %}
+{% endif %}
+{% endblock %}

@@ -3,7 +3,7 @@
 <div class="carousel">
   {% for post in board.latest_posts %}
     <div class="carousel-item">
-      <a class="card card-compact post-card" href="{{ url_for('posts.show', {'id': post.id}) }}">
+      <a class="card post-card" href="{{ url_for('posts.show', {'id': post.id}) }}">
         {% include 'posts/_thumb.html.twig' %}
         <div class="card-body">
           <h3 class="card-title">{{ post.title }} {% include 'posts/_count.html.twig' %}</h3>

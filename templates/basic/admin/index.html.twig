@@ -3,13 +3,12 @@
 {% block title %}관리 · {{ site.site_name }}{% endblock %}
 {% block admin_section %}dashboard{% endblock %}
 {% block body %}
-<div class="admin-hello">
+<div class="page-head">
   <div>
-    <h1>{{ current_user.display_name }}님, 오늘도 반가워요</h1>
-    <p>{{ site.site_name }} 의 게시판과 내용, 회원을 이곳에서 관리합니다.</p>
+    <h1>사이트 관리</h1>
+    <p class="page-sub">사이트 내용과 커뮤니티를 복잡한 절차 없이 관리합니다.</p>
   </div>
-  <div class="admin-hello-actions">
-    <a class="btn btn-outline" href="{{ url_for('boards.index') }}">{{ ico.i('external', 15) }} 사이트 보기</a>
+  <div class="page-head-actions">
     <a class="btn btn-primary" href="{{ url_for('admin.content.create') }}">{{ ico.i('plus', 16) }} 내용 만들기</a>
   </div>
 </div>

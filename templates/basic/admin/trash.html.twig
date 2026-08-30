@@ -21,12 +21,12 @@
           <td data-label="주소"><code class="kbd kbd-sm">/content/{{ page.slug }}</code></td>
           <td data-label="삭제일">{{ page.deleted_at|date('Y.m.d H:i') }}</td>
           <td data-label="관리" class="right">
-            <div class="row-actions">
-              <form method="post" action="{{ url_for('admin.content.restore', {id: page.id}) }}">
+            <div class="join">
+              <form method="post" action="{{ url_for('admin.content.restore', {id: page.id}) }}" class="join-item">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button class="btn btn-outline btn-sm" type="submit">{{ ico.i('restore', 14) }} 복원</button>
               </form>
-              <form method="post" action="{{ url_for('admin.content.permanent_delete', {id: page.id}) }}" onsubmit="return confirm('내용과 연결된 이미지를 모두 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.')">
+              <form method="post" action="{{ url_for('admin.content.permanent_delete', {id: page.id}) }}" class="join-item" onsubmit="return confirm('내용과 연결된 이미지를 모두 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button class="btn btn-error btn-outline btn-sm" type="submit">{{ ico.i('trash', 14) }} 완전 삭제</button>
               </form>

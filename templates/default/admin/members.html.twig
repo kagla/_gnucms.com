@@ -36,9 +36,9 @@
           <td data-label="가입일">{{ member.created_at|date('Y.m.d') }}</td>
           <td data-label="상태"><span class="badge badge-sm {{ member.status == 'active' ? 'badge-success' : 'badge-error' }} badge-soft">{{ member.status == 'active' ? '활성' : '차단' }}</span></td>
           <td data-label="관리" class="right">
-            <div class="join">
-              <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.members.edit', {id: member.id}) }}">수정</a>
-              <form method="post" action="{{ url_for('admin.members.status', {id: member.id}) }}" class="join-item">
+            <div class="row-actions">
+              <a class="btn btn-outline btn-sm" href="{{ url_for('admin.members.edit', {id: member.id}) }}">수정</a>
+              <form method="post" action="{{ url_for('admin.members.status', {id: member.id}) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button class="btn btn-outline btn-sm" type="submit">{{ member.status == 'active' ? '차단' : '해제' }}</button>
               </form>

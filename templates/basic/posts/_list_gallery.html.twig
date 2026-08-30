@@ -1,7 +1,7 @@
 {# 갤러리형: 큰 썸네일 격자. 사진 게시판에 맞는다. #}
 <div class="card-grid">
   {% for post in list.data %}
-    <a class="card post-card" href="{{ url_for('posts.show', {'id': post.id}) }}">
+    <a class="card card-compact post-card" href="{{ url_for('posts.show', {'id': post.id}) }}">
       {% include 'posts/_thumb.html.twig' %}
       <div class="card-body">
         <h2 class="card-title">{{ post.title }} {% include 'posts/_count.html.twig' %}</h2>

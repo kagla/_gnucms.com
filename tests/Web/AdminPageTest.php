@@ -125,7 +125,8 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(200, $dashboard->getStatusCode());
         self::assertStringContainsString('class="admin-page"', $this->body($dashboard));
         self::assertStringNotContainsString('<body class="theme-modern">', $this->body($dashboard));
-        self::assertStringContainsString('<h1>사이트 관리</h1>', $this->body($dashboard));
+        // 기본 테마가 claude-sky(하늘빛)로 바뀌며 대시보드 제목이 인사말이 됐다.
+        self::assertStringContainsString('님, 오늘도 반가워요</h1>', $this->body($dashboard));
         self::assertStringNotContainsString('<header class="site-header">', $this->body($dashboard));
         self::assertStringContainsString('class="admin-sidebar"', $this->body($dashboard));
         self::assertStringContainsString('>관리 콘솔</strong>', $this->body($dashboard));
