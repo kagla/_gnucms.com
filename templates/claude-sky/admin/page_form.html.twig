@@ -41,29 +41,15 @@
           <input class="input input-bordered input-block" type="number" name="sort_order" value="{{ values.sort_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
         </fieldset>
       </div>
-      {# 가입 동의 항목. 키를 적으면 회원가입 화면에 이 내용이 동의 항목으로 붙는다.
-         비우면 그냥 내용이다. 개수 제한은 없다. #}
-      <div class="grid-2">
-        <fieldset class="fieldset{% if errors.consent_key is defined %} is-invalid{% endif %}">
-          <legend class="fieldset-legend">가입 동의 항목 <span class="legend-hint">비우면 그냥 내용</span></legend>
-          <input class="input input-bordered input-block" type="text" name="consent_key" value="{{ values.consent_key|default('') }}" maxlength="20" pattern="[a-z][a-z0-9_-]*" placeholder="예: marketing, location">
-          {% if errors.consent_key is defined %}<p class="validator-hint">{{ ico.i('warning', 14) }} {{ errors.consent_key }}</p>{% endif %}
-          <p class="fieldset-label">키를 적으면 회원가입 화면에 동의 항목으로 나옵니다. 공개 상태여야 붙습니다.</p>
-        </fieldset>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">동의 항목 차례 <span class="legend-hint">작을수록 위</span></legend>
-          <input class="input input-bordered input-block" type="number" name="consent_order" value="{{ values.consent_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
-        </fieldset>
-      </div>
       <fieldset class="fieldset toggle-list">
         <label class="label toggle-row">
           <input class="toggle toggle-primary" type="checkbox" name="show_in_menu" value="1"{{ values.show_in_menu|default(false) ? ' checked' : '' }}>
           <span><strong>상단 메뉴에 표시</strong></span>
         </label>
-        {# 마케팅 수신처럼 안 해도 가입되는 항목은 이 체크를 푼다. 동의 여부는 어느 쪽이든 남는다. #}
+        {# 켜면 약관 관리 목록으로 옮겨간다. 어디에 붙일지·필수인지는 거기서 정한다. #}
         <label class="label toggle-row">
-          <input class="toggle toggle-primary" type="checkbox" name="consent_required" value="1"{{ (values.consent_required is defined ? values.consent_required : 1) ? ' checked' : '' }}>
-          <span><strong>가입할 때 반드시 동의</strong><small>풀면 선택 동의가 됩니다. 안 해도 가입은 됩니다.</small></span>
+          <input class="toggle toggle-primary" type="checkbox" name="is_consent" value="1"{{ (values.is_consent is defined ? values.is_consent : 0) ? ' checked' : '' }}>
+          <span><strong>이 내용은 약관이다</strong><small>켜면 동의 항목으로 고를 수 있게 됩니다.</small></span>
         </label>
       </fieldset>
       <div class="card-actions form-actions">

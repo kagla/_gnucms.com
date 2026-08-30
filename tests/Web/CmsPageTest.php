@@ -229,4 +229,46 @@ final class CmsPageTest extends WebTestCase
         self::assertFileDoesNotExist($storedImage, '완전 삭제하면 콘텐츠 전용 폴더의 이미지도 삭제해야 한다.');
         @rmdir($editorRoot);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testConsentToggleRoundTrip(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '소유자', true);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com', 'password' => 'owner-password-123',
+        ]);
+
+        $createForm = $this->body($this->get($app, '/admin/content/new'));
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $createForm, $keyMatch));
+        $imageKey = $keyMatch[1];
+
+        $created = $this->post($app, '/admin/content/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'refund-policy', 'title' => '환불 규정',
+            'content' => '<p>환불 규정 내용입니다.</p>', 'status' => 'published', 'show_in_menu' => '1',
+            'sort_order' => '0', 'image_key' => $imageKey, 'is_consent' => '1',
+        ]);
+        self::assertSame(303, $created->getStatusCode());
+
+        $saved = $app->cms()->findPublishedBySlug('refund-policy');
+        self::assertSame(1, (int) $saved['is_consent']);
+
+        $acl = $app->guestAcl();
+        self::assertNotContains('refund-policy', array_column($app->cmsService()->contents($acl), 'slug'));
+        self::assertContains('refund-policy', array_column($app->cmsService()->consentPages($acl), 'slug'));
+
+        // 옛 테마 폼처럼 is_consent 칸이 아예 없는 채로 수정 요청을 보내도 값이 지워지면 안 된다.
+        $edited = $this->post($app, '/admin/content/' . $saved['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'refund-policy', 'title' => '환불 규정 (수정)',
+            'content' => '<p>환불 규정 내용을 고쳤습니다.</p>', 'status' => 'published', 'show_in_menu' => '1',
+            'sort_order' => '0', 'image_key' => $imageKey,
+        ]);
+        self::assertSame(303, $edited->getStatusCode());
+
+        $afterEdit = $app->cms()->findPageById((int) $saved['id']);
+        self::assertSame('환불 규정 (수정)', $afterEdit['title']);
+        self::assertSame(1, (int) $afterEdit['is_consent'], '옛 테마 폼처럼 is_consent 를 보내지 않아도 값이 남아야 한다.');
+    }
 }
