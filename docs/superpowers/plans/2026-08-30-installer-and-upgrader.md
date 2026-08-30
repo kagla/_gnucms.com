@@ -2576,7 +2576,7 @@ J="$S/cookies.txt"; U=http://127.0.0.1:8099
 curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' $U/                       # 302 → /install.php
 curl -s -c $J -b $J $U/install.php?step=1 | grep -o '<h1>[^<]*' ; curl -s -c $J -b $J -X POST -o /dev/null -w '%{http_code} %{redirect_url}\n' $U/install.php?step=1
 curl -s -c $J -b $J -X POST -o /dev/null -w '%{http_code} %{redirect_url}\n' --data-urlencode type=sqlite --data-urlencode sqlite_path=$S/storage/board.sqlite "$U/install.php?step=2"
-curl -s -c $J -b $J -X POST -o /dev/null -w '%{http_code} %{redirect_url}\n' --data-urlencode '사이트 이름=x' --data-urlencode site_name=설치시험 --data-urlencode app_url=http://127.0.0.1:8099 --data-urlencode mail_from=no-reply@example.com "$U/install.php?step=3"
+curl -s -c $J -b $J -X POST -o /dev/null -w '%{http_code} %{redirect_url}\n' --data-urlencode site_name=설치시험 --data-urlencode app_url=http://127.0.0.1:8099 --data-urlencode mail_from=no-reply@example.com "$U/install.php?step=3"
 curl -s -c $J -b $J -X POST -o /dev/null -w '%{http_code} %{redirect_url}\n' --data-urlencode email=owner@example.com --data-urlencode display_name=사이트지기 --data-urlencode password=secret-pass-123 --data-urlencode password_confirmation=secret-pass-123 "$U/install.php?step=4"
 curl -s -c $J -b $J $U/install.php?step=5 | grep -o '<dd>[^<]*' 
 curl -s -c $J -b $J -X POST $U/install.php?step=5 | grep -o '설치가 끝났습니다\|스스로 삭제\|지우지 못했습니다'
