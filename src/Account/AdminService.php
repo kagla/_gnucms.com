@@ -86,6 +86,9 @@ final class AdminService
         $v = new Validator($input);
         $email = strtolower($v->requiredString('email', 191));
         $displayName = $v->requiredString('display_name', 100);
+        if ($displayName !== '' && $this->users->findByDisplayName($displayName, $id) !== null) {
+            $v->fail('display_name', '이미 쓰고 있는 이름입니다. 다른 이름을 골라 주세요.');
+        }
         $status = $v->inList('status', ['active', 'blocked'], 'active');
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             $v->fail('email', '올바른 이메일 주소를 입력해 주세요.');

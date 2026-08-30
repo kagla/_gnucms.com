@@ -224,4 +224,5 @@ final class AccountServiceTest extends DatabaseTestCase
 
         return rawurldecode($matches[1]);
     }
+
 }

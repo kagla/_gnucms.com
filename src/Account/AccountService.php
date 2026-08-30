@@ -176,6 +176,9 @@ final class AccountService
         }
         $v = new Validator($input);
         $displayName = $v->requiredString('display_name', 100);
+        if ($displayName !== '' && $this->users->findByDisplayName($displayName, $userId) !== null) {
+            $v->fail('display_name', '이미 쓰고 있는 이름입니다. 다른 이름을 골라 주세요.');
+        }
         $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
         if ($password !== '') {
             $current = isset($input['current_password']) && is_scalar($input['current_password'])

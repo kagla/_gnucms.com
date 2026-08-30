@@ -51,6 +51,39 @@ final class UserRepository
         ]);
     }
 
+    /** 표시 이름으로 찾는다. 대소문자는 가리지 않는다. $exceptId 는 본인을 제외할 때 쓴다. */
+    public function findByDisplayName(string $displayName, ?int $exceptId = null): ?array
+    {
+        $sql = 'SELECT id, email, display_name FROM ' . $this->db->q('users')
+            . ' WHERE LOWER(display_name) = LOWER(?)';
+        $params = [$displayName];
+        if ($exceptId !== null) {
+            $sql .= ' AND id <> ?';
+            $params[] = $exceptId;
+        }
+        return $this->db->selectOne($sql . ' LIMIT 1', $params);
+    }
+
+    /**
+     * 겹치지 않는 표시 이름. 가입 때 이메일 앞부분으로 이름을 지어 주는데, 같은 앞부분이
+     * 흔해서(kagla@a.com, kagla@b.com) 그대로 두면 겹친다. 뒤에 2, 3, … 을 붙여 비켜 간다.
+     */
+    public function uniqueDisplayName(string $base): string
+    {
+        $base = mb_substr(trim($base) === '' ? '회원' : trim($base), 0, 100);
+        if ($this->findByDisplayName($base) === null) {
+            return $base;
+        }
+        for ($n = 2; $n < 10000; $n++) {
+            $suffix = (string) $n;
+            $candidate = mb_substr($base, 0, 100 - mb_strlen($suffix)) . $suffix;
+            if ($this->findByDisplayName($candidate) === null) {
+                return $candidate;
+            }
+        }
+        return mb_substr($base, 0, 100 - 13) . bin2hex(random_bytes(6));
+    }
+
     public function createRegistered(string $email, string $passwordHash, string $displayName): int
     {
         return $this->db->transaction(function () use ($email, $passwordHash, $displayName): int {
@@ -60,7 +93,7 @@ final class UserRepository
                 ['1', 'first_admin_claimed', '0']
             ) === 1;
 
-            $id = $this->create($email, $passwordHash, $displayName, $isFirst);
+            $id = $this->create($email, $passwordHash, $this->uniqueDisplayName($displayName), $isFirst);
             if ($isFirst) {
                 $this->verifyEmail($id);
             }
@@ -82,7 +115,7 @@ final class UserRepository
                 'email' => $email,
                 'email_verified' => 1,
                 'password_hash' => null,
-                'display_name' => $displayName,
+                'display_name' => $this->uniqueDisplayName($displayName),
                 'is_admin' => $isFirst ? 1 : 0,
                 'status' => 'active',
                 'session_epoch' => 0,

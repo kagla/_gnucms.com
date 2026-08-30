@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Web;
 
+use GnuCms\Auth\Acl;
+use GnuCms\Auth\Identity;
+use GnuCms\Error\DomainError;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -77,4 +80,37 @@ final class AccountPageTest extends WebTestCase
         self::assertDoesNotMatchRegularExpression('#class="[^"]*user-menu"[^>]*>(?:(?!</ul>).)*/terms/#s', $body, '프로필 메뉴에 약관이 있으면 안 된다');
         self::assertStringContainsString('/terms/service', $body, '약관은 하단에는 그대로 있어야 한다');
     }
+    /** 표시 이름은 겹치지 않는다. 가입 때 자동으로 지은 이름이 겹치면 숫자를 붙이고, 직접 고를 때 겹치면 막는다. */
+    #[DataProvider('connectionProvider')]
+    public function testDisplayNamesAreUnique(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $users = $app->users();
+        $a = $users->createRegistered('kagla@a.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'kagla');
+        $b = $users->createRegistered('kagla@b.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'kagla');
+        $c = $users->createSocial('kagla@c.example', 'Kagla');
+        self::assertSame('kagla', $users->findById($a)['display_name']);
+        self::assertSame('kagla2', $users->findById($b)['display_name']);
+        self::assertSame('Kagla3', $users->findById($c)['display_name'], '대소문자만 다른 이름도 겹친 것으로 본다');
+
+        try {
+            $app->accountService()->updateProfile($b, ['display_name' => 'KAGLA']);
+            self::fail('남이 쓰는 이름으로는 못 바꾼다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('display_name', $e->details());
+        }
+        // 자기 이름을 그대로 두는 것은 겹침이 아니다.
+        $app->accountService()->updateProfile($b, ['display_name' => 'kagla2']);
+        self::assertSame('kagla2', $users->findById($b)['display_name']);
+
+        try {
+            $app->adminService()->updateMember(new Acl(Identity::user('1', '관리자', true)), $c, [
+                'email' => 'kagla@c.example', 'display_name' => 'kagla', 'status' => 'active',
+            ]);
+            self::fail('관리자도 남이 쓰는 이름으로는 못 바꾼다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('display_name', $e->details());
+        }
+    }
+
 }

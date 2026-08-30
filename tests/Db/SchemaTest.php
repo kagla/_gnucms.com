@@ -219,4 +219,27 @@ final class SchemaTest extends WebTestCase
             'updated_at'   => '2026-08-26 01:02:03',
         ];
     }
+    /** 옛 설치에 겹치는 표시 이름이 있으면 마이그레이션이 숫자를 붙여 갈라 놓고 고유 인덱스를 건다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrationDeduplicatesDisplayNames(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $db = $app->db();
+        $db->execute('DROP INDEX IF EXISTS ' . $db->q('ux_users_display_name'));
+        foreach (['a@example.com', 'b@example.com', 'c@example.com'] as $email) {
+            $db->insert('users', [
+                'email' => $email, 'email_verified' => 1, 'password_hash' => 'x', 'display_name' => '홍길동',
+                'is_admin' => 0, 'status' => 'active', 'session_epoch' => 0,
+                'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+            ]);
+        }
+        $db->execute('UPDATE ' . $db->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'schema_version']);
+
+        (new Schema($db))->ensureCurrent();
+
+        $names = array_column($db->select('SELECT display_name FROM ' . $db->q('users') . ' ORDER BY id ASC'), 'display_name');
+        self::assertSame(['홍길동', '홍길동2', '홍길동3'], $names);
+        self::assertNotNull($app->users()->findByDisplayName('홍길동2'));
+    }
+
 }

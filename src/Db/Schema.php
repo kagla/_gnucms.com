@@ -46,7 +46,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '9';
+    public const VERSION = '10';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -92,6 +92,7 @@ final class Schema
     public function migrateAll(): void
     {
         $this->migrateAccounts();
+        $this->migrateDisplayNames();
         // 표 이름을 먼저 옮겨야 migrateCms() 가 빈 표를 새로 만들지 않는다.
         $this->migrateContentTableName();
         $this->migrateCms();
@@ -484,6 +485,7 @@ final class Schema
         return array_merge([
             $this->usersTableStatement(),
             'CREATE UNIQUE INDEX ux_users_email ON users (email)',
+            'CREATE UNIQUE INDEX ux_users_display_name ON users (display_name)',
         ], $this->tokenStatements(), $this->identityStatements(), $this->stateStatements(false));
     }
 
@@ -766,6 +768,43 @@ final class Schema
         ];
     }
 
+    /**
+     * 표시 이름을 고유하게 만든다. 이미 겹치는 이름은 나중 가입자부터 뒤에 2, 3, … 을 붙인 뒤
+     * 고유 인덱스를 건다. 앱은 대소문자를 가리지 않고 막고, 인덱스는 같은 글자의 중복을 막는 뒷문이다.
+     */
+    private function migrateDisplayNames(): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+        } catch (DomainError $e) {
+            return;
+        }
+        $rows = $this->db->select('SELECT id, display_name FROM ' . $this->db->q('users') . ' ORDER BY id ASC');
+        $seen = [];
+        foreach ($rows as $row) {
+            $name = (string) $row['display_name'];
+            $key = mb_strtolower($name);
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                continue;
+            }
+            for ($n = 2; ; $n++) {
+                $candidate = mb_substr($name, 0, 100 - mb_strlen((string) $n)) . $n;
+                if (!isset($seen[mb_strtolower($candidate)])) {
+                    break;
+                }
+            }
+            $seen[mb_strtolower($candidate)] = true;
+            $this->db->execute('UPDATE ' . $this->db->q('users') . ' SET display_name = ? WHERE id = ?',
+                [$candidate, (int) $row['id']]);
+        }
+        try {
+            $this->db->execute('CREATE UNIQUE INDEX ux_users_display_name ON ' . $this->db->q('users') . ' (display_name)');
+        } catch (DomainError $e) {
+            // 이미 있으면 그대로 둔다
+        }
+    }
+
     private function migrateFirstAdminState(): void
     {
         try {
@@ -835,6 +874,7 @@ final class Schema
             $this->db->execute('INSERT INTO users (' . $columns . ') SELECT ' . $columns . ' FROM users_before_oauth');
             $this->db->execute('DROP TABLE users_before_oauth');
             $this->db->execute('CREATE UNIQUE INDEX ux_users_email ON users (email)');
+            $this->db->execute('CREATE UNIQUE INDEX ux_users_display_name ON users (display_name)');
         });
     }
 }
