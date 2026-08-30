@@ -102,7 +102,7 @@ daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 compo
 
 `admin/layout.php` 가 사이드바(`admin/_sidebar.php`)와 상단 띠를 그리고, 각 화면은
 `admin_section` 블록으로 사이드바의 활성 항목을 알린다 (`dashboard`, `members`, `boards`,
-`content`, `legal`, `site`, `mail`, `security`). 화면 파일은 `admin/*.php` 다.
+`content`, `legal`, `site`, `mail`). 화면 파일은 `admin/*.php` 다.
 
 ## 9. 게시판 목록 형태 (list_type)
 

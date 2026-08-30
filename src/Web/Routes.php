@@ -47,8 +47,6 @@ final class Routes
 
         $admin = new AdminController($app);
         $slim->get('/admin', [$admin, 'index'])->setName('admin.index');
-        $slim->get('/admin/password', [$admin, 'passwordForm'])->setName('admin.password');
-        $slim->post('/admin/password', [$admin, 'password']);
         $slim->get('/admin/posts', [$admin, 'posts'])->setName('admin.posts');
         $slim->get('/admin/boards', [$admin, 'boards'])->setName('admin.boards');
         $slim->get('/admin/boards/new', [$admin, 'createForm'])->setName('admin.boards.create');

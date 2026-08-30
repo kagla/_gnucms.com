@@ -28,8 +28,6 @@
         <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></span>
       </span>
       <span class="admin-user-name"><?= $this->e($current_user['display_name']) ?></span>
-      <?php // 계정 보안은 메뉴를 차지할 만큼 자주 쓰지 않는다. 로그아웃 옆에 아이콘으로만 둔다. ?>
-      <a class="btn btn-ghost btn-square btn-sm<?php if ($section === 'security'): ?> menu-active<?php endif ?>" href="<?= $this->url('admin.password') ?>" aria-label="계정 보안" title="계정 보안"><?= $this->icon('shield', 17) ?></a>
       <form method="post" action="<?= $this->url('auth.logout') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <button class="btn btn-ghost btn-square btn-sm" type="submit" aria-label="로그아웃" title="로그아웃"><?= $this->icon('logout', 17) ?></button>

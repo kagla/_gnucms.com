@@ -6,7 +6,7 @@
 <section class="card">
   <div class="card-body">
     <h1 class="card-title">회원 수정</h1>
-    <p class="card-sub">로그인 이메일과 화면에 표시할 이름, 이용 상태를 관리합니다.</p>
+    <p class="card-sub">로그인 이메일과 표시 이름, 비밀번호, 이용 상태를 관리합니다. 관리자 자신의 비밀번호도 여기서 바꿉니다.</p>
     <form method="post" action="<?= $this->url('admin.members.edit', ['id' => $values['id']]) ?>">
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
       <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">
@@ -19,6 +19,18 @@
         <input class="input input-bordered input-block" type="text" name="display_name" value="<?= $this->e($values['display_name'] ?? '') ?>" maxlength="100" required>
         <?php if (array_key_exists('display_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['display_name']) ?></p><?php endif ?>
       </fieldset>
+      <div class="grid-2">
+        <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">새 비밀번호 <span class="legend-hint">비워 두면 그대로</span></legend>
+          <input class="input input-bordered input-block" type="password" name="password" minlength="8" autocomplete="new-password">
+          <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
+        </fieldset>
+        <fieldset class="fieldset<?php if (array_key_exists('password_confirmation', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">새 비밀번호 확인</legend>
+          <input class="input input-bordered input-block" type="password" name="password_confirmation" minlength="8" autocomplete="new-password">
+          <?php if (array_key_exists('password_confirmation', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password_confirmation']) ?></p><?php endif ?>
+        </fieldset>
+      </div>
       <fieldset class="fieldset<?php if (array_key_exists('status', $errors)): ?> is-invalid<?php endif ?>">
         <legend class="fieldset-legend">이용 상태</legend>
         <select class="select select-bordered select-block" name="status">

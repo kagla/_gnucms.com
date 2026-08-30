@@ -100,11 +100,6 @@ final class AdminController
         ]);
     }
 
-    public function passwordForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
-    {
-        $this->app->guestAcl()->assertGlobalAdmin();
-        return View::fromRequest($request)->render($response, 'admin/password', ['errors' => []]);
-    }
 
     public function memberEditForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
@@ -120,6 +115,15 @@ final class AdminController
         $member = $this->app->adminService()->member($this->app->guestAcl(), $id);
         try {
             $this->app->adminService()->updateMember($this->app->guestAcl(), $id, $input);
+            // 내 비밀번호를 바꾸면 session_epoch 가 올라가 지금 세션도 끊긴다. 방금 바꾼 사람은
+            // 그대로 두고, 다른 기기만 끊기게 세션의 epoch 를 새 값으로 맞춘다.
+            $me = (string) $this->app->guestAcl()->identity()->sub() === (string) $id;
+            if ($me && isset($input['password']) && is_scalar($input['password']) && (string) $input['password'] !== '') {
+                $fresh = $this->app->users()->findById($id);
+                if ($fresh !== null) {
+                    $_SESSION['session_epoch'] = (int) $fresh['session_epoch'];
+                }
+            }
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -134,26 +138,6 @@ final class AdminController
         return $this->redirect($request, $response, 'admin.members', ['saved' => '1']);
     }
 
-    public function password(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
-    {
-        $input = $this->input($request);
-        $this->assertCsrf($input);
-        $acl = $this->app->guestAcl();
-        $acl->assertGlobalAdmin();
-        try {
-            $this->app->accountService()->changePassword((int) $acl->identity()->sub(), $input);
-        } catch (DomainError $e) {
-            if ($e->status() !== 422) {
-                throw $e;
-            }
-            return View::fromRequest($request)->render($response->withStatus(422), 'admin/password', [
-                'errors' => $e->details(),
-            ]);
-        }
-        unset($_SESSION['user_id'], $_SESSION['session_epoch']);
-        session_regenerate_id(true);
-        return View::fromRequest($request)->render($response, 'admin/password_done');
-    }
 
     public function toggleStatus(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {

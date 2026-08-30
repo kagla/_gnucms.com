@@ -12,6 +12,8 @@ use GnuCms\Validation\Validator;
 
 final class AdminService
 {
+    private const PASSWORD_MIN = 8;
+
     private Connection $db;
     private UserRepository $users;
     private BoardService $boards;
@@ -98,8 +100,24 @@ final class AdminService
             && $this->users->countAdmins() <= 1) {
             $v->fail('status', '마지막 관리자는 차단할 수 없습니다.');
         }
+        // 새 비밀번호는 비워 두면 그대로다. 적었으면 두 칸이 같고 길이가 맞아야 한다.
+        $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
+        $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
+            ? (string) $input['password_confirmation'] : '';
+        if ($password !== '') {
+            if (mb_strlen($password) < self::PASSWORD_MIN) {
+                $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
+            }
+            if ($password !== $confirmation) {
+                $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
+            }
+        }
         $v->check();
         $this->users->updateForAdmin($id, $email, $displayName, $status);
+        if ($password !== '') {
+            // 비밀번호가 바뀌면 다른 기기의 세션은 끊긴다(session_epoch 증가).
+            $this->users->updatePassword($id, password_hash($password, PASSWORD_DEFAULT));
+        }
     }
 
     public function toggleStatus(Acl $acl, int $id): void

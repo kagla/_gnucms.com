@@ -202,4 +202,54 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('마케팅 정보 수신', $body);
         self::assertStringContainsString('안 함', $body);
     }
+    /** 관리자 자신의 비밀번호도 회원 수정에서 바꾼다. 바꾼 뒤에도 지금 세션은 살아 있어야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testAdminChangesOwnPasswordFromMemberForm(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com',
+            password_hash('admin-password-123', PASSWORD_DEFAULT),
+            '관리자',
+            true
+        );
+        $app->users()->verifyEmail($adminId);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        // 비워 두면 비밀번호는 그대로다.
+        $kept = $this->post($app, '/admin/members/' . $adminId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'display_name' => '관리자', 'status' => 'active', 'password' => '', 'password_confirmation' => '',
+        ]);
+        self::assertSame(303, $kept->getStatusCode());
+        self::assertTrue(password_verify('admin-password-123', (string) $app->users()->findById($adminId)['password_hash']));
+
+        // 확인 칸이 다르면 막힌다.
+        $mismatch = $this->post($app, '/admin/members/' . $adminId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'display_name' => '관리자', 'status' => 'active',
+            'password' => 'new-password-456', 'password_confirmation' => 'other',
+        ]);
+        self::assertSame(422, $mismatch->getStatusCode());
+        self::assertStringContainsString('비밀번호가 일치하지 않습니다', $this->body($mismatch));
+
+        // 제대로 바꾸면 새 비밀번호가 들어가고, 지금 세션은 끊기지 않는다.
+        $changed = $this->post($app, '/admin/members/' . $adminId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'display_name' => '관리자', 'status' => 'active',
+            'password' => 'new-password-456', 'password_confirmation' => 'new-password-456',
+        ]);
+        self::assertSame(303, $changed->getStatusCode(), $this->body($changed));
+        self::assertTrue(password_verify('new-password-456', (string) $app->users()->findById($adminId)['password_hash']));
+        self::assertSame(200, $this->get($app, '/admin')->getStatusCode(), '내 비밀번호를 바꿔도 지금 세션은 살아 있어야 한다');
+
+        // 옛 화면은 없다.
+        self::assertSame(404, $this->get($app, '/admin/password')->getStatusCode());
+    }
+
 }
