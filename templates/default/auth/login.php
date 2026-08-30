@@ -37,9 +37,9 @@
           <legend class="fieldset-legend">비밀번호</legend>
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('lock', 16) ?></span>
-            <?php // 저장된 비밀번호를 브라우저가 알아서 채우지 않게 한다. autocomplete="off" 는 비밀번호 칸에서
-                  // 무시되지만 new-password 는 "새로 정하는 칸" 으로 보아 저장된 값을 넣지 않는다. 직접 쳐야 한다. ?>
-            <input type="password" name="password" autocomplete="new-password" required>
+            <?php // current-password 여야 브라우저가 저장해 둔 계정을 보여 주고 채워 준다.
+                  // 자동 채우기를 막고 싶으면 new-password 로 바꾸면 되지만, 그러면 저장된 계정도 안 나온다. ?>
+            <input type="password" name="password" autocomplete="current-password" required>
             <?php $this->insert('auth/_pw_toggle') ?>
           </label>
         </fieldset>
