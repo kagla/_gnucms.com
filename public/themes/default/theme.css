@@ -1635,3 +1635,18 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .schema-facts dd { margin: 0; font-weight: 600; }
 .schema-stamp { font-weight: 400; font-size: .75rem; opacity: .6; }
 .schema-note { font-size: .875rem; opacity: .75; margin-top: .75rem; }
+
+/* 글쓰기 폼의 첨부 목록 */
+.attach-box { margin-top: 1rem; }
+.attach-zone { display: flex; align-items: center; gap: .75rem; padding: .9rem 1rem; border: 1.5px dashed color-mix(in oklch, currentColor 25%, transparent); border-radius: .75rem; }
+.attach-zone.is-over { border-color: var(--color-primary, #2f7fe0); background: color-mix(in oklch, var(--color-primary, #2f7fe0) 8%, transparent); }
+.attach-zone p { margin: 0; font-size: .875rem; opacity: .7; }
+.attach-list { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.attach-row { display: flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border: 1px solid color-mix(in oklch, currentColor 12%, transparent); border-radius: .5rem; background: color-mix(in oklch, currentColor 3%, transparent); }
+.attach-row.is-dragging { opacity: .5; }
+.attach-row.is-failed .attach-size { color: var(--color-error, #d92d20); }
+.attach-grip { cursor: grab; opacity: .5; }
+.attach-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .875rem; }
+.attach-size { font-size: .75rem; opacity: .6; white-space: nowrap; }
+.attach-tools { display: flex; gap: .1rem; }
+.attach-error { color: var(--color-error, #d92d20); }

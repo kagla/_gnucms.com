@@ -61,12 +61,19 @@ final class PostController
         $id = (int) $args['id'];
         $loaded = $this->app->postService()->loadForRead($acl, $id, null);
 
+        $attachments = [];
+        foreach ($loaded['post']['attachments'] as $stored) {
+            // 저장본에는 서명이 없다. 폼이 다시 제출할 수 있게 여기서 붙인다.
+            $attachments[] = $this->app->attachments()->withSignature($stored);
+        }
+
         return $this->renderEditForm($request, $response, $id, [
             'title'     => $loaded['post']['title'],
             'content'   => $loaded['post']['content'],
             'category'  => $loaded['post']['category'],
             'is_secret' => (bool) $loaded['post']['is_secret'],
             'image_key' => (string) ($loaded['post']['image_key'] ?? '') ?: bin2hex(random_bytes(16)),
+            'attachments' => $attachments,
         ], []);
     }
 
