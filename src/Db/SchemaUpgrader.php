@@ -14,6 +14,8 @@ use Throwable;
  * 순서: 도장 비교 → 최근 실패면 건너뜀 → 파일 잠금 → 백업(SQLite) → migrateAll → 기록.
  * 실패하면 도장을 찍지 않고 upgrade-failed.json 을 남긴 뒤 MaintenanceRequired 를 던진다.
  * 그 파일이 RETRY_AFTER_SECONDS 안이면 다시 시도하지 않고 바로 점검 화면으로 보낸다.
+ * 그 뒤 재시도할 때는 표식에 실패 당시의 도장(stamp)도 같이 적어 두고, 지금 도장과
+ * 같을 때만 그 백업을 재사용한다 — 다르면(그 사이 판이 또 바뀜) 남의 백업이므로 새로 뜬다.
  */
 final class SchemaUpgrader
 {
@@ -89,8 +91,11 @@ final class SchemaUpgrader
                 // 실패 뒤 재시도라면, 그 실패 이전의 원본 스냅숏을 그대로 쓴다.
                 // 매번 새로 VACUUM 하면 5개까지만 남기는 정리 때문에 다섯 번
                 // 재시도한 뒤에는 첫 시도 이전의 깨끗한 백업이 사라진다.
+                // 단, 그 표식이 지금 판(도장)에서 실패했을 때 남긴 것이어야 한다.
+                // 도장이 다르면(예: 그 사이 다른 배포로 판이 또 바뀜) 남의 백업을
+                // 쓰는 셈이라 새로 뜬다.
                 $reusable = $failed['backup'] ?? null;
-                if (is_string($reusable) && $reusable !== '' && is_file($reusable)) {
+                if (is_string($reusable) && $reusable !== '' && is_file($reusable) && ($failed['stamp'] ?? null) === $stored) {
                     $backup = $reusable;
                 } else {
                     $backup = $this->backup($stored);
@@ -101,7 +106,7 @@ final class SchemaUpgrader
                 @unlink($this->failurePath());
             } catch (Throwable $e) {
                 ($this->log)('[schema-upgrade] ' . get_class($e) . ': ' . $e->getMessage());
-                $this->writeFailure($e->getMessage(), $backup);
+                $this->writeFailure($e->getMessage(), $backup, $stored);
                 throw new MaintenanceRequired(MaintenanceRequired::FAILED, $backup, $e);
             }
         } finally {
@@ -179,7 +184,7 @@ final class SchemaUpgrader
         return $this->storageDir . '/upgrade-failed.json';
     }
 
-    /** @return array{at: int, message: string, backup: ?string}|null */
+    /** @return array{at: int, message: string, backup: ?string, stamp: ?string}|null */
     private function readFailure(): ?array
     {
         if (!is_file($this->failurePath())) {
@@ -190,11 +195,12 @@ final class SchemaUpgrader
         return is_array($data) ? $data : null;
     }
 
-    private function writeFailure(string $message, ?string $backup): void
+    /** $stamp 는 실패 당시 storedStamp() — 재시도 때 같은 판인지 맞춰 보는 도장이다. */
+    private function writeFailure(string $message, ?string $backup, ?string $stamp): void
     {
         $wrote = @file_put_contents(
             $this->failurePath(),
-            json_encode(['at' => time(), 'message' => $message, 'backup' => $backup], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            json_encode(['at' => time(), 'message' => $message, 'backup' => $backup, 'stamp' => $stamp], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             LOCK_EX
         );
         if ($wrote === false) {

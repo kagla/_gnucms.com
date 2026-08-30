@@ -162,7 +162,7 @@ final class SchemaUpgraderTest extends TestCase
         mkdir($this->storage . '/backups', 0775, true);
         $existing = $this->storage . '/backups/board-v9-20260101-000000.sqlite';
         touch($existing);
-        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing]));
+        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing, 'stamp' => '9.oldhash']));
 
         try {
             $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
@@ -175,6 +175,28 @@ final class SchemaUpgraderTest extends TestCase
         $files = glob($this->storage . '/backups/*.sqlite') ?: [];
         self::assertCount(1, $files);
         self::assertSame($existing, $files[0]);
+    }
+
+    public function testRetryIgnoresBackupTakenAtAnotherStamp(): void
+    {
+        $this->setStoredStamp('9.oldhash');
+        mkdir($this->storage . '/backups', 0775, true);
+        $existing = $this->storage . '/backups/board-v8-20260101-000000.sqlite';
+        touch($existing);
+        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing, 'stamp' => '8.older']));
+
+        try {
+            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
+            self::fail('MaintenanceRequired 가 나와야 한다');
+        } catch (MaintenanceRequired $e) {
+            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
+            self::assertNotNull($e->backup());
+            self::assertNotSame($existing, $e->backup());
+            self::assertMatchesRegularExpression('~/board-v9-\d{8}-\d{6}\.sqlite$~', (string) $e->backup());
+        }
+
+        $files = glob($this->storage . '/backups/*.sqlite') ?: [];
+        self::assertCount(2, $files);
     }
 
     public function testRetryTakesNewBackupWhenMarkerBackupIsGone(): void
