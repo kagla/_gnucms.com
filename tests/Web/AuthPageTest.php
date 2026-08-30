@@ -81,21 +81,19 @@ final class AuthPageTest extends WebTestCase
         $app->users()->verifyEmail($ownerId);
 
         self::assertSame(403, $this->get($app, '/register')->getStatusCode());
+        $ids = [];
         foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
-            $id = $app->cms()->createPage([
+            $ids[$legal[0]] = $app->cms()->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
-                // 약관이라는 표시. 옛 화면(가입 폼 템플릿)은 아직 옛 칸으로 이름과 필수
-                // 여부를 읽으므로 함께 채워 둔다.
-                'is_consent' => 1, 'consent_key' => $legal[0], 'consent_order' => $order,
-                'consent_required' => 1,
+                'is_consent' => 1,
             ]);
-            $app->consentUses()->attach('signup', $id, true, $order);
+            $app->consentUses()->attach('signup', $ids[$legal[0]], true, $order);
         }
 
         $form = $this->body($this->get($app, '/register'));
-        self::assertStringContainsString('name="agree_terms"', $form);
-        self::assertStringContainsString('name="agree_privacy"', $form);
+        self::assertStringContainsString('name="agree_' . $ids['terms'] . '"', $form);
+        self::assertStringContainsString('name="agree_' . $ids['privacy'] . '"', $form);
         self::assertStringContainsString('href="/content/terms"', $form);
         self::assertStringContainsString('href="/content/privacy"', $form);
         self::assertSame(200, $this->get($app, '/content/terms')->getStatusCode());
@@ -105,20 +103,15 @@ final class AuthPageTest extends WebTestCase
             'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
         ]);
         self::assertSame(422, $response->getStatusCode());
-        // 검증 오류는 이제 agree_{id} 로 나오는데, 폼은 아직 agree_{consent_key} 를
-        // 읽는다(6과제에서 맞춘다). 그래서 안내 문구는 화면에 안 뜬다 — 대신 가입이
-        // 실제로 막혔는지(회원이 안 생겼는지)로 검증한다.
+        // 검증 오류와 폼 칸이 모두 agree_{id} 로 맞춰져(6과제) 안내 문구가 다시 뜬다.
+        self::assertStringContainsString('동의해야 가입할 수 있습니다', $this->body($response));
         self::assertNull($app->users()->findByEmail('member@example.com'));
     }
 
     /**
      * 선택 항목은 가입을 막지 않는다. 동의하지 않았다는 사실과 증적이 함께 남는다.
-     *
-     * 브리프 1단계 원안은 GET /register 화면에 name="agree_{id}" 가 뜨는지도 함께
-     * 본다. 하지만 가입 폼(auth/_consents.html.twig)은 6과제에서야 consent_key 를
-     * 내용 id 로 바꾸므로, 그 단언은 지금 넣으면 항상 실패한다. 여기서는 서비스
-     * 계층(AccountService::register()) 을 직접 불러 검증 차단·선택 기록·증적을
-     * 확인하고, 폼 마크업 단언은 6과제 몫으로 남긴다.
+     * 화면(auth/_consents.html.twig)도 이제 내용 id 로 칸 이름을 만들고 선택 항목에
+     * '선택' 배지를 붙이므로, 폼 마크업까지 함께 확인한다.
      */
     #[DataProvider('connectionProvider')]
     public function testOptionalConsentDoesNotBlockSignupAndTraceIsRecorded(array $dbConfig): void
@@ -147,6 +140,10 @@ final class AuthPageTest extends WebTestCase
             ]);
             $app->consentUses()->attach('signup', $ids[$doc[0]], $doc[2], $doc[3]);
         }
+
+        $form = $this->body($this->get($app, '/register'));
+        self::assertStringContainsString('name="agree_' . $ids['marketing'] . '"', $form);
+        self::assertStringContainsString('선택', $form);
 
         // 필수(terms) 를 체크하지 않으면 가입 자체가 막힌다.
         try {
