@@ -758,15 +758,22 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   content:"";position:absolute;inset:0;pointer-events:none;
   border-radius:inherit;border:var(--border) solid var(--bc-10);
 }
-.hero-content{display:flex;align-items:center;justify-content:space-between;gap:2rem;flex-wrap:wrap;padding:2.75rem 2.25rem}
-.hero-copy{max-width:42rem;min-width:0}
+.hero-content{display:flex;align-items:center;justify-content:space-between;gap:1.5rem 2.5rem;flex-wrap:wrap;padding:1.75rem 2rem}
+.hero-copy{flex:1 1 22rem;max-width:36rem;min-width:0}
+/* 히어로 오른쪽의 사실 네 줄. 숫자 카드 대신 '무엇인지' 를 말한다 */
+.hero-facts{flex:1 1 20rem;max-width:26rem;display:grid;gap:.5rem;margin:0;padding:0;list-style:none}
+.hero-facts li{display:flex;align-items:flex-start;gap:.625rem;padding:.625rem .75rem;border-radius:var(--radius-field);
+  background:color-mix(in srgb,var(--color-base-100) 78%,transparent);border:var(--border) solid var(--bc-10);backdrop-filter:blur(4px)}
+.hero-facts .icon{flex:none;margin-top:.125rem;color:var(--color-primary)}
+.hero-facts strong{display:block;font-size:13.5px;font-weight:700;letter-spacing:-.01em}
+.hero-facts span{display:block;margin-top:.125rem;font-size:12px;line-height:1.5;color:var(--bc-mid)}
 .hero-copy > .badge{
   background:var(--color-base-100);color:var(--color-primary);
   border-color:var(--p-line);box-shadow:var(--shadow-1);
 }
-.hero-copy h1{margin-top:1rem;font-size:clamp(26px,3.8vw,38px);font-weight:800;letter-spacing:-.045em;line-height:1.24}
-.hero-copy > p{margin-top:.75rem;color:var(--bc-strong);font-size:15.5px;line-height:1.7}
-.hero-actions{display:flex;flex-wrap:wrap;gap:.625rem;margin-top:1.75rem}
+.hero-copy h1{margin-top:.75rem;font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.04em;line-height:1.28;word-break:keep-all}
+.hero-copy > p{margin-top:.625rem;color:var(--bc-strong);font-size:14.5px;line-height:1.7;word-break:keep-all}
+.hero-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.25rem}
 .hero .stats{flex:none;min-width:12rem;background:color-mix(in srgb,var(--color-base-100) 80%,transparent);backdrop-filter:blur(4px)}
 
 /* 카테고리 원형 줄: 아이디어스 홈의 얼굴 */
