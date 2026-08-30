@@ -160,7 +160,7 @@
         </aside>
         <nav class="footer-nav" aria-label="사이트 메뉴">
           <a class="link link-hover" href="<?= $this->url('boards.index') ?>">홈</a>
-          <?php foreach ($site_menu as $item): ?><a class="link link-hover" href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->e($item['title']) ?></a><?php endforeach ?>
+          <?php // '상단 메뉴에 표시' 는 말 그대로 상단 메뉴다. 하단에는 약관만 모아 둔다. ?>
           <?php // 약관은 으레 하단에 모아 둔다. 공개된 약관은 사용처와 무관하게 전부 나온다. ?>
           <?php foreach ($legal_pages as $doc): ?>
             <a class="link link-hover" href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
