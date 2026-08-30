@@ -1,7 +1,0 @@
-{# 소셜 가입은 체크박스를 받을 자리가 없다. 무엇에 동의하게 되는지 여기서 밝히고,
-   실제 동의 기록은 LinkingService 가 가입 시점에 남긴다. 물어보지 않은 선택 항목은
-   동의로 볼 수 없으니 여기에도 적지 않는다. 테마마다 두지 않고 default 로 폴백시킨다. #}
-{% set required_consents = consent_documents|filter(doc => doc.required == 1) %}
-{% if required_consents is not empty %}
-  <p class="social-consent">계속하면 {% for doc in required_consents %}<a class="link" href="{{ url_for('terms.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a>{{ loop.last ? '' : ', ' }}{% endfor %}에 동의한 것으로 봅니다.</p>
-{% endif %}

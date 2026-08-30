@@ -16,7 +16,7 @@
 /storage/logs/*
 !/storage/logs/.gitkeep
 
-# Twig 캐시와 작업 중 만든 캐시 스냅샷
+# 작업 중 만든 캐시 스냅샷
 /storage/cache/*
 !/storage/cache/.gitkeep
 

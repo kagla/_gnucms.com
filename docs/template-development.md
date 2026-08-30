@@ -139,8 +139,3 @@ php -l templates/default/posts/index.php    # 문법
   데이터를 **더하는** 것은 안전하고, **빼거나 이름을 바꾸는** 것은 테마 전부를 훑는다.
 - 스키마를 바꾸면 `Schema::VERSION` 을 올린다. 도장에 파일 해시가 들어가 잊어도 다시 돌지만,
   판 번호는 사람이 읽는 표식이다.
-
-## 13. 보관본
-
-`templates/twig-sky/` 와 `public/themes/twig-sky/` 는 PHP 로 옮기기 전의 옛 템플릿 보관본이다.
-`theme.php` 가 없어 테마로 잡히지 않고, 어느 코드도 읽지 않는다. 참고용이며 지워도 된다.

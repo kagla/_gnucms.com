@@ -612,13 +612,13 @@ final class Schema
     }
 
     /** 기존 기본 테마 사용자만 새 기본 디자인으로 옮기고, 직접 고른 테마는 보존한다. */
-    /** Twig 시절 테마 이름이 설정에 남아 있으면 default 로 돌린다. 그 테마들은 더 없다. */
+    /** 이제 없는 옛 테마 이름이 설정에 남아 있으면 default 로 돌린다. */
     private function migrateDefaultTheme(): void
     {
         $gone = ['agy-ohouse', 'atlas', 'aurora', 'basic', 'bloom', 'classic', 'claude-idus', 'claude-kurly',
             'claude-sky', 'claude-idus-cdn', 'codex-bloom', 'codex-idus', 'codex-idus-cdn', 'codex-idus-preline',
             'codex-preline', 'compact', 'cozy', 'daylight', 'harbor', 'haus', 'horizon', 'lumen', 'modern',
-            'native', 'nova', 'studio', 'twig-sky'];
+            'native', 'nova', 'studio'];
         $marks = implode(',', array_fill(0, count($gone), '?'));
         $this->db->execute(
             'UPDATE ' . $this->db->q('site_settings')
