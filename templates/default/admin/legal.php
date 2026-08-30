@@ -44,7 +44,7 @@
                 </td>
                 <td data-label="필수"><input class="checkbox checkbox-sm" type="checkbox" name="required[<?= $this->e($page['id']) ?>]" value="1"<?= $page['usage_required'] ? ' checked' : '' ?>></td>
                 <td data-label="차례"><input class="input input-bordered input-sm" type="number" name="sort_order[<?= $this->e($page['id']) ?>]" value="<?= $this->e($page['usage_order']) ?>" min="-9999" max="9999"></td>
-                <td data-label="동의"><?= $this->e($page['counts']['agreed']) ?> · 미동의 <?= $this->e($page['counts']['declined']) ?></td>
+                <td data-label="동의">동의 <?= $this->e($page['counts']['agreed']) ?> · 미동의 <?= $this->e($page['counts']['declined']) ?></td>
                 <td data-label="관리" class="right">
                   <div class="row-actions">
                     <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.content.edit', ['id' => $page['id']]) ?>">수정</a>
