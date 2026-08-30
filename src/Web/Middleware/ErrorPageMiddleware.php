@@ -23,10 +23,11 @@ use Throwable;
  * 스택의 가장 바깥은 아니다. HtmlContentTypeMiddleware 가 이 미들웨어가 만든
  * 응답까지 감싸야 해서 그보다 바깥(=더 나중에 add)에 등록되어 있다.
  *
- * 라우팅이 실패(404)하면 TwigMiddleware 는 한 번도 실행되지 않아 `base_path()` 같은
- * Slim\Views\TwigRuntimeExtension 함수가 오류 화면 렌더링 중 죽는다. 그래서 여기서도
- * 같은 런타임 로더를 직접 등록해 둔다. TwigMiddleware 가 나중에 같은 값으로 다시
- * 등록해도 먼저 등록된 것이 우선이므로 결과는 같아 안전하다.
+ * 라우팅이 실패(404)하면 화면에 요청을 물려 주는 ViewMiddleware 가 한 번도 실행되지
+ * 않는다. 그러면 `url_for()`·`base_path()` 처럼 지금 요청을 알아야 하는 헬퍼가 없는
+ * 채로 오류 화면을 그리게 되어, 보여 줄 화면이 그리다 말고 죽는다. 그래서 여기서도
+ * 맨 앞에서 `$view->bindRequest($request)` 를 직접 부른다. ViewMiddleware 가 나중에
+ * 같은 요청으로 다시 불러도 결과가 같아 안전하다(엔진별 구현이 그렇게 되어 있다).
  */
 final class ErrorPageMiddleware implements MiddlewareInterface
 {

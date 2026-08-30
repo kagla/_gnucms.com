@@ -18,7 +18,7 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 
 <?php $this->start('header_search') ?>
 <form class="header-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
-  <?php if (!empty($query['category'])): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
+  <?php if ($query['category'] !== null && $query['category'] !== ''): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
     <input type="search" name="q" value="<?= $this->e($query['q']) ?>" placeholder="<?= $this->e($board['name']) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
@@ -32,7 +32,7 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
   <div class="wrap subnav-inner">
     <div class="chip-bar" role="group" aria-label="분류 선택">
       <?php if ($board['use_category'] && $board['categories'] !== []): ?>
-        <a class="btn btn-sm chip<?php if (empty($query['category'])): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
+        <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
         <?php foreach ($board['categories'] as $name): ?>
           <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
         <?php endforeach ?>
@@ -47,7 +47,7 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 
 <?php $this->start('body') ?>
 <?php
-$filtered = !empty($query['q']) || !empty($query['category']);
+$filtered = ($query['q'] !== null && $query['q'] !== '') || ($query['category'] !== null && $query['category'] !== '');
 // 목록 형태는 게시판 설정이 기본, ?view= 로 잠시 바꾼다.
 // view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다.
 $view = $view ?? 'list';
@@ -70,7 +70,7 @@ $view_param = $view !== ($board['list_type'] ?? 'list') ? $view : null;
   <div class="page-head-actions">
     <?php // 검색과 단추를 한 줄에 둔다. 넓은 화면에서는 머리글에 검색이 있으므로 여기서는 감춘다. ?>
     <form class="inline-search show-sm" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
-      <?php if (!empty($query['category'])): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
+      <?php if ($query['category'] !== null && $query['category'] !== ''): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
       <?php if ($view_param): ?><input type="hidden" name="view" value="<?= $this->e($view_param) ?>"><?php endif ?>
       <label class="input input-bordered">
         <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>
@@ -91,8 +91,8 @@ $view_param = $view !== ($board['list_type'] ?? 'list') ? $view : null;
 
 <?php if ($filtered): ?>
   <div class="filter-note">
-    <?php if (!empty($query['category'])): ?><span class="badge badge-primary badge-soft"><?= $this->e($query['category']) ?></span><?php endif ?>
-    <?php if (!empty($query['q'])): ?><span class="badge badge-soft">“<?= $this->e($query['q']) ?>”</span><?php endif ?>
+    <?php if ($query['category'] !== null && $query['category'] !== ''): ?><span class="badge badge-primary badge-soft"><?= $this->e($query['category']) ?></span><?php endif ?>
+    <?php if ($query['q'] !== null && $query['q'] !== ''): ?><span class="badge badge-soft">“<?= $this->e($query['q']) ?>”</span><?php endif ?>
     <span>검색 결과 <?= $this->e($list['total']) ?>개</span>
     <a class="link link-hover" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>">필터 지우기</a>
   </div>
