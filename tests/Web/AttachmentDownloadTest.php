@@ -140,18 +140,4 @@ final class AttachmentDownloadTest extends WebTestCase
 
         parent::tearDown();
     }
-
-    private function fakeUpload(string $name, string $contents): array
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'sbtest');
-        file_put_contents($tmp, $contents);
-
-        return [
-            'name'     => $name,
-            'type'     => 'text/plain',
-            'tmp_name' => $tmp,
-            'error'    => UPLOAD_ERR_OK,
-            'size'     => strlen($contents),
-        ];
-    }
 }

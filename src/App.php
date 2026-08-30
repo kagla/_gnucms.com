@@ -241,13 +241,16 @@ final class App
     public function attachments(): AttachmentService
     {
         if ($this->attachmentService === null) {
+            $uploads = (array) $this->config('uploads', []);
+            $uploads['max_bytes'] = $this->cmsService()->settings()['attach_max_mb'] * 1048576;
             $this->attachmentService = new AttachmentService(
                 $this->boardService(),
                 $this->postService(),
                 $this->posts(),
-                (array) $this->config('uploads', []),
+                $uploads,
                 (string) $this->config('auth.secret', '')
             );
+            $this->postService()->setAttachmentLimit($this->cmsService()->settings()['attach_limit']);
             $this->postService()->setAttachmentService($this->attachmentService);
         }
 

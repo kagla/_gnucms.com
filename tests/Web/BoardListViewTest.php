@@ -434,18 +434,4 @@ final class BoardListViewTest extends WebTestCase
             $app->postService()->create($acl, 'free', ['title' => '글 제목 ' . $i, 'content' => '본문 ' . $i]);
         }
     }
-
-    private function fakeUpload(string $name, string $contents): array
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'sbtest');
-        file_put_contents($tmp, $contents);
-
-        return [
-            'name'     => $name,
-            'type'     => 'application/octet-stream',
-            'tmp_name' => $tmp,
-            'error'    => UPLOAD_ERR_OK,
-            'size'     => strlen($contents),
-        ];
-    }
 }

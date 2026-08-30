@@ -99,4 +99,19 @@ abstract class WebTestCase extends DatabaseTestCase
 
         return (string) $response->getBody();
     }
+
+    /** AttachmentService::upload() 가 받는 $_FILES 형태의 배열을 임시 파일로 만든다. */
+    protected function fakeUpload(string $name, string $contents): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'sbtest');
+        file_put_contents($tmp, $contents);
+
+        return [
+            'name'     => $name,
+            'type'     => 'text/plain',
+            'tmp_name' => $tmp,
+            'error'    => UPLOAD_ERR_OK,
+            'size'     => strlen($contents),
+        ];
+    }
 }

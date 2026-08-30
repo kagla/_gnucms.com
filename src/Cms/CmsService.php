@@ -31,6 +31,8 @@ final class CmsService
 
     private ConsentRepository $consents;
 
+    private ?array $settingsCache = null;
+
     public function __construct(
         CmsRepository $cms,
         HtmlSanitizer $sanitizer,
@@ -47,18 +49,30 @@ final class CmsService
 
     public function settings(): array
     {
+        if ($this->settingsCache !== null) {
+            return $this->settingsCache;
+        }
         try {
             $stored = $this->cms->settings();
+            $migrated = true;
         } catch (DomainError $e) {
             // 아직 CMS 마이그레이션 전인 기존 설치도 오류 화면과 설치 진입점을
             // 정상적으로 열 수 있어야 한다. 실제 요청의 DB 오류는 각 기능에서 처리한다.
             $stored = [];
+            $migrated = false;
         }
         $settings = array_merge(self::DEFAULT_SETTINGS, $stored);
         $settings['registration_enabled'] = $settings['registration_enabled'] === '1';
         $settings['attach_max_mb'] = max(1, (int) $settings['attach_max_mb']);
         $settings['attach_limit'] = max(0, (int) $settings['attach_limit']);
-        return $settings;
+
+        // 마이그레이션 전이라 비어서 떨어진 결과는 캐시하지 않는다 — 캐시하면 설치
+        // 화면 뒤 같은 요청에서 마이그레이션이 끝나도 갱신을 못 본다.
+        if (!$migrated) {
+            return $settings;
+        }
+
+        return $this->settingsCache = $settings;
     }
 
     public function menu(): array
@@ -207,6 +221,7 @@ final class CmsService
         ];
         $v->check();
         $this->cms->saveSettings($settings);
+        $this->settingsCache = null;
     }
 
     public function createPage(Acl $acl, array $input): int

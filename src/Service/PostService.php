@@ -29,6 +29,9 @@ final class PostService
     /** @var ContentImageService */
     private $images;
 
+    /** 글당 첨부 개수 한도. 0 = 무제한. App 이 사이트 설정에서 넣는다. */
+    private int $attachmentLimit = 0;
+
     public function __construct(
         BoardService $boards,
         PostRepository $posts,
@@ -72,6 +75,11 @@ final class PostService
     public function setAttachmentService(AttachmentService $attachments): void
     {
         $this->attachments = $attachments;
+    }
+
+    public function setAttachmentLimit(int $limit): void
+    {
+        $this->attachmentLimit = max(0, $limit);
     }
 
     public function listPosts(Acl $acl, string $boardKey, array $query): array
@@ -406,6 +414,9 @@ final class PostService
         }
         if ($input !== [] && (int) $board['use_file'] !== 1) {
             throw DomainError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
+        }
+        if ($this->attachmentLimit > 0 && count($input) > $this->attachmentLimit) {
+            throw DomainError::validation(['attachments' => '첨부는 ' . $this->attachmentLimit . '개까지입니다.']);
         }
         if ($this->attachments === null) {
             throw DomainError::internal('첨부 서비스가 연결되지 않았습니다.');
