@@ -6,6 +6,7 @@ namespace GnuCms\Web;
 
 use GnuCms\App;
 use GnuCms\Web\Controller\BoardController;
+use GnuCms\Web\Controller\AccountController;
 use GnuCms\Web\Controller\AuthController;
 use GnuCms\Web\Controller\OauthController;
 use GnuCms\Web\Controller\AdminController;
@@ -38,6 +39,10 @@ final class Routes
         $slim->get('/reset-password', [$auth, 'resetForm'])->setName('auth.reset');
         $slim->post('/reset-password', [$auth, 'reset']);
         $slim->post('/logout', [$auth, 'logout'])->setName('auth.logout');
+
+        $account = new AccountController($app);
+        $slim->get('/account', [$account, 'editForm'])->setName('account.edit');
+        $slim->post('/account', [$account, 'update']);
 
         $oauth = new OauthController($app);
         $slim->post('/auth/email', [$oauth, 'email'])->setName('oauth.email');

@@ -83,9 +83,7 @@
                 <li class="menu-title"><?= $this->e($current_user['display_name']) ?></li>
                 <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 17) ?> 알림</a></li>
                 <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 17) ?> 관리 콘솔</a></li><?php endif ?>
-                <?php foreach ($legal_pages as $doc): ?>
-                  <li><a href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->icon('scale', 17) ?> <?= $this->e($doc['title']) ?></a></li>
-                <?php endforeach ?>
+                <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 17) ?> 회원정보 수정</a></li>
                 <li>
                   <form method="post" action="<?= $this->url('auth.logout') ?>">
                     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
@@ -230,6 +228,7 @@
         <?php if (!$current_user['is_guest']): ?>
           <li class="menu-title">내 활동</li>
           <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 18) ?> 알림<?php if ($unread_notifications > 0): ?> <span class="badge badge-primary badge-sm"><?= $this->e($unread_notifications) ?></span><?php endif ?></a></li>
+          <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 18) ?> 회원정보 수정</a></li>
           <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 18) ?> 관리 콘솔</a></li><?php endif ?>
         <?php endif ?>
       </ul>

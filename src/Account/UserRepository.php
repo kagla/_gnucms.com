@@ -154,6 +154,15 @@ final class UserRepository
         ], 'id = :id', ['id' => $id]);
     }
 
+    /** 본인이 고치는 표시 이름. 세션은 그대로다. */
+    public function updateDisplayName(int $id, string $displayName): void
+    {
+        $this->db->update('users', [
+            'display_name' => $displayName,
+            'updated_at' => Clock::now(),
+        ], 'id = :id', ['id' => $id]);
+    }
+
     public function updateForAdmin(int $id, string $email, string $displayName, string $status): void
     {
         $user = $this->findById($id);

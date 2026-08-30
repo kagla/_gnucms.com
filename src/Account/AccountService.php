@@ -158,6 +158,43 @@ final class AccountService
         $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
     }
 
+    /**
+     * 본인의 회원정보 수정. 표시 이름은 늘 받고, 비밀번호는 새 값을 적었을 때만 바꾼다.
+     * 비밀번호를 바꾸려면 현재 비밀번호가 맞아야 한다 — 자리를 비운 사이 남이 바꾸지 못하게.
+     */
+    public function updateProfile(int $userId, array $input): void
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null) {
+            throw DomainError::unauthorized('로그인이 필요합니다.');
+        }
+        $v = new Validator($input);
+        $displayName = $v->requiredString('display_name', 100);
+        $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
+        if ($password !== '') {
+            $current = isset($input['current_password']) && is_scalar($input['current_password'])
+                ? (string) $input['current_password'] : '';
+            $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
+                ? (string) $input['password_confirmation'] : '';
+            if ($user['password_hash'] === null) {
+                $v->fail('current_password', '소셜 로그인으로 가입한 계정은 비밀번호를 쓰지 않습니다.');
+            } elseif (!password_verify($current, (string) $user['password_hash'])) {
+                $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
+            }
+            if (mb_strlen($password) < self::PASSWORD_MIN) {
+                $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
+            }
+            if ($password !== $confirmation) {
+                $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
+            }
+        }
+        $v->check();
+        $this->users->updateDisplayName($userId, $displayName);
+        if ($password !== '') {
+            $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+        }
+    }
+
     public function changePassword(int $userId, array $input): void
     {
         $v = new Validator($input);
