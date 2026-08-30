@@ -7,11 +7,12 @@
     <p class="card-sub">어떤 항목에 동의했는지와, 그때 본 문서가 어느 판이었는지 남긴 기록입니다.</p>
     <div class="table-wrap">
       <table class="table table-zebra">
-        <thead><tr><th>항목</th><th>동의</th><th>동의 시각</th><th>그때 본 문서</th></tr></thead>
+        <thead><tr><th>항목</th><th>자리</th><th>동의</th><th>동의 시각</th><th>그때 본 문서</th></tr></thead>
         <tbody>
         {% for row in member_consents %}
           <tr>
             <td data-label="항목"><span class="cell-title">{{ row.content_title|default(row.consent_type) }}</span></td>
+            <td data-label="자리"><code class="kbd kbd-sm">{{ row.scope }}</code></td>
             <td data-label="동의"><span class="badge badge-sm badge-soft {{ row.agreed ? 'badge-success' : 'badge-ghost' }}">{{ row.agreed ? '동의' : '안 함' }}</span></td>
             <td data-label="동의 시각">{{ row.agreed_at|date('Y.m.d H:i') }}</td>
             <td data-label="그때 본 문서">

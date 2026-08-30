@@ -177,7 +177,8 @@ final class AdminController
             'values' => $values,
             'errors' => $errors,
             // 가입 동의 내역은 고칠 수 없는 기록이라 폼 밖에 따로 보여 준다.
-            'member_consents' => $this->app->consents()->forUserWithDocument((int) $values['id']),
+            'member_consents' => $this->app->consents()
+                ->forSubjectWithDocument('user', (int) $values['id']),
         ]);
     }
 

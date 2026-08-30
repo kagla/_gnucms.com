@@ -256,12 +256,14 @@ final class AdminPageTest extends WebTestCase
             true
         );
         $app->users()->verifyEmail($adminId);
-        foreach ([['terms', '이용약관', 1], ['marketing', '마케팅 정보 수신', 0]] as $doc) {
-            $app->cms()->createPage([
+        // 새 동의 저장소는 문서에 붙은 필드 대신 consent_uses 붙임으로 자리를 표현한다.
+        foreach ([['terms', '이용약관', true], ['marketing', '마케팅 정보 수신', false]] as $doc) {
+            $id = $app->cms()->createPage([
                 'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
-                'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
-                'consent_key' => $doc[0], 'consent_order' => 0, 'consent_required' => $doc[2],
+                'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0,
+                'sort_order' => 0, 'is_consent' => 1,
             ]);
+            $app->consentUses()->attach('signup', $id, $doc[2], 0);
         }
         $memberId = $app->users()->create(
             'member@example.com',
