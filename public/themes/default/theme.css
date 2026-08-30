@@ -402,7 +402,7 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 .drawer-foot form{width:100%}
 
 .menu{flex-direction:column;gap:.125rem;padding:.25rem}
-.menu li > a,.menu li > button{
+.menu li > a,.menu li > button,.menu li > form > button{
   display:flex;align-items:center;gap:.625rem;width:100%;
   min-height:2.75rem;padding:.5rem .75rem;
   border:0;border-radius:var(--radius-field);
@@ -410,9 +410,11 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
   font-size:14px;font-weight:600;text-align:left;cursor:pointer;
   transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease);
 }
-.menu li > a:hover,.menu li > button:hover{background:var(--bc-10)}
+.menu li > a:hover,.menu li > button:hover,.menu li > form > button:hover{background:var(--bc-10)}
 .menu li > a.menu-active{background:var(--p-soft);color:var(--color-primary);font-weight:800}
-.menu li > form{width:100%}
+/* 로그아웃처럼 form 안의 단추도 행 전체가 눌리게 한다. 글자만 눌리면 옆의 빈 곳을 눌러도 아무 일이 없다 */
+.menu li > form{width:100%;padding:0;margin:0}
+.menu li > form > button{width:100%;text-align:left;cursor:pointer}
 .menu-title{padding:.875rem .75rem .25rem;color:var(--bc-soft);font-size:11.5px;font-weight:800;letter-spacing:.04em}
 
 .dropdown{display:inline-flex}
