@@ -110,7 +110,11 @@ final class AccountService
             throw DomainError::validation(['email' => '이메일 또는 비밀번호를 확인해 주세요.']);
         }
         if (!(bool) $user['email_verified']) {
-            throw DomainError::validation(['email' => '이메일 인증을 완료해 주세요.']);
+            // 비밀번호까지 맞은 사람이다. 화면이 '다시 보내기' 를 내줄 수 있게 따로 표시한다.
+            throw DomainError::validation([
+                'email' => '아직 이메일 인증이 끝나지 않았습니다.',
+                'unverified' => '1',
+            ]);
         }
 
         return $this->publicUser($user);

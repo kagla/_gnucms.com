@@ -177,4 +177,34 @@ final class AuthPageTest extends WebTestCase
         }
         self::assertSame(['service' => 1, 'marketing' => 0], $agreed);
     }
+    /** 인증이 안 끝난 사람이 맞는 비밀번호로 오면, 왜 안 되는지와 다시 보내는 길을 보여 준다. */
+    #[DataProvider('connectionProvider')]
+    public function testUnverifiedLoginExplainsAndOffersResend(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->users()->create('new@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '새회원', false);
+
+        $this->get($app, '/login');
+        $response = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'new@example.com', 'password' => 'member-password-123',
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('아직 이메일 인증이 끝나지 않았습니다', $body);
+        self::assertStringContainsString('action="/verify-email/resend"', $body);
+        self::assertStringContainsString('value="new@example.com"', $body);
+
+        // 비밀번호가 틀리면 인증 얘기는 하지 않는다 — 계정 존재 여부를 흘리지 않는다.
+        $wrong = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'new@example.com', 'password' => 'nope',
+        ]);
+        self::assertStringNotContainsString('/verify-email/resend', $this->body($wrong));
+
+        $resent = $this->post($app, '/verify-email/resend', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'new@example.com',
+        ]);
+        self::assertSame(200, $resent->getStatusCode(), $this->body($resent));
+        self::assertStringContainsString('이메일을 확인해', $this->body($resent));
+    }
+
 }

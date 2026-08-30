@@ -34,6 +34,7 @@ final class Routes
         $slim->get('/register', [$auth, 'registerForm'])->setName('auth.register');
         $slim->post('/register', [$auth, 'register']);
         $slim->get('/verify-email', [$auth, 'verifyEmail'])->setName('auth.verify');
+        $slim->post('/verify-email/resend', [$auth, 'resendVerification'])->setName('auth.verify.resend');
         $slim->get('/forgot-password', [$auth, 'forgotForm'])->setName('auth.forgot');
         $slim->post('/forgot-password', [$auth, 'forgot']);
         $slim->get('/reset-password', [$auth, 'resetForm'])->setName('auth.reset');

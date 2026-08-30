@@ -9,6 +9,20 @@
         <h1 class="card-title"><?= $this->e($site['site_name']) ?>에 로그인</h1>
         <p class="card-sub">이야기를 이어서 나눠 보세요.</p>
       </div>
+      <?php if ($unverified_email !== null): ?>
+        <div class="alert alert-warning alert-soft auth-notice">
+          <span aria-hidden="true"><?= $this->icon('mail', 18) ?></span>
+          <div>
+            <strong>아직 이메일 인증이 끝나지 않았습니다.</strong>
+            <p>가입 때 보낸 인증 메일의 링크를 열어야 로그인할 수 있어요. 받은편지함과 스팸함을 확인해 주세요.</p>
+            <form method="post" action="<?= $this->url('auth.verify.resend') ?>">
+              <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+              <input type="hidden" name="email" value="<?= $this->e($unverified_email) ?>">
+              <button class="btn btn-warning btn-sm" type="submit"><?= $this->icon('mail', 15) ?> 인증 메일 다시 보내기</button>
+            </form>
+          </div>
+        </div>
+      <?php endif ?>
       <form method="post" action="<?= $this->url('auth.login') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">

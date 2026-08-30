@@ -23,7 +23,9 @@ final class AuthController
 
     public function loginForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return View::fromRequest($request)->render($response, 'auth/login', ['errors' => [], 'values' => []]);
+        return View::fromRequest($request)->render($response, 'auth/login', [
+            'errors' => [], 'values' => [], 'unverified_email' => null,
+        ]);
     }
 
     public function login(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -36,10 +38,17 @@ final class AuthController
             if ($e->status() !== 422) {
                 throw $e;
             }
+            $details = $e->details();
+            $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
             return View::fromRequest($request)->render(
                 $response->withStatus(422),
                 'auth/login',
-                ['errors' => $e->details(), 'values' => ['email' => $input['email'] ?? '']]
+                [
+                    'errors' => $details,
+                    'values' => ['email' => $email],
+                    // 비밀번호까지 맞았는데 인증만 안 된 사람에게는 '다시 보내기' 를 내준다.
+                    'unverified_email' => isset($details['unverified']) ? $email : null,
+                ]
             );
         }
         $this->storeSession($user);
@@ -100,6 +109,24 @@ final class AuthController
         $token = $request->getQueryParams()['token'] ?? '';
         $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
         return View::fromRequest($request)->render($response, 'auth/verified');
+    }
+
+    /** 인증 메일을 다시 보낸다. 없는 이메일이나 이미 인증된 계정이면 조용히 같은 화면을 낸다. */
+    public function resendVerification(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
+        try {
+            $this->app->accountService()->resendVerification($email);
+        } catch (DomainError $e) {
+            // 메일이 안 나가면 로그인 화면에서 그 사실을 말해 준다. 조용히 '보냈다' 고 하면 사람이 기다리기만 한다.
+            return View::fromRequest($request)->render($response->withStatus(422), 'auth/login', [
+                'errors' => ['email' => '인증 메일을 보내지 못했습니다. 잠시 뒤 다시 시도해 주세요.'],
+                'values' => ['email' => $email], 'unverified_email' => $email,
+            ]);
+        }
+        return View::fromRequest($request)->render($response, 'auth/check_email');
     }
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
