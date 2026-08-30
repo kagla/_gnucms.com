@@ -270,4 +270,54 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('설치 이후 없음', $body);
     }
 
+    /** 옮긴 시각·백업 목록·비SQLite 안내, 세 갈래를 모두 확인한다. */
+    #[DataProvider('connectionProvider')]
+    public function testSettingsPageShowsSchemaBackupsAndUpgradedAt(array $dbConfig): void
+    {
+        $tmp = sys_get_temp_dir() . '/' . GNUCMS_ID . '-settings-' . bin2hex(random_bytes(4));
+        $backupsDir = $tmp . '/backups';
+        $older = $backupsDir . '/board-v8-20260101-000000.sqlite';
+        $newer = $backupsDir . '/board-v9-20260201-000000.sqlite';
+
+        try {
+            mkdir($backupsDir, 0775, true);
+            file_put_contents($older, 'x');
+            touch($newer);
+
+            $app = $this->makeApp($dbConfig, ['storage' => ['dir' => $tmp]]);
+            $app->db()->execute(
+                'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
+                ['schema_upgraded_at', '2026-08-30 01:02:03', '2026-08-30 01:02:03']
+            );
+            $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+            $app->users()->verifyEmail($id);
+            $this->get($app, '/login');
+            $this->post($app, '/login', [
+                'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+            ]);
+
+            $body = $this->body($this->get($app, '/admin/settings'));
+
+            self::assertStringContainsString('2026-08-30 01:02:03 UTC', $body);
+
+            if ($app->db()->dialect()->name() !== 'sqlite') {
+                self::assertStringContainsString('앱이 백업하지 못합니다', $body);
+                return;
+            }
+
+            self::assertStringContainsString('schema-backups', $body);
+            self::assertStringNotContainsString('설치 이후 없음', $body);
+            $newerPos = strpos($body, 'board-v9-20260201-000000.sqlite');
+            $olderPos = strpos($body, 'board-v8-20260101-000000.sqlite');
+            self::assertIsInt($newerPos);
+            self::assertIsInt($olderPos);
+            self::assertLessThan($olderPos, $newerPos, '최신 백업이 먼저 나와야 한다');
+        } finally {
+            @unlink($older);
+            @unlink($newer);
+            @rmdir($backupsDir);
+            @rmdir($tmp);
+        }
+    }
+
 }
