@@ -745,6 +745,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 /* 아이디어스 첫 화면의 큰 배너. 사진 대신 손그림 같은 그러데이션을 깐다. */
 .hero{
   display:block;
+  /* daisyUI 의 place-items:center 는 최신 브라우저에서 block 의 자식도 가운데로 모아
+     내용 폭으로 줄여 버린다. 좌우가 텅 비어 보이던 원인. */
+  place-items:normal;
   position:relative;overflow:hidden;
   margin-bottom:1.75rem;
   border:0;
