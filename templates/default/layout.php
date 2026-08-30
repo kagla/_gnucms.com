@@ -188,8 +188,10 @@
           <?= $this->icon('bell', 21) ?><span class="dock-label">알림</span>
           <?php if ($unread_notifications > 0): ?><span class="bell-dot" aria-hidden="true"><?= $this->e($unread_notifications > 99 ? '99+' : $unread_notifications) ?></span><?php endif ?>
         </a>
-        <a href="<?= $current_user['is_admin'] ? $this->url('admin.index') : $this->url('boards.index') ?>">
-          <?= $this->icon($current_user['is_admin'] ? 'cog' : 'user', 21) ?><span class="dock-label"><?= $this->e($current_user['is_admin'] ? '관리' : '내 계정') ?></span>
+        <?php // '내 계정' 은 회원정보 수정으로. 예전엔 홈으로 보내 눌러도 아무 일이 없어 보였다.
+              // 관리 콘솔은 머리글 톱니와 서랍에 있으니 독에서는 누구나 같은 자리로 간다. ?>
+        <a href="<?= $this->url('account.edit') ?>"<?php if (trim($this->block('nav_section')) === 'account'): ?> class="dock-active" aria-current="page"<?php endif ?>>
+          <?= $this->icon('user', 21) ?><span class="dock-label">내 계정</span>
         </a>
       <?php endif ?>
     </nav>

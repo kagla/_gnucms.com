@@ -1,4 +1,5 @@
 <?php $this->layout('layout') ?>
+<?php $this->start('nav_section') ?>account<?php $this->stop() ?>
 <?php $this->start('title') ?>회원정보 수정 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('body') ?>
 <div class="auth-wrap">
