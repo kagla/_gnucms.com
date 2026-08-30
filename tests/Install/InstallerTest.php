@@ -25,6 +25,7 @@ final class InstallerTest extends TestCase
 
     protected function tearDown(): void
     {
+        @chmod($this->workDir . '/config', 0775);
         foreach (['config/config.php', 'storage/board.sqlite', 'public/install.php'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
@@ -119,6 +120,31 @@ final class InstallerTest extends TestCase
             self::assertArrayHasKey('_', $e->details());
         }
         self::assertFileDoesNotExist($this->configPath());
+    }
+
+    public function testFailedConfigWriteLeavesNoAdminBehind(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root 로 실행하면 chmod 로 쓰기를 막을 수 없다.');
+        }
+
+        chmod($this->workDir . '/config', 0555);
+
+        try {
+            $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
+            self::fail('config.php 를 못 쓰면 500 이 나와야 한다');
+        } catch (DomainError $e) {
+            self::assertSame(500, $e->status());
+        }
+
+        self::assertFileDoesNotExist($this->configPath());
+        $db = Connection::create($this->dbConfig());
+        self::assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
+        self::assertSame('0', $db->selectOne("SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'")['state_value']);
+
+        chmod($this->workDir . '/config', 0775);
+        $result = $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
+        self::assertSame('owner@example.com', $result['admin_email']);
     }
 
     public function testWithoutInstallScriptSelfDeletedIsNull(): void

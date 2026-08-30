@@ -113,32 +113,39 @@ final class Installer
 
         $this->ensureStorageDirectories();
 
-        $db->execute(
-            'UPDATE ' . $db->q('site_settings') . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
-            [$site['site_name'], Clock::now(), 'site_name']
-        );
-
-        $adminEmail = null;
-        if ($admin !== null) {
-            $users = new UserRepository($db);
-            if ($users->findByEmail($admin['email']) !== null) {
-                throw DomainError::validation(['email' => '이미 있는 이메일입니다.']);
-            }
-            $id = $users->create(
-                $admin['email'],
-                password_hash($admin['password'], PASSWORD_DEFAULT),
-                $users->uniqueDisplayName($admin['display_name']),
-                true
-            );
-            $users->verifyEmail($id);
+        // 사이트 이름 갱신·관리자 생성·config.php 쓰기를 한 트랜잭션으로 묶는다.
+        // config.php 쓰기가 실패(디스크 가득 참, config/ 권한 없음 등)하면 관리자 행도 같이
+        // 롤백되어야, 재시도할 때 findByEmail() 이 "이미 있는 이메일" 로 막히지 않는다.
+        $adminEmail = $db->transaction(function () use ($db, $dbConfig, $site, $admin): ?string {
             $db->execute(
-                'UPDATE ' . $db->q('site_state') . ' SET state_value = ? WHERE state_key = ?',
-                ['1', 'first_admin_claimed']
+                'UPDATE ' . $db->q('site_settings') . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                [$site['site_name'], Clock::now(), 'site_name']
             );
-            $adminEmail = $admin['email'];
-        }
 
-        $this->writeConfig($dbConfig, $site);
+            $adminEmail = null;
+            if ($admin !== null) {
+                $users = new UserRepository($db);
+                if ($users->findByEmail($admin['email']) !== null) {
+                    throw DomainError::validation(['email' => '이미 있는 이메일입니다.']);
+                }
+                $id = $users->create(
+                    $admin['email'],
+                    password_hash($admin['password'], PASSWORD_DEFAULT),
+                    $users->uniqueDisplayName($admin['display_name']),
+                    true
+                );
+                $users->verifyEmail($id);
+                $db->execute(
+                    'UPDATE ' . $db->q('site_state') . ' SET state_value = ? WHERE state_key = ?',
+                    ['1', 'first_admin_claimed']
+                );
+                $adminEmail = $admin['email'];
+            }
+
+            $this->writeConfig($dbConfig, $site);
+
+            return $adminEmail;
+        });
 
         $selfDeleted = null;
         if ($this->installScript !== null) {
@@ -199,7 +206,7 @@ final class Installer
         ];
 
         $php = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n";
-        if (file_put_contents($this->configPath, $php, LOCK_EX) === false) {
+        if (@file_put_contents($this->configPath, $php, LOCK_EX) === false) {
             throw DomainError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
         }
         @chmod($this->configPath, 0640);
