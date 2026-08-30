@@ -5,121 +5,267 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use GnuCms\Error\DomainError;
+use GnuCms\Install\DbSetup;
 use GnuCms\Install\Installer;
+use GnuCms\Install\InstallSession;
+use GnuCms\Install\ServerCheck;
 
-$installer = new Installer(__DIR__ . '/../config/config.php', __DIR__ . '/../storage');
-
-$requestHost = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
-if (preg_match('/^[A-Za-z0-9.\-:\[\]]+$/D', $requestHost) !== 1) {
-    $requestHost = 'localhost';
-}
-$requestScheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$mailHost = preg_replace('/:\d+$/', '', trim($requestHost, '[]')) ?: 'localhost';
-
-$done = null;
-$errors = [];
-$input = [
-    'app_url'      => $requestScheme . '://' . $requestHost,
-    'mail_from'    => 'no-reply@' . $mailHost,
-    'dsn'          => 'sqlite:' . realpath(__DIR__ . '/..') . '/storage/board.sqlite',
-    'db_username'  => '',
-    'cors_origins' => '',
-];
-
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    $input = array_merge($input, $_POST);
-    try {
-        $done = $installer->run($_POST);
-    } catch (DomainError $e) {
-        $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
-    }
-}
-
-$installed = $installer->isInstalled();
+$root = dirname(__DIR__);
+$installer = new Installer($root . '/config/config.php', $root . '/storage', __FILE__);
 
 function h(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
-?>
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars(GNUCMS, ENT_QUOTES) ?> 설치</title>
-<style>
-  :root { color-scheme: light; --bg: #f7f8fb; --panel: #fff; --fg: #172033; --muted: #667085; --line: #d0d5dd; --primary: #635bff; --danger: #d92d20; }
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 56px 16px; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; letter-spacing: -.012em; }
-  main { max-width: 680px; margin: auto; padding: clamp(26px, 6vw, 48px); border: 1px solid #e4e7ec; border-radius: 20px; background: var(--panel); box-shadow: 0 18px 50px rgba(16, 24, 40, .08); }
-  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 34px; font-size: 17px; font-weight: 800; }
-  .mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: #fff; background: linear-gradient(145deg, #7c74ff, #5148e5); }
-  .eyebrow { margin: 0 0 6px; color: var(--primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-  h1 { margin: 0 0 10px; font-size: clamp(28px, 6vw, 38px); line-height: 1.2; letter-spacing: -.045em; }
-  .intro { margin: 0 0 30px; color: var(--muted); }
-  label { display: block; margin-top: 19px; font-weight: 700; }
-  input, textarea { width: 100%; margin-top: 7px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); color: var(--fg); font: inherit; transition: border-color .15s, box-shadow .15s; }
-  input:focus, textarea:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99, 91, 255, .14); }
-  .hint { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; font-size: 12px; }
-  .error { color: var(--danger); font-size: 13px; margin: 5px 0 0; }
-  .done { padding: 18px 20px; border: 1px solid #75d5a4; border-radius: 13px; background: #ecfdf3; color: #085d3a; }
-  button { min-height: 46px; margin-top: 28px; padding: 0 22px; border: 0; border-radius: 11px; background: var(--primary); color: #fff; font: inherit; font-weight: 750; cursor: pointer; box-shadow: 0 7px 16px rgba(99, 91, 255, .22); }
-  a { color: var(--primary); font-weight: 700; }
-  code { padding: 2px 5px; border-radius: 5px; background: rgba(99, 91, 255, .09); }
-  @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --bg: #10131a; --panel: #181c25; --fg: #f2f4f7; --muted: #aeb6c5; --line: #3d4655; --primary: #958fff; --danger: #ff8b81; } main { border-color: #2c3340; box-shadow: 0 18px 50px rgba(0,0,0,.25); } .done { background: #16392b; color: #a6f4c5; border-color: #237a50; } }
-</style>
-</head>
-<body>
-<main>
-<div class="brand"><span class="mark"><?= htmlspecialchars(mb_strtoupper(mb_substr(GNUCMS, 0, 1)), ENT_QUOTES) ?></span><?= htmlspecialchars(GNUCMS, ENT_QUOTES) ?></div>
-<p class="eyebrow">Setup</p>
-<h1><?= htmlspecialchars(GNUCMS, ENT_QUOTES) ?> 설치</h1>
-<p class="intro">몇 가지 기본 정보를 입력하면 바로 커뮤니티를 시작할 수 있습니다.</p>
 
-<?php if ($done !== null): ?>
-  <div class="done">
-    <p><strong>설치가 끝났습니다.</strong> 사용 중인 DB: <?= h($done['dialect']) ?></p>
-    <p><strong>지금 <code>public/install.php</code> 를 삭제하세요.</strong> 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>
-    <p><a href="./">사이트로 이동</a></p>
-  </div>
-<?php elseif ($installed): ?>
-  <p>이미 설치되어 있습니다. 다시 설치하려면 <code>config/config.php</code> 를 지우세요.</p>
-<?php else: ?>
-  <?php if (isset($errors['_'])): ?><p class="error"><?= h($errors['_']) ?></p><?php endif; ?>
-  <form method="post">
-    <label>사이트 주소
-      <span class="hint">인증 메일과 비밀번호 재설정 링크에 사용합니다</span>
-      <input name="app_url" type="url" value="<?= h($input['app_url']) ?>" placeholder="https://example.com" required>
-    </label>
-    <?php if (isset($errors['app_url'])): ?><p class="error"><?= h($errors['app_url']) ?></p><?php endif; ?>
+/** @param array<string, string> $errors */
+function err(array $errors, string $field): string
+{
+    return isset($errors[$field]) ? '<p class="error">' . h($errors[$field]) . '</p>' : '';
+}
 
-    <label>발신 이메일
-      <span class="hint">인증 메일을 보낼 주소입니다. 운영 도메인의 메일 주소를 권장합니다</span>
-      <input name="mail_from" type="email" value="<?= h($input['mail_from']) ?>" placeholder="no-reply@example.com" required>
-    </label>
-    <?php if (isset($errors['mail_from'])): ?><p class="error"><?= h($errors['mail_from']) ?></p><?php endif; ?>
+function field(string $label, string $name, string $value, array $errors, string $type = 'text', string $hint = '', string $attrs = ''): string
+{
+    return '<label>' . h($label) . ($hint !== '' ? '<span class="hint">' . h($hint) . '</span>' : '')
+        . '<input name="' . h($name) . '" type="' . h($type) . '" value="' . h($value) . '" ' . $attrs . '></label>'
+        . err($errors, $name);
+}
 
-    <label>DB DSN
-      <span class="hint">예) sqlite:/절대경로/board.sqlite · mysql:host=localhost;dbname=board;charset=utf8mb4 · pgsql:host=localhost;dbname=board</span>
-      <input name="dsn" value="<?= h($input['dsn']) ?>" required>
-    </label>
-    <?php if (isset($errors['dsn'])): ?><p class="error"><?= h($errors['dsn']) ?></p><?php endif; ?>
+function page(int $step, string $title, string $body): void
+{
+    $names = ['서버 점검', '데이터베이스', '사이트', '관리자', '완료'];
+    $steps = '';
+    foreach ($names as $i => $name) {
+        $n = $i + 1;
+        $cls = $n < $step ? 'done' : ($n === $step ? 'now' : '');
+        $steps .= '<li class="' . $cls . '"><span>' . $n . '</span>' . h($name) . '</li>';
+    }
+    echo '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . h($title) . ' · ' . h(GNUCMS) . ' 설치</title>'
+        . '<style>'
+        . ':root{color-scheme:light;--bg:#f4f8fd;--panel:#fff;--fg:#0f172a;--muted:#64748b;--line:#dbe4f0;--primary:#2f7fe0;--danger:#d92d20;--ok:#1a7f4b}'
+        . '@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0b1220;--panel:#111a2b;--fg:#e5edf8;--muted:#94a3b8;--line:#243043;--primary:#6aa6f0;--danger:#ff8b81;--ok:#5ad28f}}'
+        . '*{box-sizing:border-box}body{margin:0;padding:40px 16px;background:var(--bg);color:var(--fg);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}'
+        . 'main{max-width:680px;margin:auto;padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:20px;background:var(--panel)}'
+        . '.brand{color:var(--primary);font-weight:800;margin-bottom:18px}'
+        . 'ol.steps{display:flex;gap:6px;list-style:none;margin:0 0 26px;padding:0;font-size:12px;color:var(--muted)}'
+        . 'ol.steps li{flex:1;padding:6px 0;border-top:3px solid var(--line)}ol.steps li span{display:block;font-weight:800}'
+        . 'ol.steps li.now{border-color:var(--primary);color:var(--fg)}ol.steps li.done{border-color:var(--ok)}'
+        . 'h1{margin:0 0 8px;font-size:26px;letter-spacing:-.03em}.intro{margin:0 0 22px;color:var(--muted)}'
+        . 'label{display:block;margin-top:16px;font-weight:700}.hint{display:block;color:var(--muted);font-weight:400;font-size:12px}'
+        . 'input,select{width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);font:inherit}'
+        . 'input:focus,select:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px rgba(47,127,224,.18)}'
+        . '.radios{display:flex;gap:8px;margin-top:6px}.radios label{flex:1;margin:0;padding:10px;border:1px solid var(--line);border-radius:10px;text-align:center;font-weight:600;cursor:pointer}'
+        . '.radios input{width:auto;margin:0 6px 0 0}.radios label.off{opacity:.45}'
+        . '.error{margin:4px 0 0;color:var(--danger);font-size:13px}.alert{padding:12px 14px;border-radius:10px;background:rgba(217,45,32,.08);color:var(--danger);margin-bottom:12px}'
+        . '.notice{padding:12px 14px;border-radius:10px;background:rgba(47,127,224,.08);margin:14px 0}'
+        . '.done{padding:16px 18px;border-radius:12px;background:rgba(26,127,75,.1);color:var(--ok)}'
+        . 'table{width:100%;border-collapse:collapse;margin-top:8px}td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}'
+        . '.ok{color:var(--ok);font-weight:800}.bad{color:var(--danger);font-weight:800}.opt{color:var(--muted);font-size:12px}'
+        . '.actions{display:flex;justify-content:space-between;align-items:center;margin-top:26px}'
+        . 'button{min-height:44px;padding:0 20px;border:0;border-radius:10px;background:var(--primary);color:#fff;font:inherit;font-weight:750;cursor:pointer}'
+        . 'a{color:var(--primary);font-weight:700}code{padding:2px 5px;border-radius:5px;background:rgba(47,127,224,.12)}'
+        . 'dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px}dt{color:var(--muted)}dd{margin:0}'
+        . '.pw{position:relative}.pw button{position:absolute;right:6px;bottom:6px;min-height:0;padding:6px 8px;background:transparent;color:var(--muted);font-size:12px}'
+        . '</style></head><body><main><div class="brand">' . h(GNUCMS) . '</div><ol class="steps">' . $steps . '</ol>'
+        . '<h1>' . h($title) . '</h1>' . $body . '</main>'
+        . '<script>document.querySelectorAll("[data-show]").forEach(function(b){b.addEventListener("click",function(){var i=document.getElementById(b.dataset.show);i.type=i.type==="password"?"text":"password";b.textContent=i.type==="password"?"보기":"숨기기"})})</script>'
+        . '</body></html>';
+}
 
-    <label>DB 사용자 <span class="hint">SQLite 면 비워 둡니다</span>
-      <input name="db_username" value="<?= h($input['db_username']) ?>">
-    </label>
-    <label>DB 비밀번호
-      <input name="db_password" type="password" value="">
-    </label>
+function redirectTo(int $step): void
+{
+    header('Location: ' . strtok((string) $_SERVER['REQUEST_URI'], '?') . '?step=' . $step, true, 303);
+    exit;
+}
 
-    <label>허용할 출처 (CORS) <span class="hint">호스트 앱 주소를 한 줄에 하나씩. 없으면 비워 둡니다</span>
-      <textarea name="cors_origins" rows="3"><?= h($input['cors_origins']) ?></textarea>
-    </label>
+if ($installer->isInstalled()) {
+    page(5, '이미 설치되어 있습니다', '<p>다시 설치하려면 서버에서 <code>config/config.php</code> 를 지우고 이 화면을 새로고침하세요.</p><p><a href="./">사이트로 이동</a></p>');
+    exit;
+}
 
-    <button type="submit">설치</button>
-  </form>
-<?php endif; ?>
-</main>
-</body>
-</html>
+session_name('gnucms_install');
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
+session_start();
+$session = new InstallSession($_SESSION);
+
+$configDir = $root . '/config';
+$storageDir = $root . '/storage';
+$method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$requested = (int) ($_GET['step'] ?? 1);
+$step = $session->allowedStep($requested);
+if ($requested !== $step && $method === 'GET') {
+    redirectTo($step);
+}
+$errors = [];
+$post = $method === 'POST' ? $_POST : [];
+
+// ---------- 1. 서버 점검 ----------
+if ($step === 1) {
+    $result = (new ServerCheck($configDir, $storageDir))->run();
+    if ($method === 'POST' && $result['ok']) {
+        $session->complete(1);
+        redirectTo(2);
+    }
+    $rows = '';
+    foreach ($result['items'] as $item) {
+        $rows .= '<tr><td class="' . ($item['ok'] ? 'ok' : 'bad') . '">' . ($item['ok'] ? '✓' : '✗') . '</td>'
+            . '<td>' . h($item['label']) . (!$item['required'] ? ' <span class="opt">권장</span>' : '') . '</td>'
+            . '<td class="opt">' . h($item['note']) . '</td></tr>';
+    }
+    $body = '<p class="intro">이 서버에서 ' . h(GNUCMS) . ' 가 돌 수 있는지 봅니다.</p><table>' . $rows . '</table>';
+    $body .= $result['ok']
+        ? '<form method="post"><div class="actions"><span></span><button type="submit">다음</button></div></form>'
+        : '<p class="alert">✗ 표시된 필수 항목을 고친 뒤 <a href="?step=1">다시 점검</a>하세요.</p>';
+    page(1, '서버 점검', $body);
+    exit;
+}
+
+// ---------- 2. 데이터베이스 ----------
+if ($step === 2) {
+    $types = DbSetup::availableTypes();
+    $saved = $session->get('db') ?? [];
+    $values = array_merge([
+        'type' => in_array('sqlite', $types, true) ? 'sqlite' : (string) ($types[0] ?? ''),
+        'sqlite_path' => $storageDir . '/board.sqlite',
+        'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '',
+    ], (array) ($saved['input'] ?? []), $post);
+    $probe = null;
+    if ($method === 'POST') {
+        try {
+            $dbConfig = DbSetup::dsnFrom($post);
+            $probe = DbSetup::probe($dbConfig);
+            if ($probe['has_tables'] && (string) ($post['reuse'] ?? '') !== '1') {
+                $errors['reuse'] = '이 DB 에는 이미 ' . h(GNUCMS) . ' 표가 있습니다. 이어 쓰려면 아래를 확인하세요.';
+            } else {
+                $input = $post;
+                unset($input['password'], $input['reuse']);
+                $session->set('db', ['config' => $dbConfig, 'probe' => $probe, 'input' => $input, 'reuse' => $probe['has_tables']]);
+                $session->complete(2);
+                redirectTo(3);
+            }
+        } catch (DomainError $e) {
+            $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
+        }
+    }
+    $radios = '';
+    foreach (DbSetup::TYPES as $key => $label) {
+        $on = in_array($key, $types, true);
+        $radios .= '<label class="' . ($on ? '' : 'off') . '"><input type="radio" name="type" value="' . h($key) . '"'
+            . ($values['type'] === $key ? ' checked' : '') . ($on ? '' : ' disabled') . '>' . h($label)
+            . ($on ? '' : '<span class="hint">드라이버 없음</span>') . '</label>';
+    }
+    $body = '<p class="intro">SQLite 는 파일 하나로 끝나고, MySQL·PostgreSQL 은 DB 서버 접속 정보가 필요합니다.</p>'
+        . (isset($errors['_']) ? '<p class="alert">' . h($errors['_']) . '</p>' : '')
+        . '<form method="post"><div class="radios">' . $radios . '</div>' . err($errors, 'type')
+        . '<div id="sqlite">' . field('SQLite 파일 경로', 'sqlite_path', $values['sqlite_path'], $errors, 'text', '웹에서 접근할 수 없는 폴더의 절대 경로') . '</div>'
+        . '<div id="server">'
+        . field('호스트', 'host', $values['host'], $errors)
+        . field('포트', 'port', $values['port'], $errors, 'text', '비우면 기본값 (MySQL 3306, PostgreSQL 5432)', 'inputmode="numeric"')
+        . field('DB 이름', 'name', $values['name'], $errors)
+        . field('DB 계정', 'user', $values['user'], $errors)
+        . field('DB 비밀번호', 'password', '', $errors, 'password', '', 'autocomplete="off"')
+        . '</div>';
+    if (isset($errors['reuse'])) {
+        $body .= '<div class="notice"><p>' . $errors['reuse'] . '</p><label style="margin:0;font-weight:600"><input type="checkbox" name="reuse" value="1" style="width:auto;margin-right:6px">기존 데이터베이스를 이어 씁니다 (표를 새로 만들지 않고 새 판으로 옮깁니다)</label></div>';
+    }
+    $body .= '<div class="actions"><a href="?step=1">← 이전</a><button type="submit">접속 시험 후 다음</button></div></form>'
+        . '<script>function sw(){var t=document.querySelector("input[name=type]:checked");var s=t&&t.value==="sqlite";document.getElementById("sqlite").style.display=s?"":"none";document.getElementById("server").style.display=s?"none":""}document.querySelectorAll("input[name=type]").forEach(function(r){r.addEventListener("change",sw)});sw()</script>';
+    page(2, '데이터베이스', $body);
+    exit;
+}
+
+// ---------- 3. 사이트 ----------
+if ($step === 3) {
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    if (preg_match('/^[A-Za-z0-9.\-:\[\]]+$/D', $host) !== 1) {
+        $host = 'localhost';
+    }
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $mailHost = preg_replace('/:\d+$/', '', trim($host, '[]')) ?: 'localhost';
+    $values = array_merge([
+        'site_name' => GNUCMS,
+        'app_url' => $scheme . '://' . $host . rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/'),
+        'mail_from' => 'no-reply@' . $mailHost,
+    ], $session->get('site') ?? [], $post);
+    if ($method === 'POST') {
+        try {
+            $session->set('site', Installer::siteFrom($post));
+            $session->complete(3);
+            $db = $session->get('db') ?? [];
+            redirectTo(!empty($db['probe']['has_admin']) ? 5 : 4);
+        } catch (DomainError $e) {
+            $errors = $e->details();
+        }
+    }
+    $body = '<p class="intro">나중에 관리 콘솔에서 바꿀 수 있습니다.</p><form method="post">'
+        . field('사이트 이름', 'site_name', $values['site_name'], $errors, 'text', '', 'maxlength="50" required')
+        . field('사이트 주소', 'app_url', $values['app_url'], $errors, 'url', '인증 메일과 비밀번호 재설정 링크에 씁니다', 'required')
+        . field('발신 이메일', 'mail_from', $values['mail_from'], $errors, 'email', '인증 메일을 보낼 주소. 운영 도메인의 주소를 권장합니다', 'required')
+        . '<div class="actions"><a href="?step=2">← 이전</a><button type="submit">다음</button></div></form>';
+    page(3, '사이트', $body);
+    exit;
+}
+
+// ---------- 4. 첫 관리자 ----------
+if ($step === 4) {
+    $db = $session->get('db') ?? [];
+    if (!empty($db['probe']['has_admin'])) {
+        $session->complete(4);
+        redirectTo(5);
+    }
+    $values = array_merge(['email' => '', 'display_name' => ''], $session->get('admin') ?? [], $post);
+    if ($method === 'POST') {
+        try {
+            $session->set('admin', Installer::adminFrom($post));
+            $session->complete(4);
+            redirectTo(5);
+        } catch (DomainError $e) {
+            $errors = $e->details();
+        }
+    }
+    $body = '<p class="intro">이 계정이 전역 관리자가 됩니다. 이메일 인증은 건너뜁니다.</p><form method="post">'
+        . field('이메일', 'email', $values['email'], $errors, 'email', '', 'required autocomplete="username"')
+        . field('표시 이름', 'display_name', $values['display_name'], $errors, 'text', '한글·영문·숫자만. 한글 2자 또는 영문 4자 이상', 'required')
+        . '<label>비밀번호<span class="hint">8자 이상</span><div class="pw"><input id="pw1" name="password" type="password" autocomplete="new-password" required><button type="button" data-show="pw1">보기</button></div></label>' . err($errors, 'password')
+        . '<label>비밀번호 확인<div class="pw"><input id="pw2" name="password_confirmation" type="password" autocomplete="new-password" required><button type="button" data-show="pw2">보기</button></div></label>' . err($errors, 'password_confirmation')
+        . '<div class="actions"><a href="?step=3">← 이전</a><button type="submit">다음</button></div></form>';
+    page(4, '첫 관리자', $body);
+    exit;
+}
+
+// ---------- 5. 완료 ----------
+$db = $session->get('db') ?? [];
+$site = $session->get('site') ?? [];
+$admin = $session->get('admin');
+$reuse = !empty($db['reuse']);
+if ($method === 'POST') {
+    try {
+        $result = $installer->finish((array) $db['config'], $site, $reuse && !empty($db['probe']['has_admin']) ? null : $admin, $reuse);
+        $session->reset();
+        session_destroy();
+        $body = '<div class="done"><p><strong>설치가 끝났습니다.</strong> 사용 중인 DB: ' . h($result['dialect']) . '</p>'
+            . ($result['admin_email'] !== null ? '<p>관리자: <code>' . h($result['admin_email']) . '</code></p>' : '')
+            . '</div>';
+        $body .= $result['self_deleted'] === false
+            ? '<p class="alert"><strong>install.php 를 지우지 못했습니다.</strong> 지금 <code>public/install.php</code> 를 손으로 삭제하세요. 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>'
+            : '<p class="notice">설치기(<code>install.php</code>)는 스스로 삭제했습니다.</p>';
+        $body .= '<p><a href="./login">로그인하러 가기</a> · <a href="./">사이트로 이동</a></p>';
+        page(5, '완료', $body);
+        exit;
+    } catch (DomainError $e) {
+        $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
+    }
+}
+$dbLabel = DbSetup::TYPES[(string) ($db['input']['type'] ?? '')] ?? (string) ($db['probe']['dialect'] ?? '');
+$body = '<p class="intro">아래 내용으로 설치합니다. 표를 만들고, 관리자를 만들고, <code>config/config.php</code> 를 씁니다.</p>';
+foreach ($errors as $message) {
+    $body .= '<p class="alert">' . h((string) $message) . '</p>';
+}
+$body .= '<dl><dt>데이터베이스</dt><dd>' . h($dbLabel) . ($reuse ? ' (기존 DB 이어 쓰기)' : '') . '</dd>'
+    . '<dt>사이트 이름</dt><dd>' . h((string) ($site['site_name'] ?? '')) . '</dd>'
+    . '<dt>사이트 주소</dt><dd>' . h((string) ($site['app_url'] ?? '')) . '</dd>'
+    . '<dt>발신 이메일</dt><dd>' . h((string) ($site['mail_from'] ?? '')) . '</dd>'
+    . '<dt>관리자</dt><dd>' . ($admin !== null && empty($db['probe']['has_admin']) ? h($admin['email']) . ' (' . h($admin['display_name']) . ')' : '기존 DB 의 관리자를 그대로 씁니다') . '</dd></dl>'
+    . '<form method="post"><div class="actions"><a href="?step=' . (empty($db['probe']['has_admin']) ? 4 : 3) . '">← 이전</a><button type="submit">설치</button></div></form>';
+page(5, '설치 확인', $body);
