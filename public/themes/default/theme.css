@@ -1127,6 +1127,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   font-size:14px;line-height:1.72;overflow-wrap:anywhere;
 }
 .chat-start .chat-bubble{border-start-start-radius:.25rem}
+/* 댓글 안 사진도 본문 사진처럼 모서리를 둥글린다. 말풍선 안이라 한 단계 작게 */
+.chat-bubble img{display:block;max-width:100%;height:auto;border-radius:var(--radius-field)}
 @media (max-width: 480px){
   .chat-image .avatar-inner,.article-writer .avatar-inner{width:1.625rem;height:1.625rem;font-size:11px}
 }
