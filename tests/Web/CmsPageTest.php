@@ -160,7 +160,10 @@ final class CmsPageTest extends WebTestCase
 
         // 붙임을 화면에서 저장할 수 있다.
         $terms = $app->cms()->findBySlug('terms');
-        self::assertSame(200, $this->get($app, '/admin/content/' . $terms['id'] . '/edit')->getStatusCode());
+        $termsEditForm = $this->get($app, '/admin/content/' . $terms['id'] . '/edit');
+        self::assertSame(200, $termsEditForm->getStatusCode());
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $this->body($termsEditForm), $termsKeyMatch));
+        $termsImageKey = $termsKeyMatch[1];
         $saved = $this->post($app, '/admin/terms/uses', [
             'csrf_token' => $_SESSION['csrf_token'],
             'scope' => 'signup',
@@ -172,6 +175,33 @@ final class CmsPageTest extends WebTestCase
         $uses = $app->consentUses()->listForScope('signup');
         self::assertCount(1, $uses);
         self::assertSame(1, (int) $uses[0]['required']);
+        self::assertSame(10, (int) $uses[0]['sort_order']);
+
+        // 체크를 풀고 다시 보내면 그 자리에서 완전히 떨어진다.
+        $detached = $this->post($app, '/admin/terms/uses', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'scope' => 'signup',
+        ]);
+        self::assertSame(303, $detached->getStatusCode(), $this->body($detached));
+        self::assertSame([], $app->consentUses()->listForScope('signup'));
+
+        // 약관을 폼에서 고쳐 저장하면 약관 관리로 돌아가야 한다.
+        $termsEdit = $this->post($app, '/admin/content/' . $terms['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'terms', 'title' => $terms['title'],
+            'content' => $terms['content'], 'status' => $terms['status'],
+            'show_in_menu' => $terms['show_in_menu'] ? '1' : '0',
+            'sort_order' => (string) $terms['sort_order'], 'image_key' => $termsImageKey, 'is_consent' => '1',
+        ]);
+        self::assertSame(303, $termsEdit->getStatusCode(), $this->body($termsEdit));
+        self::assertSame('/admin/terms?saved=1', $termsEdit->getHeaderLine('Location'));
+
+        // 관리자 화면 밖에서 만든 약관도 약관 관리 목록에 나온다.
+        $app->cms()->createPage([
+            'slug' => 'marketing', 'title' => '마케팅 활용 동의', 'content' => '마케팅 활용 동의 내용입니다.',
+            'seo_description' => null, 'status' => 'draft', 'show_in_menu' => 0, 'sort_order' => 30,
+            'is_consent' => 1,
+        ]);
+        self::assertStringContainsString('마케팅 활용 동의', $this->body($this->get($app, '/admin/terms')));
 
         // 한 약관에 누가 동의했는지 따로 볼 수 있다.
         $app->consents()->record('user', 1, 'signup', $app->cms()->findBySlug('terms'), true, null);
@@ -205,6 +235,16 @@ final class CmsPageTest extends WebTestCase
         $preview = $this->get($app, '/admin/content/' . $saved['id'] . '/preview');
         self::assertSame(200, $preview->getStatusCode());
         self::assertStringContainsString('공개된 내용 미리보기', $this->body($preview));
+
+        // 약관이 아닌 일반 내용은 폼에서 고쳐 저장하면 내용 관리로 돌아간다.
+        $pageEdit = $this->post($app, '/admin/content/' . $saved['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'guide', 'title' => $saved['title'],
+            'content' => $saved['content'], 'status' => $saved['status'],
+            'show_in_menu' => $saved['show_in_menu'] ? '1' : '0',
+            'sort_order' => (string) $saved['sort_order'], 'image_key' => $saved['image_key'],
+        ]);
+        self::assertSame(303, $pageEdit->getStatusCode(), $this->body($pageEdit));
+        self::assertSame('/admin/content?saved=1', $pageEdit->getHeaderLine('Location'));
 
         $deleted = $this->post($app, '/admin/content/' . $saved['id'] . '/delete', [
             'csrf_token' => $_SESSION['csrf_token'],

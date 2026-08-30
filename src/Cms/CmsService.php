@@ -151,15 +151,6 @@ final class CmsService
         return $this->cms->listDeletedPages();
     }
 
-    public function legalOverview(Acl $acl): array
-    {
-        $acl->assertGlobalAdmin();
-        return [
-            'terms' => $this->cms->findBySlug('terms'),
-            'privacy' => $this->cms->findBySlug('privacy'),
-        ];
-    }
-
     public function page(Acl $acl, int $id): array
     {
         $acl->assertGlobalAdmin();

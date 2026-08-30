@@ -196,8 +196,9 @@ final class AdminCmsController
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
+        $acl = $this->app->guestAcl();
         try {
-            $this->app->cmsService()->createPage($this->app->guestAcl(), $input);
+            $id = $this->app->cmsService()->createPage($acl, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -205,7 +206,9 @@ final class AdminCmsController
             return $this->renderPageForm($request, $response->withStatus(422),
                 $this->withImageKey($input), $e->details(), true);
         }
-        return $this->redirect($request, $response, 'admin.content', ['saved' => '1']);
+        // 방금 만든 값 그대로가 아니라 저장된 행을 다시 읽어 약관 여부를 판단한다.
+        $legal = $this->isLegal($this->app->cmsService()->page($acl, $id));
+        return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['saved' => '1']);
     }
 
     public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -221,7 +224,7 @@ final class AdminCmsController
         $this->assertCsrf($input);
         $id = (int) $args['id'];
         $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
-        $legal = false;
+        $legal = $this->isLegal($page);
         try {
             $this->app->cmsService()->updatePage($this->app->guestAcl(), $id, $input);
         } catch (DomainError $e) {
@@ -249,7 +252,7 @@ final class AdminCmsController
         $this->assertCsrf($input);
         $id = (int) $args['id'];
         $page = $this->app->cmsService()->page($this->app->guestAcl(), $id);
-        $legal = false;
+        $legal = $this->isLegal($page);
         $this->app->cmsService()->deletePage($this->app->guestAcl(), $id);
         return $this->redirect($request, $response, $legal ? 'admin.terms' : 'admin.content', ['deleted' => '1']);
     }
@@ -262,9 +265,11 @@ final class AdminCmsController
         ]);
     }
 
+    /** 약관 여부는 슬러그가 아니라 is_consent 표시가 가른다. 슬러그는 누구나 바꿀 수 있지만
+     *  표시는 약관 관리 화면에서만 붙고 떨어진다. */
     private function isLegal(array $page): bool
     {
-        return in_array($page['slug'], ['terms', 'privacy'], true);
+        return (int) ($page['is_consent'] ?? 0) === 1;
     }
 
     private function defaults(): array
