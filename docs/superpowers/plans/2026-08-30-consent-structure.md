@@ -1980,3 +1980,6 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - 폼(신청서) 기능 자체
 - 동의 철회·재동의 화면
 - 만 14세 미만 법정대리인 동의
+- `ux_contents_consent` 인덱스 지우기 (스펙 4.1 이 명시했으나 칸과 함께 다음 판으로)
+- 가입 게이트가 아직 slug terms/privacy 에 매여 있음 (`legalDocuments()`) — 붙임 기반 게이트로 전환
+- 회원 탈퇴 기능이 생기면 consents_given 파기를 함께 (처리방침 문구의 보관기간 약속 이행)
