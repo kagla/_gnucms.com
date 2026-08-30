@@ -3,5 +3,5 @@
    동의로 볼 수 없으니 여기에도 적지 않는다. 테마마다 두지 않고 default 로 폴백시킨다. #}
 {% set required_consents = consent_documents|filter(doc => doc.required == 1) %}
 {% if required_consents is not empty %}
-  <p class="social-consent">계속하면 {% for doc in required_consents %}<a class="link" href="{{ url_for('content.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a>{{ loop.last ? '' : ', ' }}{% endfor %}에 동의한 것으로 봅니다.</p>
+  <p class="social-consent">계속하면 {% for doc in required_consents %}<a class="link" href="{{ url_for('terms.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a>{{ loop.last ? '' : ', ' }}{% endfor %}에 동의한 것으로 봅니다.</p>
 {% endif %}

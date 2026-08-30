@@ -32,7 +32,7 @@
               <tr>
                 <td data-label="약관"><span class="cell-title">{{ page.title }}</span>
                   {% if page.status != 'published' %}<span class="badge badge-warning badge-soft badge-xs">초안</span>{% endif %}</td>
-                <td data-label="공개 주소"><code class="kbd kbd-sm">/content/{{ page.slug }}</code></td>
+                <td data-label="공개 주소"><code class="kbd kbd-sm">/terms/{{ page.slug }}</code></td>
                 <td data-label="사용처">
                   <select class="select select-bordered select-sm" name="usage[{{ page.id }}]">
                     <option value="signup"{{ page.usage == 'signup' ? ' selected' : '' }}>회원가입 동의</option>

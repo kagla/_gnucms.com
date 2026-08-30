@@ -112,18 +112,20 @@ final class Routes
         $slim->get('/', [new BoardController($app), 'index'])->setName('boards.index');
         $pageController = new PageController($app);
         $slim->get('/content/{slug:[a-z0-9][a-z0-9_-]*}', [$pageController, 'show'])->setName('content.show');
-        // 약관도 이제 그냥 내용이라 /content/{slug} 가 정식 주소다. 예전 주소는 그리로 보낸다.
-        foreach (['/terms/service' => 'terms', '/terms' => 'terms', '/privacy' => 'privacy',
-                  '/terms/privacy' => 'privacy'] as $legacyPath => $slug) {
+        // 옛 주소 되돌림. FastRoute 는 변수 라우트 뒤의 정적 라우트를 금지하므로
+        // /terms/service 같은 정적 경로를 /terms/{slug} 보다 먼저 등록한다.
+        foreach (['/terms/service' => 'terms', '/terms' => 'terms', '/privacy' => 'privacy'] as $legacyPath => $slug) {
             $slim->get($legacyPath, static function (
                 ServerRequestInterface $request,
                 ResponseInterface $response
             ) use ($slug): ResponseInterface {
                 $url = RouteContext::fromRequest($request)->getRouteParser()
-                    ->urlFor('content.show', ['slug' => $slug]);
+                    ->urlFor('terms.show', ['slug' => $slug]);
                 return $response->withHeader('Location', $url)->withStatus(301);
             });
         }
+        // 약관의 정식 주소는 /terms/{slug} 다. 일반 내용과 주소부터 갈라 둔다.
+        $slim->get('/terms/{slug:[a-z0-9][a-z0-9_-]*}', [$pageController, 'showTerms'])->setName('terms.show');
         // 파일 이름 뒤의 -thumb / -view 는 줄여서 내보내는 크기다 (ContentImageService::VARIANTS).
         $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'showOwned'])->setName('editor.owned_image');

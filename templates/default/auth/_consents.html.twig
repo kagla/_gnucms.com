@@ -7,7 +7,7 @@
       {% set is_required = doc.required == 1 %}
       <label class="label check-row{% if errors[field] is defined %} is-invalid{% endif %}">
         <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" name="{{ field }}" value="1"{{ values[field]|default(false) ? ' checked' : '' }}{{ is_required ? ' required' : '' }}>
-        <span><a class="link" href="{{ url_for('content.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a> 동의
+        <span><a class="link" href="{{ url_for('terms.show', {slug: doc.slug}) }}" target="_blank" rel="noopener">{{ doc.title }}</a> 동의
           <span class="badge {{ is_required ? 'badge-error' : 'badge-ghost' }} badge-soft badge-xs">{{ is_required ? '필수' : '선택' }}</span></span>
       </label>
       {% if errors[field] is defined %}<p class="validator-hint">{{ errors[field] }}</p>{% endif %}

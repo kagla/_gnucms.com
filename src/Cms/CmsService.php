@@ -166,6 +166,12 @@ final class CmsService
         return $page;
     }
 
+    /** 하단에 표시할 약관 목록. 사용처와 무관하게 공개된 약관은 모두 나온다. */
+    public function publishedConsentPages(): array
+    {
+        return $this->cms->listPublishedConsentPages();
+    }
+
     public function publishedPage(string $slug): array
     {
         $page = $this->cms->findPublishedBySlug($slug);

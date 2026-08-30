@@ -151,7 +151,7 @@ final class CmsPageTest extends WebTestCase
         $legalPage = $this->get($app, '/admin/terms');
         self::assertSame(200, $legalPage->getStatusCode());
         self::assertStringContainsString('이용약관', $this->body($legalPage));
-        self::assertStringContainsString('>/content/terms<', $this->body($legalPage));
+        self::assertStringContainsString('>/terms/terms<', $this->body($legalPage));
         self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
 
         // 옛 주소는 없어졌다.
@@ -237,7 +237,16 @@ final class CmsPageTest extends WebTestCase
 
         // 약관의 옛 공개 주소는 그대로 /content/{slug} 로 보낸다.
         self::assertSame(301, $this->get($app, '/terms/service')->getStatusCode());
-        self::assertSame('/content/terms', $this->get($app, '/terms/service')->getHeaderLine('Location'));
+        self::assertSame('/terms/terms', $this->get($app, '/terms/service')->getHeaderLine('Location'));
+
+        // 약관이 아닌 내용을 /terms 밑으로 열면 정식 주소인 /content 로 보낸다.
+        $app->cms()->createPage([
+            'slug' => 'about-us', 'title' => '소개', 'content' => '<p>소개 본문입니다.</p>',
+            'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+        ]);
+        self::assertSame(200, $this->get($app, '/content/about-us')->getStatusCode());
+        self::assertSame(301, $this->get($app, '/terms/about-us')->getStatusCode());
+        self::assertSame('/content/about-us', $this->get($app, '/terms/about-us')->getHeaderLine('Location'));
 
         $draftId = $app->cms()->createPage([
             'slug' => 'private-note', 'title' => '비공개 안내', 'content' => '관리자 미리보기',

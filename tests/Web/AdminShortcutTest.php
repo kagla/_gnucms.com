@@ -21,21 +21,22 @@ final class AdminShortcutTest extends WebTestCase
         $app->cms()->createPage([
             'slug' => 'privacy', 'title' => '개인정보 처리방침', 'content' => '내용',
             'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
+            'is_consent' => 1,
         ]);
 
-        // 옛 주소는 정식 주소로 보낸다.
-        self::assertSame(301, $this->get($app, '/terms/privacy')->getStatusCode());
-        self::assertSame('/content/privacy', $this->get($app, '/terms/privacy')->getHeaderLine('Location'));
+        // 약관의 정식 주소는 /terms/{slug} 다. 옛 /content 주소는 그리로 보낸다.
+        self::assertSame(301, $this->get($app, '/content/privacy')->getStatusCode());
+        self::assertSame('/terms/privacy', $this->get($app, '/content/privacy')->getHeaderLine('Location'));
 
         $page = $app->cms()->findBySlug('privacy');
         self::assertStringNotContainsString(
             '/admin/content/' . $page['id'] . '/edit',
-            $this->body($this->get($app, '/content/privacy')),
+            $this->body($this->get($app, '/terms/privacy')),
             '게스트에게는 관리 링크가 보이면 안 된다'
         );
 
         $this->loginAsAdmin($app);
-        $body = $this->body($this->get($app, '/content/privacy'));
+        $body = $this->body($this->get($app, '/terms/privacy'));
 
         self::assertStringContainsString('/admin/content/' . $page['id'] . '/edit', $body);
         self::assertStringContainsString('관리자에게만 보입니다', $body);

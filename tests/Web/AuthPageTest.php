@@ -94,10 +94,13 @@ final class AuthPageTest extends WebTestCase
         $form = $this->body($this->get($app, '/register'));
         self::assertStringContainsString('name="agree_' . $ids['terms'] . '"', $form);
         self::assertStringContainsString('name="agree_' . $ids['privacy'] . '"', $form);
-        self::assertStringContainsString('href="/content/terms"', $form);
-        self::assertStringContainsString('href="/content/privacy"', $form);
-        self::assertSame(200, $this->get($app, '/content/terms')->getStatusCode());
-        self::assertSame(200, $this->get($app, '/content/privacy')->getStatusCode());
+        self::assertStringContainsString('href="/terms/terms"', $form);
+        self::assertStringContainsString('href="/terms/privacy"', $form);
+        self::assertSame(200, $this->get($app, '/terms/terms')->getStatusCode());
+        self::assertSame(200, $this->get($app, '/terms/privacy')->getStatusCode());
+        // 옛 주소로 들어와도 정식 주소로 보낸다.
+        self::assertSame(301, $this->get($app, '/content/terms')->getStatusCode());
+        self::assertSame('/terms/terms', $this->get($app, '/content/terms')->getHeaderLine('Location'));
         $response = $this->post($app, '/register', [
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
             'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',

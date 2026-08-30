@@ -78,6 +78,16 @@ final class CmsRepository
         ));
     }
 
+    /** 사이트 하단에 늘어놓을 공개 약관 전부. 로그인 없이도 보이므로 ACL 을 타지 않는다. */
+    public function listPublishedConsentPages(): array
+    {
+        return $this->db->select(
+            'SELECT * FROM ' . $this->db->q('contents')
+            . " WHERE is_consent = 1 AND status = 'published' AND deleted_at IS NULL"
+            . ' ORDER BY sort_order ASC, id ASC'
+        );
+    }
+
     public function findPageById(int $id): ?array
     {
         $row = $this->db->selectOne(

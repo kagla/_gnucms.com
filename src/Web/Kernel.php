@@ -56,7 +56,10 @@ final class Kernel
         $legalDocuments = [];
         // 가입 화면에 붙는 동의 항목 전부. 개수 제한이 없고, 없으면 빈 배열이다.
         $consentDocuments = [];
+        // 사이트 하단에 늘어놓을 공개 약관 전부. 사용처와 무관하다.
+        $legalPages = [];
         try {
+            $legalPages = $app->cmsService()->publishedConsentPages();
             // 동의 항목을 먼저 읽는다. 씨앗 약관이 아직 없어 legalDocuments() 가
             // 튕겨도, 이미 붙여 둔 항목까지 함께 사라지지는 않는다.
             $consentDocuments = $app->cmsService()->consentDocuments('signup');
@@ -71,6 +74,7 @@ final class Kernel
         $twig->getEnvironment()->addGlobal('registration_available', $registrationAvailable);
         $twig->getEnvironment()->addGlobal('legal_documents', $legalDocuments);
         $twig->getEnvironment()->addGlobal('consent_documents', $consentDocuments);
+        $twig->getEnvironment()->addGlobal('legal_pages', $legalPages);
         $twig->getEnvironment()->addGlobal('site_menu', $app->cmsService()->menu());
         $twig->getEnvironment()->addGlobal('base_path', $basePath);
         $twig->getEnvironment()->addGlobal('active_theme', $themes->name());
