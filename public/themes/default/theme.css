@@ -181,7 +181,7 @@
   --p-soft:color-mix(in srgb,var(--color-primary) 12%,var(--color-base-100));
   --p-line:color-mix(in srgb,var(--color-primary) 32%,transparent);
 
-  --wrap:75rem;   /* 1200px. 흔히 쓰는 본문 폭 */
+  --wrap:71.25rem;   /* 1140px. 흔히 쓰는 본문 폭 */
   --pad:1rem;
   --nav-h:66px;
   --tabs-h:48px;
