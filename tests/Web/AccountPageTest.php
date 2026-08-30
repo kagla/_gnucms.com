@@ -99,6 +99,16 @@ final class AccountPageTest extends WebTestCase
         } catch (DomainError $e) {
             self::assertArrayHasKey('display_name', $e->details());
         }
+        // 한 글자는 안 된다. 자동 이름도 한 글자면 '회원' 으로 대신한다.
+        try {
+            $app->accountService()->updateProfile($b, ['display_name' => '가']);
+            self::fail('한 글자 이름은 막아야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('display_name', $e->details());
+        }
+        $d = $users->createRegistered('a@d.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'a');
+        self::assertSame('회원', $users->findById($d)['display_name']);
+
         // 자기 이름을 그대로 두는 것은 겹침이 아니다.
         $app->accountService()->updateProfile($b, ['display_name' => 'kagla2']);
         self::assertSame('kagla2', $users->findById($b)['display_name']);

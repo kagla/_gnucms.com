@@ -9,6 +9,9 @@ use GnuCms\Support\Clock;
 
 final class UserRepository
 {
+    /** 표시 이름 최소 글자 수. 한 글자는 누구인지 알아볼 수 없고 겹치기도 쉽다. */
+    public const DISPLAY_NAME_MIN = 2;
+
     private Connection $db;
 
     public function __construct(Connection $db)
@@ -70,7 +73,9 @@ final class UserRepository
      */
     public function uniqueDisplayName(string $base): string
     {
-        $base = mb_substr(trim($base) === '' ? '회원' : trim($base), 0, 100);
+        // 너무 짧은 자동 이름(a@x.com 의 'a')은 '회원' 으로 대신한다.
+        $base = trim($base);
+        $base = mb_substr(mb_strlen($base) < self::DISPLAY_NAME_MIN ? '회원' : $base, 0, 100);
         if ($this->findByDisplayName($base) === null) {
             return $base;
         }
