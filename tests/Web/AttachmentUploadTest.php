@@ -101,4 +101,24 @@ final class AttachmentUploadTest extends WebTestCase
 
         self::assertSame(422, $response->getStatusCode());
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testRejectedUploadLeavesNoTempFile(array $dbConfig): void
+    {
+        // 이전 실행이 실패해서 남긴 찌꺼기가 있으면 아래 개수 비교가 흔들리므로
+        // 테스트 시작 전에 먼저 치운다.
+        foreach (glob(sys_get_temp_dir() . '/gnucms-att-*') ?: [] as $leftover) {
+            @unlink($leftover);
+        }
+        $before = count(glob(sys_get_temp_dir() . '/gnucms-att-*') ?: []);
+
+        $app = $this->loggedInApp($dbConfig, false);
+        $file = new UploadedFile($this->tmpFile('x'), 'a.txt', 'text/plain', 1);
+
+        $response = $this->upload($app, '/boards/free/files?csrf_token=' . urlencode($_SESSION['csrf_token']), ['file' => $file]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $after = count(glob(sys_get_temp_dir() . '/gnucms-att-*') ?: []);
+        self::assertSame($before, $after, '거부된 업로드가 gnucms-att-* 임시 파일을 남겼습니다.');
+    }
 }

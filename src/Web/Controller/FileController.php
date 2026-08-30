@@ -107,11 +107,12 @@ final class FileController
             return $this->json($response->withStatus(422), ['error' => '파일이 없습니다.']);
         }
 
+        $file = $this->toFilesArray($uploaded);
         try {
             $descriptor = $this->app->attachments()->upload(
                 $this->app->guestAcl(),
                 (string) $args['key'],
-                $this->toFilesArray($uploaded)
+                $file
             );
         } catch (DomainError $e) {
             // 용량·형식 오류는 폼이 문구로 보여 준다. 권한 같은 판단은 그대로 내보낸다.
@@ -121,6 +122,13 @@ final class FileController
             $message = $e->details() !== [] ? implode(' ', $e->details()) : $e->getMessage();
 
             return $this->json($response->withStatus($e->status()), ['error' => $message]);
+        } finally {
+            // 성공하면 서비스가 임시 파일을 업로드 디렉터리로 옮겨 버리므로 is_file 이
+            // false 가 되어 아무 일도 안 한다. 거부되거나(413/422) 재던져지는 경우
+            // (401/403 등) 임시 파일이 그대로 남아 tmp 를 오염시키므로 여기서 지운다.
+            if (is_file($file['tmp_name'])) {
+                @unlink($file['tmp_name']);
+            }
         }
 
         $descriptor['size_label'] = $this->sizeLabel((int) $descriptor['size']);
