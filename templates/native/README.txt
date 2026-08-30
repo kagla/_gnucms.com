@@ -24,8 +24,9 @@ Twig 대신 `PhpView` 를 세운다. `theme.php` 가 없는 테마는 지금까�
   $this->start('body') … stop()      블록을 잡는다                        ({% block %})
   $this->block('body', '')           잡힌 블록을 낸다. 없으면 기본값      ({{ block('body') }})
   $this->has('header_search')        블록이 비어 있지 않은가              (block('x')|trim is not empty)
-  $this->insert('posts/_meta', [..]) 조각을 그려 낸다                     ({% include %})
-  $this->fetch('posts/_meta', [..])  조각을 문자열로                      ({% set %}{% include %}{% endset %})
+  $this->def($v, '기본')             비었으면 기본값                      (|default('기본'))
+  $this->insert($t, $data=[], $only=false)  조각을 그려 낸다              ({% include %})
+  $this->fetch($t, $data=[], $only=false)   조각을 문자열로               ({% set %}{% include %}{% endset %})
   $this->url('posts.index', [..], [..])  라우트 주소                      (url_for())
   $this->asset('theme.css')          테마 정적 파일 주소                  (theme_asset())
   $this->html($content)              정화된 본문 HTML                     (|cms_html)
@@ -33,6 +34,15 @@ Twig 대신 `PhpView` 를 세운다. `theme.php` 가 없는 테마는 지금까�
   $this->date($v, 'Y.m.d')           날짜                                 (|date)
   $this->json($v)                    <script> 안에 넣을 JSON              (|json_encode)
   $this->base                        기준 경로                            (base_path)
+
+`insert()`/`fetch()` 의 `$only` 는 Twig 의 `with ... only` 다. 참이면 지금 화면의 지역 변수를
+끊고 `$data` 만 넘긴다. 전역(site, current_user, csrf_token, …)은 Twig 도 끊지 않으므로 남는다.
+
+`def()` 는 Twig 의 `|default` 와 같다. PHP 의 `??` 는 null 만 보지만 Twig 는 `''`·`false`·`[]`
+도 '비었다' 로 본다(문자열 "0" 과 숫자 0 은 비어 있지 않다). 그래서 `|default('list')` 처럼
+기본값이 비어 있지 않은 자리는 `??` 가 아니라 `def()` 로 옮겨야 한다. 기본값이 `''`·`false`·
+`null`·`0`·`[]` 인 자리는 두 방식의 결과가 같아 `??` 를 그대로 쓴다.
+값이 아예 없을 수 있으면 `def($x ?? null, '기본')` 처럼 쓴다.
 
 규칙: 출력은 전부 $this->e() 를 거친다
 --------------------------------------
@@ -51,9 +61,11 @@ Twig 를 옮길 때 주의할 것
 
 파리티 테스트 돌리는 법
 -----------------------
-41개 경로(손님 20 + 관리 21)를 `default` 와 `native` 로 그려 HTML 을 견준다.
+48개 경로를 `default` 와 `native` 로 그려 HTML 을 견준다. 손님 22 + 없는 쪽 1 + 관리 21 +
+공개 화면 4개(`/`, `/boards/free`, `/posts/{id}`, `/content/about`)를 관리자로 다시 본 것이다.
+쪽 넘김은 씨앗을 25개로 늘려 `?page=2` 로 본다.
 
-  ./vendor/bin/phpunit --filter ThemeParityTest      # 기대: OK (41 tests)
+  ./vendor/bin/phpunit --filter ThemeParityTest      # 기대: OK (48 tests)
 
 비교 전에 정규화하는 것은 다섯 가지뿐이다: 줄 끝 공백과 빈 줄, 태그 사이 공백,
 `theme.css?v=` 해시와 `/themes/{이름}/`, `image_key` 난수, 그리고 테마 선택 `<select>` 에서
@@ -69,9 +81,11 @@ Twig 를 옮길 때 주의할 것
 
 알려진 한계
 -----------
-- `PhpTemplate::run()` 에 순환 방지가 없다. 레이아웃 둘이 서로를 `layout()` 으로 가리키면
-  무한 재귀로 죽는다. 지금 58개 화면에는 그런 짝이 없어 두었다.
+- 레이아웃 둘이 서로를 `layout()` 으로 가리키면 `PhpTemplate::run()` 이 예외를 던진다
+  (`레이아웃이 서로를 감쌉니다`). 무한히 돌지는 않는다.
 - `PhpTemplate::date()` 는 문자열/정수만 받는다. `DateTimeInterface` 를 넘기면 안 된다.
   지금은 컨트롤러가 전부 문자열로 넘겨 문제가 없다.
+- `date(null)` 은 빈 문자열을 낸다. Twig 의 `|date` 는 null 을 '지금' 으로 보아 현재 시각을
+  찍는다. 지금 58개 화면에는 null 이 오는 자리가 없어 파리티에 잡히지 않는다.
 - 테마 하나만 본다(엔진 간 폴백 없음, 위 참고). PHP 테마를 하나 더 만들면 그때 폴백 경로를
   `PhpView` 에 들여야 한다.

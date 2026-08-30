@@ -16,8 +16,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * native 로 아직 옮기지 않은 화면은 '템플릿을 찾을 수 없습니다' 로 떨어진다.
  * 그 실패가 곧 남은 일 목록이다.
  *
- * normalize() 는 네 가지만 정규화한다: ?v= 캐시 해시, /themes/{name}/ 경로,
- * 공백, 그리고 image_key 입력에 담긴 32자리 16진 난수.
+ * normalize() 는 다섯 가지만 정규화한다: ?v= 캐시 해시, /themes/{name}/ 경로,
+ * 공백, image_key 입력에 담긴 32자리 16진 난수, 그리고 테마 선택 <select> 에서
+ * 하니스가 스스로 심는 default/native <option> 의 selected 표시.
  */
 final class ThemeParityTest extends WebTestCase
 {
@@ -38,18 +39,24 @@ final class ThemeParityTest extends WebTestCase
     public static function routes(): array
     {
         $guest = [
-            '/', '/boards/free', '/boards/free?view=gallery', '/boards/free?view=magazine',
+            '/', '/boards/free', '/boards/free?page=2', '/boards/free?view=gallery',
+            '/boards/free?view=magazine',
             '/boards/free?view=news', '/boards/free?q=테스트&category=질문', '/boards/photo',
             '/boards/news', '/boards/mag', '/boards/free/write', '/posts/{post}', '/posts/{post}/edit',
             '/comments/{comment}/edit', '/content/about', '/terms/service', '/terms/privacy',
             '/login', '/register', '/forgot-password', '/reset-password?token=abc', '/health',
         ];
+        // 손님으로도 보는 공개 화면을 관리자로 한 번 더 본다. 관리자에게만 나오는
+        // 수정·삭제 단추와 관리 메뉴가 두 엔진에서 같은지 여기서 드러난다.
+        $publicAsAdmin = ['/', '/boards/free', '/posts/{post}', '/content/about'];
         $admin = [
             '/admin', '/admin/boards', '/admin/boards/new', '/admin/boards/free/edit', '/admin/posts',
+            '/admin/posts?page=2',
             '/admin/posts?q=테스트&board=free', '/admin/members', '/admin/members/{admin}/edit',
             '/admin/content', '/admin/content/new', '/admin/content/{page}/edit',
             '/admin/content/{page}/preview', '/admin/content/trash', '/admin/settings', '/admin/mail',
-            '/admin/terms', '/admin/terms/new', '/admin/password', '/notifications',
+            '/admin/terms', '/admin/terms/new', '/admin/terms/{terms}/consents',
+            '/admin/password', '/notifications',
         ];
         $cases = [];
         foreach ($guest as $path) {
@@ -58,6 +65,9 @@ final class ThemeParityTest extends WebTestCase
         $cases['/no-such-page'] = ['/no-such-page', 404, false];
         foreach ($admin as $path) {
             $cases[$path] = [$path, 200, true];
+        }
+        foreach ($publicAsAdmin as $path) {
+            $cases[$path . ' (admin)'] = [$path, 200, true];
         }
 
         return $cases;
@@ -82,6 +92,7 @@ final class ThemeParityTest extends WebTestCase
             $real = strtr($path, [
                 '{post}' => (string) $ids['post'], '{comment}' => (string) $ids['comment'],
                 '{page}' => (string) $ids['page'], '{admin}' => (string) $ids['admin'],
+                '{terms}' => (string) $ids['terms'],
             ]);
             $response = $this->get($app, $real);
             self::assertSame($status, $response->getStatusCode(), $theme . ' ' . $real);
@@ -90,7 +101,7 @@ final class ThemeParityTest extends WebTestCase
         self::assertSame($html['default'], $html['native'], $path);
     }
 
-    /** 씨앗. smoke.php 와 같은 데이터. @return array{post:int,comment:int,page:int,admin:int,admin_email:string} */
+    /** 씨앗. smoke.php 와 같은 데이터. @return array{post:int,comment:int,page:int,admin:int,terms:int,admin_email:string} */
     private function seed(App $app): array
     {
         $acl = $this->adminAcl();
@@ -108,7 +119,8 @@ final class ThemeParityTest extends WebTestCase
             ]);
         }
         $postId = null;
-        for ($i = 1; $i <= 6; $i++) {
+        // 쪽 넘김을 보려면 한 쪽(20개)을 넘겨야 한다. 이 씨앗은 이 테스트 전용이다.
+        for ($i = 1; $i <= 25; $i++) {
             $created = $app->postService()->create($acl, 'free', [
                 'title' => "테스트 글 {$i}", 'content' => "<p>본문 {$i}</p>", 'category' => '질문',
                 // 두 엔진이 같은 값을 받도록 무작위 대신 정해진 열쇠를 쓴다.
@@ -129,9 +141,14 @@ final class ThemeParityTest extends WebTestCase
         ]);
         $app->cmsService()->ensureLegalDrafts($acl);
         // 약관은 초안으로 만들어진다. 공개 화면을 보려면 공개 상태로 올린다.
+        $termsId = 0;
         foreach (['service', 'privacy'] as $slug) {
             $doc = $app->cms()->findBySlug($slug);
             if ($doc !== null) {
+                if ($slug === 'service') {
+                    // 동의 이력 화면(/admin/terms/{id}/consents)이 약관 쪽 id 를 받는다.
+                    $termsId = (int) $doc['id'];
+                }
                 $app->cmsService()->updatePage($acl, (int) $doc['id'], [
                     'title' => $doc['title'], 'slug' => $doc['slug'], 'content' => $doc['content'],
                     'status' => 'published', 'show_in_menu' => '0', 'sort_order' => '0',
@@ -154,6 +171,7 @@ final class ThemeParityTest extends WebTestCase
             'comment' => (int) $comment['id'],
             'page' => (int) $pageId,
             'admin' => (int) $adminId,
+            'terms' => $termsId,
             'admin_email' => 'admin@example.com',
         ];
     }

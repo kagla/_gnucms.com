@@ -17,7 +17,7 @@ Twig 를 걷어내고 **PHP 파일 템플릿만으로** 화면을 그리려 한�
 ## 2. 목표
 
 1. **`native` 테마는 Twig 없이 돈다.** 58개 화면 전부 PHP 파일이다.
-2. **렌더 결과가 Twig `default` 와 같다.** 같은 데이터로 41개 경로를 그려 HTML 을 비교한다.
+2. **렌더 결과가 Twig `default` 와 같다.** 같은 데이터로 48개 경로를 그려 HTML 을 비교한다.
 3. **엔진을 테마가 고른다.** 당분간 Twig 테마와 PHP 테마가 함께 돈다.
 4. **Twig 제거가 파일 삭제로 끝나게** 경계를 잡는다.
 
@@ -68,6 +68,7 @@ return ['engine' => 'php', 'label' => 'PHP 네이티브 (하늘빛)'];
 | `$this->start('body')` … `$this->stop()` | 블록을 잡는다 | `{% block %}` |
 | `$this->block('body', '')` | 잡힌 블록을 낸다. 없으면 기본값 | `{{ block('body') }}` / 부모 블록 본문 |
 | `$this->has('header_search')` | 블록이 비어 있지 않은가 | `block('x')\|trim is not empty` |
+| `$this->def($v, $d)` | 값이 비었으면(`null`·`''`·`false`·`[]`) 기본값 | `\|default(d)` |
 | `$this->insert('posts/_meta', ['post' => $post])` | 조각을 그려 낸다 | `{% include %}` |
 | `$this->fetch('posts/_meta', [...])` | 조각을 문자열로 | `{% set x %}{% include %}{% endset %}` |
 | `$this->url('posts.index', ['key' => $k], ['q' => $q])` | 라우트 주소 | `url_for()` |
@@ -117,8 +118,12 @@ return ['engine' => 'php', 'label' => 'PHP 네이티브 (하늘빛)'];
 
 ### 3.7 검증
 
-**HTML 파리티.** 같은 씨앗 데이터로 41개 경로(손님 20 + 관리 21)를 `default` 와 `native`
-로 그려 비교한다. 비교 전에 다음만 정규화한다.
+**HTML 파리티.** 같은 씨앗 데이터로 48개 경로(손님 22 + 없는 쪽 1 + 관리 21 + 공개 화면을
+관리자로 다시 본 것 4)를 `default` 와 `native` 로 그려 비교한다. 손님·관리자를 갈라 보는 것은
+`/`·`/boards/free`·`/posts/{id}`·`/content/about` 네 쪽이다 — 관리자에게만 나오는 수정·삭제
+단추가 여기서만 드러난다. 쪽 넘김은 씨앗을 25개로 늘려 `/boards/free?page=2`(손님)와
+`/admin/posts?page=2`(관리)로 본다. 동의 이력은 `/admin/terms/{service 약관 id}/consents` 다.
+비교 전에 다음만 정규화한다.
 
 - 줄 끝 공백과 빈 줄
 - 태그 사이 공백 (`>\s+<` → `><`)
@@ -129,7 +134,7 @@ return ['engine' => 'php', 'label' => 'PHP 네이티브 (하늘빛)'];
   `admin/settings` 가 그 값을 정직하게 보여주므로, 하니스가 심은 선택이 화면에 새어 나온다.
   `image_key` 와 같은 성격의, 하니스 자신이 만든 차이다. 다른 테마 이름은 건드리지 않는다)
 
-그 밖의 차이는 전부 결함이다. 목표는 **41개 경로 차이 0**.
+그 밖의 차이는 전부 결함이다. 목표는 **48개 경로 차이 0**.
 
 **단위 테스트.** `PhpView` 의 레이아웃·블록 덮어쓰기·이스케이프·`insert`·`url`·파일 없음.
 `ThemeManager::engine()`. `View::fromRequest()`.
