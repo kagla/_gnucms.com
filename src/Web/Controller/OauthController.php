@@ -11,7 +11,7 @@ use GnuCms\Oauth\SocialProfile;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class OauthController
 {
@@ -63,7 +63,7 @@ final class OauthController
             'profile' => $profile->toArray(),
             'expires_at' => time() + self::TTL,
         ];
-        return Twig::fromRequest($request)->render($response, 'auth/social_email.html.twig', [
+        return View::fromRequest($request)->render($response, 'auth/social_email', [
             'provider_label' => $this->app->providerRegistry()->get($key)->label(),
             'errors' => [],
             'values' => ['email' => $profile->email ?? ''],
@@ -85,7 +85,7 @@ final class OauthController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render($response->withStatus(422), 'auth/social_email.html.twig', [
+            return View::fromRequest($request)->render($response->withStatus(422), 'auth/social_email', [
                 'provider_label' => $this->app->providerRegistry()->get($profile->provider)->label(),
                 'errors' => $e->details(),
                 'values' => ['email' => $email],
@@ -94,7 +94,7 @@ final class OauthController
         $_SESSION['oauth_pending']['email'] = $email;
         $_SESSION['oauth_pending']['token_hash'] = hash('sha256', $token);
 
-        return Twig::fromRequest($request)->render($response, 'auth/social_email_sent.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/social_email_sent');
     }
 
     public function complete(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

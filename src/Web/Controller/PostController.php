@@ -10,7 +10,7 @@ use GnuCms\Service\BoardService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class PostController
 {
@@ -32,7 +32,7 @@ final class PostController
         $boardEntity = $this->app->boardService()->getEntity($acl, $key);
         $list = $this->app->postService()->listPosts($acl, $key, $query);
 
-        return Twig::fromRequest($request)->render($response, 'posts/index.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/index', [
             'board' => $board,
             'list'  => $list,
             'can_write' => $acl->canWrite($boardEntity),
@@ -128,7 +128,7 @@ final class PostController
         $loaded = $this->app->postService()->loadForRead($acl, $id, null);
         $post = $loaded['post'];
 
-        return Twig::fromRequest($request)->render($response, 'posts/edit.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/edit', [
             'board'  => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'post'   => ['id' => $id, 'author_id' => $post['author_id']],
             'errors' => $errors,
@@ -161,7 +161,7 @@ final class PostController
         $entity = $this->app->boardService()->getEntity($acl, $key);
         $acl->assertCanWrite($entity);
 
-        return Twig::fromRequest($request)->render($response, 'posts/create.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/create', [
             'board' => $this->app->boardService()->get($acl, $key),
             'errors' => [],
             // 편집기가 올린 이미지를 한 폴더로 묶는 키. 저장할 때 본문에 남은 것만 남긴다.
@@ -183,9 +183,9 @@ final class PostController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render(
+            return View::fromRequest($request)->render(
                 $response->withStatus(422),
-                'posts/create.html.twig',
+                'posts/create',
                 [
                     'board' => $this->app->boardService()->get($acl, $key),
                     'errors' => $e->details(),
@@ -212,7 +212,7 @@ final class PostController
         $post = $this->app->postService()->get($acl, $id, null);
         $comments = $this->app->commentService()->listComments($acl, $id, null);
 
-        return Twig::fromRequest($request)->render($response, 'posts/show.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/show', [
             'post'     => $post,
             'board'    => $board,
             'comments' => $comments,

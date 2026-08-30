@@ -6,21 +6,21 @@ namespace GnuCms\Web\Middleware;
 
 use GnuCms\App;
 use GnuCms\Auth\Identity;
+use GnuCms\View\ViewInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
-use Slim\Views\Twig;
 
 final class SessionGuard implements MiddlewareInterface
 {
     private App $app;
-    private Twig $twig;
+    private ViewInterface $view;
 
-    public function __construct(App $app, Twig $twig)
+    public function __construct(App $app, ViewInterface $view)
     {
         $this->app = $app;
-        $this->twig = $twig;
+        $this->view = $view;
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
@@ -53,15 +53,15 @@ final class SessionGuard implements MiddlewareInterface
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         }
 
-        $this->twig->getEnvironment()->addGlobal('current_user', [
+        $this->view->addGlobal('current_user', [
             'is_guest' => $identity->isGuest(),
             // 글·댓글이 내 것인지 화면에서 가리려면 작성자 id 와 견줄 값이 필요하다.
             'id' => $identity->sub(),
             'display_name' => $identity->displayName(),
             'is_admin' => $identity->isAdmin(),
         ]);
-        $this->twig->getEnvironment()->addGlobal('csrf_token', $_SESSION['csrf_token']);
-        $this->twig->getEnvironment()->addGlobal('unread_notifications', $this->unreadCount());
+        $this->view->addGlobal('csrf_token', $_SESSION['csrf_token']);
+        $this->view->addGlobal('unread_notifications', $this->unreadCount());
 
         try {
             return $handler->handle($request);

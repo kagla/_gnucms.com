@@ -10,7 +10,7 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class AuthController
 {
@@ -23,7 +23,7 @@ final class AuthController
 
     public function loginForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'auth/login.html.twig', ['errors' => [], 'values' => []]);
+        return View::fromRequest($request)->render($response, 'auth/login', ['errors' => [], 'values' => []]);
     }
 
     public function login(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -36,9 +36,9 @@ final class AuthController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render(
+            return View::fromRequest($request)->render(
                 $response->withStatus(422),
-                'auth/login.html.twig',
+                'auth/login',
                 ['errors' => $e->details(), 'values' => ['email' => $input['email'] ?? '']]
             );
         }
@@ -50,7 +50,7 @@ final class AuthController
     public function registerForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->assertRegistrationEnabled();
-        return Twig::fromRequest($request)->render($response, 'auth/register.html.twig', [
+        return View::fromRequest($request)->render($response, 'auth/register', [
             'errors' => [], 'values' => [], 'legal' => $this->registrationLegal(),
         ]);
     }
@@ -70,9 +70,9 @@ final class AuthController
             foreach ($this->app->cmsService()->consentDocuments('signup') as $doc) {
                 $values['agree_' . $doc['id']] = isset($input['agree_' . $doc['id']]);
             }
-            return Twig::fromRequest($request)->render(
+            return View::fromRequest($request)->render(
                 $response->withStatus(422),
-                'auth/register.html.twig',
+                'auth/register',
                 ['errors' => $e->details(), 'values' => $values, 'legal' => $this->registrationLegal()]
             );
         }
@@ -80,7 +80,7 @@ final class AuthController
             $this->storeSession($user);
             return $this->redirectTo($request, $response, 'admin.index');
         }
-        return Twig::fromRequest($request)->render($response, 'auth/check_email.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/check_email');
     }
 
     private function assertRegistrationEnabled(): void
@@ -99,12 +99,12 @@ final class AuthController
     {
         $token = $request->getQueryParams()['token'] ?? '';
         $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
-        return Twig::fromRequest($request)->render($response, 'auth/verified.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/verified');
     }
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'auth/forgot.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/forgot');
     }
 
     public function forgot(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -113,13 +113,13 @@ final class AuthController
         $this->assertCsrf($input);
         $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
         $this->app->accountService()->requestPasswordReset($email);
-        return Twig::fromRequest($request)->render($response, 'auth/reset_sent.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/reset_sent');
     }
 
     public function resetForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $token = $request->getQueryParams()['token'] ?? '';
-        return Twig::fromRequest($request)->render($response, 'auth/reset.html.twig', [
+        return View::fromRequest($request)->render($response, 'auth/reset', [
             'token' => is_scalar($token) ? (string) $token : '',
             'errors' => [],
         ]);
@@ -135,13 +135,13 @@ final class AuthController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render($response->withStatus(422), 'auth/reset.html.twig', [
+            return View::fromRequest($request)->render($response->withStatus(422), 'auth/reset', [
                 'token' => isset($input['token']) && is_scalar($input['token']) ? (string) $input['token'] : '',
                 'errors' => $e->details(),
             ]);
         }
         unset($_SESSION['user_id'], $_SESSION['session_epoch']);
-        return Twig::fromRequest($request)->render($response, 'auth/reset_done.html.twig');
+        return View::fromRequest($request)->render($response, 'auth/reset_done');
     }
 
     public function logout(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

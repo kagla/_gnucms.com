@@ -9,7 +9,7 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class NotificationController
 {
@@ -25,7 +25,7 @@ final class NotificationController
         $query = $request->getQueryParams();
         $page = isset($query['page']) && ctype_digit((string) $query['page']) ? (int) $query['page'] : 1;
 
-        return Twig::fromRequest($request)->render($response, 'notifications/index.html.twig', [
+        return View::fromRequest($request)->render($response, 'notifications/index', [
             'notifications' => $this->app->notificationService()->listFor($this->app->guestAcl(), $page),
         ]);
     }

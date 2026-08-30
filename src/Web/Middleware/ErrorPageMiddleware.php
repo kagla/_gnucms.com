@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace GnuCms\Web\Middleware;
 
 use GnuCms\Error\DomainError;
+use GnuCms\View\ViewInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Slim\Exception\HttpException;
 use Slim\Exception\HttpNotFoundException;
-use Slim\Interfaces\RouteParserInterface;
 use Slim\Psr7\Response;
-use Slim\Views\Twig;
-use Slim\Views\TwigRuntimeLoader;
 use Throwable;
 
 /**
@@ -32,8 +30,8 @@ use Throwable;
  */
 final class ErrorPageMiddleware implements MiddlewareInterface
 {
-    /** @var Twig */
-    private $twig;
+    /** @var ViewInterface */
+    private $view;
 
     /** @var bool */
     private $debug;
@@ -41,29 +39,19 @@ final class ErrorPageMiddleware implements MiddlewareInterface
     /** @var string|null */
     private $logFile;
 
-    /** @var RouteParserInterface */
-    private $routeParser;
-
-    /** @var string */
-    private $basePath;
-
     public function __construct(
-        Twig $twig,
+        ViewInterface $view,
         bool $debug,
-        ?string $logFile,
-        RouteParserInterface $routeParser,
-        string $basePath
+        ?string $logFile
     ) {
-        $this->twig = $twig;
+        $this->view = $view;
         $this->debug = $debug;
         $this->logFile = $logFile === '' ? null : $logFile;
-        $this->routeParser = $routeParser;
-        $this->basePath = $basePath;
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $this->twig->addRuntimeLoader(new TwigRuntimeLoader($this->routeParser, $request->getUri(), $this->basePath));
+        $this->view->bindRequest($request);
 
         try {
             return $handler->handle($request);
@@ -132,8 +120,7 @@ final class ErrorPageMiddleware implements MiddlewareInterface
     private function render(int $status, string $title, string $message, array $details = []): ResponseInterface
     {
         $response = (new Response())->withStatus($status);
-
-        return $this->twig->render($response, 'error.html.twig', [
+        return $this->view->render($response, 'error', [
             'title'   => $title,
             'message' => $message,
             'details' => $details,

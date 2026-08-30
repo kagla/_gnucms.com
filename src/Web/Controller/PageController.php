@@ -8,7 +8,7 @@ use GnuCms\App;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class PageController
 {
@@ -41,7 +41,7 @@ final class PageController
 
     private function render(ServerRequestInterface $request, ResponseInterface $response, array $page): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
+        return View::fromRequest($request)->render($response, 'pages/show', [
             'page' => $page,
             'preview' => false,
         ]);

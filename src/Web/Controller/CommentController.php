@@ -9,7 +9,7 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class CommentController
 {
@@ -132,7 +132,7 @@ final class CommentController
         $acl = $this->app->guestAcl();
         $loaded = $this->app->postService()->loadForRead($acl, (int) $comment['post_id'], null);
 
-        return Twig::fromRequest($request)->render($response, 'posts/comment_edit.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/comment_edit', [
             'comment' => $comment,
             'post' => $this->app->postService()->get($acl, (int) $comment['post_id'], null),
             'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
@@ -171,7 +171,7 @@ final class CommentController
         $acl = $this->app->guestAcl();
         $loaded = $this->app->postService()->loadForRead($acl, $postId, null);
 
-        return Twig::fromRequest($request)->render($response, 'posts/show.html.twig', [
+        return View::fromRequest($request)->render($response, 'posts/show', [
             'post' => $this->app->postService()->get($acl, $postId, null),
             'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'comments' => $this->app->commentService()->listComments($acl, $postId, null),

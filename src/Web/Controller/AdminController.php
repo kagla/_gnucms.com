@@ -9,7 +9,7 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class AdminController
 {
@@ -25,12 +25,12 @@ final class AdminController
         $data = $this->app->adminService()->dashboard($this->app->guestAcl());
         $data['page_count'] = $this->app->cmsService()->countPages();
         $data['query'] = $request->getQueryParams();
-        return Twig::fromRequest($request)->render($response, 'admin/index.html.twig', $data);
+        return View::fromRequest($request)->render($response, 'admin/index', $data);
     }
 
     public function boards(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/boards.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/boards', [
             'boards' => $this->app->adminService()->boards($this->app->guestAcl()),
             'query' => $request->getQueryParams(),
         ]);
@@ -93,7 +93,7 @@ final class AdminController
         $params = $request->getQueryParams();
         $query = $params['q'] ?? '';
         $query = is_scalar($query) ? trim((string) $query) : '';
-        return Twig::fromRequest($request)->render($response, 'admin/members.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/members', [
             'members' => $this->app->adminService()->members($this->app->guestAcl(), $query),
             'query' => $query,
             'saved' => ($params['saved'] ?? '') === '1',
@@ -103,7 +103,7 @@ final class AdminController
     public function passwordForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        return Twig::fromRequest($request)->render($response, 'admin/password.html.twig', ['errors' => []]);
+        return View::fromRequest($request)->render($response, 'admin/password', ['errors' => []]);
     }
 
     public function memberEditForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -146,13 +146,13 @@ final class AdminController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render($response->withStatus(422), 'admin/password.html.twig', [
+            return View::fromRequest($request)->render($response->withStatus(422), 'admin/password', [
                 'errors' => $e->details(),
             ]);
         }
         unset($_SESSION['user_id'], $_SESSION['session_epoch']);
         session_regenerate_id(true);
-        return Twig::fromRequest($request)->render($response, 'admin/password_done.html.twig');
+        return View::fromRequest($request)->render($response, 'admin/password_done');
     }
 
     public function toggleStatus(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -165,7 +165,7 @@ final class AdminController
     private function renderBoardForm(ServerRequestInterface $request, ResponseInterface $response, array $values,
         array $errors, bool $create, string $key = ''): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/board_form.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/board_form', [
             'values' => $values, 'errors' => $errors, 'create' => $create, 'board_key' => $key,
         ]);
     }
@@ -173,7 +173,7 @@ final class AdminController
     private function renderMemberForm(ServerRequestInterface $request, ResponseInterface $response, array $values,
         array $errors): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/member_form.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/member_form', [
             'values' => $values,
             'errors' => $errors,
             // 가입 동의 내역은 고칠 수 없는 기록이라 폼 밖에 따로 보여 준다.
@@ -188,7 +188,7 @@ final class AdminController
         $acl = $this->app->guestAcl();
         $query = $request->getQueryParams();
 
-        return Twig::fromRequest($request)->render($response, 'admin/posts.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/posts', [
             'list'   => $this->app->postService()->listAllPosts($acl, $query),
             'boards' => $this->app->adminService()->boards($acl),
             'query'  => [

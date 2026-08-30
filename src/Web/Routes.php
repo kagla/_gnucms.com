@@ -20,7 +20,7 @@ use GnuCms\Web\Controller\NotificationController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 use Slim\Routing\RouteContext;
 
 final class Routes
@@ -104,7 +104,7 @@ final class Routes
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($app): ResponseInterface {
-            return Twig::fromRequest($request)->render($response, 'health.html.twig', [
+            return View::fromRequest($request)->render($response, 'health', [
                 'dialect' => $app->db()->dialect()->name(),
             ]);
         });

@@ -8,7 +8,7 @@ use GnuCms\App;
 use GnuCms\Service\BoardService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class BoardController
 {
@@ -38,7 +38,7 @@ final class BoardController
             $boards[] = $board;
         }
 
-        return Twig::fromRequest($request)->render($response, 'home/index.html.twig', [
+        return View::fromRequest($request)->render($response, 'home/index', [
             'boards' => $boards,
         ]);
     }

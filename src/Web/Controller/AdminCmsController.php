@@ -9,7 +9,7 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
-use Slim\Views\Twig;
+use GnuCms\View\View;
 
 final class AdminCmsController
 {
@@ -23,7 +23,7 @@ final class AdminCmsController
     public function settingsForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        return Twig::fromRequest($request)->render($response, 'admin/settings.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/settings', [
             'values' => $this->app->cmsService()->settings(), 'errors' => [],
             'query' => $request->getQueryParams(),
         ]);
@@ -39,7 +39,7 @@ final class AdminCmsController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return Twig::fromRequest($request)->render($response->withStatus(422), 'admin/settings.html.twig', [
+            return View::fromRequest($request)->render($response->withStatus(422), 'admin/settings', [
                 'values' => $input, 'errors' => $e->details(), 'query' => [],
             ]);
         }
@@ -91,7 +91,7 @@ final class AdminCmsController
     private function renderMailForm(ServerRequestInterface $request, ResponseInterface $response,
         array $values, array $errors, ?string $testError): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/mail.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/mail', [
             'values' => $values, 'errors' => $errors, 'query' => $request->getQueryParams(),
             'test_error' => $testError,
         ]);
@@ -100,7 +100,7 @@ final class AdminCmsController
     public function pages(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $trash = $this->app->cmsService()->trash($this->app->guestAcl());
-        return Twig::fromRequest($request)->render($response, 'admin/pages.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/pages', [
             'pages' => $this->app->cmsService()->contents($this->app->guestAcl()),
             'trash_count' => count($trash),
             'query' => $request->getQueryParams(),
@@ -109,7 +109,7 @@ final class AdminCmsController
 
     public function trash(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/trash.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/trash', [
             'pages' => $this->app->cmsService()->trash($this->app->guestAcl()),
             'query' => $request->getQueryParams(),
         ]);
@@ -145,7 +145,7 @@ final class AdminCmsController
             $pages[] = $page;
         }
         $query = $request->getQueryParams();
-        return Twig::fromRequest($request)->render($response, 'admin/legal.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/legal', [
             'pages' => $pages,
             'saved' => ($query['saved'] ?? '') === '1',
             'created' => ($query['created'] ?? '') === '1',
@@ -197,7 +197,7 @@ final class AdminCmsController
         $acl = $this->app->guestAcl();
         $page = $this->app->cmsService()->page($acl, (int) $args['id']);
 
-        return Twig::fromRequest($request)->render($response, 'admin/consents.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/consents', [
             'page' => $page,
             'rows' => $this->app->consents()->forContent((int) $page['id']),
             'counts' => $this->app->consents()->countsForContent((int) $page['id']),
@@ -310,7 +310,7 @@ final class AdminCmsController
     public function preview(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $page = $this->app->cmsService()->page($this->app->guestAcl(), (int) $args['id']);
-        return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
+        return View::fromRequest($request)->render($response, 'pages/show', [
             'page' => $page,
             'preview' => true,
         ]);
@@ -330,7 +330,7 @@ final class AdminCmsController
     private function renderPageForm(ServerRequestInterface $request, ResponseInterface $response, array $values,
         array $errors, bool $create, int $id = 0, bool $legal = false): ResponseInterface
     {
-        return Twig::fromRequest($request)->render($response, 'admin/page_form.html.twig', [
+        return View::fromRequest($request)->render($response, 'admin/page_form', [
             'values' => $values, 'errors' => $errors, 'create' => $create, 'page_id' => $id, 'legal' => $legal,
         ]);
     }
