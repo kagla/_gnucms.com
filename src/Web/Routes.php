@@ -199,6 +199,8 @@ final class Routes
         $slim->post('/comments/{id:[0-9]+}/edit', [$comments, 'update']);
         $slim->post('/comments/{id:[0-9]+}/delete', [$comments, 'destroy'])->setName('comments.delete');
 
+        $slim->post('/boards/{key}/files', [$files, 'upload'])->setName('boards.files.upload');
+
         // 본문 편집기 이미지. 관리자 전용인 admin.editor.images 와 달리 게시판 권한으로 판단한다.
         $editorImages = new EditorImageController($app);
         $slim->post('/boards/{key}/editor/images', [$editorImages, 'uploadForBoard'])
