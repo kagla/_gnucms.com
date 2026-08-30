@@ -17,7 +17,7 @@
 - **Twig 테마는 손대지 않는다.** `templates/default/**` 와 다른 23벌은 읽기만 한다.
 - **엔진 간 폴백 없음.** `native` 는 58개 화면을 전부 갖는다. `PhpView` 는 `templates/native` 한 경로만 본다.
 - **출력은 전부 `$this->e()`.** 예외는 `html()`·`icon()`·`json()`·`insert()`·`block()`·`url()`·`asset()` 의 결과처럼 이미 안전한 것뿐이다.
-- **파리티 정규화는 네 가지만.** 줄 끝 공백과 빈 줄, 태그 사이 공백(`>\s+<`→`><`), `theme.css?v=` 해시와 `/themes/{이름}/` 의 테마 이름, `image_key` 입력의 32자리 16진 난수(렌더마다 새로 만드는 값이라 마스킹한다). 그 밖의 차이는 결함이다.
+- **파리티 정규화는 다섯 가지만.** 줄 끝 공백과 빈 줄, 태그 사이 공백(`>\s+<`→`><`), `theme.css?v=` 해시와 `/themes/{이름}/` 의 테마 이름, `image_key` 입력의 32자리 16진 난수(렌더마다 새로 만드는 값이라 마스킹한다), 테마 선택 `<select>` 에서 하니스가 심는 두 이름(`default`·`native`) `<option>` 의 `selected`(하니스가 엔진을 가르려고 `theme` 설정을 회차마다 다르게 저장하는 탓에 생기는, 하니스 자신이 만든 차이다). 그 밖의 차이는 전부 결함이다.
 - **컨트롤러는 논리 이름.** `'home/index'` 처럼 확장자 없이 넘긴다. 확장자는 엔진이 붙인다.
 - **주석은 한국어**, "왜"를 적는다. **커밋 메시지는 한국어**, 끝에 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 - **Twig 를 아는 파일은 셋뿐.** `src/View/TwigView.php`, `src/Web/Kernel.php`(조립 한 줄), `src/View/ViewInterface.php` 의 `bindRequest()` 주석. 다른 곳에 `use Twig\…`·`use Slim\Views\…` 가 남으면 결함이다.

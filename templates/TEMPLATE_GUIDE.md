@@ -26,3 +26,27 @@ templates/modern/posts/index.html.twig
 ```
 
 현재 선택값은 DB의 `site_settings` 테이블에서 `theme` 키로 저장됩니다.
+
+## PHP 테마는 `theme.php` 로 엔진을 고른다
+
+테마 폴더에 `theme.php` 가 있고 그 파일이 `['engine' => 'php', ...]` 를 돌려주면,
+그 테마는 Twig 가 아니라 PHP 파일 템플릿으로 그립니다. `theme.php` 가 없으면 지금까지처럼
+Twig 테마입니다.
+
+```php
+<?php
+// templates/native/theme.php
+return ['engine' => 'php', 'label' => 'PHP 네이티브 (하늘빛)'];
+```
+
+PHP 테마의 화면 파일은 `.html.twig` 가 아니라 `.php` 입니다(`posts/index.php`).
+컨트롤러는 확장자 없는 논리 이름(`'posts/index'`)만 넘기고, 확장자는 엔진이 붙입니다.
+
+- **엔진 간 폴백은 없습니다.** Twig 테마는 파일이 없으면 `default/` 로 떨어지지만,
+  PHP 테마는 자기 폴더 하나만 봅니다. 그래서 PHP 테마는 화면 58개를 전부 갖춰야 합니다.
+- Twig 의 `{% extends %}`·`{% block %}`·`{% include %}` 자리에는 `$this->layout()`·
+  `$this->start()`/`$this->stop()`·`$this->insert()` 를 씁니다.
+- 자동 이스케이프가 없으므로 **출력은 전부 `$this->e()`** 를 거쳐야 합니다.
+
+지금 있는 PHP 테마는 `native/` 하나이며, Twig `default/` 테마를 화면 그대로 옮긴 것입니다.
+자세한 헬퍼 표와 규칙은 [`native/README.txt`](native/README.txt) 를 보세요.
