@@ -56,20 +56,14 @@ final class Schema
      * 파일이 바뀌면 도장도 달라지므로 그런 어긋남이 스스로 풀린다.
      * migrate* 는 모두 멱등이라 한 번 더 도는 값은 싸다.
      */
-    private function stamp(): string
+    public function stamp(): string
     {
         $hash = hash_file('xxh128', __FILE__);
         return self::VERSION . '.' . substr($hash === false ? '' : $hash, 0, 12);
     }
 
-    /**
-     * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
-     *
-     * 컬럼이 늘어난 뒤 마이그레이션을 잊으면 목록 조회가 통째로 실패해 사이트가 멈춘다.
-     * 사람이 기억해야 하는 절차로 두지 않고 부팅할 때 스스로 맞춘다.
-     * 각 migrate* 는 여러 번 돌려도 안전하므로 동시 요청이 겹쳐도 문제되지 않는다.
-     */
-    public function ensureCurrent(): void
+    /** DB 에 적힌 도장. site_settings 가 없는 아주 오래된 설치면 null. */
+    public function storedStamp(): ?string
     {
         try {
             $row = $this->db->selectOne(
@@ -77,11 +71,20 @@ final class Schema
                 ['schema_version']
             );
         } catch (DomainError $e) {
-            // site_settings 자체가 없는 아주 오래된 설치. 전체 마이그레이션이 만들어 준다.
-            $row = null;
+            return null;
         }
 
-        if ($row !== null && (string) $row['setting_value'] === $this->stamp()) {
+        return $row === null ? null : (string) $row['setting_value'];
+    }
+
+    /**
+     * DB 스키마를 코드에 맞춘다. 이미 최신이면 설정값 하나만 읽고 끝난다.
+     * 운영 요청 경로는 SchemaUpgrader::run() 이 백업·잠금을 두르고 이 일을 한다.
+     * 이 메서드는 설치기(기존 DB 이어 쓰기)와 테스트가 쓴다.
+     */
+    public function ensureCurrent(): void
+    {
+        if ($this->storedStamp() === $this->stamp()) {
             return;
         }
 
