@@ -26,6 +26,7 @@ final class AdminCmsController
         return View::fromRequest($request)->render($response, 'admin/settings', [
             'values' => $this->app->cmsService()->settings(), 'errors' => [],
             'query' => $request->getQueryParams(),
+            'schema' => $this->app->schemaUpgrader()->status(),
         ]);
     }
 
@@ -41,6 +42,7 @@ final class AdminCmsController
             }
             return View::fromRequest($request)->render($response->withStatus(422), 'admin/settings', [
                 'values' => $input, 'errors' => $e->details(), 'query' => [],
+                'schema' => $this->app->schemaUpgrader()->status(),
             ]);
         }
         return $this->redirect($request, $response, 'admin.settings', ['saved' => '1']);

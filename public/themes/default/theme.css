@@ -1627,3 +1627,11 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 @media (max-width: 640px){
   .show-sm{display:flex}
 }
+
+/* 관리 콘솔 > 사이트 설정 > 데이터 구조 */
+.schema-card { margin-top: 1.25rem; }
+.schema-facts { display: grid; gap: .5rem 1.5rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: .75rem 0 1rem; }
+.schema-facts dt { font-size: .8rem; color: color-mix(in oklch, currentColor 60%, transparent); }
+.schema-facts dd { margin: 0; font-weight: 600; }
+.schema-stamp { font-weight: 400; font-size: .75rem; opacity: .6; }
+.schema-note { font-size: .875rem; opacity: .75; margin-top: .75rem; }

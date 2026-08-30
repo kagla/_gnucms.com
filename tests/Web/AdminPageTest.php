@@ -252,4 +252,22 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(404, $this->get($app, '/admin/password')->getStatusCode());
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testSettingsPageShowsSchemaStatus(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $body = $this->body($this->get($app, '/admin/settings'));
+
+        self::assertStringContainsString('데이터 구조', $body);
+        self::assertStringContainsString('<dt>판 번호</dt><dd>' . \GnuCms\Db\Schema::VERSION . ' ', $body);
+        self::assertStringContainsString('설치 이후 없음', $body);
+    }
+
 }

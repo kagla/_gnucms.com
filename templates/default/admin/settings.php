@@ -44,7 +44,7 @@
             <?php foreach ($available_themes as $theme_name): ?><option value="<?= $this->e($theme_name) ?>"<?= $this->def($values['theme'] ?? null, $active_theme) === $theme_name ? ' selected' : '' ?>><?= $this->e($theme_name === 'default' ? 'default (기본)' : $theme_name) ?></option><?php endforeach ?>
           </select>
           <?php if (array_key_exists('theme', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['theme']) ?></p><?php endif ?>
-          <p class="fieldset-label">선택한 템플릿에 없는 화면과 파일은 default 템플릿을 사용합니다.</p>
+          <p class="fieldset-label">템플릿은 화면 전부를 가집니다. 정적 파일만 없으면 default 의 것을 씁니다.</p>
         </fieldset>
         <fieldset class="fieldset toggle-list">
           <label class="label toggle-row">
@@ -58,6 +58,37 @@
         <button class="btn btn-primary" type="submit">설정 저장</button>
       </div>
     </form>
+  </div>
+</section>
+<section class="card schema-card">
+  <div class="card-body">
+    <h2 class="card-title"><?= $this->icon('shield', 18) ?> 데이터 구조</h2>
+    <p class="card-sub">코드를 새로 올리면 첫 요청에서 스스로 새 판으로 옮깁니다. SQLite 는 옮기기 전에 백업합니다.</p>
+    <dl class="schema-facts">
+      <div><dt>판 번호</dt><dd><?= $this->e($schema['version']) ?> <small class="schema-stamp"><?= $this->e($schema['stamp']) ?></small></dd></div>
+      <div><dt>마지막으로 옮긴 시각</dt><dd><?= $schema['upgraded_at'] !== null ? $this->e($schema['upgraded_at']) . ' UTC' : '설치 이후 없음' ?></dd></div>
+    </dl>
+    <?php if (!$schema['can_backup']): ?>
+      <p class="schema-note">MySQL/PostgreSQL 은 앱이 백업하지 못합니다. mysqldump·pg_dump 같은 DB 도구로 백업하세요.</p>
+    <?php elseif ($schema['backups'] === []): ?>
+      <p class="schema-note">아직 백업이 없습니다. 판이 바뀔 때 <code>storage/backups/</code> 에 최근 <?= (int) $schema['keep'] ?>개까지 남깁니다.</p>
+    <?php else: ?>
+      <div class="overflow-x-auto">
+        <table class="table table-sm schema-backups">
+          <thead><tr><th>백업 파일</th><th>크기</th><th>만든 시각</th></tr></thead>
+          <tbody>
+          <?php foreach ($schema['backups'] as $backup): ?>
+            <tr>
+              <td><code><?= $this->e($backup['name']) ?></code></td>
+              <td><?= $this->e(number_format($backup['size'] / 1024, 1)) ?> KB</td>
+              <td><?= $this->e(gmdate('Y-m-d H:i', $backup['mtime'])) ?> UTC</td>
+            </tr>
+          <?php endforeach ?>
+          </tbody>
+        </table>
+      </div>
+      <p class="schema-note">되돌리려면 사이트를 잠시 멈추고 <code>storage/board.sqlite</code> 를 백업 파일로 바꿉니다.</p>
+    <?php endif ?>
   </div>
 </section>
 <?php $this->stop() ?>
