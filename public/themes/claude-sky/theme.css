@@ -532,6 +532,9 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 }
 .legend-hint{color:var(--bc-soft);font-size:12px;font-weight:500}
 .fieldset-label{color:var(--bc-soft);font-size:12px;line-height:1.6}
+.usage-guide{display:grid;gap:.25rem;margin-top:.5rem;padding-left:0;list-style:none}
+.usage-guide li{line-height:1.55}
+.usage-guide strong{color:var(--bc-mid);font-weight:700}
 .validator-hint{display:flex;align-items:center;gap:.25rem;color:var(--color-error);font-size:12.5px;font-weight:700}
 
 .input,.textarea,.select{
