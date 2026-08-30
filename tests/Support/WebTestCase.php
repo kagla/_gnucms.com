@@ -114,4 +114,20 @@ abstract class WebTestCase extends DatabaseTestCase
             'size'     => strlen($contents),
         ];
     }
+
+    /** 공유 임시 업로드 폴더를 비운다. collectGarbage 의 개수 단언이 이전 실행에 흔들리지 않게. */
+    protected function purgeTestUploads(): void
+    {
+        $root = sys_get_temp_dir() . '/' . GNUCMS_ID . '-test-uploads';
+        if (!is_dir($root)) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+    }
 }

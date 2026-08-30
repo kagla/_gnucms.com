@@ -560,9 +560,11 @@ final class PostService
         foreach ($row['attachments'] as $index => $file) {
             $view['attachments'][] = [
                 'index' => $index,
+                'id'    => $file['id'] ?? '',
                 'name'  => $file['name'] ?? '',
                 'size'  => (int) ($file['size'] ?? 0),
                 'mime'  => $file['mime'] ?? 'application/octet-stream',
+                'path'  => $file['path'] ?? '',
             ];
         }
 

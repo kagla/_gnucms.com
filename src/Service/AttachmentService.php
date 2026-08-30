@@ -12,6 +12,9 @@ use GnuCms\Support\Clock;
 
 final class AttachmentService
 {
+    /** 정리가 건너뛰는 나이. 이보다 새 파일은 작성 중인 폼의 것일 수 있다. */
+    public const GC_MIN_AGE_SECONDS = 86400;
+
     /** @var BoardService */
     private $boards;
 
@@ -146,6 +149,24 @@ final class AttachmentService
     }
 
     /**
+     * 저장된 디스크립터에 서명을 다시 붙인다. 수정 화면이 기존 첨부를
+     * 폼의 hidden input 으로 되실을 때 쓴다. index 같은 여분 키는 버린다.
+     */
+    public function withSignature(array $stored): array
+    {
+        $descriptor = [
+            'id'   => (string) ($stored['id'] ?? ''),
+            'name' => (string) ($stored['name'] ?? ''),
+            'size' => (int) ($stored['size'] ?? 0),
+            'mime' => (string) ($stored['mime'] ?? ''),
+            'path' => (string) ($stored['path'] ?? ''),
+        ];
+        $descriptor['sig'] = $this->sign($descriptor);
+
+        return $descriptor;
+    }
+
+    /**
      * 서명이 유효하면 이 서버가 방금 받아들인 파일이라는 뜻이다.
      * 임시 업로드를 추적하는 테이블이 필요 없는 이유다.
      */
@@ -258,6 +279,10 @@ final class AttachmentService
             }
             $path = $item->getPathname();
             if (isset($referenced[$path])) {
+                continue;
+            }
+            // 방금 올라온 파일은 아직 글을 저장하지 않은 폼의 것일 수 있다.
+            if ($item->getMTime() > time() - self::GC_MIN_AGE_SECONDS) {
                 continue;
             }
             $size = (int) $item->getSize();
