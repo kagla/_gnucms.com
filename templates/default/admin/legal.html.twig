@@ -39,6 +39,10 @@
                     <option value="form"{{ page.usage == 'form' ? ' selected' : '' }}>신청서·등록 동의</option>
                     <option value="none"{{ page.usage == 'none' ? ' selected' : '' }}>안내만</option>
                   </select>
+                  {# 신청서 자리 이름은 편집 폼에서 정한다. 여기서는 보여만 준다. #}
+                  {% if page.usage == 'form' and page.uses[0].scope|default('') starts with 'form:' %}
+                    <div class="cell-sub"><code class="kbd kbd-sm">{{ page.uses[0].scope|slice(5) }}</code></div>
+                  {% endif %}
                 </td>
                 <td data-label="필수"><input class="checkbox checkbox-sm" type="checkbox" name="required[{{ page.id }}]" value="1"{{ page.usage_required ? ' checked' : '' }}></td>
                 <td data-label="차례"><input class="input input-bordered input-sm" type="number" name="sort_order[{{ page.id }}]" value="{{ page.usage_order }}" min="-9999" max="9999"></td>

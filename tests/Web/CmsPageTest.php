@@ -176,16 +176,28 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(1, (int) $uses[0]['required']);
         self::assertSame(10, (int) $uses[0]['use_sort_order']);
 
-        // 사용처를 신청서·등록으로 바꾸면 회원가입 자리에서 떨어지고 form 자리에 붙는다.
-        $moved = $this->post($app, '/admin/terms/uses', [
+        // 편집 폼에서 신청서·등록 동의에 자리 이름을 주면 form:{이름} 으로 붙는다.
+        $named = $this->post($app, '/admin/content/' . $terms['id'] . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'slug' => 'service', 'title' => $terms['title'],
+            'content' => $terms['content'], 'status' => $terms['status'],
+            'show_in_menu' => '1', 'sort_order' => (string) $terms['sort_order'],
+            'image_key' => $termsImageKey, 'consent_usage' => 'form',
+            'consent_scope_key' => 'event-2026', 'consent_required' => '1', 'consent_order' => '10',
+        ]);
+        self::assertSame(303, $named->getStatusCode(), $this->body($named));
+        self::assertSame([], $app->consentUses()->listForScope('signup'));
+        self::assertCount(1, $app->consentUses()->listForScope('form:event-2026'));
+
+        // 목록 화면에는 자리 이름 칸이 없다. form 을 그대로 두고 일괄 저장해도 이름이 지켜진다.
+        $bulk = $this->post($app, '/admin/terms/uses', [
             'csrf_token' => $_SESSION['csrf_token'],
             'usage' => [(string) $terms['id'] => 'form'],
             'required' => [(string) $terms['id'] => '1'],
             'sort_order' => [(string) $terms['id'] => '10'],
         ]);
-        self::assertSame(303, $moved->getStatusCode(), $this->body($moved));
-        self::assertSame([], $app->consentUses()->listForScope('signup'));
-        self::assertCount(1, $app->consentUses()->listForScope('form'));
+        self::assertSame(303, $bulk->getStatusCode(), $this->body($bulk));
+        self::assertCount(1, $app->consentUses()->listForScope('form:event-2026'),
+            '일괄 저장이 자리 이름을 지우면 안 된다.');
 
         // 안내만 으로 바꾸면 어느 자리에도 붙지 않는다.
         $detached = $this->post($app, '/admin/terms/uses', [

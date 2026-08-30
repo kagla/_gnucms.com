@@ -171,10 +171,20 @@ final class AdminCmsController
         foreach ($this->app->cmsService()->consentPages($acl) as $page) {
             $id = (int) $page['id'];
             $choice = isset($usage[$id]) && is_string($usage[$id]) ? $usage[$id] : 'none';
+            // 목록 화면에는 자리 이름 칸이 없다. form 을 그대로 두면 이미 붙어 있던
+            // form:{이름} 을 지켜, 일괄 저장이 이름을 조용히 지우지 않게 한다.
+            $keepScope = null;
+            foreach ($page['uses'] as $use) {
+                if (str_starts_with((string) $use['scope'], 'form')) {
+                    $keepScope = (string) $use['scope'];
+                    break;
+                }
+            }
             // 한 약관은 한 용도만 갖는다. 용도를 바꾸면 옛 자리 붙임부터 걷는다.
             $uses->detachContent($id);
             if ($choice === 'signup' || $choice === 'form') {
-                $uses->attach($choice, $id, !empty($required[$id]), (int) ($order[$id] ?? 0));
+                $scope = $choice === 'signup' ? 'signup' : ($keepScope ?? 'form');
+                $uses->attach($scope, $id, !empty($required[$id]), (int) ($order[$id] ?? 0));
             }
         }
 
@@ -329,11 +339,28 @@ final class AdminCmsController
     private function withConsentUsage(array $values, int $id): array
     {
         $use = $id > 0 ? ($this->app->consentUses()->listForContent($id)[0] ?? null) : null;
-        $values['consent_usage'] = $use === null ? 'none'
-            : ((string) $use['scope'] === 'signup' ? 'signup' : 'form');
+        $scope = $use === null ? '' : (string) $use['scope'];
+        $values['consent_usage'] = $use === null ? 'none' : ($scope === 'signup' ? 'signup' : 'form');
+        // 신청서 자리는 form:{이름} 으로 저장된다. 이름이 없으면 이름 없는 한 통이다.
+        $values['consent_scope_key'] = str_starts_with($scope, 'form:') ? substr($scope, 5) : '';
         $values['consent_required'] = $use === null ? 1 : (int) $use['required'];
         $values['consent_order'] = $use === null ? 0 : (int) $use['sort_order'];
         return $values;
+    }
+
+    /**
+     * 신청서 자리 이름을 form:{이름} 으로 만든다. 나중에 신청서가 여럿일 때
+     * 어느 폼의 약관인지 이 이름으로 가른다. 비우면 이름 없는 form 한 통이다.
+     */
+    private function formScope(array $input): string
+    {
+        $key = isset($input['consent_scope_key']) && is_scalar($input['consent_scope_key'])
+            ? strtolower(trim((string) $input['consent_scope_key'])) : '';
+        // scope 칸은 VARCHAR(40) 이고 'form:' 이 다섯 자를 쓴다.
+        if ($key === '' || preg_match('/^[a-z0-9][a-z0-9_-]{0,34}$/D', $key) !== 1) {
+            return 'form';
+        }
+        return 'form:' . $key;
     }
 
     /** 저장이 끝난 약관에 폼에서 고른 사용처를 반영한다. 한 약관은 한 용도만 갖는다. */
@@ -344,7 +371,8 @@ final class AdminCmsController
         $uses = $this->app->consentUses();
         $uses->detachContent($id);
         if ($choice === 'signup' || $choice === 'form') {
-            $uses->attach($choice, $id, !empty($input['consent_required']),
+            $scope = $choice === 'signup' ? 'signup' : $this->formScope($input);
+            $uses->attach($scope, $id, !empty($input['consent_required']),
                 (int) ($input['consent_order'] ?? 0));
         }
     }
