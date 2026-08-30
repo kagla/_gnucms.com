@@ -114,6 +114,15 @@ final class PhpViewTest extends TestCase
         );
     }
 
+    public function testUrlAndAssetEscapeLikeTwigDid(): void
+    {
+        // slim/twig-view 는 url_for 를, Kernel 은 theme_asset 을 is_safe 없이 등록했다.
+        // 즉 Twig 판은 두 결과를 자동 이스케이프했다. PHP 판도 같아야 한다.
+        $this->write('a', "<?= \$this->url('x', ['id' => 'a\"&b']) ?>|<?= \$this->asset('c\"&d.css') ?>");
+        $out = $this->view()->fetch('a');
+        self::assertSame('/r/x/a&quot;&amp;b|/themes/t/c&quot;&amp;d.css', $out);
+    }
+
     public function testIconComesFromIconsFile(): void
     {
         $this->write('_icons', "<?php return ['home' => '<path d=\"M1 1\"/>'];");
@@ -159,5 +168,40 @@ final class PhpViewTest extends TestCase
         } catch (\LogicException $e) {
             self::assertSame($level, ob_get_level(), '출력 버퍼가 남으면 다음 화면이 깨진다');
         }
+    }
+
+    public function testExceptionInsideOpenBlockDoesNotLeakBufferedOutput(): void
+    {
+        $this->write('a', "<?php \$this->start('x') ?>앞<?php throw new \\LogicException('x'); ?>");
+        $level = ob_get_level();
+        try {
+            $this->view()->fetch('a');
+            self::fail('예외가 나야 한다');
+        } catch (\LogicException $e) {
+            self::assertSame($level, ob_get_level(), '열린 블록 버퍼까지 걷어야 한다');
+        }
+    }
+
+    public function testUnclosedStartThrowsInsteadOfSwallowingLaterOutput(): void
+    {
+        // stop() 을 빠뜨리면 capture() 자기 버퍼가 열린 채 남아 이후 출력이 전부 사라진다.
+        $this->write('a', "<?php \$this->start('x') ?>본문");
+        $level = ob_get_level();
+        try {
+            $this->view()->fetch('a');
+            self::fail('예외가 나야 한다');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('stop() 없이 끝난 start()', $e->getMessage());
+        }
+        self::assertSame($level, ob_get_level(), '출력 버퍼가 남으면 다음 화면이 깨진다');
+    }
+
+    public function testLayoutCycleThrowsInsteadOfHanging(): void
+    {
+        $this->write('a', "<?php \$this->layout('b') ?>");
+        $this->write('b', "<?php \$this->layout('a') ?>");
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('레이아웃이 서로를 감쌉니다');
+        $this->view()->fetch('a');
     }
 }

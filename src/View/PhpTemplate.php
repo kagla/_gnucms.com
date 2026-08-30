@@ -46,8 +46,14 @@ final class PhpTemplate
     {
         $file = $this->view->resolve($template);
         $out = $this->capture($file);
+        // 이미 지나온 레이아웃 이름. 같은 것이 다시 나오면 서로를 감싸는 짝이다.
+        $seen = [];
         while ($this->layout !== null) {
             $next = $this->layout;
+            if (isset($seen[$next])) {
+                throw new RuntimeException('레이아웃이 서로를 감쌉니다: ' . $next);
+            }
+            $seen[$next] = true;
             $this->layout = null;
             $this->isChild = false;
             // 자식의 블록 밖 출력은 버린다. Twig 의 extends 화면과 같다.
@@ -69,6 +75,11 @@ final class PhpTemplate
                 ob_end_clean();
             }
             throw $e;
+        }
+        if (ob_get_level() > $__level + 1) {
+            // stop() 없이 끝난 start() 가 있다. 조용히 삼키면 이후 화면이 전부 빈 채로 나간다.
+            while (ob_get_level() > $__level) { ob_end_clean(); }
+            throw new RuntimeException('stop() 없이 끝난 start() 가 있습니다: ' . $__file);
         }
         return (string) ob_get_clean();
     }
