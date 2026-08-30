@@ -128,7 +128,7 @@ final class CmsService
     /**
      * 약관 관리 목록. 그 자리의 붙임과 동의 수를 합쳐 준다.
      *
-     * 붙임을 여기서 골라 주는 이유는 Twig 의 {% set %} 이 for 밖으로 새지 않아
+     * 붙임을 여기서 골라 주는 이유는 템플릿 반복문 안에서 고르면 읽기 어려워
      * 템플릿 안에서 "이 약관이 이 자리에 붙었나" 를 고를 수 없기 때문이다.
      */
     public function consentPages(Acl $acl, string $scope = 'signup'): array

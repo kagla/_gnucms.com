@@ -1,7 +1,7 @@
 <?php
 /*
   게시글·댓글 본문 편집기 (CKEditor 4).
-  관리자 전용인 admin/_editor.html.twig 와 달리 게시판 권한으로 업로드를 허용한다.
+  관리자 전용인 admin/_editor.php 와 달리 게시판 권한으로 업로드를 허용한다.
 
   넘겨야 하는 값
     editor_id     textarea 의 id
@@ -54,7 +54,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
 
   /* 표준 Image 다이얼로그는 URL 을 직접 넣는 자리다. 사진을 고르는 흐름이 아니라
      파일 선택창에서 여러 장을 골라 바로 본문에 넣는 방식을 쓴다.
-     관리자 내용 편집기(admin/_editor.html.twig)와 같은 동작이다. */
+     관리자 내용 편집기(admin/_editor.php)와 같은 동작이다. */
   var uploading=0;
   function insertImage(editor,url,name){
     var paragraph=new CKEDITOR.dom.element('p'),image=new CKEDITOR.dom.element('img');

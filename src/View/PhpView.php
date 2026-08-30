@@ -99,14 +99,14 @@ final class PhpView implements ViewInterface
 
     public function url(string $route, array $params = [], array $query = []): string
     {
-        // Twig 판은 slim/twig-view 가 url_for 를 is_safe 없이 등록해 결과를 자동
+        // 주소는 속성값 자리에 그대로 들어가므로 여기서 이스케이프한다. 템플릿이 다시
         // 이스케이프했다. 주소에 &·" 가 섞일 수 있으므로 여기서도 똑같이 거른다.
         return $this->escape($this->routes->urlFor($route, $params, $query));
     }
 
     public function asset(string $path): string
     {
-        // theme_asset 도 Kernel 이 is_safe 없이 등록했다(=Twig 가 이스케이프했다). 같게 맞춘다.
+        // 정적 파일 주소도 같은 이유로 여기서 이스케이프한다.
         return $this->escape(($this->assetUrl)($path));
     }
 

@@ -56,7 +56,7 @@ final class PhpTemplate
             $seen[$next] = true;
             $this->layout = null;
             $this->isChild = false;
-            // 자식의 블록 밖 출력은 버린다. Twig 의 extends 화면과 같다.
+            // 자식의 블록 밖 출력은 버린다. 레이아웃이 낼 자리가 없는 출력이다.
             $out = $this->capture($this->view->resolve($next));
         }
         return $out;
@@ -94,7 +94,7 @@ final class PhpTemplate
         return htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
-    /** Twig 의 |default 와 같다. null·''·false·[] 이면 기본값. ?? 는 null 만 보므로 다르다. */
+    /** 비었으면 기본값. null·''·false·[] 를 '비었다' 로 본다. ?? 는 null 만 보므로 다르다. */
     public function def(mixed $v, mixed $default): mixed
     {
         if ($v instanceof \Countable) { return count($v) === 0 ? $default : $v; }
@@ -125,7 +125,7 @@ final class PhpTemplate
         if (!array_key_exists($name, $this->blocks)) {
             $this->blocks[$name] = $content;
         }
-        // 루트 레이아웃의 start/stop 은 Twig 의 {% block %} 처럼 그 자리에 낸다.
+        // 루트 레이아웃의 start/stop 은 기본값을 정의하면서 그 자리에 낸다.
         if (!$this->isChild) {
             echo $this->blocks[$name];
         }
@@ -155,8 +155,8 @@ final class PhpTemplate
     public function fetch(string $template, array $data = [], bool $only = false): string
     {
         // 조각은 자기 블록 저장소를 갖는 새 렌더다. 변수는 지금 것에 덧붙여 물려준다.
-        // $only 는 Twig 의 `with ... only` 와 같다: 지금 화면의 지역 변수는 끊지만,
-        // 전역(site, current_user 등)은 Twig 도 끊지 않으므로 여기서도 계속 물려준다.
+        // $only 가 참이면 지금 화면의 지역 변수는 끊는다. 전역(site, current_user 등)은
+        // 어느 조각이든 필요하므로 계속 물려준다.
         $vars = $only ? $data + $this->view->globals() : $data + $this->vars;
         return (new self($this->view, $vars, $this->base))->run($template);
     }
@@ -178,14 +178,14 @@ final class PhpTemplate
 
     public function icon(string $name, int $size = 20, string $cls = ''): string
     {
-        // 여는 태그는 templates/default/_icons.html.twig 의 매크로와 글자 단위로 같다.
+        // 여는 태그의 속성 순서는 theme.css 의 .icon 규칙과 짝이다. 함부로 바꾸지 않는다.
         // 파리티 테스트가 두 엔진의 HTML 을 그대로 비교하기 때문이다.
         $paths = $this->view->icons();
         return '<svg class="icon' . ($cls !== '' ? ' ' . $this->e($cls) : '') . '"'
             . ' width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none"'
             . ' stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'
             . ' aria-hidden="true" focusable="false">'
-            // 모르는 이름이면 Twig 매크로의 else 분기(원)와 같은 걸 낸다.
+            // 모르는 이름이면 빈 자리 대신 원을 낸다. 빠진 아이콘이 눈에 띄게.
             . ($paths[$name] ?? '<circle cx="12" cy="12" r="8.6"/>')
             . '</svg>';
     }
@@ -201,7 +201,7 @@ final class PhpTemplate
 
     public function json(mixed $v): string
     {
-        // Twig 의 json_encode 필터와 같은 기본 옵션. 파리티가 이 값을 비교한다.
+        // 기본 옵션 그대로. 값은 서버가 만든 주소·토큰이라 < 가 들어올 일이 없다.
         return (string) json_encode($v);
     }
 }

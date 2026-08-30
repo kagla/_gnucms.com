@@ -39,7 +39,7 @@
 
     <?php $this->start('site_header') ?>
     <?php // 검색 폼이 있는 화면에서만 돋보기와 검색창을 낸다.
-          // Twig 의 block('header_search')|trim is not empty 는 자식이 덮어썼으면 그 값을,
+          // 검색 칸 여부: 자식이 header_search 블록을 덮어썼으면 그 값을,
           // 아니면 아래 기본 본문의 결과를 본다. has() 로는 "안 잡힘" 과 "빈 값" 을 못 가르므로
           // 살피개(sentinel)로 갈라, 안 잡혔을 때는 기본 본문과 같은 조건을 그대로 따진다.
     $__hs = $this->block('header_search', "\0");

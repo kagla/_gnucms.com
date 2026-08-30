@@ -1,5 +1,5 @@
 <?php
-// posts/_comments.html.twig 를 옮긴 파셜. 답글은 같은 파일을 다시 부르는 재귀다.
+// 댓글 목록 조각. 답글은 같은 파일을 다시 부르는 재귀다.
 // insert() 를 $only=true 로 부르므로 nodes/nested/can_comment 만 명시해 넘겨야 하고,
 // current_user 는 전역이라 $only 여도 그대로 물려받는다.
 $nested = $nested ?? false;

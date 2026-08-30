@@ -113,7 +113,7 @@ final class AuthPageTest extends WebTestCase
 
     /**
      * 선택 항목은 가입을 막지 않는다. 동의하지 않았다는 사실과 증적이 함께 남는다.
-     * 화면(auth/_consents.html.twig)도 이제 내용 id 로 칸 이름을 만들고 선택 항목에
+     * 화면(auth/_consents.php)도 이제 내용 id 로 칸 이름을 만들고 선택 항목에
      * '선택' 배지를 붙이므로, 폼 마크업까지 함께 확인한다.
      */
     #[DataProvider('connectionProvider')]

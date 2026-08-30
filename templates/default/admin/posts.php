@@ -1,8 +1,8 @@
 <?php $this->layout('admin/layout') ?>
 <?php
-// admin/posts.html.twig 4~10행의 매크로 pageUrl 을 이 파일 안에서만 쓰는 클로저로 옮긴다.
+// 쪽 주소 만들기. 이 파일 안에서만 쓰는 클로저다.
 // 결과는 이미 이스케이프된 HTML(& 는 &amp;)이므로 호출부에서 e() 를 쓰지 않는다.
-// query.q / query.board 는 Twig 의 bare 진리성(if x)으로 검사하므로 !empty() 가 그대로 맞는다.
+// query.q / query.board 는 진리성으로만 검사한다 — "0" 도 없는 것으로 보는다.
 $pageUrl = function (array $query, int $p): string {
     $params = [];
     if (!empty($query['q']))     { $params[] = 'q=' . rawurlencode((string) $query['q']); }

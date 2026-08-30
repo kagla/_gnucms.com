@@ -1,6 +1,6 @@
 <?php $this->layout('layout') ?>
 <?php
-// posts/index.html.twig 5~12행의 매크로 listUrl 을 이 파일 안에서만 쓰는 클로저로 옮긴다.
+// 목록 주소 만들기. 이 파일 안에서만 쓰는 클로저다.
 // 결과는 이미 이스케이프된 HTML(& 는 &amp;)이므로 호출부에서 e() 를 쓰지 않는다.
 $listUrl = function (array $board, $q, $category, $page, $view = null): string {
     $params = [];

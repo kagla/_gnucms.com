@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * 게시판 목록 형태(list_type: 목록·갤러리·매거진·뉴스형)를 다룬다.
  *
- * 형태 이름은 posts/_list_{이름}.html.twig 로 그대로 파일 경로가 되므로,
+ * 형태 이름은 posts/_list_{이름}.php 로 그대로 파일 경로가 되므로,
  * 허용 목록 밖의 값이 그 자리에 닿지 않는지가 이 테스트의 핵심이다.
  */
 final class BoardListViewTest extends WebTestCase

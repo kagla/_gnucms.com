@@ -51,7 +51,7 @@ final class PhpViewTest extends TestCase
         );
     }
 
-    public function testEscapesLikeTwig(): void
+    public function testEscapesHtmlSpecialChars(): void
     {
         $this->write('a', '<?= $this->e($v) ?>|<?= $this->e(null) ?>');
         self::assertSame('&lt;b&gt;&quot;&#039;&amp;|', $this->view()->fetch('a', ['v' => '<b>"\'&']));
@@ -69,7 +69,7 @@ final class PhpViewTest extends TestCase
 
     public function testChildBlockBeatsParentDefaultAndNestedLayoutsWork(): void
     {
-        // 루트 레이아웃은 start/stop 으로 '기본값을 정의하면서 출력' 한다 (Twig 의 {% block %}).
+        // 루트 레이아웃은 start/stop 으로 '기본값을 정의하면서 출력' 한다 (정의하면서 출력).
         $this->write('layout', "[<?php \$this->start('chrome') ?>기본크롬<?php \$this->stop() ?>|<?= \$this->block('body') ?>]");
         // 중간 레이아웃은 자식이면서 부모다. 자기 블록은 조용히 잡히고, 자식 블록을 읽어 넣는다.
         $this->write('sub/layout', "<?php \$this->layout('layout') ?><?php \$this->start('chrome') ?>관리크롬(<?= \$this->block('body') ?>)<?php \$this->stop() ?>");
@@ -114,18 +114,17 @@ final class PhpViewTest extends TestCase
         );
     }
 
-    public function testUrlAndAssetEscapeLikeTwigDid(): void
+    public function testUrlAndAssetAreEscaped(): void
     {
-        // slim/twig-view 는 url_for 를, Kernel 은 theme_asset 을 is_safe 없이 등록했다.
-        // 즉 Twig 판은 두 결과를 자동 이스케이프했다. PHP 판도 같아야 한다.
+        // 주소는 속성값 자리에 들어가므로 엔진이 이스케이프해 준다.
         $this->write('a', "<?= \$this->url('x', ['id' => 'a\"&b']) ?>|<?= \$this->asset('c\"&d.css') ?>");
         $out = $this->view()->fetch('a');
         self::assertSame('/r/x/a&quot;&amp;b|/themes/t/c&quot;&amp;d.css', $out);
     }
 
-    public function testDefMatchesTwigDefaultFilter(): void
+    public function testDefTreatsEmptyValuesAsMissing(): void
     {
-        // Twig 의 |default 는 '비었으면' 기본값이다. ?? 는 null 만 본다 — "0"·0 에서 갈린다.
+        // def() 는 '비었으면' 기본값이다. ?? 는 null 만 본다 — "0"·0 에서 갈린다.
         $this->write('a', "<?= \$this->e(\$this->def('', 'd')) ?>|<?= \$this->e(\$this->def('0', 'd')) ?>"
             . "|<?= \$this->e(\$this->def(false, 'd')) ?>|<?= \$this->e(\$this->def(0, 'd')) ?>"
             . "|<?= \$this->e(\$this->def([], 'd')) ?>|<?= \$this->e(\$this->def(null, 'd')) ?>"
@@ -134,9 +133,9 @@ final class PhpViewTest extends TestCase
 
         $t = new \GnuCms\View\PhpTemplate($this->view(), [], '/base');
         self::assertSame('d', $t->def('', 'd'));
-        self::assertSame('0', $t->def('0', 'd'), '문자열 "0" 은 Twig 에서 비어 있지 않다');
+        self::assertSame('0', $t->def('0', 'd'), '문자열 "0" 은 비어 있지 않다');
         self::assertSame('d', $t->def(false, 'd'));
-        self::assertSame(0, $t->def(0, 'd'), '숫자 0 도 Twig 에서 비어 있지 않다');
+        self::assertSame(0, $t->def(0, 'd'), '숫자 0 도 비어 있지 않다');
         self::assertSame('d', $t->def([], 'd'));
         self::assertSame('d', $t->def(null, 'd'));
     }
