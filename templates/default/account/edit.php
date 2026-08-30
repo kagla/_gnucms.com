@@ -20,7 +20,7 @@
           <p class="account-email"><?= $this->e($values['email']) ?></p>
         </fieldset>
         <fieldset class="fieldset<?php if (array_key_exists('display_name', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">표시 이름</legend>
+          <legend class="fieldset-legend">표시 이름 <span class="legend-hint">한글 2자 또는 영문 4자 이상</span></legend>
           <input class="input input-bordered input-block" type="text" name="display_name" minlength="2" value="<?= $this->e($values['display_name']) ?>" maxlength="100" required>
           <?php if (array_key_exists('display_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['display_name']) ?></p><?php endif ?>
         </fieldset>

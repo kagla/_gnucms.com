@@ -99,15 +99,22 @@ final class AccountPageTest extends WebTestCase
         } catch (DomainError $e) {
             self::assertArrayHasKey('display_name', $e->details());
         }
-        // 한 글자는 안 된다. 자동 이름도 한 글자면 '회원' 으로 대신한다.
-        try {
-            $app->accountService()->updateProfile($b, ['display_name' => '가']);
-            self::fail('한 글자 이름은 막아야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('display_name', $e->details());
+        // 한글 2자·영문 4자 미만은 안 된다. 자동 이름이 짧으면 '회원' 으로 대신한다.
+        foreach (['가', 'ab', 'kim', '김a'] as $short) {
+            try {
+                $app->accountService()->updateProfile($b, ['display_name' => $short]);
+                self::fail($short . ' 은 너무 짧아 막아야 한다');
+            } catch (DomainError $e) {
+                self::assertArrayHasKey('display_name', $e->details(), $short);
+            }
         }
-        $d = $users->createRegistered('a@d.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'a');
-        self::assertSame('회원', $users->findById($d)['display_name']);
+        foreach (['홍길', 'abcd', '김ab'] as $ok) {
+            $app->accountService()->updateProfile($b, ['display_name' => $ok]);
+            self::assertSame($ok, $users->findById($b)['display_name']);
+        }
+        $app->accountService()->updateProfile($b, ['display_name' => 'kagla2']);
+        $d = $users->createRegistered('kim@d.example', password_hash('x-password-123', PASSWORD_DEFAULT), 'kim');
+        self::assertSame('회원', $users->findById($d)['display_name'], '영문 3자 자동 이름은 회원으로 대신한다');
 
         // 자기 이름을 그대로 두는 것은 겹침이 아니다.
         $app->accountService()->updateProfile($b, ['display_name' => 'kagla2']);

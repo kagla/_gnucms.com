@@ -9,8 +9,22 @@ use GnuCms\Support\Clock;
 
 final class UserRepository
 {
-    /** 표시 이름 최소 글자 수. 한 글자는 누구인지 알아볼 수 없고 겹치기도 쉽다. */
-    public const DISPLAY_NAME_MIN = 2;
+    /**
+     * 표시 이름 최소 폭. 한글·한자·가나는 한 글자를 2, 영문·숫자는 1 로 센다(mb_strwidth).
+     * 4 면 한글 2자 또는 영문 4자 이상이다 — 국내 사이트가 흔히 쓰는 기준이다.
+     */
+    public const DISPLAY_NAME_MIN_WIDTH = 4;
+
+    public static function displayNameTooShort(string $name): bool
+    {
+        return mb_strwidth($name, 'UTF-8') < self::DISPLAY_NAME_MIN_WIDTH;
+    }
+
+    /** 검증 문구. 폭 규칙을 사람 말로 푼다. */
+    public static function displayNameRule(): string
+    {
+        return '한글 ' . intdiv(self::DISPLAY_NAME_MIN_WIDTH, 2) . '자 또는 영문 ' . self::DISPLAY_NAME_MIN_WIDTH . '자 이상 적어 주세요.';
+    }
 
     private Connection $db;
 
@@ -75,7 +89,7 @@ final class UserRepository
     {
         // 너무 짧은 자동 이름(a@x.com 의 'a')은 '회원' 으로 대신한다.
         $base = trim($base);
-        $base = mb_substr(mb_strlen($base) < self::DISPLAY_NAME_MIN ? '회원' : $base, 0, 100);
+        $base = mb_substr(self::displayNameTooShort($base) ? '회원' : $base, 0, 100);
         if ($this->findByDisplayName($base) === null) {
             return $base;
         }
