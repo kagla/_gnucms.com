@@ -7,14 +7,14 @@
   <div class="alert alert-info admin-bar">
     <span aria-hidden="true">{{ ico.i('cog', 17) }}</span>
     <span>관리자에게만 보입니다.</span>
-    <a class="btn btn-sm btn-primary" href="{{ legal_type ? url_for('admin.terms.edit', {type: legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">이 내용 수정</a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('admin.content.edit', {id: page.id}) }}">이 내용 수정</a>
   </div>
 {% endif %}
 {% if preview %}
   <div class="alert alert-info">
     <span aria-hidden="true">{{ ico.i('info', 18) }}</span>
     <span>{{ page.status == 'published' ? '공개된 내용 미리보기입니다.' : '아직 공개되지 않은 초안 미리보기입니다.' }}</span>
-    <a class="btn btn-sm btn-ghost" href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
+    <a class="btn btn-sm btn-ghost" href="{{ url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
   </div>
 {% endif %}
 <div class="read-progress" aria-hidden="true"></div>

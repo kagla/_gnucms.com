@@ -5,7 +5,7 @@
 {% if preview %}
   <aside class="notice notice-info preview-bar">
     <span>{{ page.status == 'published' ? '공개된 내용 미리보기입니다.' : '아직 공개되지 않은 초안 미리보기입니다.' }}</span>
-    <a class="text-link" href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
+    <a class="text-link" href="{{ url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
   </aside>
 {% endif %}
 <div class="read-progress" aria-hidden="true"></div>

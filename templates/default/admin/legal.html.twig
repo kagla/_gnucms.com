@@ -3,54 +3,56 @@
 {% block title %}약관 관리 · {{ site.site_name }}{% endblock %}
 {% block admin_section %}legal{% endblock %}
 {% block body %}
-{% set ready = legal.terms and legal.terms.status == 'published' and legal.privacy and legal.privacy.status == 'published' %}
 <div class="breadcrumbs"><ul><li><a href="{{ url_for('admin.index') }}">사이트 관리</a></li><li aria-current="page">약관</li></ul></div>
-<div class="page-head">
-  <div><h1>약관 관리</h1><p class="page-sub">회원가입에 연결되는 이용약관과 개인정보 처리방침을 관리합니다.</p></div>
-  <div class="page-head-actions">
-    <form method="post" action="{{ url_for('admin.terms.setup') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-outline" type="submit">누락된 초안 만들기</button>
-    </form>
-  </div>
-</div>
-{% if query.created|default('') == '1' %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>약관 초안을 준비했습니다. 운영 정보에 맞게 수정한 뒤 공개하세요.</span></div>{% endif %}
-{% if query.saved|default('') == '1' %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>약관을 저장했습니다.</span></div>{% endif %}
-{% if query.deleted|default('') == '1' %}<div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>약관을 삭제했습니다.</span></div>{% endif %}
-{% if ready %}
-  <div class="alert alert-success"><span aria-hidden="true">{{ ico.i('check-circle', 18) }}</span><span>필수 약관이 모두 공개되어 회원가입에 연결되어 있습니다.</span></div>
-{% else %}
-  <div class="alert alert-info"><span aria-hidden="true">{{ ico.i('info', 18) }}</span><span>두 항목을 검토하고 모두 공개하면 회원가입 링크와 필수 동의 항목이 자동으로 활성화됩니다.</span></div>
-{% endif %}
+{% if saved %}<div class="alert alert-success">저장했습니다.</div>{% endif %}
 <section class="card">
-  <div class="table-wrap">
-    <table class="table table-zebra">
-      <thead><tr><th>구분</th><th>공개 주소</th><th>상태</th><th>수정일</th><th class="right">관리</th></tr></thead>
-      <tbody>
-      {% for type, label in {'service':'이용약관','privacy':'개인정보 처리방침'} %}
-        {% set page = type == 'service' ? legal.terms : legal.privacy %}
-        <tr>
-          <td data-label="구분"><span class="cell-title">{{ label }}</span></td>
-          <td data-label="공개 주소"><code class="kbd kbd-sm">/content/{{ type == 'service' ? 'terms' : 'privacy' }}</code></td>
-          {% if page %}
-            <td data-label="상태"><span class="badge badge-sm badge-soft {{ page.status == 'published' ? 'badge-success' : 'badge-ghost' }}">{{ page.status == 'published' ? '공개' : '초안' }}</span></td>
-            <td data-label="수정일">{{ page.updated_at|date('Y.m.d') }}</td>
-            <td data-label="관리" class="right">
-              <div class="join">
-                <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.terms.preview', {type: type}) }}" target="_blank" rel="noopener">미리보기</a>
-                <a class="btn btn-outline btn-sm join-item" href="{{ url_for('admin.terms.edit', {type: type}) }}">수정</a>
-              </div>
-            </td>
-          {% else %}
-            <td data-label="상태"><span class="badge badge-error badge-soft badge-sm">미생성</span></td>
-            <td data-label="수정일">-</td>
-            <td data-label="관리" class="right"><span class="cell-sub">초안을 만들어 주세요.</span></td>
-          {% endif %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="card-body">
+    <h1 class="card-title">약관 관리</h1>
+    <p class="card-sub">내용 편집에서 &lsquo;이 내용은 약관이다&rsquo; 를 켠 것이 여기에 나옵니다. 회원가입에서 받을 항목과 필수·선택을 여기서 정합니다.</p>
+    {% if pages is empty %}
+      <p class="cell-sub">아직 약관이 없습니다. 이용약관과 개인정보 처리방침 초안을 만들어 시작하세요.</p>
+      <form method="post" action="{{ url_for('admin.terms.setup') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-primary" type="submit">씨앗 약관 만들기</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('admin.terms.uses') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <div class="table-wrap">
+          <table class="table table-zebra">
+            <thead><tr><th>약관</th><th>공개 주소</th><th>회원가입</th><th>필수</th><th>차례</th><th>동의</th><th class="right">관리</th></tr></thead>
+            <tbody>
+            {% for page in pages %}
+              {# page.use 는 CmsService 가 이 자리의 붙임을 골라 넣어 준 것이다.
+                 Twig 의 set 은 for 밖으로 새지 않아 여기서 고를 수 없다. #}
+              {% set attached = page.use is not null %}
+              {% set attached_required = attached ? page.use.required : 1 %}
+              {% set attached_order = attached ? page.use.sort_order : 0 %}
+              <tr>
+                <td data-label="약관"><span class="cell-title">{{ page.title }}</span>
+                  {% if page.status != 'published' %}<span class="badge badge-warning badge-soft badge-xs">초안</span>{% endif %}</td>
+                <td data-label="공개 주소"><code class="kbd kbd-sm">/content/{{ page.slug }}</code></td>
+                <td data-label="회원가입"><input class="checkbox checkbox-sm" type="checkbox" name="use[{{ page.id }}]" value="1"{{ attached ? ' checked' : '' }}></td>
+                <td data-label="필수"><input class="checkbox checkbox-sm" type="checkbox" name="required[{{ page.id }}]" value="1"{{ attached_required ? ' checked' : '' }}></td>
+                <td data-label="차례"><input class="input input-bordered input-sm" type="number" name="sort_order[{{ page.id }}]" value="{{ attached_order }}" min="-9999" max="9999"></td>
+                <td data-label="동의">{{ page.counts.agreed }} · 미동의 {{ page.counts.declined }}</td>
+                <td data-label="관리" class="right">
+                  <div class="row-actions">
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('admin.content.edit', {id: page.id}) }}">수정</a>
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('admin.terms.consents', {id: page.id}) }}">동의 현황</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-actions form-actions">
+          <button class="btn btn-primary" type="submit">변경사항 저장</button>
+        </div>
+      </form>
+    {% endif %}
   </div>
 </section>
-<p class="page-note">초안은 일반적인 시작 문구입니다. 실제 운영자 정보와 개인정보 처리 현황에 맞게 수정하고 필요하면 법률 전문가의 검토를 받으세요.</p>
 {% endblock %}

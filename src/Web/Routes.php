@@ -74,9 +74,9 @@ final class Routes
         $slim->post('/admin/content/trash/{id:[0-9]+}/delete', [$cms, 'permanentlyDelete'])
             ->setName('admin.content.permanent_delete');
         $slim->get('/admin/terms', [$cms, 'legal'])->setName('admin.terms');
-        $slim->get('/admin/terms/{type:service|privacy}', [$cms, 'legalEditForm'])->setName('admin.terms.edit');
-        $slim->post('/admin/terms/{type:service|privacy}', [$cms, 'legalUpdate']);
-        $slim->get('/admin/terms/{type:service|privacy}/preview', [$cms, 'legalPreview'])->setName('admin.terms.preview');
+        $slim->post('/admin/terms/uses', [$cms, 'consentUses'])->setName('admin.terms.uses');
+        // {id} 는 숫자만 받으므로 위의 /admin/terms/uses 와 겹치지 않는다.
+        $slim->get('/admin/terms/{id:[0-9]+}/consents', [$cms, 'consents'])->setName('admin.terms.consents');
         $slim->get('/admin/content/new', [$cms, 'createForm'])->setName('admin.content.create');
         $slim->post('/admin/content/new', [$cms, 'create']);
         $slim->post('/admin/terms/setup', [$cms, 'legalSetup'])->setName('admin.terms.setup');
@@ -96,19 +96,6 @@ final class Routes
         };
         $slim->get('/admin/pages', $legacyContentRedirect);
         $slim->get('/admin/documents', $legacyContentRedirect);
-        $slim->get('/admin/legal', static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
-            $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('admin.terms');
-            return $response->withHeader('Location', $url)->withStatus(301);
-        });
-        foreach (['terms' => 'service', 'privacy' => 'privacy'] as $oldType => $newType) {
-            $slim->get('/admin/legal/' . $oldType, static function (
-                ServerRequestInterface $request,
-                ResponseInterface $response
-            ) use ($newType): ResponseInterface {
-                $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('admin.terms.edit', ['type' => $newType]);
-                return $response->withHeader('Location', $url)->withStatus(301);
-            });
-        }
 
         $slim->get('/health', static function (
             ServerRequestInterface $request,

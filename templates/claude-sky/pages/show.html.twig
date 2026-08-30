@@ -14,7 +14,7 @@
         ? (page_draft ? '아직 공개되지 않은 초안 미리보기 · 편집으로 돌아가기' : '공개된 내용 미리보기 · 편집으로 돌아가기')
         : '이 내용 수정' %}
     <a class="btn btn-outline btn-sm btn-square page-edit{{ page_draft ? ' page-edit-draft' : '' }}"
-       href="{{ legal_type ? url_for('admin.terms.edit', {type: legal_type}) : url_for('admin.content.edit', {id: page.id}) }}"
+       href="{{ url_for('admin.content.edit', {id: page.id}) }}"
        title="{{ page_edit_label }}" aria-label="{{ page_edit_label }}">{{ ico.i('cog', 15) }}</a>
   {% endif %}
   <div class="card-body article-head">

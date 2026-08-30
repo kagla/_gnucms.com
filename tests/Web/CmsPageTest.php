@@ -147,30 +147,41 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(303, $legalSetup->getStatusCode());
         self::assertSame('draft', $app->cms()->findBySlug('terms')['status']);
         self::assertSame('draft', $app->cms()->findBySlug('privacy')['status']);
+        // 약관 관리에는 약관 전부가 나오고, 내용 관리에는 안 나온다.
         $legalPage = $this->get($app, '/admin/terms');
         self::assertSame(200, $legalPage->getStatusCode());
-        self::assertStringContainsString('<h1>약관 관리</h1>', $this->body($legalPage));
         self::assertStringContainsString('이용약관', $this->body($legalPage));
-        self::assertStringContainsString('/admin/terms/service', $this->body($legalPage));
         self::assertStringContainsString('>/content/terms<', $this->body($legalPage));
-        // 약관은 약관 관리에서 다루므로 내용 관리 목록에는 나오지 않는다.
         self::assertStringNotContainsString('이용약관', $this->body($this->get($app, '/admin/content')));
+
+        // 옛 주소는 없어졌다.
+        self::assertSame(404, $this->get($app, '/admin/terms/service')->getStatusCode());
+        self::assertSame(404, $this->get($app, '/admin/legal')->getStatusCode());
+
+        // 붙임을 화면에서 저장할 수 있다.
         $terms = $app->cms()->findBySlug('terms');
-        self::assertSame(200, $this->get($app, '/admin/terms/service')->getStatusCode());
-        self::assertSame(200, $this->get($app, '/admin/terms/service/preview')->getStatusCode());
         self::assertSame(200, $this->get($app, '/admin/content/' . $terms['id'] . '/edit')->getStatusCode());
-        $termsSaved = $this->post($app, '/admin/terms/service', [
-            'csrf_token' => $_SESSION['csrf_token'], 'title' => '이용약관',
-            'content' => '검토를 마친 이용약관', 'seo_description' => '약관', 'status' => 'published',
-            'sort_order' => '900',
+        $saved = $this->post($app, '/admin/terms/uses', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'scope' => 'signup',
+            'use' => [(string) $terms['id'] => '1'],
+            'required' => [(string) $terms['id'] => '1'],
+            'sort_order' => [(string) $terms['id'] => '10'],
         ]);
-        self::assertSame(303, $termsSaved->getStatusCode(), $this->body($termsSaved));
-        self::assertSame('/admin/terms?saved=1', $termsSaved->getHeaderLine('Location'));
-        self::assertSame(200, $this->get($app, '/content/terms')->getStatusCode());
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        $uses = $app->consentUses()->listForScope('signup');
+        self::assertCount(1, $uses);
+        self::assertSame(1, (int) $uses[0]['required']);
+
+        // 한 약관에 누가 동의했는지 따로 볼 수 있다.
+        $app->consents()->record('user', 1, 'signup', $app->cms()->findBySlug('terms'), true, null);
+        $view = $this->get($app, '/admin/terms/' . $terms['id'] . '/consents');
+        self::assertSame(200, $view->getStatusCode());
+        self::assertStringContainsString('동의 현황', $this->body($view));
+
+        // 약관의 옛 공개 주소는 그대로 /content/{slug} 로 보낸다.
         self::assertSame(301, $this->get($app, '/terms/service')->getStatusCode());
         self::assertSame('/content/terms', $this->get($app, '/terms/service')->getHeaderLine('Location'));
-        self::assertSame(301, $this->get($app, '/admin/legal')->getStatusCode());
-        self::assertSame('/admin/terms', $this->get($app, '/admin/legal')->getHeaderLine('Location'));
 
         $draftId = $app->cms()->createPage([
             'slug' => 'private-note', 'title' => '비공개 안내', 'content' => '관리자 미리보기',

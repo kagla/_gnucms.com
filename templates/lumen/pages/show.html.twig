@@ -3,7 +3,7 @@
 {% block meta_description %}<meta name="description" content="{{ page.seo_description ?: site.site_tagline }}">{% endblock %}
 {% block body %}
 {% if preview %}
-  <aside class="preview-bar lumen-preview"><span>{{ page.status == 'published' ? '공개된 내용 미리보기' : '아직 공개되지 않은 초안 미리보기' }}</span><a href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a></aside>
+  <aside class="preview-bar lumen-preview"><span>{{ page.status == 'published' ? '공개된 내용 미리보기' : '아직 공개되지 않은 초안 미리보기' }}</span><a href="{{ url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a></aside>
 {% endif %}
 <article class="lumen-article">
   <header class="lumen-article-head">

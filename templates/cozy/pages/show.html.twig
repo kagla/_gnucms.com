@@ -5,7 +5,7 @@
 {% if preview %}
   <div class="banner banner-info">
     <span>{{ page.status == 'published' ? '공개된 내용 미리보기입니다.' : '아직 공개되지 않은 초안 미리보기입니다.' }}</span>
-    <a class="link" href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
+    <a class="link" href="{{ url_for('admin.content.edit', {id: page.id}) }}">편집으로 돌아가기</a>
   </div>
 {% endif %}
 <article class="detail detail-page">

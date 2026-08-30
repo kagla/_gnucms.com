@@ -13,7 +13,7 @@
         <h3 style="font-weight: 800; font-size: 0.95rem;">미리보기 모드</h3>
         <p style="font-size: 0.85rem;">{{ page.status == 'published' ? '공개된 페이지의 미리보기입니다.' : '아직 공개되지 않은 초안 미리보기입니다.' }}</p>
       </div>
-      <a class="btn btn-sm btn-primary" href="{{ preview_legal_type ? url_for('admin.terms.edit', {type: preview_legal_type}) : url_for('admin.content.edit', {id: page.id}) }}">
+      <a class="btn btn-sm btn-primary" href="{{ url_for('admin.content.edit', {id: page.id}) }}">
         {{ ico.i('edit', 14) }} 편집으로 돌아가기
       </a>
     </div>

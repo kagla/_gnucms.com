@@ -130,50 +130,52 @@ final class AdminCmsController
         return $this->redirect($request, $response, 'admin.content.trash', ['deleted' => '1']);
     }
 
+    /** 약관 관리. 약관 전부와 자리별 붙임을 보여 준다. */
     public function legal(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $acl = $this->app->guestAcl();
         return Twig::fromRequest($request)->render($response, 'admin/legal.html.twig', [
-            'legal' => $this->app->cmsService()->legalOverview($this->app->guestAcl()),
-            'query' => $request->getQueryParams(),
+            'pages' => $this->app->cmsService()->consentPages($acl),
+            'scope' => 'signup',
+            'saved' => ($request->getQueryParams()['saved'] ?? '') === '1',
         ]);
     }
 
-    public function legalEditForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-    {
-        $type = (string) $args['type'];
-        $values = $this->withImageKey($this->requiredLegalPage($type));
-        return Twig::fromRequest($request)->render($response, 'admin/legal_form.html.twig', [
-            'type' => $type, 'values' => $values, 'errors' => [],
-        ]);
-    }
-
-    public function legalUpdate(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    /** 한 자리의 붙임을 통째로 다시 쓴다. 체크가 풀린 약관은 떼어 낸다. */
+    public function consentUses(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
-        $type = (string) $args['type'];
-        $page = $this->requiredLegalPage($type);
-        $input['slug'] = $this->legalSlug($type);
-        $input['show_in_menu'] = '0';
-        try {
-            $this->app->cmsService()->updatePage($this->app->guestAcl(), (int) $page['id'], $input);
-        } catch (DomainError $e) {
-            if ($e->status() !== 422) {
-                throw $e;
+        $acl = $this->app->guestAcl();
+        $scope = isset($input['scope']) && is_string($input['scope']) && $input['scope'] !== ''
+            ? $input['scope'] : 'signup';
+        $use = is_array($input['use'] ?? null) ? $input['use'] : [];
+        $required = is_array($input['required'] ?? null) ? $input['required'] : [];
+        $order = is_array($input['sort_order'] ?? null) ? $input['sort_order'] : [];
+
+        $uses = $this->app->consentUses();
+        foreach ($this->app->cmsService()->consentPages($acl) as $page) {
+            $id = (int) $page['id'];
+            if (empty($use[$id])) {
+                $uses->detach($scope, $id);
+                continue;
             }
-            return Twig::fromRequest($request)->render($response->withStatus(422), 'admin/legal_form.html.twig', [
-                'type' => $type, 'values' => $this->withImageKey($input), 'errors' => $e->details(),
-            ]);
+            $uses->attach($scope, $id, !empty($required[$id]), (int) ($order[$id] ?? 0));
         }
+
         return $this->redirect($request, $response, 'admin.terms', ['saved' => '1']);
     }
 
-    public function legalPreview(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    /** 한 약관에 누가 동의했고 누가 안 했는지. */
+    public function consents(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $type = (string) $args['type'];
-        return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
-            'page' => $this->requiredLegalPage($type), 'preview' => true, 'preview_legal_type' => $type,
-            'legal_type' => $type,
+        $acl = $this->app->guestAcl();
+        $page = $this->app->cmsService()->page($acl, (int) $args['id']);
+
+        return Twig::fromRequest($request)->render($response, 'admin/consents.html.twig', [
+            'page' => $page,
+            'rows' => $this->app->consents()->forContent((int) $page['id']),
+            'counts' => $this->app->consents()->countsForContent((int) $page['id']),
         ]);
     }
 
@@ -238,8 +240,6 @@ final class AdminCmsController
         return Twig::fromRequest($request)->render($response, 'pages/show.html.twig', [
             'page' => $page,
             'preview' => true,
-            'preview_legal_type' => null,
-            'legal_type' => null,
         ]);
     }
 
@@ -265,21 +265,6 @@ final class AdminCmsController
     private function isLegal(array $page): bool
     {
         return in_array($page['slug'], ['terms', 'privacy'], true);
-    }
-
-    private function requiredLegalPage(string $type): array
-    {
-        $legal = $this->app->cmsService()->legalOverview($this->app->guestAcl());
-        $slug = $this->legalSlug($type);
-        if (!array_key_exists($slug, $legal) || $legal[$slug] === null) {
-            throw DomainError::notFound('약관 초안을 먼저 만들어 주세요.');
-        }
-        return $legal[$slug];
-    }
-
-    private function legalSlug(string $type): string
-    {
-        return $type === 'service' ? 'terms' : 'privacy';
     }
 
     private function defaults(): array
