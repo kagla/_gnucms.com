@@ -67,11 +67,20 @@
           <input class="input input-bordered input-block" type="number" name="consent_order" value="{{ values.consent_order|default(0) }}" min="-9999" max="9999" inputmode="numeric">
         </fieldset>
       </div>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend">신청서 자리 이름 <span class="legend-hint">신청서·등록 동의일 때만 씁니다</span></legend>
+      {# 자리 이름은 신청서·등록 동의에만 뜻이 있다. 다른 사용처에서는 숨긴다. #}
+      <fieldset class="fieldset" data-scope-key{{ values.consent_usage|default('none') != 'form' ? ' hidden' : '' }}>
+        <legend class="fieldset-legend">신청서 자리 이름 <span class="legend-hint">비우면 공용 자리</span></legend>
         <input class="input input-bordered input-block" type="text" name="consent_scope_key" value="{{ values.consent_scope_key|default('') }}" maxlength="35" pattern="[a-z0-9][a-z0-9_-]*" placeholder="예: event-2026, rental">
-        <p class="fieldset-label">나중에 신청서가 여럿일 때 어느 폼의 약관인지 이 이름으로 가릅니다. 비우면 이름 없는 공용 자리에 붙습니다.</p>
+        <p class="fieldset-label">나중에 신청서가 여럿일 때 어느 폼의 약관인지 이 이름으로 가릅니다.</p>
       </fieldset>
+      <script>
+      (function () {
+        var usage = document.querySelector('select[name="consent_usage"]');
+        var key = document.querySelector('[data-scope-key]');
+        if (!usage || !key) { return; }
+        usage.addEventListener('change', function () { key.hidden = usage.value !== 'form'; });
+      })();
+      </script>
       {% endif %}
       <fieldset class="fieldset toggle-list">
         <label class="label toggle-row">
