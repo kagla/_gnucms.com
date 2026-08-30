@@ -148,7 +148,7 @@ final class PhpViewTest extends TestCase
         self::assertStringContainsString('<svg class="icon x" width="18" height="18"', $out);
         self::assertStringContainsString('<path d="M1 1"/>', $out);
         self::assertStringContainsString('|<svg class="icon" width="20" height="20"', $out);
-        self::assertStringContainsString('<circle cx="12" cy="12" r="8.6"/></svg>', $out, '모르는 이름은 Twig 매크로의 else 분기(원)와 같아야 한다');
+        self::assertStringContainsString('<circle cx="12" cy="12" r="8.6"/></svg>', $out, '모르는 이름은 빈 자리 대신 원을 낸다');
     }
 
     public function testInsertOnlyDropsOuterLocalsButKeepsGlobals(): void
