@@ -12,8 +12,6 @@ use GnuCms\Validation\Validator;
 
 final class AdminService
 {
-    private const PASSWORD_MIN = 8;
-
     private Connection $db;
     private UserRepository $users;
     private BoardService $boards;
@@ -113,8 +111,8 @@ final class AdminService
         $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
             ? (string) $input['password_confirmation'] : '';
         if ($password !== '') {
-            if (mb_strlen($password) < self::PASSWORD_MIN) {
-                $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
+            if (mb_strlen($password) < Validator::PASSWORD_MIN) {
+                $v->fail('password', Validator::PASSWORD_MIN . '자 이상이어야 합니다.');
             }
             if ($password !== $confirmation) {
                 $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');

@@ -13,8 +13,6 @@ use GnuCms\Cms\CmsService;
 
 final class AccountService
 {
-    private const PASSWORD_MIN = 8;
-
     private UserRepository $users;
     private TokenService $tokens;
     private MailerInterface $mailer;
@@ -43,9 +41,6 @@ final class AccountService
 
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             $v->fail('email', '올바른 이메일 주소를 입력해 주세요.');
-        }
-        if ($password !== '' && mb_strlen($password) < self::PASSWORD_MIN) {
-            $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
         }
         if ($password !== $confirmation) {
             $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
@@ -152,9 +147,6 @@ final class AccountService
         $password = $v->requiredPassword('password');
         $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
             ? (string) $input['password_confirmation'] : '';
-        if ($password !== '' && mb_strlen($password) < self::PASSWORD_MIN) {
-            $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
-        }
         if ($password !== $confirmation) {
             $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
         }
@@ -195,8 +187,8 @@ final class AccountService
             } elseif (!password_verify($current, (string) $user['password_hash'])) {
                 $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
             }
-            if (mb_strlen($password) < self::PASSWORD_MIN) {
-                $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
+            if (mb_strlen($password) < Validator::PASSWORD_MIN) {
+                $v->fail('password', Validator::PASSWORD_MIN . '자 이상이어야 합니다.');
             }
             if ($password !== $confirmation) {
                 $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');
@@ -221,9 +213,6 @@ final class AccountService
         if ($user === null || $user['password_hash'] === null
             || !password_verify($current, (string) $user['password_hash'])) {
             $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
-        }
-        if ($password !== '' && mb_strlen($password) < self::PASSWORD_MIN) {
-            $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
         }
         if ($password !== $confirmation) {
             $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');

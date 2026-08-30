@@ -183,7 +183,7 @@ final class InstallerTest extends TestCase
             Installer::adminFrom(['email' => 'nope', 'display_name' => 'a b', 'password' => 'short', 'password_confirmation' => 'other']);
             self::fail('422 가 나와야 한다');
         } catch (DomainError $e) {
-            self::assertSame(['email', 'display_name', 'password', 'password_confirmation'], array_keys($e->details()));
+            self::assertEqualsCanonicalizing(['email', 'display_name', 'password', 'password_confirmation'], array_keys($e->details()));
         }
 
         try {

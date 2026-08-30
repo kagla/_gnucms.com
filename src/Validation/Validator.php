@@ -12,7 +12,7 @@ use GnuCms\Error\DomainError;
  */
 final class Validator
 {
-    public const PASSWORD_MIN = 4;
+    public const PASSWORD_MIN = 8;
 
     /** @var array */
     private $data;

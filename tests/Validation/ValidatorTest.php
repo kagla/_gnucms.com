@@ -79,7 +79,7 @@ final class ValidatorTest extends TestCase
             $v->check();
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
         } catch (DomainError $e) {
-            $this->assertSame(['password' => '4자 이상이어야 합니다.'], $e->details());
+            $this->assertSame(['password' => '8자 이상이어야 합니다.'], $e->details());
         }
     }
 

@@ -20,9 +20,6 @@ use Throwable;
  */
 final class Installer
 {
-    /** 회원가입과 같은 비밀번호 최소 길이. Validator::requiredPassword() 의 기준(4자)보다 세다. */
-    private const PASSWORD_MIN = 8;
-
     private string $configPath;
     private string $storageDir;
     /** @var string|null install.php 경로. null 이면 스스로 지우지 않는다 */
@@ -74,9 +71,6 @@ final class Installer
             $v->fail('display_name', '표시 이름은 한글·영문·숫자만 쓸 수 있습니다.');
         } elseif ($name !== '' && UserRepository::displayNameTooShort($name)) {
             $v->fail('display_name', UserRepository::displayNameRule());
-        }
-        if ($password !== '' && mb_strlen($password) < self::PASSWORD_MIN) {
-            $v->fail('password', self::PASSWORD_MIN . '자 이상이어야 합니다.');
         }
         if ((string) ($input['password_confirmation'] ?? '') !== (string) ($input['password'] ?? '')) {
             $v->fail('password_confirmation', '비밀번호 확인이 다릅니다.');
