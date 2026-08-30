@@ -32,7 +32,7 @@ final class AccountService
         $this->consents = $consents;
     }
 
-    public function register(array $input): array
+    public function register(array $input, ?ConsentTrace $trace = null): array
     {
         $v = new Validator($input);
         $email = strtolower($v->requiredString('email', 191));
@@ -55,13 +55,11 @@ final class AccountService
         if ($this->users->countAll() > 0) {
             // 필수 두 개가 공개돼 있는지 먼저 확인한다. 없으면 가입 자체를 받지 않는다.
             $this->cms->legalDocuments();
-            $consents = $this->cms->consentDocuments();
+            $consents = $this->cms->consentDocuments('signup');
             foreach ($consents as $doc) {
                 // 선택 항목은 체크를 안 해도 가입을 막지 않는다. 대신 안 했다는 사실을 남긴다.
-                if ((int) $doc['consent_required'] === 1
-                    && !$v->bool('agree_' . $doc['consent_key'], false)) {
-                    $v->fail('agree_' . $doc['consent_key'],
-                        $doc['title'] . '에 동의해야 가입할 수 있습니다.');
+                if ((int) $doc['required'] === 1 && !$v->bool('agree_' . $doc['id'], false)) {
+                    $v->fail('agree_' . $doc['id'], $doc['title'] . '에 동의해야 가입할 수 있습니다.');
                 }
             }
         }
@@ -87,10 +85,8 @@ final class AccountService
         $user = $this->users->findById($id);
         if (!(bool) $user['is_admin']) {
             foreach ($consents as $doc) {
-                $agreed = (int) $doc['consent_required'] === 1
-                    || $v->bool('agree_' . $doc['consent_key'], false);
-                // 시그니처만 우선 맞춘다. subject_type/scope 를 제대로 쓰는 개편은 다음 작업에서 한다.
-                $this->consents->record('user', $id, 'signup', $doc, $agreed, null);
+                $agreed = (int) $doc['required'] === 1 || $v->bool('agree_' . $doc['id'], false);
+                $this->consents->record('user', $id, 'signup', $doc, $agreed, $trace);
             }
         }
         if (!(bool) $user['email_verified']) {

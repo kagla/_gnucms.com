@@ -31,7 +31,7 @@ final class LinkingService
         $this->consents = $consents;
     }
 
-    public function resolve(SocialProfile $profile): ?array
+    public function resolve(SocialProfile $profile, ?ConsentTrace $trace = null): ?array
     {
         $this->assertProfile($profile);
         $linked = $this->identities->findUser($profile->provider, $profile->uid);
@@ -43,10 +43,10 @@ final class LinkingService
             return null;
         }
 
-        return $this->connect($profile, $profile->email);
+        return $this->connect($profile, $profile->email, $trace);
     }
 
-    public function completeVerifiedEmail(SocialProfile $profile, string $email): array
+    public function completeVerifiedEmail(SocialProfile $profile, string $email, ?ConsentTrace $trace = null): array
     {
         $this->assertProfile($profile);
         $email = strtolower(trim($email));
@@ -54,18 +54,18 @@ final class LinkingService
             throw DomainError::validation(['email' => '올바른 이메일 주소를 입력해 주세요.']);
         }
         $linked = $this->identities->findUser($profile->provider, $profile->uid);
-        return $linked === null ? $this->connect($profile, $email) : $this->assertActive($linked);
+        return $linked === null ? $this->connect($profile, $email, $trace) : $this->assertActive($linked);
     }
 
-    private function connect(SocialProfile $profile, string $email): array
+    private function connect(SocialProfile $profile, string $email, ?ConsentTrace $trace): array
     {
-        return $this->db->transaction(function () use ($profile, $email): array {
+        return $this->db->transaction(function () use ($profile, $email, $trace): array {
             $user = $this->users->findByEmail($email);
             if ($user === null) {
                 $id = $this->users->createSocial($email, $profile->name);
                 $user = $this->users->findById($id);
                 // 소셜로 처음 가입하는 사람. 여기서 동의를 남기지 않으면 기록이 아예 없다.
-                $this->recordConsents($user);
+                $this->recordConsents($user, $trace);
             } elseif (!(bool) $user['email_verified']) {
                 $this->users->verifyEmail((int) $user['id']);
                 $user = $this->users->findById((int) $user['id']);
@@ -79,20 +79,17 @@ final class LinkingService
 
     /**
      * 소셜 가입은 폼이 없어 체크박스를 받을 수 없다. 로그인 화면의 소셜 단추 옆에
-     * "계속하면 동의로 봅니다" 를 적어 두고, 어느 판을 보고 가입했는지를 남긴다.
-     * 남기지 않으면 동의 기록이 통째로 비어 나중에 확인할 길이 없다.
+     * "계속하면 동의로 봅니다" 를 적고, 필수만 동의로 본다. 물어본 적 없는 선택
+     * 항목을 동의로 볼 수는 없으니 안 함으로 남긴다.
      */
-    private function recordConsents(array $user): void
+    private function recordConsents(array $user, ?ConsentTrace $trace): void
     {
         if ((bool) $user['is_admin']) {
             return;
         }
-        foreach ($this->cms->consentDocuments() as $doc) {
-            // 필수는 '계속하면 동의' 고지로 받은 것으로 본다. 선택은 물어본 적이 없으니
-            // 동의로 볼 수 없다. 나중에 회원이 직접 켤 수 있게 안 함으로 남겨 둔다.
-            $agreed = (int) $doc['consent_required'] === 1;
-            // 시그니처만 우선 맞춘다. subject_type/scope 를 제대로 쓰는 개편은 다음 작업에서 한다.
-            $this->consents->record('user', (int) $user['id'], 'signup', $doc, $agreed, null);
+        foreach ($this->cms->consentDocuments('signup') as $doc) {
+            $agreed = (int) $doc['required'] === 1;
+            $this->consents->record('user', (int) $user['id'], 'signup', $doc, $agreed, $trace);
         }
     }
 

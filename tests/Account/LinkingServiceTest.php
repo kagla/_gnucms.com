@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Account;
 
+use GnuCms\Account\ConsentTrace;
 use GnuCms\Account\IdentityRepository;
 use GnuCms\Account\LinkingService;
 use GnuCms\Account\UserRepository;
@@ -53,6 +54,40 @@ final class LinkingServiceTest extends DatabaseTestCase
         self::assertSame(1, (int) $stored['is_admin']);
     }
 
+    /** 필수·선택 약관이 붙은 상태에서 소셜 가입해도 동의 증적이 남는다. */
+    #[DataProvider('connectionProvider')]
+    public function testSocialSignupRecordsRequiredConsentsWithTrace(array $config): void
+    {
+        [$service, $users, , , $consents, $cmsRepository, $consentUses] = $this->services($config);
+        // '첫 사람' 자리는 site_state 깃발로 정해진다. createRegistered() 로 만들어야
+        // 그 깃발이 꽂혀, 뒤이은 소셜 가입자가 관리자로 올라가지 않고 동의를 남긴다.
+        $users->createRegistered('owner@example.com', password_hash('password123', PASSWORD_DEFAULT), '주인');
+        foreach ([['terms', '이용약관', true], ['marketing', '마케팅 정보 수신', false]] as $order => $doc) {
+            $id = $cmsRepository->createPage([
+                'slug' => $doc[0], 'title' => $doc[1], 'content' => $doc[1] . ' 본문',
+                'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0,
+                'sort_order' => 0, 'is_consent' => 1,
+            ]);
+            $consentUses->attach('signup', $id, $doc[2], $order);
+        }
+
+        $trace = new ConsentTrace('198.51.100.9', 'Mozilla/Test');
+        $user = $service->resolve(
+            new SocialProfile('google', 'google-3', 'social@example.com', true, '소셜 회원'),
+            $trace
+        );
+
+        $rows = $consents->forSubject('user', (int) $user['id']);
+        self::assertCount(2, $rows);
+        $agreed = [];
+        foreach ($rows as $row) {
+            self::assertSame('signup', $row['scope']);
+            self::assertSame('198.51.100.9', $row['agreed_ip']);
+            $agreed[$row['consent_type']] = (int) $row['agreed'];
+        }
+        self::assertSame(['terms' => 1, 'marketing' => 0], $agreed);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testUnverifiedEmailNeverAutomaticallyLinks(array $config): void
     {
@@ -87,13 +122,18 @@ final class LinkingServiceTest extends DatabaseTestCase
         $users = new UserRepository($db);
         $identities = new IdentityRepository($db);
         $consents = new \GnuCms\Account\ConsentRepository($db);
+        $cmsRepository = new \GnuCms\Cms\CmsRepository($db);
+        $consentUses = new \GnuCms\Cms\ConsentUseRepository($db);
         $cms = new \GnuCms\Cms\CmsService(
-            new \GnuCms\Cms\CmsRepository($db),
+            $cmsRepository,
             new \GnuCms\Cms\HtmlSanitizer(),
             new \GnuCms\Cms\ContentImageService(sys_get_temp_dir() . '/' . GNUCMS_ID . '-linking-test'),
-            new \GnuCms\Cms\ConsentUseRepository($db),
+            $consentUses,
             $consents
         );
-        return [new LinkingService($db, $users, $identities, $cms, $consents), $users, $identities];
+        return [
+            new LinkingService($db, $users, $identities, $cms, $consents),
+            $users, $identities, $cms, $consents, $cmsRepository, $consentUses,
+        ];
     }
 }

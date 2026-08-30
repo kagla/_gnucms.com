@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Web\Controller;
 
 use GnuCms\App;
+use GnuCms\Account\ConsentTrace;
 use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -60,19 +61,19 @@ final class AuthController
         $input = $this->input($request);
         $this->assertCsrf($input);
         try {
-            $user = $this->app->accountService()->register($input);
+            $user = $this->app->accountService()->register($input, $this->consentTrace($request));
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
             }
+            $values = ['email' => $input['email'] ?? ''];
+            foreach ($this->app->cmsService()->consentDocuments('signup') as $doc) {
+                $values['agree_' . $doc['id']] = isset($input['agree_' . $doc['id']]);
+            }
             return Twig::fromRequest($request)->render(
                 $response->withStatus(422),
                 'auth/register.html.twig',
-                ['errors' => $e->details(), 'values' => [
-                    'email' => $input['email'] ?? '',
-                    'agree_terms' => isset($input['agree_terms']),
-                    'agree_privacy' => isset($input['agree_privacy']),
-                ], 'legal' => $this->registrationLegal()]
+                ['errors' => $e->details(), 'values' => $values, 'legal' => $this->registrationLegal()]
             );
         }
         if ($user['newly_created'] && $user['is_admin'] && $user['email_verified']) {
@@ -157,6 +158,17 @@ final class AuthController
     {
         $input = $request->getParsedBody();
         return is_array($input) ? $input : [];
+    }
+
+    /** 동의 증적. 프록시를 신뢰하지 않으므로 REMOTE_ADDR 만 쓴다. */
+    private function consentTrace(ServerRequestInterface $request): ConsentTrace
+    {
+        $server = $request->getServerParams();
+        $ip = isset($server['REMOTE_ADDR']) && is_scalar($server['REMOTE_ADDR'])
+            ? (string) $server['REMOTE_ADDR'] : null;
+        $ua = $request->getHeaderLine('User-Agent');
+
+        return new ConsentTrace($ip, $ua === '' ? null : $ua);
     }
 
     private function assertCsrf(array $input): void

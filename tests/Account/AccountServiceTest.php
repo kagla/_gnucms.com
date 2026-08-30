@@ -24,7 +24,7 @@ final class AccountServiceTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testFirstOwnerSkipsEmailAndFollowingMemberRequiresVerification(array $config): void
     {
-        [$service, $mailer, , $consents] = $this->service($config);
+        [$service, $mailer, , $consents, , $ids] = $this->service($config);
         $owner = $service->register([
             'email' => 'owner@example.com',
             'password' => 'safe-password-123',
@@ -40,12 +40,13 @@ final class AccountServiceTest extends DatabaseTestCase
 
         $created = $service->register([
             'email' => 'USER@example.com', 'password' => 'member-password-123',
-            'password_confirmation' => 'member-password-123', 'agree_terms' => '1', 'agree_privacy' => '1',
+            'password_confirmation' => 'member-password-123',
+            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
         self::assertFalse($created['email_verified']);
         self::assertFalse($created['is_admin']);
         self::assertCount(1, $mailer->messages);
-        self::assertCount(2, $consents->forUser($created['id']));
+        self::assertCount(2, $consents->forSubject('user', $created['id']));
 
         try {
             $service->authenticate(['email' => 'user@example.com', 'password' => 'member-password-123']);
@@ -67,14 +68,15 @@ final class AccountServiceTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testOnlyFirstRegistrationBecomesAdmin(array $config): void
     {
-        [$service] = $this->service($config);
+        [$service, , , , , $ids] = $this->service($config);
         $first = $service->register([
             'email' => 'first@example.com', 'password' => 'password-123',
             'password_confirmation' => 'password-123',
         ]);
         $second = $service->register([
             'email' => 'second@example.com', 'password' => 'password-456',
-            'password_confirmation' => 'password-456', 'agree_terms' => '1', 'agree_privacy' => '1',
+            'password_confirmation' => 'password-456',
+            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
 
         self::assertTrue($first['is_admin']);
@@ -84,15 +86,15 @@ final class AccountServiceTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testDuplicateSignupDoesNotRevealExistingAccount(array $config): void
     {
-        [$service, $mailer] = $this->service($config);
+        [$service, $mailer, , , , $ids] = $this->service($config);
         $input = [
             'email' => 'member@example.com',
             'password' => 'safe-password-123',
             'password_confirmation' => 'safe-password-123',
         ];
         $first = $service->register($input);
-        $input['agree_terms'] = '1';
-        $input['agree_privacy'] = '1';
+        $input['agree_' . $ids['terms']] = '1';
+        $input['agree_' . $ids['privacy']] = '1';
         $second = $service->register($input);
 
         self::assertSame($first['id'], $second['id']);
@@ -159,7 +161,7 @@ final class AccountServiceTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testVerificationMailUsesConfiguredSiteName(array $config): void
     {
-        [$service, $mailer, , , $cms] = $this->service($config);
+        [$service, $mailer, , , $cms, $ids] = $this->service($config);
         $service->register([
             'email' => 'owner@example.com', 'password' => 'safe-password-123',
             'password_confirmation' => 'safe-password-123',
@@ -168,7 +170,8 @@ final class AccountServiceTest extends DatabaseTestCase
 
         $service->register([
             'email' => 'member@example.com', 'password' => 'member-password-123',
-            'password_confirmation' => 'member-password-123', 'agree_terms' => '1', 'agree_privacy' => '1',
+            'password_confirmation' => 'member-password-123',
+            'agree_' . $ids['terms'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
 
         self::assertCount(1, $mailer->messages);
@@ -184,17 +187,17 @@ final class AccountServiceTest extends DatabaseTestCase
         $users = new UserRepository($db);
         $cmsRepository = new CmsRepository($db);
         $consentUses = new ConsentUseRepository($db);
+        $ids = [];
         foreach ([['terms', '이용약관'], ['privacy', '개인정보 처리방침']] as $order => $legal) {
             $id = $cmsRepository->createPage([
                 'slug' => $legal[0], 'title' => $legal[1], 'content' => $legal[1] . ' 본문',
                 'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
                 // 약관이라는 표시. 이 표시가 붙고 회원가입 자리에 붙은 내용만 가입 화면에 나온다.
+                // 필수·차례는 약관이 아니라 붙임(consent_uses)이 갖는다.
                 'is_consent' => 1,
-                // AccountService::register() 는 아직(5·6 과제 전) 옛 칸으로 폼 이름을
-                // 만들고 필수 여부를 읽으므로, 옛 칸도 함께 채워 둔다.
-                'consent_key' => $legal[0], 'consent_order' => $order, 'consent_required' => 1,
             ]);
             $consentUses->attach('signup', $id, true, $order);
+            $ids[$legal[0]] = $id;
         }
         $consents = new ConsentRepository($db);
         $service = new AccountService(
@@ -212,7 +215,7 @@ final class AccountServiceTest extends DatabaseTestCase
             $consents
         );
 
-        return [$service, $mailer, $users, $consents, $cmsRepository];
+        return [$service, $mailer, $users, $consents, $cmsRepository, $ids];
     }
 
     private function tokenFrom(string $body): string

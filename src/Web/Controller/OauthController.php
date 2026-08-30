@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Web\Controller;
 
 use GnuCms\App;
+use GnuCms\Account\ConsentTrace;
 use GnuCms\Error\DomainError;
 use GnuCms\Oauth\SocialProfile;
 use Psr\Http\Message\ResponseInterface;
@@ -52,7 +53,7 @@ final class OauthController
         }
         $code = isset($query['code']) && is_scalar($query['code']) ? (string) $query['code'] : '';
         $profile = $this->app->socialAuthService()->profile($key, $code, $state);
-        $user = $this->app->socialAuthService()->resolve($profile);
+        $user = $this->app->socialAuthService()->resolve($profile, $this->consentTrace($request));
         if ($user !== null) {
             $this->storeSession($user);
             return $this->homeRedirect($request, $response);
@@ -107,7 +108,8 @@ final class OauthController
         }
         $user = $this->app->socialAuthService()->complete(
             SocialProfile::fromArray((array) $pending['profile']),
-            (string) ($pending['email'] ?? '')
+            (string) ($pending['email'] ?? ''),
+            $this->consentTrace($request)
         );
         unset($_SESSION['oauth_pending']);
         $this->storeSession($user);
@@ -123,6 +125,17 @@ final class OauthController
             throw DomainError::validation(['oauth' => '소셜 로그인 요청이 만료되었습니다. 다시 시도해 주세요.']);
         }
         return $pending;
+    }
+
+    /** 동의 증적. 프록시를 신뢰하지 않으므로 REMOTE_ADDR 만 쓴다. */
+    private function consentTrace(ServerRequestInterface $request): ConsentTrace
+    {
+        $server = $request->getServerParams();
+        $ip = isset($server['REMOTE_ADDR']) && is_scalar($server['REMOTE_ADDR'])
+            ? (string) $server['REMOTE_ADDR'] : null;
+        $ua = $request->getHeaderLine('User-Agent');
+
+        return new ConsentTrace($ip, $ua === '' ? null : $ua);
     }
 
     private function assertCsrf(array $input): void

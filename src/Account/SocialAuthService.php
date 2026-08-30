@@ -36,9 +36,9 @@ final class SocialAuthService
         return $this->providers->get($provider)->fetchProfile($code, $state);
     }
 
-    public function resolve(SocialProfile $profile): ?array
+    public function resolve(SocialProfile $profile, ?ConsentTrace $trace = null): ?array
     {
-        return $this->linking->resolve($profile);
+        return $this->linking->resolve($profile, $trace);
     }
 
     public function sendPendingEmail(SocialProfile $profile, string $email, string $token): string
@@ -60,8 +60,8 @@ final class SocialAuthService
         return $this->cms === null ? GNUCMS : (string) $this->cms->settings()['site_name'];
     }
 
-    public function complete(SocialProfile $profile, string $email): array
+    public function complete(SocialProfile $profile, string $email, ?ConsentTrace $trace = null): array
     {
-        return $this->linking->completeVerifiedEmail($profile, $email);
+        return $this->linking->completeVerifiedEmail($profile, $email, $trace);
     }
 }
