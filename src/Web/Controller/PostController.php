@@ -22,6 +22,16 @@ final class PostController
         $this->app = $app;
     }
 
+    /** 게시판을 넘나드는 전체 글. */
+    public function all(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $query = $request->getQueryParams();
+        return View::fromRequest($request)->render($response, 'posts/all', [
+            'list' => $this->app->postService()->listRecentPosts($this->app->guestAcl(), $query),
+            'query' => ['q' => isset($query['q']) && is_scalar($query['q']) ? (string) $query['q'] : null],
+        ]);
+    }
+
     public function index(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $acl = $this->app->guestAcl();

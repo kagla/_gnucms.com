@@ -119,6 +119,43 @@ final class PostService
      * 관리 화면의 전체 글 목록. 게시판 경계를 넘으므로 사이트 관리 권한이 필요하다.
      * 각 글에 board_key/board_name 을 붙여 어느 게시판 글인지 바로 알 수 있게 한다.
      */
+    /**
+     * 게시판을 넘나드는 전체 글. 읽을 수 있는 게시판의 글만, 최신순으로.
+     * 관리 콘솔의 listAllPosts() 와 달리 누구나 부를 수 있고 지운 글은 안 보인다.
+     */
+    public function listRecentPosts(Acl $acl, array $query): array
+    {
+        $v = new Validator($query);
+        $page = $v->int('page', 1, 1, 100000);
+        $q = $v->optionalString('q', 100);
+        $v->check();
+        $perPage = 20;
+
+        $boards = [];
+        foreach ($this->boards->listBoards($acl) as $board) {
+            $boards[(int) $board['id']] = $board;
+        }
+
+        $result = $this->posts->paginateAll($page, $perPage, $q, null, false, array_keys($boards));
+
+        $rows = [];
+        foreach ($result['rows'] as $row) {
+            $summary = $this->summary($row);
+            $board = $boards[(int) $row['board_id']];
+            $summary['board_key'] = $board['board_key'];
+            $summary['board_name'] = $board['name'];
+            $rows[] = $summary;
+        }
+
+        return [
+            'data'        => $rows,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total'       => $result['total'],
+            'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+        ];
+    }
+
     public function listAllPosts(Acl $acl, array $query): array
     {
         $acl->assertGlobalAdmin();

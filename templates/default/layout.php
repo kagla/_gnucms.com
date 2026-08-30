@@ -107,6 +107,7 @@
           <label for="nav-drawer" class="gnb-all" role="button" tabindex="0"><?= $this->icon('grid', 15) ?> 전체</label>
           <nav class="tabs tabs-border" aria-label="주요 메뉴">
             <a class="tab<?php if (trim($this->block('nav_section')) === 'home'): ?> tab-active<?php endif ?>" href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> aria-current="page"<?php endif ?>>홈</a>
+            <a class="tab<?php if (trim($this->block('nav_section')) === 'all'): ?> tab-active<?php endif ?>" href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> aria-current="page"<?php endif ?>>전체 글</a>
             <?php $this->start('extra_tabs') ?><?php $this->stop() ?>
             <?php foreach ($site_menu as $item): ?><a class="tab" href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->e($item['title']) ?></a><?php endforeach ?>
           </nav>

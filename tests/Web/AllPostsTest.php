@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace GnuCms\Tests\Web;
+
+use GnuCms\Tests\Support\WebTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+final class AllPostsTest extends WebTestCase
+{
+    #[DataProvider('connectionProvider')]
+    public function testAllPostsListsOnlyReadableBoardsAndSearches(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $app->boardService()->create($acl, ['board_key' => 'secret', 'name' => '관리자전용', 'perm_read' => 'admin']);
+        $app->postService()->create($acl, 'free', ['title' => '공개 글 하나', 'content' => '내용']);
+        $app->postService()->create($acl, 'free', ['title' => '공개 글 둘', 'content' => '사과']);
+        $app->postService()->create($acl, 'secret', ['title' => '비공개 글', 'content' => '내용']);
+
+        $response = $this->get($app, '/posts');
+        self::assertSame(200, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('공개 글 하나', $body);
+        self::assertStringContainsString('공개 글 둘', $body);
+        self::assertStringNotContainsString('비공개 글', $body, '읽을 수 없는 게시판의 글은 안 나온다');
+        self::assertStringContainsString('자유게시판', $body, '게시판 이름 배지가 붙는다');
+        self::assertStringContainsString('aria-current="page"', $body);
+        self::assertMatchesRegularExpression('#href="/posts"[^>]*>전체 글#', $body, '상단 탭에 전체 글이 있다');
+
+        $found = $this->body($this->get($app, '/posts', ['q' => '사과']));
+        self::assertStringContainsString('공개 글 둘', $found);
+        self::assertStringNotContainsString('공개 글 하나', $found);
+        self::assertStringContainsString('검색 결과 1건', $found);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAllPostsPaginates(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        for ($i = 1; $i <= 21; $i++) {
+            $app->postService()->create($acl, 'free', ['title' => '글 ' . $i, 'content' => '내용']);
+        }
+        $first = $this->body($this->get($app, '/posts'));
+        self::assertStringContainsString('글 21', $first);
+        self::assertStringNotContainsString('>글 1<', $first, '21번째 글은 둘째 쪽으로 넘어간다');
+        self::assertStringContainsString('href="/posts?page=2"', $first);
+        $second = $this->body($this->get($app, '/posts', ['page' => '2']));
+        self::assertStringContainsString('>글 1 ', $second);
+    }
+}

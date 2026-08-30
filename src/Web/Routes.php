@@ -148,6 +148,7 @@ final class Routes
             return $response->withHeader('Location', $url)->withStatus(301);
         });
         $posts = new PostController($app);
+        $slim->get('/posts', [$posts, 'all'])->setName('posts.all');
         $slim->get('/boards/{key}', [$posts, 'index'])->setName('posts.index');
         $slim->get('/boards/{key}/write', [$posts, 'createForm'])->setName('posts.create');
         $slim->post('/boards/{key}/write', [$posts, 'create']);

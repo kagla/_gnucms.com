@@ -114,10 +114,24 @@ final class PostRepository
         int $perPage,
         ?string $q = null,
         ?int $boardId = null,
-        bool $includeDeleted = false
+        bool $includeDeleted = false,
+        ?array $boardIds = null
     ): array {
         $where = $includeDeleted ? '1 = 1' : 'deleted_at IS NULL';
         $params = [];
+
+        // 읽을 수 있는 게시판만. 빈 목록이면 아무 글도 없다.
+        if ($boardIds !== null) {
+            if ($boardIds === []) {
+                return ['rows' => [], 'total' => 0];
+            }
+            $marks = [];
+            foreach (array_values($boardIds) as $i => $id) {
+                $marks[] = ':b' . $i;
+                $params['b' . $i] = (int) $id;
+            }
+            $where .= ' AND board_id IN (' . implode(', ', $marks) . ')';
+        }
 
         if ($q !== null && $q !== '') {
             $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
