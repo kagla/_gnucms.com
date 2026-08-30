@@ -12,6 +12,7 @@ use GnuCms\Install\DbSetup;
 use GnuCms\Install\Installer;
 use GnuCms\Install\InstallSession;
 use GnuCms\Install\ServerCheck;
+use GnuCms\Web\BasePath;
 
 $root = dirname(__DIR__);
 $installer = new Installer($root . '/config/config.php', $root . '/storage', __FILE__);
@@ -78,8 +79,11 @@ function page(int $step, string $title, string $body): void
 
 function redirectTo(int $step): void
 {
-    $self = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'install.php')) ?: 'install.php';
-    header('Location: ' . $self . '?step=' . $step, true, 303);
+    // 같은 폴더의 install.php 절대 경로로 보낸다. mod_rewrite 로 index.php 가
+    // /board/foo 처럼 재작성된 상태에서 왔을 때도 basename 만으로는 상대 경로가
+    // 어긋나므로, BasePath::siblingUrl() 로 SCRIPT_NAME 기준 폴더를 계산한다.
+    $location = BasePath::siblingUrl((string) ($_SERVER['SCRIPT_NAME'] ?? '/install.php'), 'install.php');
+    header('Location: ' . $location . '?step=' . $step, true, 303);
     exit;
 }
 
