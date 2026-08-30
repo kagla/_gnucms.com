@@ -12,6 +12,7 @@ use GnuCms\Install\DbSetup;
 use GnuCms\Install\Installer;
 use GnuCms\Install\InstallSession;
 use GnuCms\Install\ServerCheck;
+use GnuCms\Validation\Validator;
 use GnuCms\Web\BasePath;
 
 $root = dirname(__DIR__);
@@ -245,7 +246,7 @@ if ($step === 4) {
     $body = '<p class="intro">이 계정이 전역 관리자가 됩니다. 이메일 인증은 건너뜁니다.</p><form method="post">'
         . field('이메일', 'email', $values['email'], $errors, 'email', '', 'required autocomplete="username"')
         . field('표시 이름', 'display_name', $values['display_name'], $errors, 'text', '한글·영문·숫자만. 한글 2자 또는 영문 4자 이상', 'required')
-        . '<label>비밀번호<span class="hint">8자 이상</span><div class="pw"><input id="pw1" name="password" type="password" autocomplete="new-password" required><button type="button" data-show="pw1">보기</button></div></label>' . err($errors, 'password')
+        . '<label>비밀번호<span class="hint">' . h((string) Validator::passwordMin()) . '자 이상</span><div class="pw"><input id="pw1" name="password" type="password" autocomplete="new-password" required><button type="button" data-show="pw1">보기</button></div></label>' . err($errors, 'password')
         . '<label>비밀번호 확인<div class="pw"><input id="pw2" name="password_confirmation" type="password" autocomplete="new-password" required><button type="button" data-show="pw2">보기</button></div></label>' . err($errors, 'password_confirmation')
         . '<div class="actions"><a href="?step=3">← 이전</a><button type="submit">다음</button></div></form>';
     page(4, '첫 관리자', $body);

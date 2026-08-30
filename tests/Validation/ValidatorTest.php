@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Validation;
 
 use PHPUnit\Framework\TestCase;
 use GnuCms\Error\DomainError;
+use GnuCms\App;
 use GnuCms\Validation\Validator;
 
 final class ValidatorTest extends TestCase
@@ -196,6 +197,36 @@ final class ValidatorTest extends TestCase
             $this->fail('VALIDATION_FAILED 가 나와야 한다');
         } catch (DomainError $e) {
             $this->assertArrayHasKey('perm_read', $e->details());
+        }
+    }
+
+    public function testPasswordMinimumIsConfigurable(): void
+    {
+        try {
+            Validator::setPasswordMin(12);
+            $v = new Validator(['password' => '12345678']);
+            $v->requiredPassword('password');
+            try {
+                $v->check();
+                $this->fail('VALIDATION_FAILED 가 나와야 한다');
+            } catch (DomainError $e) {
+                $this->assertSame(['password' => '12자 이상이어야 합니다.'], $e->details());
+            }
+        } finally {
+            Validator::setPasswordMin(8);
+        }
+    }
+
+    public function testAppSetsPasswordMinFromConfig(): void
+    {
+        try {
+            new App(['auth' => ['password_min' => 10]]);
+            $this->assertSame(10, Validator::passwordMin());
+
+            new App([]);
+            $this->assertSame(8, Validator::passwordMin(), '설정이 없으면 기본 8자로 돌아간다');
+        } finally {
+            Validator::setPasswordMin(8);
         }
     }
 }

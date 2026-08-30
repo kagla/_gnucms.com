@@ -14,6 +14,7 @@ use GnuCms\Account\SocialAuthService;
 use GnuCms\Account\AdminService;
 use GnuCms\Account\ConsentRepository;
 use GnuCms\Auth\Acl;
+use GnuCms\Validation\Validator;
 use GnuCms\Auth\Identity;
 use GnuCms\Db\Connection;
 use GnuCms\Db\SchemaUpgrader;
@@ -125,6 +126,8 @@ final class App
     {
         $this->config = $config;
         $this->identity = Identity::guest();
+        // 검사 기준이 곳곳에 흩어지지 않도록 비밀번호 최소 길이는 여기서 한 번만 정한다.
+        Validator::setPasswordMin((int) $this->config('auth.password_min', 8));
     }
 
     /** 점 표기 경로로 설정을 읽는다. 예: config('auth.secret') */

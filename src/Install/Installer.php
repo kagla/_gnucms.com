@@ -179,7 +179,8 @@ final class Installer
                 'password' => ($dbConfig['password'] ?? '') === '' ? null : $dbConfig['password'],
             ],
             'auth' => [
-                'secret' => Base64Url::encode(random_bytes(32)),
+                'secret'       => Base64Url::encode(random_bytes(32)),
+                'password_min' => 8,
             ],
             'uploads' => [
                 'dir'         => $this->storageDir . '/uploads',

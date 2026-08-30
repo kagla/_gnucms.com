@@ -68,7 +68,8 @@ final class InstallerTest extends TestCase
         $config = require $this->configPath();
 
         self::assertGreaterThanOrEqual(43, strlen($config['auth']['secret']));
-        self::assertSame(['secret'], array_keys($config['auth']));
+        self::assertSame(['secret', 'password_min'], array_keys($config['auth']));
+        self::assertSame(8, $config['auth']['password_min']);
         self::assertArrayNotHasKey('cors', $config);
         self::assertArrayNotHasKey('bootstrap_admin', $config);
         self::assertSame('https://community.example.com', $config['app']['url']);

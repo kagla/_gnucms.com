@@ -187,8 +187,8 @@ final class AccountService
             } elseif (!password_verify($current, (string) $user['password_hash'])) {
                 $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
             }
-            if (mb_strlen($password) < Validator::PASSWORD_MIN) {
-                $v->fail('password', Validator::PASSWORD_MIN . '자 이상이어야 합니다.');
+            if (mb_strlen($password) < Validator::passwordMin()) {
+                $v->fail('password', Validator::passwordMin() . '자 이상이어야 합니다.');
             }
             if ($password !== $confirmation) {
                 $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');

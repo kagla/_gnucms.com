@@ -13,7 +13,7 @@
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <input type="hidden" name="token" value="<?= $this->e($token) ?>">
         <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">새 비밀번호 <span class="legend-hint">8자 이상</span></legend>
+          <legend class="fieldset-legend">새 비밀번호 <span class="legend-hint"><?= $this->e((string) $password_min) ?>자 이상</span></legend>
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('lock', 16) ?></span>
             <input type="password" name="password" minlength="8" autocomplete="new-password" required>

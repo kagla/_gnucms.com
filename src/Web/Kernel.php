@@ -10,6 +10,7 @@ use GnuCms\Web\Middleware\HtmlContentTypeMiddleware;
 use GnuCms\Web\Middleware\SessionGuard;
 use GnuCms\Error\DomainError;
 use GnuCms\Theme\ThemeManager;
+use GnuCms\Validation\Validator;
 use GnuCms\View\PhpView;
 use GnuCms\Web\Middleware\ViewMiddleware;
 use Slim\App as SlimApp;
@@ -52,6 +53,7 @@ final class Kernel
         ]);
         $view->addGlobal('csrf_token', '');
         $view->addGlobal('unread_notifications', 0);
+        $view->addGlobal('password_min', Validator::passwordMin());
         $view->addGlobal('oauth_providers', $app->providerRegistry()->options());
         $registrationAvailable = (bool) $site['registration_enabled'];
         $legalDocuments = [];

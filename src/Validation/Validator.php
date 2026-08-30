@@ -12,7 +12,21 @@ use GnuCms\Error\DomainError;
  */
 final class Validator
 {
-    public const PASSWORD_MIN = 8;
+    /**
+     * 비밀번호 최소 길이. config 의 auth.password_min 값으로 App 이 부팅할 때 정한다.
+     * 설치기처럼 App 없이 도는 곳은 기본 8자를 그대로 쓴다.
+     */
+    private static int $passwordMin = 8;
+
+    public static function setPasswordMin(int $min): void
+    {
+        self::$passwordMin = max(1, $min);
+    }
+
+    public static function passwordMin(): int
+    {
+        return self::$passwordMin;
+    }
 
     /** @var array */
     private $data;
@@ -96,8 +110,8 @@ final class Validator
 
             return '';
         }
-        if (mb_strlen($value) < self::PASSWORD_MIN) {
-            $this->errors[$field] = self::PASSWORD_MIN . '자 이상이어야 합니다.';
+        if (mb_strlen($value) < self::passwordMin()) {
+            $this->errors[$field] = self::passwordMin() . '자 이상이어야 합니다.';
 
             return '';
         }
