@@ -175,5 +175,16 @@ foreach (($values['attachments'] ?? []) as $row) {
     var after = event.clientY > rect.top + rect.height / 2;
     list.insertBefore(dragging, after ? over.nextElementSibling : over);
   });
+
+  // 업로드가 끝나지 않은 행이 있으면 저장을 막는다. 실패한 행은 hidden input이
+  // 없을 뿐 사용자가 무시하고 저장할 수 있어야 하므로 막지 않는다.
+  if (form) {
+    form.addEventListener('submit', function (event) {
+      if (list.querySelector('.is-uploading')) {
+        event.preventDefault();
+        showError('파일을 올리는 중입니다. 끝난 뒤 저장해 주세요.');
+      }
+    });
+  }
 })();
 </script>
