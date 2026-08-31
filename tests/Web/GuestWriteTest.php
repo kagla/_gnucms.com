@@ -97,4 +97,66 @@ final class GuestWriteTest extends WebTestCase
         self::assertSame(301, $response->getStatusCode());
         self::assertSame('/boards/free/new', $response->getHeaderLine('Location'));
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testWrongGuestPasswordSaysSoInsteadOfAskingToLogIn(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $this->get($app, '/boards/free/new');
+        $created = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '손님의 글', 'content' => '본문입니다',
+            'author_name' => '지나가던손님', 'password' => 'guest-pass-123',
+        ]);
+        $postUrl = $created->getHeaderLine('Location');
+
+        $response = $this->post($app, $postUrl . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '고친 제목', 'content' => '본문입니다', 'password' => 'wrong-pass-999',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('비밀번호가 올바르지 않습니다', $body);
+        self::assertStringNotContainsString('로그인이 필요합니다', $body);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMissingGuestPasswordAsksForIt(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $this->get($app, '/boards/free/new');
+        $created = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '손님의 글', 'content' => '본문입니다',
+            'author_name' => '지나가던손님', 'password' => 'guest-pass-123',
+        ]);
+
+        $response = $this->post($app, $created->getHeaderLine('Location') . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '고친 제목', 'content' => '본문입니다',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('비밀번호를 입력해 주세요', $this->body($response));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testGuestEditingMemberPostStillGetsUnauthorized(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '회원 글', 'content' => '본문']);
+
+        try {
+            $app->postService()->update(new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::guest()), $post['id'], [
+                'title' => '가로채기', 'content' => '본문', 'password' => 'whatever-123',
+            ]);
+            self::fail('401 이 나와야 한다');
+        } catch (\GnuCms\Error\DomainError $e) {
+            // 회원 글은 비밀번호가 소유 증명이 아니므로 기존대로 로그인 안내다.
+            self::assertSame(401, $e->status());
+            self::assertSame('로그인이 필요합니다.', $e->getMessage());
+        }
+    }
 }
+

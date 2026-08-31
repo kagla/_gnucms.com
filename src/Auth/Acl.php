@@ -120,7 +120,17 @@ final class Acl
 
     public function assertCanModify(array $board, array $resource, ?string $password): void
     {
-        $this->deny($this->canModify($board, $resource, $password), '수정하거나 삭제할 권한이 없습니다.');
+        if ($this->canModify($board, $resource, $password)) {
+            return;
+        }
+        // 비회원 글·댓글은 비밀번호가 곧 소유 증명이다. 로그인하라는 안내는 엉뚱하므로
+        // 비밀번호 칸에 붙는 검증 오류로 알려 준다. 회원 글은 기존대로 401/403 이다.
+        if (($resource['author_id'] ?? null) === null && ($resource['guest_password'] ?? null) !== null) {
+            throw DomainError::validation(['password' => $password === null || $password === ''
+                ? '비밀번호를 입력해 주세요.'
+                : '비밀번호가 올바르지 않습니다.']);
+        }
+        $this->deny(false, '수정하거나 삭제할 권한이 없습니다.');
     }
 
     private function allows(array $board, string $level): bool
