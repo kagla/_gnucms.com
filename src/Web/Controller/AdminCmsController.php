@@ -51,6 +51,17 @@ final class AdminCmsController
         return $this->redirect($request, $response, 'admin.settings', ['saved' => '1']);
     }
 
+    public function uploadsGc(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $result = $this->app->attachments()->collectGarbage($this->app->guestAcl());
+        $url = RouteContext::fromRequest($request)->getRouteParser()
+            ->urlFor('admin.settings', [], ['gc' => (string) $result['deleted']]);
+
+        return $response->withHeader('Location', $url)->withStatus(303);
+    }
+
     public function mailForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         return $this->renderMailForm($request, $response,

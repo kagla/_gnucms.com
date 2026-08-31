@@ -1635,6 +1635,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .schema-facts dd { margin: 0; font-weight: 600; }
 .schema-stamp { font-weight: 400; font-size: .75rem; opacity: .6; }
 .schema-note { font-size: .875rem; opacity: .75; margin-top: .75rem; }
+.schema-gc { display:flex; align-items:center; gap:.6rem; margin-top:.75rem; }
 
 /* 글쓰기 폼의 첨부 목록 */
 .attach-box { margin-top: 1rem; }

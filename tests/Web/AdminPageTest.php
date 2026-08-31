@@ -360,4 +360,31 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(1024, $app->cmsService()->settings()['attach_max_mb']);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testAbandonedUploadsCanBeCleanedFromSettings(array $dbConfig): void
+    {
+        $this->purgeTestUploads();
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+        $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유', 'use_file' => true]);
+        $abandoned = $app->attachments()->upload($this->adminAcl(), 'free', $this->fakeUpload('버려짐.txt', 'x'));
+        touch($abandoned['path'], time() - 90000);
+
+        $page = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringContainsString('버려진 파일 정리', $page);
+
+        $cleaned = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
+        self::assertSame(303, $cleaned->getStatusCode());
+        self::assertStringContainsString('gc=1', $cleaned->getHeaderLine('Location'));
+        self::assertFileDoesNotExist($abandoned['path']);
+
+        $after = $this->body($this->get($app, '/admin/settings', ['gc' => '1']));
+        self::assertStringContainsString('버려진 파일 1개를 정리했습니다', $after);
+    }
+
 }

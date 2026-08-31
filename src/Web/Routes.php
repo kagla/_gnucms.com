@@ -69,6 +69,7 @@ final class Routes
         $cmsImages = new CmsImageController($app);
         $slim->get('/admin/settings', [$cms, 'settingsForm'])->setName('admin.settings');
         $slim->post('/admin/settings', [$cms, 'settings']);
+        $slim->post('/admin/uploads/gc', [$cms, 'uploadsGc'])->setName('admin.uploads.gc');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
         $slim->post('/admin/mail/test', [$cms, 'mailTest'])->setName('admin.mail.test');

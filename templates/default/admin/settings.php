@@ -105,6 +105,14 @@
       </div>
       <p class="schema-note">되돌리려면 사이트를 잠시 멈추고 <code>storage/board.sqlite</code> 를 백업 파일로 바꿉니다.</p>
     <?php endif ?>
+    <?php if (($query['gc'] ?? '') !== ''): ?>
+      <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>버려진 파일 <?= $this->e((string) (int) $query['gc']) ?>개를 정리했습니다.</span></div>
+    <?php endif ?>
+    <form method="post" action="<?= $this->url('admin.uploads.gc') ?>" class="schema-gc">
+      <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+      <button class="btn btn-sm" type="submit">버려진 파일 정리</button>
+      <span class="schema-note">글에 붙지 못하고 하루 넘게 남은 업로드를 지웁니다.</span>
+    </form>
   </div>
 </section>
 <?php $this->stop() ?>
