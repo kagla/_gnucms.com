@@ -11,7 +11,7 @@ final class BoardListTest extends WebTestCase
     /** @dataProvider connectionProvider */
     public function testReadableBoardsAreListed(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free',
             'name'      => '자유게시판',
@@ -22,13 +22,13 @@ final class BoardListTest extends WebTestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('자유게시판', $this->body($response));
         self::assertStringContainsString('/boards/free', $this->body($response));
-        self::assertStringContainsString('/themes/default/theme.css', $this->body($response));
+        self::assertStringContainsString('/themes/gnucmscom/theme.css', $this->body($response));
     }
 
     /** @dataProvider connectionProvider */
     public function testUnreadableBoardIsHidden(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'secret',
             'name'      => '관리자전용',
@@ -43,20 +43,21 @@ final class BoardListTest extends WebTestCase
     /** @dataProvider connectionProvider */
     public function testProductHomeIsShownWithoutBoards(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
 
         $body = $this->body($this->get($app, '/'));
-        self::assertStringContainsString('운영에 필요한 것은', $body);
-        self::assertStringContainsString('지금 내려받기', $body);
+        self::assertStringContainsString('필요한 것만 담은', $body);
+        self::assertStringContainsString('내려받기', $body);
     }
 
     /** @dataProvider connectionProvider */
     public function testHomeExplainsTheProductAndLinksToUpstream(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
         $body = $this->body($this->get($app, '/'));
 
-        self::assertStringContainsString('오픈소스 PHP CMS', $body);
+        self::assertStringContainsString('가벼운 오픈소스 CMS', $body);
+        self::assertStringContainsString('PHP 7.4+', $body);
         self::assertStringContainsString('SQLite', $body);
         self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
         self::assertStringNotContainsString('class="btn btn-ghost btn-circle theme-toggle"', $body);
@@ -66,7 +67,7 @@ final class BoardListTest extends WebTestCase
     /** @dataProvider connectionProvider */
     public function testLatestFivePostsAreShownOnHome(array $dbConfig): void
     {
-        $app = $this->makeApp($dbConfig);
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
 
@@ -79,6 +80,6 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('홈 최신글 6', $body);
         self::assertStringContainsString('홈 최신글 2', $body);
         self::assertStringNotContainsString('홈 최신글 1', $body);
-        self::assertStringContainsString('GNucms · 작게 시작해 오래 운영하는 PHP CMS', $body);
+        self::assertStringContainsString('GNUCMS · 가벼운 PHP CMS', $body);
     }
 }

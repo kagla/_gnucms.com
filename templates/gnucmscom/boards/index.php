@@ -1,5 +1,5 @@
 <?php $this->layout('layout') ?>
-<?php $this->start('title') ?><?= $this->e($site['site_name']) ?> · <?= $this->e($site['site_tagline']) ?><?php $this->stop() ?>
+<?php $this->start('title') ?>게시판 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>home<?php $this->stop() ?>
 
 <?php // 검색을 머리글 한가운데 크게 둔다.
@@ -10,6 +10,7 @@
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
     <input type="search" name="q" value="" placeholder="<?= $this->e($boards[0]['name']) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
+    <kbd class="kbd kbd-sm" aria-hidden="true">/</kbd>
   </label>
   <button class="btn btn-primary header-search-btn" type="submit">검색</button>
 </form>
@@ -40,22 +41,27 @@ $hot = array_slice($pool, 0, 6);
       <p><?= $this->e($site['home_intro']) ?></p>
       <div class="hero-actions">
         <?php if ($boards !== []): ?>
-          <a class="btn btn-primary" href="<?= $this->url('posts.index', ['key' => $boards[0]['board_key']]) ?>"><?= $this->icon('sparkle', 16) ?> 둘러보기</a>
+          <a class="btn btn-primary btn-lg" href="<?= $this->url('posts.index', ['key' => $boards[0]['board_key']]) ?>"><?= $this->icon('sparkle', 16) ?> 둘러보기</a>
         <?php endif ?>
         <?php if ($current_user['is_guest'] && $registration_available): ?>
-          <a class="btn btn-outline" href="<?= $this->url('auth.register') ?>">회원가입</a>
+          <a class="btn btn-outline btn-lg" href="<?= $this->url('auth.register') ?>">회원가입</a>
         <?php elseif ($boards !== []): ?>
-          <a class="btn btn-outline" href="<?= $this->url('posts.create', ['key' => $boards[0]['board_key']]) ?>"><?= $this->icon('pencil', 16) ?> 글쓰기</a>
+          <a class="btn btn-outline btn-lg" href="<?= $this->url('posts.create', ['key' => $boards[0]['board_key']]) ?>"><?= $this->icon('pencil', 16) ?> 글쓰기</a>
         <?php endif ?>
       </div>
     </div>
-    <?php // 게시판 몇 개·글 몇 개 같은 숫자는 사이트가 작을 때 오히려 초라하다.
-          // 대신 이 CMS 가 무엇인지 말해 주는 사실 네 줄을 둔다. ?>
-    <ul class="hero-facts" aria-label="GNUCMS 특징">
-      <li><?= $this->icon('board', 16) ?><div><strong>게시판 · 내용 · 약관 · 회원</strong><span>CMS의 뼈대가 처음부터 들어 있습니다</span></div></li>
-      <li><?= $this->icon('grid', 16) ?><div><strong>SQLite · MySQL · PostgreSQL</strong><span>어디서든 같은 코드로 돕니다</span></div></li>
-      <li><?= $this->icon('sparkle', 16) ?><div><strong>AI 와도 잘 맞습니다</strong><span>의존성 없는 단순한 PHP 라 함께 고치기 쉽습니다</span></div></li>
-    </ul>
+    <div class="stats stats-vertical">
+      <div class="stat">
+        <div class="stat-figure" aria-hidden="true"><?= $this->icon('board', 20) ?></div>
+        <div class="stat-title">게시판</div>
+        <div class="stat-value"><?= $this->e(count($boards)) ?></div>
+      </div>
+      <div class="stat">
+        <div class="stat-figure" data-tone="1" aria-hidden="true"><?= $this->icon('document', 20) ?></div>
+        <div class="stat-title">최근 글</div>
+        <div class="stat-value"><?= $this->e($recent) ?></div>
+      </div>
+    </div>
   </div>
 </section>
 
