@@ -385,6 +385,13 @@ final class AdminPageTest extends WebTestCase
 
         $after = $this->body($this->get($app, '/admin/settings', ['gc' => '1']));
         self::assertStringContainsString('버려진 파일 1개를 정리했습니다', $after);
+
+        // 정리할 게 없을 때(gc=0)는 성공 알림이 아니라 안내 문구를 보여야 한다.
+        $cleanedAgain = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
+        self::assertStringContainsString('gc=0', $cleanedAgain->getHeaderLine('Location'));
+        $emptyGc = $this->body($this->get($app, '/admin/settings', ['gc' => '0']));
+        self::assertStringContainsString('정리할 파일이 없습니다', $emptyGc);
+        self::assertStringNotContainsString('버려진 파일 0개를 정리했습니다', $emptyGc);
     }
 
 }

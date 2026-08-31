@@ -33,13 +33,24 @@ final class AttachmentService
     /** @var ImageResizer */
     private $resizer;
 
-    /** 서버 PHP 가 실제로 받아 주는 파일당 최대 크기(MB). 설정 화면의 힌트에 쓴다. */
-    public static function serverMaxMb(): int
+    /**
+     * 서버 PHP 가 실제로 받아 주는 파일당 최대 크기(MB). 설정 화면의 힌트에 쓴다.
+     * upload_max_filesize·post_max_size 가 둘 다 무제한(iniToMb 가 PHP_INT_MAX)이면
+     * 0 을 돌려준다. 0 은 "서버 쪽 한계가 없다"는 뜻이고, 화면은 이를 별도 문구로 보여 준다.
+     *
+     * @param string|null $uploadMaxFilesize 테스트 전용. 생략하면 ini_get('upload_max_filesize').
+     *   두 값 모두 PHP_INI_PERDIR 라 ini_set() 으로 런타임에 바꿀 수 없어, 무제한(0) 분기를
+     *   테스트하려면 이렇게 값을 주입받아야 한다.
+     * @param string|null $postMaxSize 테스트 전용. 생략하면 ini_get('post_max_size').
+     */
+    public static function serverMaxMb(?string $uploadMaxFilesize = null, ?string $postMaxSize = null): int
     {
-        return max(1, min(
-            self::iniToMb((string) ini_get('upload_max_filesize')),
-            self::iniToMb((string) ini_get('post_max_size'))
-        ));
+        $mb = min(
+            self::iniToMb($uploadMaxFilesize ?? (string) ini_get('upload_max_filesize')),
+            self::iniToMb($postMaxSize ?? (string) ini_get('post_max_size'))
+        );
+
+        return $mb === PHP_INT_MAX ? 0 : max(1, $mb);
     }
 
     /** php.ini 의 8M·1G 같은 축약 표기를 MB 정수로. 0·음수는 무제한이라는 뜻이다. */

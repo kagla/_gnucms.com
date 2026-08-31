@@ -13,8 +13,23 @@ final class AttachmentServiceTest extends WebTestCase
 {
     public function testServerMaxMbIsPositive(): void
     {
-        // php.ini 값에 따라 다르지만 항상 1 이상의 정수여야 한다.
-        self::assertGreaterThanOrEqual(1, AttachmentService::serverMaxMb());
+        // php.ini 값에 따라 다르지만, 둘 다 무제한이 아닌 한 0 보다 큰 정수여야 한다.
+        // 0 은 "서버 쪽 한계 없음"이라는 별도 의미이므로 이 값 자체는 배제하지 않는다.
+        self::assertGreaterThanOrEqual(0, AttachmentService::serverMaxMb());
+    }
+
+    public function testServerMaxMbIsZeroWhenBothIniLimitsAreUnlimited(): void
+    {
+        // upload_max_filesize·post_max_size 는 PHP_INI_PERDIR 라 ini_set() 으로 런타임에
+        // 바꿀 수 없다. serverMaxMb() 가 테스트용으로 받는 파라미터로 이 분기를 확인한다.
+        self::assertSame(0, AttachmentService::serverMaxMb('0', '0'), '둘 다 무제한이면 0(제한 없음)이어야 한다');
+        self::assertSame(0, AttachmentService::serverMaxMb('-1', '0'));
+    }
+
+    public function testServerMaxMbUsesTheSmallerOfTheTwoLimits(): void
+    {
+        self::assertSame(8, AttachmentService::serverMaxMb('8M', '0'));
+        self::assertSame(4, AttachmentService::serverMaxMb('4M', '16M'));
     }
 
     public function testIniShorthandIsParsed(): void

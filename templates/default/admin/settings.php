@@ -59,7 +59,11 @@
           <legend class="fieldset-legend">파일당 최대 용량 (MB)</legend>
           <input class="input input-bordered input-block" type="number" name="attach_max_mb" min="1" max="1024" value="<?= $this->e((string) ($values['attach_max_mb'] ?? 5)) ?>" required>
           <?php if (array_key_exists('attach_max_mb', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['attach_max_mb']) ?></p><?php endif ?>
+          <?php if ((int) $server_max_mb === 0): ?>
+          <p class="fieldset-label">서버 PHP 한계가 없습니다.</p>
+          <?php else: ?>
           <p class="fieldset-label">서버 PHP 한계는 <?= $this->e((string) $server_max_mb) ?> MB 입니다. 그보다 크게 적어도 거기까지만 받습니다.</p>
+          <?php endif ?>
         </fieldset>
         <fieldset class="fieldset<?php if (array_key_exists('attach_limit', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">글당 첨부 개수</legend>
@@ -106,7 +110,11 @@
       <p class="schema-note">되돌리려면 사이트를 잠시 멈추고 <code>storage/board.sqlite</code> 를 백업 파일로 바꿉니다.</p>
     <?php endif ?>
     <?php if (($query['gc'] ?? '') !== ''): ?>
-      <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>버려진 파일 <?= $this->e((string) (int) $query['gc']) ?>개를 정리했습니다.</span></div>
+      <?php if ((int) $query['gc'] === 0): ?>
+        <div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>정리할 파일이 없습니다.</span></div>
+      <?php else: ?>
+        <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>버려진 파일 <?= $this->e((string) (int) $query['gc']) ?>개를 정리했습니다.</span></div>
+      <?php endif ?>
     <?php endif ?>
     <form method="post" action="<?= $this->url('admin.uploads.gc') ?>" class="schema-gc">
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
