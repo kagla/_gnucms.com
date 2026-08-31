@@ -123,9 +123,14 @@ final class PostController
                 throw $e;
             }
 
-            return $this->renderEditForm($request, $response->withStatus(422), $id, $input, [
-                'password' => $e->getMessage(),
-            ]);
+            // 422 는 칸별 상세(비밀번호 오류 등)를 그대로 보여 준다. getMessage() 만 쓰면
+            // '입력값을 확인해 주세요' 라는 껍데기 문구가 비밀번호 칸에 붙는다.
+            $errors = $e->details();
+            if ($errors === []) {
+                $errors = ['password' => $e->getMessage()];
+            }
+
+            return $this->renderEditForm($request, $response->withStatus(422), $id, $input, $errors);
         }
 
         $url = RouteContext::fromRequest($request)->getRouteParser()

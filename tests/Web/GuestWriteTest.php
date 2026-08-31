@@ -158,5 +158,26 @@ final class GuestWriteTest extends WebTestCase
             self::assertSame('로그인이 필요합니다.', $e->getMessage());
         }
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testWrongGuestPasswordOnDeleteSaysSoToo(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $this->get($app, '/boards/free/new');
+        $created = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '손님의 글', 'content' => '본문입니다',
+            'author_name' => '지나가던손님', 'password' => 'guest-pass-123',
+        ]);
+
+        $response = $this->post($app, $created->getHeaderLine('Location') . '/delete', [
+            'csrf_token' => $_SESSION['csrf_token'], 'password' => 'wrong-pass-999',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('비밀번호가 올바르지 않습니다', $body);
+        self::assertStringNotContainsString('입력값을 확인해 주세요', $body);
+    }
 }
 
