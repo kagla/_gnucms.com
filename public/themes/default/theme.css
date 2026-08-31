@@ -1757,3 +1757,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 
 /* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
 .notice-list .notice-scope{white-space:nowrap}
+
+/* 공지 선택은 세 항목뿐이라 칸을 가득 채울 이유가 없다 */
+.notice-select{width:100%;max-width:16rem}

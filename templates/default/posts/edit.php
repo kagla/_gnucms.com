@@ -74,12 +74,12 @@
                 // ('공지 아님')이 제출돼 공지가 내려가거나 403 이 난다. 잠근 셀렉트는
                 // 아무것도 보내지 않으므로 글만 고치고 공지는 그대로 남는다. ?>
           <?php if (empty($can_pin_global) && ($notice_current ?? 'none') === 'global'): ?>
-            <select class="select select-bordered select-block" aria-label="공지 범위" disabled>
+            <select class="select select-bordered notice-select" aria-label="공지 범위" disabled>
               <option selected>전체 게시판 공지</option>
             </select>
             <p class="fieldset-label">현재 전체 공지입니다. 사이트 관리자만 바꿀 수 있습니다.</p>
           <?php else: ?>
-            <select class="select select-bordered select-block" name="notice" aria-label="공지 범위">
+            <select class="select select-bordered notice-select" name="notice" aria-label="공지 범위">
               <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
                 <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
                 <option value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' selected' : '' ?>><?= $this->e($label) ?></option>

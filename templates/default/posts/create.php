@@ -78,7 +78,7 @@
         <fieldset class="fieldset<?php if (array_key_exists('notice', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
           <?php if (array_key_exists('notice', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['notice']) ?></p><?php endif ?>
-          <select class="select select-bordered select-block" name="notice" aria-label="공지 범위">
+          <select class="select select-bordered notice-select" name="notice" aria-label="공지 범위">
             <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
               <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
               <option value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' selected' : '' ?>><?= $this->e($label) ?></option>
