@@ -685,8 +685,11 @@ select.select:-webkit-autofill:focus{
 .terms-table .select{width:auto;min-width:9rem}
 .terms-table input[type=number]{width:4.5rem}
 .terms-table .row-actions{flex-wrap:nowrap}
-/* 게시판 이름 배지가 두 줄로 접히지 않게 (여러 게시판이 섞이는 표에서만) */
-.posts-table .post-col-board{white-space:nowrap;width:1%}
+/* 게시판 이름 배지가 두 줄로 접히지 않게 (여러 게시판이 섞이는 표에서만).
+   width:1% 로 칸을 줄이던 옛 요령은 table-layout:fixed 아래에서 그대로 1% 가 되어
+   내용이 제목 칸 위로 넘쳐 겹친다. 아래 미디어 쿼리에서 실제 너비를 준다. */
+.posts-table .post-col-board{white-space:nowrap}
+.posts-table .post-col-board .badge{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .breadcrumbs{margin-bottom:1rem;padding-block:0;font-size:12.5px;overflow-x:auto;scrollbar-width:none}
 .breadcrumbs::-webkit-scrollbar{display:none}
@@ -734,8 +737,9 @@ select.select:-webkit-autofill:focus{
 .posts-table .post-col-title .cell-title{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .posts-table .post-col-category .badge{display:block;max-width:6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (min-width:641px){
-  .posts-table .post-col-category,.posts-table .post-col-author,
+  .posts-table .post-col-board,.posts-table .post-col-category,.posts-table .post-col-author,
   .posts-table .post-col-date,.posts-table .post-col-views{padding-inline:.75rem}
+  .posts-table .post-col-board{width:7rem;white-space:nowrap}
   .posts-table .post-col-category{width:7rem;white-space:nowrap}
   .posts-table .post-col-author{width:9rem;white-space:nowrap}
   .posts-table .post-col-date{width:4.75rem;white-space:nowrap}
