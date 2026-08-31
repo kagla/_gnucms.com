@@ -15,7 +15,7 @@ final class PostRepository
      * 이 목록에 없는 컬럼은 findWithSecret() 로만 얻을 수 있다.
      */
     private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name,'
-        . ' is_notice, is_secret, view_count, comment_count, attachments, image_key,'
+        . ' is_notice, notice_scope, is_secret, view_count, comment_count, attachments, image_key,'
         . ' created_at, updated_at, deleted_at';
 
     private const DEFAULTS = [
@@ -23,6 +23,7 @@ final class PostRepository
         'author_id'      => null,
         'guest_password' => null,
         'is_notice'      => 0,
+        'notice_scope'   => 'board',
         'is_secret'      => 0,
         'view_count'     => 0,
         'comment_count'  => 0,
@@ -312,6 +313,8 @@ final class PostRepository
         foreach (['id', 'board_id', 'is_notice', 'is_secret', 'view_count', 'comment_count'] as $column) {
             $row[$column] = (int) $row[$column];
         }
+
+        $row['notice_scope'] = ($row['notice_scope'] ?? '') === 'global' ? 'global' : 'board';
 
         return $row;
     }

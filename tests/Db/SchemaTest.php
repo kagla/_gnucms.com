@@ -242,4 +242,20 @@ final class SchemaTest extends WebTestCase
         self::assertNotNull($app->users()->findByDisplayName('홍길동2'));
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testPostsHaveNoticeScope(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+
+        $db->execute(
+            'INSERT INTO ' . $db->q('posts')
+            . ' (board_id, title, content, author_name, is_notice, is_secret, view_count, comment_count, created_at, updated_at)'
+            . ' VALUES (1, ?, ?, ?, 1, 0, 0, 0, ?, ?)',
+            ['공지', '본문', '관리자', '2026-08-31 00:00:00', '2026-08-31 00:00:00']
+        );
+
+        $row = $db->selectOne('SELECT notice_scope FROM ' . $db->q('posts'));
+        self::assertSame('board', $row['notice_scope'], '기본값은 이 게시판 공지다');
+    }
+
 }
