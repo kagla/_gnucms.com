@@ -1736,3 +1736,11 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 /* 글쓴이 칸은 옛 데이터에 긴 이름이 남아 있어도 줄임표로 접는다 */
 .cell-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .post-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+
+/* 목록의 글쓴이 단추와 모달 */
+.link-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.link-author:hover{color:var(--color-primary)}
+.author-modal .modal-box{max-width:22rem}
+.author-modal-title{margin:0 0 .25rem;font-size:1.05rem;font-weight:800}
+.author-modal-sub{margin:0 0 1rem;font-size:.8125rem;color:var(--bc-soft)}
+.author-modal-links{display:grid;gap:.5rem}

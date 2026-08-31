@@ -52,6 +52,15 @@ final class CommentController
         return $response->withHeader('Location', $url . '#comments')->withStatus(303);
     }
 
+    // Task 4 에서 채운다. 지금은 글쓴이 모달의 링크가 가리킬 빈 자리만 만든다.
+    public function byAuthor(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return View::fromRequest($request)->render($response, 'posts/comments_by_author', [
+            'list' => ['data' => [], 'page' => 1, 'total' => 0, 'total_pages' => 0],
+            'author' => null,
+        ]);
+    }
+
     public function passwordForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $id = (int) $args['id'];

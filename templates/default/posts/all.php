@@ -35,4 +35,5 @@ $allUrl = function ($q, $page): string {
 ]) ?>
 
 <?php $this->insert('posts/_pager', ['list' => $list, 'page_url' => fn (int $page): string => $allUrl($query['q'], $page)]) ?>
+<?php $this->insert('posts/_author_modal') ?>
 <?php $this->stop() ?>

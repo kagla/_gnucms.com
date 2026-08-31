@@ -146,4 +146,5 @@ $show_views = isset($view_types) && count($view_types) > 1;
 <?php if ($can_write): ?>
   <a class="fab btn btn-primary btn-circle" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>" aria-label="글쓰기"><?= $this->icon('pencil', 22) ?></a>
 <?php endif ?>
+<?php $this->insert('posts/_author_modal') ?>
 <?php $this->stop() ?>
