@@ -41,22 +41,25 @@ final class BoardListTest extends WebTestCase
     }
 
     /** @dataProvider connectionProvider */
-    public function testEmptyStateIsShown(array $dbConfig): void
+    public function testProductHomeIsShownWithoutBoards(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
 
-        self::assertStringContainsString('게시판이 없습니다', $this->body($this->get($app, '/')));
+        $body = $this->body($this->get($app, '/'));
+        self::assertStringContainsString('운영에 필요한 것은', $body);
+        self::assertStringContainsString('지금 내려받기', $body);
     }
 
     /** @dataProvider connectionProvider */
-    public function testHomeExplainsFoundationCommunityAndOffersThemeToggle(array $dbConfig): void
+    public function testHomeExplainsTheProductAndLinksToUpstream(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
         $body = $this->body($this->get($app, '/'));
 
-        self::assertStringContainsString('가볍게 시작하고, 오래 이어지는 공간', $body);
-        self::assertStringContainsString('기초 커뮤니티', $body);
-        self::assertStringContainsString('theme-toggle', $body);
+        self::assertStringContainsString('오픈소스 PHP CMS', $body);
+        self::assertStringContainsString('SQLite', $body);
+        self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
+        self::assertStringNotContainsString('class="btn btn-ghost btn-circle theme-toggle"', $body);
         self::assertStringContainsString(GNUCMS_ID . '-theme', $body);
     }
 
@@ -76,6 +79,6 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('홈 최신글 6', $body);
         self::assertStringContainsString('홈 최신글 2', $body);
         self::assertStringNotContainsString('홈 최신글 1', $body);
-        self::assertStringContainsString(GNUCMS . ' · 가볍게 시작하는 기초 커뮤니티', $body);
+        self::assertStringContainsString('GNucms · 작게 시작해 오래 운영하는 PHP CMS', $body);
     }
 }
