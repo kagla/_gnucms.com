@@ -103,6 +103,41 @@ final class CommentRepository
         $this->db->delete('comments', 'board_id = :board_id', ['board_id' => $boardId]);
     }
 
+    /**
+     * 한 회원이 남긴 댓글을 최신순으로. 지운 댓글과 읽을 수 없는 게시판은 뺀다.
+     *
+     * @param int[] $boardIds 읽을 수 있는 게시판 번호. 빈 배열이면 아무것도 없다
+     * @return array{rows: array, total: int}
+     */
+    public function paginateByAuthor(int $authorId, array $boardIds, int $page, int $perPage): array
+    {
+        if ($boardIds === []) {
+            return ['rows' => [], 'total' => 0];
+        }
+
+        $params = ['author_id' => (string) $authorId];
+        $marks = [];
+        foreach (array_values($boardIds) as $i => $id) {
+            $marks[] = ':b' . $i;
+            $params['b' . $i] = (int) $id;
+        }
+        $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')';
+
+        $total = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE ' . $where,
+            $params
+        )['c'];
+
+        $offset = max(0, ($page - 1) * $perPage);
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments')
+            . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        );
+
+        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+    }
+
     public function hasChildren(int $id): bool
     {
         $row = $this->db->selectOne(

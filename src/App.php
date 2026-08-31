@@ -277,6 +277,8 @@ final class App
                 $this->notificationService()
             );
             $this->commentService->setContentMinChars((int) $this->cmsService()->settings()['comment_min_chars']);
+            $this->commentService->setUserRepository($this->users());
+            $this->commentService->setBoardService($this->boardService());
         }
 
         return $this->commentService;

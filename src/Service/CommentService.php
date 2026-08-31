@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Service;
 
+use GnuCms\Account\UserRepository;
 use GnuCms\Auth\Acl;
 use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\HtmlSanitizer;
@@ -35,6 +36,10 @@ final class CommentService
     /** @var NotificationService|null */
     private $notifications;
 
+    private ?UserRepository $users = null;
+
+    private ?BoardService $boards = null;
+
     public function __construct(
         PostService $postService,
         PostRepository $postRepo,
@@ -63,6 +68,16 @@ final class CommentService
     public function setContentMinChars(int $min): void
     {
         $this->contentMinChars = max(0, $min);
+    }
+
+    public function setUserRepository(UserRepository $users): void
+    {
+        $this->users = $users;
+    }
+
+    public function setBoardService(BoardService $boards): void
+    {
+        $this->boards = $boards;
     }
 
     /** 편집기가 감싼 태그와 공백으로 길이를 속일 수 없게 글자만 센다. */
@@ -319,6 +334,74 @@ final class CommentService
 
         $this->comments->softDelete($id);
         $this->postRepo->adjustCommentCount((int) $comment['post_id'], -1);
+    }
+
+    /** 한 회원이 남긴 댓글 목록. 글 제목을 함께 붙인다. */
+    public function listByAuthor(Acl $acl, array $query): array
+    {
+        $v = new Validator($query);
+        $page = $v->int('page', 1, 1, 100000);
+        $author = $v->int('author', 0, 0, PHP_INT_MAX);
+        $v->check();
+        $perPage = 20;
+
+        $user = $author > 0 && $this->users !== null ? $this->users->findById($author) : null;
+        $empty = [
+            'data' => [], 'page' => $page, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 0,
+            'author' => null, 'author_name' => null,
+        ];
+        if ($user === null) {
+            return $empty;
+        }
+
+        $boardIds = [];
+        foreach ($this->boards->listBoards($acl) as $board) {
+            $boardIds[] = (int) $board['id'];
+        }
+
+        $result = $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage);
+
+        // 글 제목은 한 번에 읽는다. 줄마다 읽으면 스무 번 물어보게 된다.
+        $titles = [];
+        $postIds = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['post_id'], $result['rows'])));
+        foreach ($postIds as $postId) {
+            $post = $this->postRepo->findWithSecret($postId);
+            if ($post !== null) {
+                $titles[$postId] = (string) $post['title'];
+            }
+        }
+
+        $rows = [];
+        foreach ($result['rows'] as $row) {
+            $secret = (bool) $row['is_secret'];
+            $rows[] = [
+                'id'         => (int) $row['id'],
+                'post_id'    => (int) $row['post_id'],
+                'post_title' => $titles[(int) $row['post_id']] ?? '(지워진 글)',
+                // 비밀 댓글의 본문은 목록에 흘리지 않는다.
+                'excerpt'    => $secret ? '비밀 댓글' : $this->plainExcerpt((string) $row['content'], 80),
+                'is_secret'  => $secret,
+                'created_at' => $row['created_at'],
+            ];
+        }
+
+        return [
+            'data' => $rows,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $result['total'],
+            'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+            'author' => $author,
+            'author_name' => (string) $user['display_name'],
+        ];
+    }
+
+    /** 목록에 보일 한 줄. 태그를 걷고 길면 자른다. */
+    private function plainExcerpt(string $html, int $length): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+
+        return mb_strlen($text) > $length ? mb_substr($text, 0, $length) . '…' : $text;
     }
 
     private function boardOf(array $comment): array

@@ -1744,3 +1744,11 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-modal-title{margin:0 0 .25rem;font-size:1.05rem;font-weight:800}
 .author-modal-sub{margin:0 0 1rem;font-size:.8125rem;color:var(--bc-soft)}
 .author-modal-links{display:grid;gap:.5rem}
+
+/* 회원 댓글 목록 */
+.author-comments .author-comment{display:flex;align-items:center;gap:.75rem}
+.author-comment-body{flex:1;min-width:0;display:grid;gap:.15rem}
+.author-comment-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
+.author-comment-empty{color:var(--bc-soft)}
