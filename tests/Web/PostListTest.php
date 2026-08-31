@@ -159,7 +159,7 @@ final class PostListTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
 
-        $response = $this->get($app, '/boards/free/write');
+        $response = $this->get($app, '/boards/free/new');
 
         self::assertSame(401, $response->getStatusCode());
         self::assertStringContainsString('로그인이 필요합니다', $this->body($response));

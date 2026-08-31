@@ -21,6 +21,22 @@
       <input type="hidden" name="image_key" value="<?= $this->e($values['image_key'] ?? '') ?>">
       <input type="hidden" name="uploaded_images" value="<?= $this->e($values['uploaded_images'] ?? '') ?>" data-uploaded-images>
 
+      <?php if ($current_user['is_guest']): ?>
+        <?php // 비회원 글은 이름과 비밀번호(수정·삭제의 소유 증명)가 필수다. 댓글 폼과 같은 짜임. ?>
+        <div class="grid-2">
+          <fieldset class="fieldset<?php if (array_key_exists('author_name', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">이름</legend>
+            <input class="input input-bordered input-block" type="text" name="author_name" value="<?= $this->e($values['author_name'] ?? '') ?>" maxlength="100" required>
+            <?php if (array_key_exists('author_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['author_name']) ?></p><?php endif ?>
+          </fieldset>
+          <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">비밀번호 <span class="legend-hint"><?= $this->e((string) $password_min) ?>자 이상 · 수정·삭제에 씁니다</span></legend>
+            <input class="input input-bordered input-block" type="password" name="password" required>
+            <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
+          </fieldset>
+        </div>
+      <?php endif ?>
+
       <?php if ($board['use_category'] && $board['categories'] !== []): ?>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">분류</legend>

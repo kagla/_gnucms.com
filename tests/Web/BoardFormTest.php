@@ -99,8 +99,8 @@ final class BoardFormTest extends WebTestCase
             'use_category' => true, 'categories' => ['잡담', '질문'], 'perm_write' => 'guest',
         ]);
 
-        $this->get($app, '/boards/free/write');
-        $response = $this->post($app, '/boards/free/write', [
+        $this->get($app, '/boards/free/new');
+        $response = $this->post($app, '/boards/free/new', [
             'csrf_token'  => $_SESSION['csrf_token'] ?? '',
             'author_name' => '아무개',
             'password'    => 'pass-1234',

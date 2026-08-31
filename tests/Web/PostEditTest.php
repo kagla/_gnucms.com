@@ -115,8 +115,8 @@ final class PostEditTest extends WebTestCase
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유게시판', 'perm_write' => 'guest',
         ]);
-        $this->get($app, '/boards/free/write');
-        $this->post($app, '/boards/free/write', [
+        $this->get($app, '/boards/free/new');
+        $this->post($app, '/boards/free/new', [
             'csrf_token'  => $_SESSION['csrf_token'] ?? '',
             'author_name' => '아무개',
             'password'    => 'post-pass-1',

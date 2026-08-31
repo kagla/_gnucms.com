@@ -35,12 +35,12 @@ final class AttachmentFormTest extends WebTestCase
     public function testWriteFormShowsAttachmentUiOnlyWhenBoardAllowsFiles(array $dbConfig): void
     {
         $app = $this->loggedInApp($dbConfig, true);
-        $body = $this->body($this->get($app, '/boards/free/write'));
+        $body = $this->body($this->get($app, '/boards/free/new'));
         self::assertStringContainsString('data-attachments', $body);
         self::assertStringContainsString('/boards/free/files', $body);
 
         $app2 = $this->loggedInApp($dbConfig, false);
-        self::assertStringNotContainsString('data-attachments', $this->body($this->get($app2, '/boards/free/write')));
+        self::assertStringNotContainsString('data-attachments', $this->body($this->get($app2, '/boards/free/new')));
     }
 
     #[DataProvider('connectionProvider')]
@@ -51,7 +51,7 @@ final class AttachmentFormTest extends WebTestCase
         $first = $app->attachments()->upload($acl, 'free', $this->fakeUpload('가.txt', '1'));
         $second = $app->attachments()->upload($acl, 'free', $this->fakeUpload('나.txt', '2'));
 
-        $created = $this->post($app, '/boards/free/write', [
+        $created = $this->post($app, '/boards/free/new', [
             'csrf_token' => $_SESSION['csrf_token'],
             'title' => '순서 시험', 'content' => '본문',
             // 드래그로 순서를 바꾼 상태를 흉내 낸다: 나 → 가
@@ -116,7 +116,7 @@ final class AttachmentFormTest extends WebTestCase
         $first = $app->attachments()->upload($acl, 'free', $this->fakeUpload('하나.txt', '1'));
         $second = $app->attachments()->upload($acl, 'free', $this->fakeUpload('둘.txt', '2'));
 
-        $response = $this->post($app, '/boards/free/write', [
+        $response = $this->post($app, '/boards/free/new', [
             'csrf_token' => $_SESSION['csrf_token'],
             'title' => '한도 초과', 'content' => '본문',
             'attachments' => [$first, $second],
@@ -143,7 +143,7 @@ final class AttachmentFormTest extends WebTestCase
         (new \ReflectionProperty(\GnuCms\App::class, 'attachmentService'))
             ->setValue($app, null);
 
-        $created = $this->post($app, '/boards/free/write', [
+        $created = $this->post($app, '/boards/free/new', [
             'csrf_token' => $_SESSION['csrf_token'],
             'title' => '지연 연결', 'content' => '본문',
             'attachments' => [$descriptor],
@@ -173,7 +173,7 @@ final class AttachmentFormTest extends WebTestCase
         (new \ReflectionProperty(\GnuCms\Service\PostService::class, 'attachmentLimit'))
             ->setValue($app->postService(), 0);
 
-        $response = $this->post($app, '/boards/free/write', [
+        $response = $this->post($app, '/boards/free/new', [
             'csrf_token' => $_SESSION['csrf_token'],
             'title' => '한도 초과', 'content' => '본문',
             'attachments' => [$first, $second],

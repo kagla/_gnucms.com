@@ -178,8 +178,8 @@ final class NotificationTest extends WebTestCase
         ]);
         $this->loginAs($app, 'writer@example.com', '글쓴이');
 
-        $this->get($app, '/boards/free/write');
-        $this->post($app, '/boards/free/write', [
+        $this->get($app, '/boards/free/new');
+        $this->post($app, '/boards/free/new', [
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'title'      => '알림이 붙을 글',
             'content'    => '본문입니다.',
