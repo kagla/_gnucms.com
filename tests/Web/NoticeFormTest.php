@@ -65,6 +65,25 @@ final class NoticeFormTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testNoticeChoiceSurvivesAValidationFailure(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유']);
+        $this->loginAsAdmin($app);
+
+        // 제목을 비워 검증에서 422 를 받도록 한다. 이때도 공지 선택은 화면에 남아야 한다.
+        $response = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '', 'content' => '본문입니다', 'notice' => 'global',
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+
+        $body = $this->body($response);
+        self::assertStringContainsString('name="notice"', $body);
+        self::assertMatchesRegularExpression('/value="global"[^>]*checked/', $body);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testEditFormRemembersTheCurrentScope(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

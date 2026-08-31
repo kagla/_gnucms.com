@@ -217,6 +217,9 @@ final class PostController
                     'board' => $this->app->boardService()->get($acl, $key),
                     'errors' => $e->details(),
                     'values' => $input,
+                    // 관리자에게만 보이는 공지 선택지. 여기서 빠뜨리면 검증 실패로 폼이
+                    // 되돌아올 때 고른 공지 범위가 화면에서 사라진다.
+                    'can_manage_board' => $acl->isAdminFor($this->app->boardService()->getEntity($acl, $key)),
                 ]
             );
         }
