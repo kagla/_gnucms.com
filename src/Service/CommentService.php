@@ -406,10 +406,18 @@ final class CommentService
         ];
     }
 
-    /** 목록에 보일 한 줄. 태그를 걷고 길면 자른다. */
+    /**
+     * 목록에 보일 한 줄. 태그를 걷고 길면 자른다.
+     *
+     * 사진만 있는 댓글은 태그를 걷으면 글자가 하나도 남지 않는다. 그 자리를 비워 두면
+     * 무엇이 있었는지 알 수 없는 빈 줄이 되므로 무엇인지 적어 준다.
+     */
     private function plainExcerpt(string $html, int $length): string
     {
         $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+        if ($text === '') {
+            return stripos($html, '<img') !== false ? '사진' : '내용 없음';
+        }
 
         return mb_strlen($text) > $length ? mb_substr($text, 0, $length) . '…' : $text;
     }

@@ -240,4 +240,32 @@ final class AuthorCommentsTest extends WebTestCase
         self::assertStringContainsString('회원을 찾을 수 없습니다', $body);
         self::assertStringNotContainsString('차단 전에 남긴 댓글입니다', $body);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testImageOnlyCommentShowsAPlaceholderInsteadOfAnEmptyLine(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $post = $app->postService()->create($acl, 'free', ['title' => '사진 글', 'content' => '본문입니다']);
+        $memberId = $app->users()->create('shot@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '사진쓴사람');
+        $app->users()->verifyEmail($memberId);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'shot@example.com', 'password' => 'member-password-123',
+        ]);
+        // 사진만 있는 댓글. 태그를 걷으면 글자가 하나도 남지 않는다.
+        $this->post($app, '/posts/' . $post['id'] . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'content' => '<p><img alt="사진.jpg" src="/media/editor/2026/08/abc.jpg"></p>',
+        ]);
+
+        $body = $this->body($this->get($app, '/comments', ['author' => (string) $memberId]));
+
+        self::assertStringContainsString('사진', $body);
+        self::assertStringContainsString('사진 글', $body, '어느 글에 남긴 댓글인지도 함께 보인다');
+        // 빈 줄이 아니라 무엇인지 말해 주는 자리표시가 있어야 한다.
+        self::assertStringNotContainsString('<span class="author-comment-text"></span>', $body);
+    }
 }
+
