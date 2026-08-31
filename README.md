@@ -250,18 +250,3 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 | POST | `/maintenance/gc` | 고아 첨부 정리 (전역 관리자) |
 
 `mod_rewrite` 가 없는 호스팅에서는 `index.php?p=/boards/free/posts` 형태로 호출한다.
-
-## 개발
-
-```bash
-composer install
-vendor/bin/phpunit                 # SQLite 로 실행
-
-TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=board_test;charset=utf8mb4' \
-TEST_MYSQL_USER=root TEST_MYSQL_PASS=secret \
-TEST_PGSQL_DSN='pgsql:host=127.0.0.1;dbname=board_test' \
-TEST_PGSQL_USER=postgres TEST_PGSQL_PASS=secret \
-vendor/bin/phpunit                 # 세 DB 전부
-```
-
-세 DB 로 전부 통과하는 것이 릴리스 조건이다.
