@@ -16,7 +16,7 @@ final class Schema
     public const TABLES = [
         'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities', 'site_state',
         'site_settings', 'mail_settings', 'contents', 'user_consents', 'consent_uses',
-        'consents_given',
+        'consents_given', 'password_attempts',
     ];
 
     /** @var Connection */
@@ -46,7 +46,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '10';
+    public const VERSION = '11';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -103,6 +103,7 @@ final class Schema
         $this->migrateBoards();
         $this->migrateEditorImages();
         $this->migrateNotifications();
+        $this->migratePasswordThrottle();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('schema_version', $stamp);
         $this->db->execute(
@@ -190,6 +191,18 @@ final class Schema
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('notifications'));
         } catch (DomainError $e) {
             foreach ($this->notificationStatements() as $sql) {
+                $this->db->execute($this->expand($sql));
+            }
+        }
+    }
+
+    /** 비밀번호 대입 방어 기록. 없으면 만든다. */
+    public function migratePasswordThrottle(): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('password_attempts'));
+        } catch (DomainError $e) {
+            foreach ($this->passwordThrottleStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
@@ -480,7 +493,8 @@ final class Schema
         ], $this->accountStatements(), $this->settingsStatements(), $this->mailSettingsStatements(),
             $this->contentStatements(), $this->consentStatements(),
             $this->consentUseStatements(), $this->consentsGivenStatements(),
-            $this->notificationStatements());
+            $this->notificationStatements(),
+            $this->passwordThrottleStatements());
     }
 
     private function accountStatements(): array
@@ -707,6 +721,20 @@ final class Schema
                 created_at  {DATETIME}   NOT NULL
             ){SUFFIX}',
             'CREATE INDEX ix_notifications_user ON notifications (user_id, is_read, id)',
+        ];
+    }
+
+    private function passwordThrottleStatements(): array
+    {
+        return [
+            'CREATE TABLE password_attempts (
+                id              {AUTO_PK},
+                attempt_key     VARCHAR(120) NOT NULL,
+                client_ip       VARCHAR(64)  NOT NULL,
+                fail_count      INTEGER      NOT NULL DEFAULT 0,
+                first_failed_at INTEGER      NOT NULL
+            ){SUFFIX}',
+            'CREATE UNIQUE INDEX ux_password_attempts ON password_attempts (attempt_key, client_ip)',
         ];
     }
 

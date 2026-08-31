@@ -247,7 +247,7 @@ final class PostService
             throw DomainError::notFound('글을 찾을 수 없습니다.');
         }
 
-        if ((int) $post['is_secret'] === 1 && !$acl->canModify($board, $post, $password)) {
+        if ((int) $post['is_secret'] === 1 && !$acl->verifySecret($board, $post, $password)) {
             throw DomainError::forbidden('비밀글입니다.');
         }
 

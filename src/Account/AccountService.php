@@ -9,6 +9,7 @@ use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
+use GnuCms\Auth\PasswordThrottle;
 use GnuCms\Cms\CmsService;
 
 final class AccountService
@@ -19,6 +20,13 @@ final class AccountService
     private string $appUrl;
     private CmsService $cms;
     private ConsentRepository $consents;
+
+    private ?PasswordThrottle $throttle = null;
+
+    public function setPasswordThrottle(PasswordThrottle $throttle): void
+    {
+        $this->throttle = $throttle;
+    }
 
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
         CmsService $cms, ConsentRepository $consents)
@@ -98,11 +106,22 @@ final class AccountService
             ? strtolower(trim((string) $input['email'])) : '';
         $password = isset($input['password']) && is_scalar($input['password'])
             ? (string) $input['password'] : '';
+        // 계정별+IP 별 대입 방어. 잠긴 동안은 맞는 비밀번호도 검사하지 않는다.
+        if ($this->throttle !== null && $email !== '') {
+            $this->throttle->assertNotLocked('login:' . $email, 'email');
+        }
         $user = $email === '' ? null : $this->users->findByEmail($email);
 
         if ($user === null || $user['status'] !== 'active' || $user['password_hash'] === null
             || !password_verify($password, (string) $user['password_hash'])) {
+            if ($this->throttle !== null && $email !== '') {
+                $this->throttle->recordFailure('login:' . $email);
+            }
             throw DomainError::validation(['email' => '이메일 또는 비밀번호를 확인해 주세요.']);
+        }
+        if ($this->throttle !== null && $email !== '') {
+            // 비밀번호까지 맞은 사람이다(미인증 분기 포함). 이전 실패는 잊는다.
+            $this->throttle->clear('login:' . $email);
         }
         if (!(bool) $user['email_verified']) {
             // 비밀번호까지 맞은 사람이다. 화면이 '다시 보내기' 를 내줄 수 있게 따로 표시한다.

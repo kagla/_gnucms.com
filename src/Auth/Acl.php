@@ -118,10 +118,54 @@ final class Acl
         $this->deny($this->canComment($board), '이 게시판에 댓글을 쓸 권한이 없습니다.');
     }
 
+    /** 비밀번호 대입 방어. App::guestAcl() 이 주입한다. 없으면(단위 테스트 등) 검사만 없다. */
+    private ?PasswordThrottle $throttle = null;
+
+    public function setPasswordThrottle(PasswordThrottle $throttle): void
+    {
+        $this->throttle = $throttle;
+    }
+
+    /**
+     * 비밀글 열람 판정. canModify 와 같지만 비밀번호 대입을 잠근다.
+     * 잠긴 동안은 맞는 비밀번호도 검사하지 않는다.
+     */
+    public function verifySecret(array $board, array $post, ?string $password): bool
+    {
+        $useThrottle = $this->throttle !== null && $password !== null && $password !== '';
+        $key = 'secret:' . ($post['id'] ?? 0);
+        if ($useThrottle) {
+            $this->throttle->assertNotLocked($key);
+        }
+
+        $allowed = $this->canModify($board, $post, $password);
+        if ($useThrottle) {
+            $allowed ? $this->throttle->clear($key) : $this->throttle->recordFailure($key);
+        }
+
+        return $allowed;
+    }
+
     public function assertCanModify(array $board, array $resource, ?string $password): void
     {
+        $guestOwned = ($resource['author_id'] ?? null) === null && ($resource['guest_password'] ?? null) !== null;
+        // 댓글 행에는 post_id 가 있다. 글과 댓글이 같은 잠금 열쇠를 나누지 않게 가른다.
+        $key = 'modify:' . (isset($resource['post_id']) ? 'comment' : 'post') . ':' . ($resource['id'] ?? 0);
+        $useThrottle = $guestOwned && $this->throttle !== null && $password !== null && $password !== '';
+        if ($useThrottle) {
+            // 잠긴 동안은 맞는 비밀번호도 검사하지 않는다. 대입이 성공 시점을 알 수 없게.
+            $this->throttle->assertNotLocked($key);
+        }
+
         if ($this->canModify($board, $resource, $password)) {
+            if ($useThrottle) {
+                $this->throttle->clear($key);
+            }
+
             return;
+        }
+        if ($useThrottle) {
+            $this->throttle->recordFailure($key);
         }
         // 비회원 글·댓글은 비밀번호가 곧 소유 증명이다. 로그인하라는 안내는 엉뚱하므로
         // 비밀번호 칸에 붙는 검증 오류로 알려 준다. 회원 글은 기존대로 401/403 이다.

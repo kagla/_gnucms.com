@@ -14,6 +14,7 @@ use GnuCms\Account\SocialAuthService;
 use GnuCms\Account\AdminService;
 use GnuCms\Account\ConsentRepository;
 use GnuCms\Auth\Acl;
+use GnuCms\Auth\PasswordThrottle;
 use GnuCms\Validation\Validator;
 use GnuCms\Auth\Identity;
 use GnuCms\Db\Connection;
@@ -300,6 +301,7 @@ final class App
                 $this->cmsService(),
                 $this->consents()
             );
+            $this->accountService->setPasswordThrottle($this->passwordThrottle());
         }
 
         return $this->accountService;
@@ -472,8 +474,25 @@ final class App
         $this->identity = $identity;
     }
 
+    private ?PasswordThrottle $passwordThrottle = null;
+
+    /** 비밀번호 대입 방어. 프록시 헤더는 믿지 않는다(동의 증적과 같은 원칙). */
+    public function passwordThrottle(): PasswordThrottle
+    {
+        if ($this->passwordThrottle === null) {
+            $ip = isset($_SERVER['REMOTE_ADDR']) && is_scalar($_SERVER['REMOTE_ADDR'])
+                ? (string) $_SERVER['REMOTE_ADDR'] : null;
+            $this->passwordThrottle = new PasswordThrottle($this->db(), $ip);
+        }
+
+        return $this->passwordThrottle;
+    }
+
     public function guestAcl(): Acl
     {
-        return new Acl($this->identity);
+        $acl = new Acl($this->identity);
+        $acl->setPasswordThrottle($this->passwordThrottle());
+
+        return $acl;
     }
 }
