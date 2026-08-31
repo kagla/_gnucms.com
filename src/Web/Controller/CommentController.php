@@ -29,7 +29,7 @@ final class CommentController
         $this->assertCsrf($input);
 
         try {
-            $this->app->commentService()->create($acl, $postId, $input);
+            $comment = $this->app->commentService()->create($acl, $postId, $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -39,10 +39,111 @@ final class CommentController
             return $this->renderPost($request, $response->withStatus(422), $postId, $input, $e->details());
         }
 
+        $grant = $this->app->commentService()->guestOwnershipGrant((int) $comment['id']);
+        if ($grant !== null) {
+            $_SESSION['secret_comments'] = isset($_SESSION['secret_comments']) && is_array($_SESSION['secret_comments'])
+                ? $_SESSION['secret_comments'] : [];
+            $_SESSION['secret_comments'][(string) $comment['id']] = $grant;
+        }
+
         $url = RouteContext::fromRequest($request)->getRouteParser()
             ->urlFor('posts.show', ['id' => (string) $postId]);
 
         return $response->withHeader('Location', $url . '#comments')->withStatus(303);
+    }
+
+    public function passwordForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $challenge = $this->app->commentService()->secretChallenge($this->app->guestAcl(), $id);
+        if ($challenge === null) {
+            return $this->backToComment($request, $response, $this->postIdOf($id), $id);
+        }
+
+        return $this->renderPassword($request, $response, $challenge, []);
+    }
+
+    public function unlockSecret(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $this->assertCsrf($input);
+        $challenge = $this->app->commentService()->secretChallenge($this->app->guestAcl(), $id);
+        if ($challenge === null) {
+            return $this->backToComment($request, $response, $this->postIdOf($id), $id);
+        }
+
+        $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
+        try {
+            $unlocked = $this->app->commentService()->unlockSecret($this->app->guestAcl(), $id, $password);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            return $this->renderPassword(
+                $request,
+                $response->withStatus(422),
+                $challenge,
+                $e->details()
+            );
+        }
+
+        if ($unlocked['kind'] === 'post') {
+            $_SESSION['secret_posts'] = isset($_SESSION['secret_posts']) && is_array($_SESSION['secret_posts'])
+                ? $_SESSION['secret_posts'] : [];
+            $_SESSION['secret_posts'][(string) $unlocked['post_id']] = $unlocked['grant'];
+        } elseif (in_array($unlocked['kind'], ['comment', 'parent'], true)) {
+            $_SESSION['secret_comments'] = isset($_SESSION['secret_comments']) && is_array($_SESSION['secret_comments'])
+                ? $_SESSION['secret_comments'] : [];
+            $_SESSION['secret_comments'][(string) $unlocked['grant_comment_id']] = $unlocked['grant'];
+        }
+
+        return $this->backToComment($request, $response, $unlocked['post_id'], $id);
+    }
+
+    /** 비회원 댓글 수정 버튼의 비밀번호 확인 모달이 호출한다. */
+    public function verifyOwnership(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        try {
+            $this->assertCsrf($input);
+            $password = isset($input['password']) && is_scalar($input['password'])
+                ? (string) $input['password'] : '';
+            $verified = $this->app->commentService()->verifyGuestOwnership(
+                $this->app->guestAcl(),
+                $id,
+                $password
+            );
+        } catch (DomainError $e) {
+            $details = $e->details();
+            $message = isset($details['password']) ? (string) $details['password'] : $e->getMessage();
+
+            return $this->json($response->withStatus($e->status()), [
+                'ok' => false,
+                'message' => $message,
+            ]);
+        }
+
+        $_SESSION['comment_edits'] = isset($_SESSION['comment_edits']) && is_array($_SESSION['comment_edits'])
+            ? $_SESSION['comment_edits'] : [];
+        $_SESSION['comment_edits'][(string) $verified['comment_id']] = $verified['grant'];
+        // 수정 비밀번호 확인은 댓글 작성자라는 더 강한 증명이므로 비밀 댓글 열람도 함께 연다.
+        $_SESSION['secret_comments'] = isset($_SESSION['secret_comments']) && is_array($_SESSION['secret_comments'])
+            ? $_SESSION['secret_comments'] : [];
+        $_SESSION['secret_comments'][(string) $verified['comment_id']] = $verified['grant'];
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor(
+            'posts.show',
+            ['id' => (string) $verified['post_id']],
+            ['edit_comment' => (string) $verified['comment_id']]
+        );
+
+        return $this->json($response, [
+            'ok' => true,
+            'redirect' => $url . '#comment-' . $verified['comment_id'],
+        ]);
     }
 
     public function editForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -139,7 +240,7 @@ final class CommentController
             'values' => $values,
             'errors' => $errors,
             // 비회원이 쓴 댓글은 비밀번호로 주인을 확인한다. 관리자는 물어보지 않는다.
-            'needs_password' => $comment['author_id'] === null && !$acl->isAdminFor($loaded['board']),
+            'needs_password' => $comment['author_id'] === null && !$acl->canEditComment($loaded['board'], $comment),
         ]);
     }
 
@@ -153,6 +254,35 @@ final class CommentController
             ->urlFor('posts.show', ['id' => (string) $postId]);
 
         return $response->withHeader('Location', $url . '#comment-' . $commentId)->withStatus(303);
+    }
+
+    private function renderPassword(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $challenge,
+        array $errors
+    ): ResponseInterface {
+        return View::fromRequest($request)->render($response, 'posts/comment_password', [
+            'comment_id' => $challenge['comment_id'],
+            'post_id' => $challenge['post_id'],
+            'board' => $this->app->boardService()->get(
+                $this->app->guestAcl(),
+                (string) $challenge['board_key']
+            ),
+            'errors' => $errors,
+        ]);
+    }
+
+    private function postIdOf(int $commentId): int
+    {
+        $challenge = $this->app->commentService()->secretChallenge($this->app->guestAcl(), $commentId);
+        if ($challenge !== null) {
+            return (int) $challenge['post_id'];
+        }
+
+        // 이미 권한이 생긴 직후의 리디렉션에서만 이 분기로 온다. 수정용 조회는 권한이
+        // 확인된 댓글의 post_id 를 안전하게 돌려준다.
+        return (int) $this->app->commentService()->getForEdit($this->app->guestAcl(), $commentId)['post_id'];
     }
 
     /** 댓글 권한은 글이 속한 게시판을 기준으로 판단한다. */
@@ -175,7 +305,7 @@ final class CommentController
             'post' => $this->app->postService()->get($acl, $postId, null),
             'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'comments' => $this->app->commentService()->listComments($acl, $postId, null),
-            'can_comment' => $acl->canComment($loaded['board']),
+            'can_comment' => $acl->canCommentOnPost($loaded['board'], $loaded['post']),
             'comment_errors' => $errors,
             'comment_values' => $values,
         ]);
@@ -188,5 +318,15 @@ final class CommentController
         if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
             throw DomainError::forbidden('요청을 확인할 수 없습니다. 다시 시도해 주세요.');
         }
+    }
+
+    private function json(ResponseInterface $response, array $data): ResponseInterface
+    {
+        $response->getBody()->write((string) json_encode(
+            $data,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        ));
+
+        return $response->withHeader('Content-Type', 'application/json; charset=utf-8');
     }
 }

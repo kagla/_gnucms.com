@@ -110,7 +110,7 @@ $show_views = isset($view_types) && count($view_types) > 1;
         <span class="notice-ico" aria-hidden="true"><?= $this->icon('megaphone', 16) ?></span>
         <span class="badge badge-primary badge-soft badge-sm">공지</span>
         <a class="notice-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?></a>
-        <time class="notice-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'm.d') ?></time>
+        <time class="notice-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time>
       </li>
     <?php endforeach ?>
   </ul>

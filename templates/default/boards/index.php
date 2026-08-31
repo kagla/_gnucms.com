@@ -2,7 +2,7 @@
 <?php $this->start('title') ?>게시판 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>home<?php $this->stop() ?>
 
-<?php // 아이디어스처럼 검색을 머리글 한가운데 크게 둔다.
+<?php // 검색을 머리글 한가운데 크게 둔다.
       // 검색은 게시판 단위라서 첫 게시판을 기본 대상으로 삼는다. ?>
 <?php $this->start('header_search') ?>
 <?php if ($boards !== []): ?>
@@ -137,7 +137,7 @@ $hot = array_slice($pool, 0, 6);
     </section>
   <?php endforeach ?>
 
-  <?php // 아이디어스가 첫 화면 아래에 두는 안내 블록 자리. 셋 다 이 사이트에서 실제로 되는 일이다. ?>
+  <?php // 첫 화면 아래의 안내 블록. 셋 다 이 사이트에서 실제로 되는 일이다. ?>
   <section class="guide" aria-labelledby="guide-title">
     <h2 class="guide-title" id="guide-title"><?= $this->e($site['site_name']) ?> 이렇게 즐겨보세요</h2>
     <div class="guide-grid">

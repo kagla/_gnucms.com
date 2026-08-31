@@ -62,7 +62,14 @@ final class AdminPageTest extends WebTestCase
         ]);
         self::assertSame(303, $saved->getStatusCode());
         self::assertSame('/admin/mail?saved=1', $saved->getHeaderLine('Location'));
-        self::assertStringNotContainsString('google-app-password', $this->body($this->get($app, '/admin/mail')));
+        $savedMail = $this->body($this->get($app, '/admin/mail'));
+        self::assertStringNotContainsString('google-app-password', $savedMail);
+        self::assertStringContainsString('placeholder="••••••••••••••••"', $savedMail);
+        self::assertStringContainsString('data-mail-password-toggle', $savedMail);
+        $revealed = $this->post($app, '/admin/mail/password', ['csrf_token' => $_SESSION['csrf_token']]);
+        self::assertSame(200, $revealed->getStatusCode());
+        self::assertSame('no-store', $revealed->getHeaderLine('Cache-Control'));
+        self::assertSame(['password' => 'google-app-password'], json_decode($this->body($revealed), true));
     }
 
     #[DataProvider('connectionProvider')]

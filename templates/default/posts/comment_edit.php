@@ -36,8 +36,8 @@
         <?php if (array_key_exists('content', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['content']) ?></p><?php endif ?>
       </fieldset>
 
-      <?php if ($board['use_secret']): ?>
-        <label class="label toggle-row">
+      <?php if ($board['use_secret'] && !$current_user['is_guest']): ?>
+        <label class="label comment-secret-control">
           <input class="toggle toggle-primary" type="checkbox" name="is_secret" value="1"<?php if ($comment['is_secret']): ?> checked<?php endif ?>>
           <span><strong><?= $this->icon('lock', 14) ?> 비밀 댓글</strong></span>
         </label>

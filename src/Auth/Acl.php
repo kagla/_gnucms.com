@@ -20,6 +20,18 @@ final class Acl
     /** @var Identity */
     private $identity;
 
+    /** 사이트 전체 비회원 글쓰기 스위치. 직접 만든 ACL 은 기존 호환을 위해 허용한다. */
+    private bool $guestWriteEnabled = true;
+
+    /** @var array<string,string> 현재 세션에서 비밀번호 확인을 마친 비밀글 지문 */
+    private array $secretGrants = [];
+
+    /** @var array<string,string> 현재 세션에서 소유를 확인한 비회원 댓글 지문 */
+    private array $commentSecretGrants = [];
+
+    /** @var array<string,string> 수정 모달에서 비밀번호를 확인한 비회원 댓글 지문 */
+    private array $commentEditGrants = [];
+
     public function __construct(Identity $identity)
     {
         $this->identity = $identity;
@@ -33,6 +45,170 @@ final class Acl
     public function isGlobalAdmin(): bool
     {
         return $this->identity->isAdmin();
+    }
+
+    public function setGuestWriteEnabled(bool $enabled): void
+    {
+        $this->guestWriteEnabled = $enabled;
+    }
+
+    /** @param array<string|int,mixed> $grants */
+    public function setSecretGrants(array $grants): void
+    {
+        $this->secretGrants = [];
+        foreach ($grants as $postId => $fingerprint) {
+            if (ctype_digit((string) $postId) && is_string($fingerprint) && $fingerprint !== '') {
+                $this->secretGrants[(string) $postId] = $fingerprint;
+            }
+        }
+    }
+
+    public static function secretGrantFor(array $post): string
+    {
+        return hash('sha256', (string) ($post['id'] ?? '') . '|' . (string) ($post['guest_password'] ?? ''));
+    }
+
+    /** @param array<string|int,mixed> $grants */
+    public function setCommentSecretGrants(array $grants): void
+    {
+        $this->commentSecretGrants = [];
+        foreach ($grants as $commentId => $fingerprint) {
+            if (ctype_digit((string) $commentId) && is_string($fingerprint) && $fingerprint !== '') {
+                $this->commentSecretGrants[(string) $commentId] = $fingerprint;
+            }
+        }
+    }
+
+    public static function commentSecretGrantFor(array $comment): string
+    {
+        return hash('sha256', 'comment|' . (string) ($comment['id'] ?? '') . '|'
+            . (string) ($comment['guest_password'] ?? ''));
+    }
+
+    /** @param array<string|int,mixed> $grants */
+    public function setCommentEditGrants(array $grants): void
+    {
+        $this->commentEditGrants = [];
+        foreach ($grants as $commentId => $fingerprint) {
+            if (ctype_digit((string) $commentId) && is_string($fingerprint) && $fingerprint !== '') {
+                $this->commentEditGrants[(string) $commentId] = $fingerprint;
+            }
+        }
+    }
+
+    public function hasGuestCommentOwnership(array $comment): bool
+    {
+        if (($comment['author_id'] ?? null) !== null || ($comment['guest_password'] ?? null) === null) {
+            return false;
+        }
+        $grant = $this->commentSecretGrants[(string) ($comment['id'] ?? '')] ?? null;
+
+        return is_string($grant) && hash_equals(self::commentSecretGrantFor($comment), $grant);
+    }
+
+    public function canEditComment(array $board, array $comment): bool
+    {
+        if ($this->isAdminFor($board)) {
+            return true;
+        }
+        if (($comment['author_id'] ?? null) !== null) {
+            $sub = $this->identity->sub();
+
+            return $sub !== null && hash_equals((string) $comment['author_id'], $sub);
+        }
+
+        $grant = $this->commentEditGrants[(string) ($comment['id'] ?? '')] ?? null;
+
+        return ($comment['guest_password'] ?? null) !== null && is_string($grant)
+            && hash_equals(self::commentSecretGrantFor($comment), $grant);
+    }
+
+    public function canViewSecretComment(array $board, array $post, array $comment, ?array $parent = null): bool
+    {
+        if (!(bool) ($comment['is_secret'] ?? false) || $this->isAdminFor($board)) {
+            return true;
+        }
+
+        $sub = $this->identity->sub();
+        if ($sub !== null) {
+            if (($comment['author_id'] ?? null) !== null
+                && hash_equals((string) $comment['author_id'], $sub)) {
+                return true;
+            }
+            if (($post['author_id'] ?? null) !== null && hash_equals((string) $post['author_id'], $sub)) {
+                return true;
+            }
+            if ($parent !== null && ($parent['author_id'] ?? null) !== null
+                && hash_equals((string) $parent['author_id'], $sub)) {
+                return true;
+            }
+        }
+
+        $postGrant = $this->secretGrants[(string) ($post['id'] ?? '')] ?? null;
+        if (($post['author_id'] ?? null) === null && is_string($postGrant)
+            && hash_equals(self::secretGrantFor($post), $postGrant)) {
+            return true;
+        }
+
+        if ($parent !== null && $this->hasGuestCommentOwnership($parent)) {
+            return true;
+        }
+
+        return $this->hasGuestCommentOwnership($comment);
+    }
+
+    /**
+     * 비회원 비밀 댓글은 댓글 작성 비밀번호와 비회원 원글 비밀번호 중 하나로 연다.
+     * 반환값은 어느 소유권을 세션에 기억해야 하는지 나타낸다.
+     */
+    public function verifySecretComment(
+        array $board,
+        array $post,
+        array $comment,
+        string $password,
+        ?array $parent = null
+    ): string
+    {
+        if ($this->canViewSecretComment($board, $post, $comment, $parent)) {
+            return 'already';
+        }
+
+        $key = 'secret-comment:' . ($comment['id'] ?? 0);
+        if ($this->throttle !== null && $password !== '') {
+            $this->throttle->assertNotLocked($key);
+        }
+
+        $commentHash = $comment['guest_password'] ?? null;
+        if (is_string($commentHash) && $commentHash !== '' && password_verify($password, $commentHash)) {
+            if ($this->throttle !== null) {
+                $this->throttle->clear($key);
+            }
+            return 'comment';
+        }
+
+        $postHash = $post['guest_password'] ?? null;
+        if (is_string($postHash) && $postHash !== '' && password_verify($password, $postHash)) {
+            if ($this->throttle !== null) {
+                $this->throttle->clear($key);
+            }
+            return 'post';
+        }
+
+        $parentHash = $parent['guest_password'] ?? null;
+        if (is_string($parentHash) && $parentHash !== '' && password_verify($password, $parentHash)) {
+            if ($this->throttle !== null) {
+                $this->throttle->clear($key);
+            }
+            return 'parent';
+        }
+
+        if ($password === '') {
+            throw DomainError::validation(['password' => '비밀번호를 입력해 주세요.']);
+        }
+        $message = $this->throttle === null
+            ? '비밀번호가 올바르지 않습니다.'
+            : $this->throttle->recordFailureMessage($key, '비밀번호가 올바르지 않습니다.');
+        throw DomainError::validation(['password' => $message]);
     }
 
     public function isBoardManager(array $board): bool
@@ -59,12 +235,40 @@ final class Acl
 
     public function canWrite(array $board): bool
     {
+        if ($this->identity->isGuest() && !$this->guestWriteEnabled) {
+            return false;
+        }
+
         return $this->allows($board, (string) $board['perm_write']);
     }
 
     public function canComment(array $board): bool
     {
         return $this->allows($board, (string) $board['perm_comment']);
+    }
+
+    public function canCommentOnPost(array $board, array $post): bool
+    {
+        if (!$this->canComment($board)) {
+            return false;
+        }
+        if (!(bool) ($post['is_secret'] ?? false)) {
+            return true;
+        }
+        if ($this->isAdminFor($board)) {
+            return true;
+        }
+
+        $authorId = $post['author_id'] ?? null;
+        if ($authorId !== null) {
+            $sub = $this->identity->sub();
+
+            return $sub !== null && hash_equals((string) $authorId, $sub);
+        }
+
+        $grant = $this->secretGrants[(string) ($post['id'] ?? '')] ?? null;
+
+        return is_string($grant) && hash_equals(self::secretGrantFor($post), $grant);
     }
 
     /**
@@ -118,6 +322,16 @@ final class Acl
         $this->deny($this->canComment($board), '이 게시판에 댓글을 쓸 권한이 없습니다.');
     }
 
+    public function assertCanCommentOnPost(array $board, array $post): void
+    {
+        $this->deny(
+            $this->canCommentOnPost($board, $post),
+            (bool) ($post['is_secret'] ?? false)
+                ? '비밀글에는 글 작성자와 관리자만 댓글을 쓸 수 있습니다.'
+                : '이 게시판에 댓글을 쓸 권한이 없습니다.'
+        );
+    }
+
     /** 비밀번호 대입 방어. App::guestAcl() 이 주입한다. 없으면(단위 테스트 등) 검사만 없다. */
     private ?PasswordThrottle $throttle = null;
 
@@ -132,6 +346,10 @@ final class Acl
      */
     public function verifySecret(array $board, array $post, ?string $password): bool
     {
+        $grant = $this->secretGrants[(string) ($post['id'] ?? '')] ?? null;
+        if (is_string($grant) && hash_equals(self::secretGrantFor($post), $grant)) {
+            return true;
+        }
         $useThrottle = $this->throttle !== null && $password !== null && $password !== '';
         $key = 'secret:' . ($post['id'] ?? 0);
         if ($useThrottle) {
@@ -146,8 +364,12 @@ final class Acl
             if ($this->owns($post, $password)) {
                 $this->throttle->clear($key);
             } elseif (!$allowed) {
-                $this->throttle->recordFailure($key);
+                $message = $this->throttle->recordFailureMessage($key, '비밀번호가 올바르지 않습니다.');
             }
+        }
+
+        if (!$allowed && isset($message)) {
+            throw DomainError::validation(['password' => $message]);
         }
 
         return $allowed;
@@ -156,6 +378,10 @@ final class Acl
     public function assertCanModify(array $board, array $resource, ?string $password): void
     {
         $guestOwned = ($resource['author_id'] ?? null) === null && ($resource['guest_password'] ?? null) !== null;
+        if ($guestOwned && isset($resource['post_id']) && $this->canEditComment($board, $resource)
+            && ($password === null || $password === '')) {
+            return;
+        }
         // 댓글 행에는 post_id 가 있다. 글과 댓글이 같은 잠금 열쇠를 나누지 않게 가른다.
         $key = 'modify:' . (isset($resource['post_id']) ? 'comment' : 'post') . ':' . ($resource['id'] ?? 0);
         $useThrottle = $guestOwned && $this->throttle !== null && $password !== null && $password !== '';
@@ -175,14 +401,14 @@ final class Acl
             return;
         }
         if ($useThrottle) {
-            $this->throttle->recordFailure($key);
+            $message = $this->throttle->recordFailureMessage($key, '비밀번호가 올바르지 않습니다.');
         }
         // 비회원 글·댓글은 비밀번호가 곧 소유 증명이다. 로그인하라는 안내는 엉뚱하므로
         // 비밀번호 칸에 붙는 검증 오류로 알려 준다. 회원 글은 기존대로 401/403 이다.
         if (($resource['author_id'] ?? null) === null && ($resource['guest_password'] ?? null) !== null) {
             throw DomainError::validation(['password' => $password === null || $password === ''
                 ? '비밀번호를 입력해 주세요.'
-                : '비밀번호가 올바르지 않습니다.']);
+                : ($message ?? '비밀번호가 올바르지 않습니다.')]);
         }
         $this->deny(false, '수정하거나 삭제할 권한이 없습니다.');
     }

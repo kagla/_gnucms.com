@@ -496,6 +496,16 @@ final class App
         $acl = new Acl($this->identity);
         $acl->setPasswordThrottle($this->passwordThrottle());
         $acl->setGuestWriteEnabled((bool) $this->cmsService()->settings()['guest_write_enabled']);
+        $acl->setSecretGrants(isset($_SESSION['secret_posts']) && is_array($_SESSION['secret_posts'])
+            ? $_SESSION['secret_posts'] : []);
+        $acl->setCommentSecretGrants(
+            isset($_SESSION['secret_comments']) && is_array($_SESSION['secret_comments'])
+                ? $_SESSION['secret_comments'] : []
+        );
+        $acl->setCommentEditGrants(
+            isset($_SESSION['comment_edits']) && is_array($_SESSION['comment_edits'])
+                ? $_SESSION['comment_edits'] : []
+        );
 
         return $acl;
     }

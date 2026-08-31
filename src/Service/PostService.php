@@ -289,6 +289,30 @@ final class PostService
         return ['post' => $post, 'board' => $board];
     }
 
+    /**
+     * 비회원 비밀글이면 비밀번호 화면에 필요한 안전한 정보만 돌려준다.
+     * 관리자·회원 작성자·이미 비밀번호를 확인한 세션은 null 로 통과한다.
+     */
+    public function secretChallenge(Acl $acl, int $id): ?array
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null) {
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
+        }
+        $board = $this->boards->getEntity($acl, $this->boardKeyOf($post));
+        if ($post['deleted_at'] !== null && !$acl->isAdminFor($board)) {
+            throw DomainError::notFound('글을 찾을 수 없습니다.');
+        }
+        if ((int) $post['is_secret'] !== 1 || $acl->verifySecret($board, $post, null)) {
+            return null;
+        }
+        if ($post['author_id'] !== null || ($post['guest_password'] ?? null) === null) {
+            throw DomainError::forbidden('비밀글입니다.');
+        }
+
+        return ['post_id' => $id, 'board' => $board];
+    }
+
     public function get(Acl $acl, int $id, ?string $password): array
     {
         $loaded = $this->loadForRead($acl, $id, $password);
@@ -356,6 +380,16 @@ final class PostService
         }
 
         return $this->detail($this->posts->findWithSecret($id));
+    }
+
+    public function guestOwnershipGrant(int $id): ?string
+    {
+        $post = $this->posts->findWithSecret($id);
+        if ($post === null || $post['author_id'] !== null || ($post['guest_password'] ?? null) === null) {
+            return null;
+        }
+
+        return Acl::secretGrantFor($post);
     }
 
     public function update(Acl $acl, int $id, array $input): array

@@ -34,8 +34,6 @@ foreach (($values['attachments'] ?? []) as $row) {
       <span class="attach-name"><?= $this->e($row['name']) ?></span>
       <span class="attach-size"><?= $this->e(number_format(((int) $row['size']) / 1024, 1)) ?> KB</span>
       <span class="attach-tools">
-        <button type="button" class="btn btn-ghost btn-xs" data-attach-up aria-label="위로">↑</button>
-        <button type="button" class="btn btn-ghost btn-xs" data-attach-down aria-label="아래로">↓</button>
         <button type="button" class="btn btn-ghost btn-xs" data-attach-remove aria-label="삭제"><?= $this->icon('close', 13) ?></button>
       </span>
       <?php foreach (['id', 'name', 'size', 'mime', 'path', 'sig'] as $field): ?>
@@ -81,8 +79,6 @@ foreach (($values['attachments'] ?? []) as $row) {
     row.innerHTML = '<span class="attach-grip" aria-hidden="true">≡</span>'
       + '<span class="attach-name"></span><span class="attach-size">올리는 중…</span>'
       + '<span class="attach-tools">'
-      + '<button type="button" class="btn btn-ghost btn-xs" data-attach-up aria-label="위로">↑</button>'
-      + '<button type="button" class="btn btn-ghost btn-xs" data-attach-down aria-label="아래로">↓</button>'
       + '<button type="button" class="btn btn-ghost btn-xs" data-attach-remove aria-label="삭제">✕</button></span>';
     row.querySelector('.attach-name').textContent = name;
     list.appendChild(row);
@@ -148,10 +144,6 @@ foreach (($values['attachments'] ?? []) as $row) {
     var row = button.closest('li');
     if (button.hasAttribute('data-attach-remove')) {
       row.remove();
-    } else if (button.hasAttribute('data-attach-up') && row.previousElementSibling) {
-      list.insertBefore(row, row.previousElementSibling);
-    } else if (button.hasAttribute('data-attach-down') && row.nextElementSibling) {
-      list.insertBefore(row.nextElementSibling, row);
     }
     renumber();
   });

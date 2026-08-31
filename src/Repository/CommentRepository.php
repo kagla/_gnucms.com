@@ -39,6 +39,18 @@ final class CommentRepository
         return array_map([$this, 'hydrate'], $rows);
     }
 
+    /** 비밀 댓글 소유권 판정용. 반환값을 화면에 직접 넘기지 않는다. */
+    public function findByPostWithSecret(int $postId): array
+    {
+        $rows = $this->db->select(
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('comments')
+            . ' WHERE post_id = ? ORDER BY id ASC',
+            [$postId]
+        );
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
     public function find(int $id): ?array
     {
         $row = $this->db->selectOne(

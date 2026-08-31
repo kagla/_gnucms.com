@@ -45,7 +45,9 @@ final class EditorImageController
 
     public function uploadForComment(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $board = $this->boardOfPost((int) $args['id']);
+        $loaded = $this->app->postService()->loadForRead($this->app->guestAcl(), (int) $args['id'], null);
+        $this->app->guestAcl()->assertCanCommentOnPost($loaded['board'], $loaded['post']);
+        $board = $loaded['board'];
 
         return $this->upload($request, $response, function ($acl, $upload, $key) use ($board) {
             return $this->app->contentImages()->uploadForComment($acl, $board, $upload, $key);
@@ -54,7 +56,9 @@ final class EditorImageController
 
     public function discardForComment(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $board = $this->boardOfPost((int) $args['id']);
+        $loaded = $this->app->postService()->loadForRead($this->app->guestAcl(), (int) $args['id'], null);
+        $this->app->guestAcl()->assertCanCommentOnPost($loaded['board'], $loaded['post']);
+        $board = $loaded['board'];
 
         return $this->discard($request, $response, function ($acl, $key, $files) use ($board) {
             $this->app->contentImages()->discardForComment($acl, $board, $key, $files);

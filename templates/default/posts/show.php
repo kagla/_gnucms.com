@@ -22,36 +22,25 @@
       <?php if ($post['is_secret']): ?><span class="badge badge-ghost"><?= $this->icon('lock', 12) ?> 비밀글</span><?php endif ?>
     </span>
     <h1 class="card-title article-title"><?= $this->e($post['title']) ?></h1>
-    <div class="article-writer">
-      <span class="avatar avatar-placeholder avatar-sm">
-        <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $post['author_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $post['author_name'], 0, 1))) ?></span></span>
-      </span>
-      <span class="article-writer-copy">
-        <strong><?= $this->e($post['author_name']) ?></strong>
-        <span class="article-writer-meta">
-          <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'y-m-d H:i:s') ?></time>
-          <span class="stat-inline"><?= $this->icon('eye', 14) ?> 조회 <?= $this->e($post['view_count']) ?></span>
-          <?php // 댓글 수를 누르면 댓글 자리로 간다. 따로 "댓글 보기" 를 둘 이유가 없다. ?>
-          <a class="stat-inline stat-inline-link" href="#comments"><?= $this->icon('comment', 14) ?> 댓글 <?= $this->e($post['comment_count']) ?></a>
-        </span>
-      </span>
-      <span class="article-actions-inline">
-        <?php
-        $mine = $current_user['is_admin']
-          || ($post['author_id'] !== null && $current_user['id'] !== null && $post['author_id'] == $current_user['id'])
-          || $post['author_id'] === null;
-        ?>
-        <?php if ($mine): ?>
-          <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.edit', ['id' => $post['id']]) ?>"><?= $this->icon('pencil', 14) ?> 수정</a>
-        <?php endif ?>
-        <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('arrow-left', 15) ?> 목록</a>
+    <div class="article-byline">
+      <strong><?= $this->e($post['author_name']) ?></strong>
+      <span class="article-writer-meta">
+        <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'y-m-d H:i:s') ?></time>
+        <span class="stat-inline"><?= $this->icon('eye', 14) ?> 조회 <?= $this->e($post['view_count']) ?></span>
+        <a class="stat-inline stat-inline-link" href="#comments"><?= $this->icon('comment', 14) ?> 댓글 <?= $this->e($post['comment_count']) ?></a>
       </span>
     </div>
   </div>
 
-  <div class="divider divider-flush"></div>
-
-  <div class="card-body article-body prose"><?= $this->html($post['content']) ?></div>
+  <div class="card-body article-body">
+    <div class="prose article-copy-content" data-copy-content><?= $this->html($post['content']) ?></div>
+    <div class="article-copy-row">
+      <span class="article-copy-feedback" data-copy-feedback aria-live="polite"></span>
+      <button class="btn btn-ghost btn-square btn-sm article-copy-btn" type="button" data-copy-post aria-label="제목과 내용 복사" title="제목과 내용 복사">
+        <?= $this->icon('copy', 18) ?>
+      </button>
+    </div>
+  </div>
 
   <?php if (!empty($post['attachments'])): ?>
     <div class="card-body article-files">
@@ -67,6 +56,20 @@
       </ul>
     </div>
   <?php endif ?>
+
+  <footer class="card-body article-footer">
+    <span class="article-actions-inline">
+      <?php
+      $mine = $current_user['is_admin']
+        || ($post['author_id'] !== null && $current_user['id'] !== null && $post['author_id'] == $current_user['id'])
+        || $post['author_id'] === null;
+      ?>
+      <?php if ($mine): ?>
+        <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.edit', ['id' => $post['id']]) ?>"><?= $this->icon('pencil', 14) ?> 수정</a>
+      <?php endif ?>
+      <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('arrow-left', 15) ?> 목록</a>
+    </span>
+  </footer>
 </article>
 
 <section class="card comments" id="comments" aria-labelledby="comments-title">
@@ -103,7 +106,7 @@
               <input class="input input-bordered input-block" type="text" name="author_name" autocomplete="off" value="<?= $this->e($comment_values['author_name'] ?? '') ?>" maxlength="20" required>
               <?php if (array_key_exists('author_name', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['author_name']) ?></p><?php endif ?>
             </fieldset>
-            <fieldset class="fieldset<?php if (array_key_exists('password', $comment_errors)): ?> is-invalid<?php endif ?>">
+            <fieldset class="fieldset<?php if (array_key_exists('password', $comment_errors)): ?> is-invalid<?php endif ?>" data-password-field>
               <legend class="fieldset-legend">비밀번호 <span class="legend-hint">수정·삭제에 씁니다</span></legend>
               <input class="input input-bordered input-block" type="password" name="password" autocomplete="new-password" required>
               <?php if (array_key_exists('password', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['password']) ?></p><?php endif ?>
@@ -118,12 +121,13 @@
         </fieldset>
 
         <div class="comment-form-foot">
-          <?php if ($board['use_secret']): ?>
-            <label class="label toggle-row comment-secret">
+          <?php if ($board['use_secret'] && !$current_user['is_guest']): ?>
+            <label class="label comment-secret-control comment-secret">
               <input class="toggle toggle-primary" type="checkbox" name="is_secret" value="1"<?php if ($comment_values['is_secret'] ?? false): ?> checked<?php endif ?>>
               <span><strong><?= $this->icon('lock', 14) ?> 비밀 댓글</strong></span>
             </label>
           <?php endif ?>
+          <?php if (array_key_exists('is_secret', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['is_secret']) ?></p><?php endif ?>
           <button class="btn btn-primary" type="submit" data-submit>댓글 등록</button>
           <?php // 고치는 중에만 나온다. 같은 폼을 삭제 주소로 보내므로 비밀번호 칸도 함께 간다. ?>
           <button class="btn btn-error btn-outline btn-delete" type="submit" data-delete hidden formnovalidate
@@ -136,14 +140,83 @@
   </div>
 </section>
 
-<div class="article-actions">
-  <a class="btn btn-outline btn-lg" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('arrow-left', 16) ?> <?= $this->e($board['name']) ?> 목록으로</a>
-  <?php if ($can_write ?? false): ?>
+<?php if ($can_write ?? false): ?>
+  <div class="article-actions">
     <a class="btn btn-primary btn-lg" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>"><?= $this->icon('pencil', 16) ?> 나도 글쓰기</a>
-  <?php endif ?>
-</div>
+  </div>
+<?php endif ?>
+
+<dialog class="comment-owner-modal" data-comment-owner-modal aria-labelledby="comment-owner-title">
+  <form class="comment-owner-box" data-comment-owner-form>
+    <button class="btn btn-ghost btn-square btn-sm comment-owner-close" type="button" data-comment-owner-cancel aria-label="닫기">×</button>
+    <span class="auth-mark" aria-hidden="true"><?= $this->icon('lock', 21) ?></span>
+    <h2 id="comment-owner-title">댓글 비밀번호 확인</h2>
+    <p>댓글을 작성할 때 입력한 비밀번호를 확인한 후 수정할 수 있습니다.</p>
+    <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+    <fieldset class="fieldset" data-comment-owner-field>
+      <legend class="fieldset-legend">댓글 비밀번호</legend>
+      <label class="input input-bordered input-block">
+        <span class="input-icon" aria-hidden="true"><?= $this->icon('lock', 16) ?></span>
+        <input type="password" name="password" autocomplete="current-password" required data-comment-owner-password>
+      </label>
+      <p class="validator-hint" data-comment-owner-error hidden></p>
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-ghost" type="button" data-comment-owner-cancel>취소</button>
+      <button class="btn btn-primary" type="submit" data-comment-owner-submit>확인 후 수정</button>
+    </div>
+  </form>
+</dialog>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
+<script>
+(function(){
+  var button=document.querySelector('[data-copy-post]');if(!button){return}
+  var title=document.querySelector('.article-title'),content=document.querySelector('[data-copy-content]'),feedback=document.querySelector('[data-copy-feedback]');
+  function fallback(text){
+    var area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+    area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();
+    var copied=document.execCommand('copy');area.remove();return copied?Promise.resolve():Promise.reject();
+  }
+  button.addEventListener('click',function(){
+    var text=[title?title.textContent.trim():'',content?content.innerText.trim():''].filter(Boolean).join('\n\n');
+    var copy=navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(text):fallback(text);
+    copy.then(function(){
+      feedback.textContent='복사됨';button.setAttribute('aria-label','복사됨');button.title='복사됨';
+      window.setTimeout(function(){feedback.textContent='';button.setAttribute('aria-label','제목과 내용 복사');button.title='제목과 내용 복사'},1800);
+    }).catch(function(){feedback.textContent='복사하지 못했습니다';});
+  });
+})();
+</script>
+<script>
+(function(){
+  var modal=document.querySelector('[data-comment-owner-modal]'),form=document.querySelector('[data-comment-owner-form]');
+  if(!modal||!form){return}
+  var password=form.querySelector('[data-comment-owner-password]'),error=form.querySelector('[data-comment-owner-error]'),
+      field=form.querySelector('[data-comment-owner-field]'),submit=form.querySelector('[data-comment-owner-submit]');
+  function close(){modal.close();form.reset();error.hidden=true;error.textContent='';field.classList.remove('is-invalid')}
+  document.addEventListener('click',function(e){
+    var button=e.target.closest&&e.target.closest('[data-guest-edit]');
+    if(!button){return}
+    form.setAttribute('action',button.getAttribute('data-owner-action'));
+    modal.showModal();window.setTimeout(function(){password.focus()},30);
+  });
+  modal.addEventListener('click',function(e){if(e.target===modal){close()}});
+  form.querySelectorAll('[data-comment-owner-cancel]').forEach(function(button){button.addEventListener('click',close)});
+  form.addEventListener('submit',function(e){
+    e.preventDefault();error.hidden=true;field.classList.remove('is-invalid');submit.disabled=true;
+    var body=new URLSearchParams();body.set('csrf_token',form.elements.csrf_token.value);body.set('password',password.value);
+    fetch(form.getAttribute('action'),{method:'POST',body:body.toString(),credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}})
+      .then(function(response){return response.json().then(function(data){return {ok:response.ok,data:data}})})
+      .then(function(result){
+        if(!result.ok||!result.data.ok){throw new Error(result.data.message||'비밀번호를 확인해 주세요.')}
+        window.location.assign(result.data.redirect);
+      })
+      .catch(function(reason){error.textContent=reason.message||'비밀번호를 확인해 주세요.';error.hidden=false;field.classList.add('is-invalid');password.select()})
+      .finally(function(){submit.disabled=false});
+  });
+})();
+</script>
 <?php if ($can_comment): ?>
   <?php $this->insert('posts/_editor', [
     'editor_id' => 'comment-content',
@@ -162,6 +235,9 @@
         del=form.querySelector('[data-delete]'),
         imageKey=form.querySelector('[name="image_key"]'),
         nameField=form.querySelector('[data-name-field]'),
+        passwordField=form.querySelector('[data-password-field]'),
+        secretToggle=form.querySelector('[name="is_secret"]'),
+        secretControl=secretToggle&&secretToggle.closest('.comment-secret-control'),
         submit=form.querySelector('[data-submit]'),
         createAction=form.getAttribute('action'),
         submitLabel=submit?submit.textContent:'댓글 등록';
@@ -179,6 +255,7 @@
       name.textContent=button.getAttribute('data-reply-author')||'';
       bar.hidden=false;
       form.classList.add('is-reply');
+      setSecretAllowed(true);
       place(function(){
         /* 답글의 답글이 이미 달려 있으면 그 묶음 뒤에 놓아야 순서가 맞다. */
         var after=target.nextElementSibling;
@@ -203,7 +280,16 @@
       form.classList.remove('is-reply');
       form.classList.add('is-editing');
       form.setAttribute('action',link.getAttribute('data-edit-action'));
-      if(nameField){nameField.hidden=true}
+      if(nameField){
+        nameField.hidden=true;
+        var nameInput=nameField.querySelector('input');if(nameInput){nameInput.disabled=true}
+      }
+      if(passwordField&&link.hasAttribute('data-password-verified')){
+        passwordField.hidden=true;
+        var passwordInput=passwordField.querySelector('input');if(passwordInput){passwordInput.disabled=true}
+      }
+      if(secretToggle){secretToggle.checked=link.getAttribute('data-edit-secret')==='1'}
+      setSecretAllowed(!(<?= $current_user['is_guest'] ? 'true' : 'false' ?>&&link.getAttribute('data-edit-reply')==='1'));
       if(submit){submit.textContent='댓글 저장'}
       if(del){del.hidden=false;del.setAttribute('formaction',link.getAttribute('data-delete-action')||'')}
       if(imageKey){imageKey.value=''}
@@ -223,7 +309,16 @@
       editBar.hidden=true;
       form.classList.remove('is-reply','is-editing');
       form.setAttribute('action',createAction);
-      if(nameField){nameField.hidden=false}
+      if(nameField){
+        nameField.hidden=false;
+        var nameInput=nameField.querySelector('input');if(nameInput){nameInput.disabled=false}
+      }
+      if(passwordField){
+        passwordField.hidden=false;
+        var passwordInput=passwordField.querySelector('input');if(passwordInput){passwordInput.disabled=false}
+      }
+      if(secretToggle){secretToggle.checked=false}
+      setSecretAllowed(true);
       if(submit){submit.textContent=submitLabel}
       if(del){del.hidden=true;del.removeAttribute('formaction')}
       var textarea=document.getElementById('comment-content');
@@ -239,6 +334,13 @@
       if(api){window.setTimeout(api.focus,120)}
     }
 
+    function setSecretAllowed(allowed){
+      if(!secretToggle){return}
+      if(!allowed){secretToggle.checked=false}
+      secretToggle.disabled=!allowed;
+      if(secretControl){secretControl.hidden=!allowed}
+    }
+
     document.addEventListener('click',function(e){
       if(!e.target.closest){return}
       var button=e.target.closest('[data-reply]');
@@ -248,6 +350,11 @@
     });
     if(cancel){cancel.addEventListener('click',reset)}
     if(editCancel){editCancel.addEventListener('click',reset)}
+    var requested=new URLSearchParams(window.location.search).get('edit_comment');
+    if(requested){
+      var requestedLink=document.querySelector('[data-edit="'+requested.replace(/[^0-9]/g,'')+'"]');
+      if(requestedLink){toEdit(requestedLink)}
+    }
   })();
   </script>
 <?php endif ?>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\View;
 
+use GnuCms\Support\Clock;
 use RuntimeException;
 use Throwable;
 
@@ -197,6 +198,31 @@ final class PhpTemplate
         }
         $ts = is_int($v) ? $v : strtotime((string) $v);
         return $ts === false ? '' : date($format, $ts);
+    }
+
+    public function compactDate(mixed $v): string
+    {
+        if ($v === null || $v === '') {
+            return '';
+        }
+        $ts = is_int($v) ? $v : strtotime((string) $v);
+        if ($ts === false) {
+            return '';
+        }
+
+        return date('Y-m-d', $ts) === date('Y-m-d', Clock::timestamp())
+            ? date('H:i', $ts)
+            : date('m-d', $ts);
+    }
+
+    public function truncate(mixed $v, int $length): string
+    {
+        $text = (string) $v;
+        if ($length < 1 || mb_strlen($text) <= $length) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, $length) . '…';
     }
 
     public function json(mixed $v): string

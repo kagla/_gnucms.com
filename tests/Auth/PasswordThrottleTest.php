@@ -37,9 +37,27 @@ final class PasswordThrottleTest extends WebTestCase
             self::fail('여섯 번째는 잠겨야 한다');
         } catch (DomainError $e) {
             self::assertSame(422, $e->status());
-            self::assertStringContainsString('너무 많이 틀렸습니다', $e->details()['email']);
+            self::assertStringContainsString('5회 잘못 입력했습니다', $e->details()['email']);
             self::assertStringContainsString('분 뒤 다시', $e->details()['email']);
         }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testFailureMessagesShowSharedLimitAndRemainingCount(array $dbConfig): void
+    {
+        $t = $this->throttle($dbConfig);
+
+        self::assertSame(
+            '비밀번호가 올바르지 않습니다. (10분 내 5회 제한 · 남은 횟수 4회)',
+            $t->recordFailureMessage('secret:1', '비밀번호가 올바르지 않습니다.')
+        );
+        for ($i = 0; $i < 3; $i++) {
+            $t->recordFailureMessage('secret:1', '비밀번호가 올바르지 않습니다.');
+        }
+        self::assertStringContainsString(
+            '비밀번호를 5회 잘못 입력했습니다. 10분 뒤 다시 시도해 주세요.',
+            $t->recordFailureMessage('secret:1', '비밀번호가 올바르지 않습니다.')
+        );
     }
 
     #[DataProvider('connectionProvider')]

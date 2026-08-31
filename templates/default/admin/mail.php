@@ -22,15 +22,17 @@
 
       <div class="form-section">
         <h2 class="form-section-title">서버</h2>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">메일 서비스</legend>
-          <select class="select select-bordered select-block" name="provider" data-mail-provider>
-            <option value="gmail"<?= $this->def($values['provider'] ?? null, 'gmail') === 'gmail' ? ' selected' : '' ?>>Gmail</option>
-            <option value="naver"<?= ($values['provider'] ?? '') === 'naver' ? ' selected' : '' ?>>네이버 메일</option>
-            <option value="daum"<?= ($values['provider'] ?? '') === 'daum' ? ' selected' : '' ?>>다음 메일</option>
-            <option value="custom"<?= ($values['provider'] ?? '') === 'custom' ? ' selected' : '' ?>>직접 설정</option>
-          </select>
-        </fieldset>
+        <div class="grid-2">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">메일 서비스</legend>
+            <select class="select select-bordered select-block" name="provider" data-mail-provider>
+              <option value="gmail"<?= $this->def($values['provider'] ?? null, 'gmail') === 'gmail' ? ' selected' : '' ?>>Gmail</option>
+              <option value="naver"<?= ($values['provider'] ?? '') === 'naver' ? ' selected' : '' ?>>네이버 메일</option>
+              <option value="daum"<?= ($values['provider'] ?? '') === 'daum' ? ' selected' : '' ?>>다음 메일</option>
+              <option value="custom"<?= ($values['provider'] ?? '') === 'custom' ? ' selected' : '' ?>>직접 설정</option>
+            </select>
+          </fieldset>
+        </div>
         <div class="grid-2">
           <fieldset class="fieldset<?php if (array_key_exists('host', $errors)): ?> is-invalid<?php endif ?>">
             <legend class="fieldset-legend">SMTP 서버</legend>
@@ -54,17 +56,29 @@
 
       <div class="form-section">
         <h2 class="form-section-title">계정</h2>
-        <fieldset class="fieldset<?php if (array_key_exists('username', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">SMTP 사용자 이름</legend>
-          <input class="input input-bordered input-block" type="text" name="username" value="<?= $this->e($values['username'] ?? '') ?>" maxlength="254" autocomplete="username" required>
-          <?php if (array_key_exists('username', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['username']) ?></p><?php endif ?>
-        </fieldset>
-        <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">앱 비밀번호</legend>
-          <input class="input input-bordered input-block" type="password" name="password" value="" autocomplete="new-password" placeholder="<?= $this->e(($values['password_set'] ?? false) ? '저장됨 · 변경할 때만 입력' : '앱 비밀번호 입력') ?>">
-          <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
-          <p class="fieldset-label">일반 로그인 비밀번호가 아니라 메일 서비스에서 발급한 앱 비밀번호를 사용하세요.</p>
-        </fieldset>
+        <div class="grid-2">
+          <fieldset class="fieldset<?php if (array_key_exists('username', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">SMTP 사용자 이름</legend>
+            <input class="input input-bordered input-block" type="text" name="username" value="<?= $this->e($values['username'] ?? '') ?>" maxlength="254" autocomplete="username" required>
+            <?php if (array_key_exists('username', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['username']) ?></p><?php endif ?>
+          </fieldset>
+          <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">앱 비밀번호</legend>
+            <label class="input input-bordered input-block">
+              <input type="password" name="password" value="" autocomplete="new-password" placeholder="<?= ($values['password_set'] ?? false) ? '••••••••••••••••' : '앱 비밀번호 입력' ?>">
+              <button class="pw-toggle" type="button" data-mail-password-toggle
+                      data-password-url="<?= $this->url('admin.mail.password') ?>"
+                      data-csrf="<?= $this->e($csrf_token) ?>"
+                      data-password-set="<?= ($values['password_set'] ?? false) ? '1' : '0' ?>"
+                      aria-pressed="false" aria-label="앱 비밀번호 표시" title="앱 비밀번호 표시">
+                <span class="pw-ico pw-ico-show" aria-hidden="true"><?= $this->icon('eye', 17) ?></span>
+                <span class="pw-ico pw-ico-hide" aria-hidden="true"><?= $this->icon('eye-off', 17) ?></span>
+              </button>
+            </label>
+            <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
+            <p class="fieldset-label"><?= ($values['password_set'] ?? false) ? '앱 비밀번호가 저장되어 있습니다. 보안상 기존 값은 표시하지 않으며, 변경할 때만 새 값을 입력하세요.' : '일반 로그인 비밀번호가 아니라 메일 서비스에서 발급한 앱 비밀번호를 사용하세요.' ?></p>
+          </fieldset>
+        </div>
       </div>
 
       <div class="form-section">
@@ -115,6 +129,34 @@
   }
   p.addEventListener('change',function(){sync(true)});
   sync(false);
+})();
+</script>
+<script>
+(function(){
+  var btn=document.querySelector('[data-mail-password-toggle]');if(!btn){return}
+  var box=btn.closest('label'),field=box?box.querySelector('input'):null;if(!field){return}
+  var revealedStored=false,loading=false;
+  function state(show){
+    var label=show?'앱 비밀번호 숨기기':'앱 비밀번호 표시';
+    field.type=show?'text':'password';btn.setAttribute('aria-pressed',show?'true':'false');
+    btn.setAttribute('aria-label',label);btn.title=label;
+  }
+  field.addEventListener('input',function(){revealedStored=false});
+  btn.addEventListener('click',async function(){
+    if(field.type==='text'){
+      state(false);if(revealedStored){field.value='';revealedStored=false}field.focus();return;
+    }
+    if(field.value!==''||btn.dataset.passwordSet!=='1'){state(true);field.focus();return}
+    if(loading){return}loading=true;btn.disabled=true;
+    try{
+      var body=new URLSearchParams({csrf_token:btn.dataset.csrf});
+      var res=await fetch(btn.dataset.passwordUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
+      if(!res.ok){throw new Error('request failed')}
+      var data=await res.json();field.value=typeof data.password==='string'?data.password:'';
+      revealedStored=true;state(true);field.focus();field.setSelectionRange(field.value.length,field.value.length);
+    }catch(e){window.alert('앱 비밀번호를 불러오지 못했습니다. 다시 로그인한 뒤 시도해 주세요.')}
+    finally{loading=false;btn.disabled=false}
+  });
 })();
 </script>
 <?php $this->stop() ?>

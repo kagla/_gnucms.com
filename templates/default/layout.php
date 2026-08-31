@@ -20,7 +20,7 @@
 </script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <?php // daisyUI 5 는 빌드 없이 그대로 링크할 수 있는 CSS 를 낸다.
-      // 판(리셋)과 컴포넌트는 여기서 오고, 아이디어스 색·전용 화면은 아래 theme.css 가 얹는다.
+      // 판(리셋)과 컴포넌트는 여기서 오고, 테마 색·전용 화면은 아래 theme.css 가 얹는다.
       // theme.css 는 레이어 밖이라 언제나 이긴다. ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.7.22/daisyui.css">
 <?php // 본문 글꼴은 웹폰트를 쓰지 않는다.

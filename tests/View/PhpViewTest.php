@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\View;
 
+use GnuCms\Support\Clock;
 use GnuCms\View\PhpView;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -112,6 +113,23 @@ final class PhpViewTest extends TestCase
             '/r/posts.show/7?q=a+b|/themes/t/theme.css|<div class="rich"><p>x</p></div>|{"a":"<"}|2026.08.30 01:02|/base',
             $this->view()->fetch('a')
         );
+    }
+
+    public function testCompactDateUsesTimeTodayAndMonthDayOtherwise(): void
+    {
+        Clock::freeze('2026-08-31 12:00:00');
+        try {
+            $this->write('a', "<?= \$this->compactDate('2026-08-31 09:07:00') ?>|<?= \$this->compactDate('2026-08-30 23:59:00') ?>");
+            self::assertSame('09:07|08-30', $this->view()->fetch('a'));
+        } finally {
+            Clock::unfreeze();
+        }
+    }
+
+    public function testTruncateUsesCharacterCountForKoreanAndEnglish(): void
+    {
+        $this->write('a', "<?= \$this->e(\$this->truncate('abcdefghij', 8)) ?>|<?= \$this->e(\$this->truncate('가나다라마바사아자차', 8)) ?>");
+        self::assertSame('abcdefgh…|가나다라마바사아…', $this->view()->fetch('a'));
     }
 
     public function testUrlAndAssetAreEscaped(): void

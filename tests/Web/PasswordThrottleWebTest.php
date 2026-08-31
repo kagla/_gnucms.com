@@ -43,7 +43,7 @@ final class PasswordThrottleWebTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'victim@example.com', 'password' => 'correct-pass-123',
         ]);
         self::assertSame(422, $locked->getStatusCode());
-        self::assertStringContainsString('너무 많이 틀렸습니다', $this->body($locked));
+        self::assertStringContainsString('5회 잘못 입력했습니다', $this->body($locked));
     }
 
     /** 대소문자만 다른 이메일은 authenticate() 가 소문자로 정규화한 뒤 스로틀 키를 만들므로 같은 잠금을 공유한다. */
@@ -66,7 +66,7 @@ final class PasswordThrottleWebTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'victim@example.com', 'password' => 'correct-pass-123',
         ]);
         self::assertSame(422, $locked->getStatusCode());
-        self::assertStringContainsString('너무 많이', $this->body($locked));
+        self::assertStringContainsString('5회 잘못 입력했습니다', $this->body($locked));
     }
 
     #[DataProvider('connectionProvider')]
@@ -92,6 +92,7 @@ final class PasswordThrottleWebTest extends WebTestCase
     public function testGuestPostPasswordLocksAfterFiveWrongTries(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest']);
         $this->get($app, '/boards/free/new');
         $created = $this->post($app, '/boards/free/new', [
@@ -111,7 +112,7 @@ final class PasswordThrottleWebTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'title' => '고침', 'content' => '본문', 'password' => 'guest-pass-123',
         ]);
         self::assertSame(422, $locked->getStatusCode());
-        self::assertStringContainsString('너무 많이 틀렸습니다', $this->body($locked));
+        self::assertStringContainsString('5회 잘못 입력했습니다', $this->body($locked));
     }
 
     #[DataProvider('connectionProvider')]
@@ -141,7 +142,7 @@ final class PasswordThrottleWebTest extends WebTestCase
             self::fail('잠긴 뒤에는 맞는 비밀번호도 막혀야 한다');
         } catch (DomainError $e) {
             self::assertSame(422, $e->status());
-            self::assertStringContainsString('너무 많이 틀렸습니다', $e->details()['password']);
+            self::assertStringContainsString('5회 잘못 입력했습니다', $e->details()['password']);
         }
     }
 }

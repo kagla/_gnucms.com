@@ -86,6 +86,20 @@ final class AdminCmsController
         return $this->redirect($request, $response, 'admin.mail', ['saved' => '1']);
     }
 
+    public function mailPassword(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->assertCsrf($this->input($request));
+        $password = $this->app->mailSettingsService()->password($this->app->guestAcl());
+        $response->getBody()->write((string) json_encode(
+            ['password' => $password],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store');
+    }
+
     public function mailTest(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->assertCsrf($this->input($request));

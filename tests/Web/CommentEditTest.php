@@ -17,14 +17,14 @@ final class CommentEditTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         [$postId, $commentId] = $this->seedGuestComment($app);
 
+        self::assertSame(404, $this->get($app, '/comments/' . $commentId . '/edit')->getStatusCode());
+        self::assertSame(200, $this->verifyOwnership($app, $commentId, 'comment-pass-1')->getStatusCode());
         $form = $this->get($app, '/comments/' . $commentId . '/edit');
         self::assertSame(200, $form->getStatusCode());
-        self::assertStringContainsString('name="password"', $this->body($form));
         self::assertStringContainsString('원래 댓글', $this->body($form));
 
         $response = $this->post($app, '/comments/' . $commentId . '/edit', [
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
-            'password'   => 'comment-pass-1',
             'content'    => '고친 댓글',
         ]);
 
@@ -42,15 +42,11 @@ final class CommentEditTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         [$postId, $commentId] = $this->seedGuestComment($app);
 
-        $this->get($app, '/comments/' . $commentId . '/edit');
-        $response = $this->post($app, '/comments/' . $commentId . '/edit', [
-            'csrf_token' => $_SESSION['csrf_token'] ?? '',
-            'password'   => '틀린비밀번호',
-            'content'    => '고친 댓글',
-        ]);
+        $response = $this->verifyOwnership($app, $commentId, '틀린비밀번호');
 
         self::assertSame(422, $response->getStatusCode());
-        self::assertStringContainsString('name="password"', $this->body($response));
+        self::assertStringContainsString('비밀번호가 올바르지 않습니다', $this->body($response));
+        self::assertSame(404, $this->get($app, '/comments/' . $commentId . '/edit')->getStatusCode());
         self::assertStringContainsString('원래 댓글', $this->body($this->get($app, '/posts/' . $postId)));
     }
 
@@ -60,10 +56,9 @@ final class CommentEditTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         [$postId, $commentId] = $this->seedGuestComment($app);
 
-        $this->get($app, '/comments/' . $commentId . '/edit');
+        self::assertSame(200, $this->verifyOwnership($app, $commentId, 'comment-pass-1')->getStatusCode());
         $response = $this->post($app, '/comments/' . $commentId . '/delete', [
             'csrf_token' => $_SESSION['csrf_token'] ?? '',
-            'password'   => 'comment-pass-1',
         ]);
 
         self::assertSame(303, $response->getStatusCode());
@@ -81,11 +76,7 @@ final class CommentEditTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         [$postId, $commentId] = $this->seedGuestComment($app);
 
-        $this->get($app, '/comments/' . $commentId . '/edit');
-        $response = $this->post($app, '/comments/' . $commentId . '/delete', [
-            'csrf_token' => $_SESSION['csrf_token'] ?? '',
-            'password'   => '틀림',
-        ]);
+        $response = $this->verifyOwnership($app, $commentId, '틀림');
 
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('원래 댓글', $this->body($this->get($app, '/posts/' . $postId)));
@@ -134,7 +125,7 @@ final class CommentEditTest extends WebTestCase
         [$postId, $commentId] = $this->seedGuestComment($app);
 
         self::assertStringContainsString(
-            '/comments/' . $commentId . '/edit',
+            'data-owner-action="/comments/' . $commentId . '/ownership"',
             $this->body($this->get($app, '/posts/' . $postId))
         );
     }
@@ -149,6 +140,7 @@ final class CommentEditTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         [$postId, $commentId] = $this->seedGuestComment($app);
+        self::assertSame(200, $this->verifyOwnership($app, $commentId, 'comment-pass-1')->getStatusCode());
 
         $body = $this->body($this->get($app, '/posts/' . $postId));
 
@@ -157,8 +149,52 @@ final class CommentEditTest extends WebTestCase
         // 고칠 때 삭제도 같이 할 수 있어야 한다.
         self::assertStringContainsString('data-delete-action="/comments/' . $commentId . '/delete"', $body);
         self::assertStringContainsString('data-delete', $body);
+        self::assertStringContainsString('nameInput.disabled=true', $body,
+            '수정 중 숨긴 필수 이름 칸이 브라우저 전송을 막지 않아야 한다');
         // 스크립트가 없어도 따로 만든 수정 화면으로 갈 수 있어야 한다.
         self::assertStringContainsString('href="/comments/' . $commentId . '/edit"', $body);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testLegacyGuestSecretCommentEditKeepsItsSecretStateWithoutOfferingToggle(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'secret', 'name' => '비밀댓글 게시판',
+            'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
+        ]);
+        $post = $app->postService()->create($this->adminAcl(), 'secret', ['title' => '글', 'content' => '본문']);
+        $postId = (int) $post['id'];
+        $this->get($app, '/posts/' . $postId);
+        $this->post($app, '/posts/' . $postId . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'author_name' => '손님',
+            'password' => 'comment-pass-1',
+            'content' => '비밀 댓글',
+        ]);
+        $commentId = (int) $app->db()->selectOne(
+            'SELECT MAX(id) AS id FROM ' . $app->db()->q('comments')
+        )['id'];
+        $app->db()->execute(
+            'UPDATE ' . $app->db()->q('comments') . ' SET is_secret = 1 WHERE id = ?',
+            [$commentId]
+        );
+        self::assertSame(200, $this->verifyOwnership($app, $commentId, 'comment-pass-1')->getStatusCode());
+
+        $body = $this->body($this->get($app, '/posts/' . $postId, ['edit_comment' => $commentId]));
+
+        self::assertStringContainsString('data-edit-secret="1"', $body);
+        self::assertStringNotContainsString('type="checkbox" name="is_secret"', $body);
+
+        $saved = $this->post($app, '/comments/' . $commentId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'content' => '고친 기존 비밀댓글',
+        ]);
+        self::assertSame(303, $saved->getStatusCode());
+        self::assertSame(1, (int) $app->db()->selectOne(
+            'SELECT is_secret FROM ' . $app->db()->q('comments') . ' WHERE id = ?',
+            [$commentId]
+        )['is_secret']);
     }
 
     /** @return array{0:int,1:int} 글 번호와 댓글 번호 */
@@ -181,5 +217,13 @@ final class CommentEditTest extends WebTestCase
         $commentId = (int) $app->db()->selectOne('SELECT MAX(id) AS id FROM ' . $app->db()->q('comments'))['id'];
 
         return [$postId, $commentId];
+    }
+
+    private function verifyOwnership(App $app, int $commentId, string $password): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->post($app, '/comments/' . $commentId . '/ownership', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'password' => $password,
+        ]);
     }
 }

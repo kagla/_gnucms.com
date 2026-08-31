@@ -119,9 +119,12 @@ final class AccountService
         if ($user === null || $user['status'] !== 'active' || $user['password_hash'] === null
             || !password_verify($password, (string) $user['password_hash'])) {
             if ($useThrottle) {
-                $this->throttle->recordFailure('login:' . $email);
+                $message = $this->throttle->recordFailureMessage(
+                    'login:' . $email,
+                    '이메일 또는 비밀번호를 확인해 주세요.'
+                );
             }
-            throw DomainError::validation(['email' => '이메일 또는 비밀번호를 확인해 주세요.']);
+            throw DomainError::validation(['email' => $message ?? '이메일 또는 비밀번호를 확인해 주세요.']);
         }
         if ($useThrottle) {
             // 비밀번호까지 맞은 사람이다(미인증 분기 포함). 이전 실패는 잊는다.
@@ -201,14 +204,28 @@ final class AccountService
         }
         $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
         if ($password !== '') {
+            $throttleKey = 'current-password:' . $userId;
             $current = isset($input['current_password']) && is_scalar($input['current_password'])
                 ? (string) $input['current_password'] : '';
             $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
                 ? (string) $input['password_confirmation'] : '';
+            if ($this->throttle !== null && $current !== '') {
+                $this->throttle->assertNotLocked($throttleKey, 'current_password');
+            }
             if ($user['password_hash'] === null) {
                 $v->fail('current_password', '소셜 로그인으로 가입한 계정은 비밀번호를 쓰지 않습니다.');
             } elseif (!password_verify($current, (string) $user['password_hash'])) {
-                $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
+                if ($this->throttle !== null && $current !== '') {
+                    $v->fail('current_password', $this->throttle->recordFailureMessage(
+                        $throttleKey,
+                        '현재 비밀번호가 올바르지 않습니다.'
+                    ));
+                } else {
+                    $v->fail('current_password', $current === ''
+                        ? '현재 비밀번호를 입력해 주세요.' : '현재 비밀번호가 올바르지 않습니다.');
+                }
+            } elseif ($this->throttle !== null) {
+                $this->throttle->clear($throttleKey);
             }
             if (mb_strlen($password) < Validator::passwordMin()) {
                 $v->fail('password', Validator::passwordMin() . '자 이상이어야 합니다.');
@@ -233,9 +250,23 @@ final class AccountService
         $confirmation = isset($input['password_confirmation']) && is_scalar($input['password_confirmation'])
             ? (string) $input['password_confirmation'] : '';
         $user = $this->users->findById($userId);
+        $throttleKey = 'current-password:' . $userId;
+        if ($this->throttle !== null && $current !== '') {
+            $this->throttle->assertNotLocked($throttleKey, 'current_password');
+        }
         if ($user === null || $user['password_hash'] === null
             || !password_verify($current, (string) $user['password_hash'])) {
-            $v->fail('current_password', '현재 비밀번호가 올바르지 않습니다.');
+            if ($this->throttle !== null && $current !== '') {
+                $v->fail('current_password', $this->throttle->recordFailureMessage(
+                    $throttleKey,
+                    '현재 비밀번호가 올바르지 않습니다.'
+                ));
+            } else {
+                $v->fail('current_password', $current === ''
+                    ? '현재 비밀번호를 입력해 주세요.' : '현재 비밀번호가 올바르지 않습니다.');
+            }
+        } elseif ($this->throttle !== null) {
+            $this->throttle->clear($throttleKey);
         }
         if ($password !== $confirmation) {
             $v->fail('password_confirmation', '비밀번호가 일치하지 않습니다.');

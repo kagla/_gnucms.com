@@ -72,6 +72,7 @@ final class Routes
         $slim->post('/admin/uploads/gc', [$cms, 'uploadsGc'])->setName('admin.uploads.gc');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
+        $slim->post('/admin/mail/password', [$cms, 'mailPassword'])->setName('admin.mail.password');
         $slim->post('/admin/mail/test', [$cms, 'mailTest'])->setName('admin.mail.test');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
@@ -189,6 +190,7 @@ final class Routes
         $slim->post('/b/{key}/write', [$posts, 'create']);
         $files = new FileController($app);
         $slim->get('/posts/{id:[0-9]+}', [$posts, 'show'])->setName('posts.show');
+        $slim->post('/posts/{id:[0-9]+}/password', [$posts, 'unlockSecret'])->setName('posts.password');
         $slim->get('/posts/{id:[0-9]+}/edit', [$posts, 'editForm'])->setName('posts.edit');
         $slim->post('/posts/{id:[0-9]+}/edit', [$posts, 'update']);
         $slim->post('/posts/{id:[0-9]+}/delete', [$posts, 'destroy'])->setName('posts.delete');
@@ -202,6 +204,10 @@ final class Routes
 
         $comments = new CommentController($app);
         $slim->post('/posts/{id:[0-9]+}/comments', [$comments, 'create'])->setName('comments.create');
+        $slim->get('/comments/{id:[0-9]+}/password', [$comments, 'passwordForm'])->setName('comments.password');
+        $slim->post('/comments/{id:[0-9]+}/password', [$comments, 'unlockSecret']);
+        $slim->post('/comments/{id:[0-9]+}/ownership', [$comments, 'verifyOwnership'])
+            ->setName('comments.ownership');
 
         $notifications = new NotificationController($app);
         $slim->get('/notifications', [$notifications, 'index'])->setName('notifications.index');

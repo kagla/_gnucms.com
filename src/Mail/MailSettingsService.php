@@ -81,6 +81,14 @@ final class MailSettingsService
         $this->settings->save($saved);
     }
 
+    public function password(Acl $acl): string
+    {
+        $acl->assertGlobalAdmin();
+        $stored = (string) ($this->settings->all()['password'] ?? '');
+
+        return $stored === '' ? '' : $this->cipher->decrypt($stored);
+    }
+
     public function runtime(): ?array
     {
         $stored = $this->settings->all();

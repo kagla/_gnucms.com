@@ -80,6 +80,8 @@ final class AttachmentFormTest extends WebTestCase
         $body = $this->body($this->get($app, '/posts/' . $post['id'] . '/edit'));
 
         self::assertStringContainsString('기존.txt', $body);
+        self::assertStringNotContainsString('data-attach-up', $body);
+        self::assertStringNotContainsString('data-attach-down', $body);
         // 프리로드된 hidden input 에 서명이 실려 있어야 다시 저장할 수 있다.
         self::assertMatchesRegularExpression('/name="attachments\[\d+\]\[sig\]" value="[0-9a-f]/', $body);
     }

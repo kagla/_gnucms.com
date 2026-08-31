@@ -14,6 +14,24 @@
         </div>
         <div class="navbar-end">
           <a class="btn btn-ghost btn-sm" href="<?= $this->url('boards.index') ?>"><?= $this->icon('external', 15) ?> 사이트 보기</a>
+          <div class="dropdown dropdown-end admin-user-dropdown">
+            <button class="admin-user" type="button" tabindex="0" aria-haspopup="menu" aria-label="<?= $this->e($current_user['display_name']) ?> 계정 메뉴">
+              <span class="avatar avatar-placeholder avatar-sm">
+                <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></span>
+              </span>
+              <span class="admin-user-name"><?= $this->e($current_user['display_name']) ?></span>
+              <span class="admin-user-chevron" aria-hidden="true"><?= $this->icon('chevron-down', 13) ?></span>
+            </button>
+            <ul class="dropdown-content menu rounded-box shadow-lg admin-user-menu" tabindex="0" role="menu">
+              <li class="menu-title"><?= $this->e($current_user['display_name']) ?></li>
+              <li>
+                <form method="post" action="<?= $this->url('auth.logout') ?>">
+                  <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+                  <button type="submit"><?= $this->icon('logout', 17) ?> 로그아웃</button>
+                </form>
+              </li>
+            </ul>
+          </div>
           <button class="btn btn-ghost btn-circle theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
             <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
             <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>

@@ -216,6 +216,13 @@ final class PostController
             );
         }
 
+        $grant = $this->app->postService()->guestOwnershipGrant((int) $post['id']);
+        if ($grant !== null) {
+            $_SESSION['secret_posts'] = isset($_SESSION['secret_posts']) && is_array($_SESSION['secret_posts'])
+                ? $_SESSION['secret_posts'] : [];
+            $_SESSION['secret_posts'][(string) $post['id']] = $grant;
+        }
+
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('posts.show', ['id' => (string) $post['id']]);
         return $response->withHeader('Location', $url)->withStatus(303);
     }
@@ -224,8 +231,11 @@ final class PostController
     {
         $acl = $this->app->guestAcl();
         $id = (int) $args['id'];
+        $challenge = $this->app->postService()->secretChallenge($acl, $id);
+        if ($challenge !== null) {
+            return $this->renderSecretPassword($request, $response, $challenge, []);
+        }
 
-        // 1단계에는 비밀글 비밀번호를 받을 폼이 없다. 비밀글은 403 으로 막힌다.
         // PostService::detail() 은 board_key 를 담지 않으므로, 목록으로 돌아갈 링크를
         // 만들려면 loadForRead() 로 얻은 게시판 키로 게시판을 따로 불러야 한다.
         $loaded = $this->app->postService()->loadForRead($acl, $id, null);
@@ -238,10 +248,59 @@ final class PostController
             'post'     => $post,
             'board'    => $board,
             'comments' => $comments,
-            'can_comment' => $acl->canComment($loaded['board']),
+            'can_comment' => $acl->canCommentOnPost($loaded['board'], $loaded['post']),
             'comment_errors' => [],
             'comment_values' => ['image_key' => bin2hex(random_bytes(16))],
         ]);
+    }
+
+    public function unlockSecret(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $this->assertCsrf($input);
+        $acl = $this->app->guestAcl();
+        $challenge = $this->app->postService()->secretChallenge($acl, $id);
+        if ($challenge === null) {
+            return $this->redirectToPost($request, $response, $id);
+        }
+        $password = isset($input['password']) && is_scalar($input['password']) ? (string) $input['password'] : '';
+        if ($password === '') {
+            return $this->renderSecretPassword($request, $response->withStatus(422), $challenge,
+                ['password' => '비밀번호를 입력해 주세요.']);
+        }
+        try {
+            $loaded = $this->app->postService()->loadForRead($acl, $id, $password);
+        } catch (DomainError $e) {
+            if (!in_array($e->status(), [403, 422], true)) {
+                throw $e;
+            }
+            $message = $e->status() === 422 && isset($e->details()['password'])
+                ? (string) $e->details()['password'] : '비밀번호가 올바르지 않습니다.';
+            return $this->renderSecretPassword($request, $response->withStatus(422), $challenge,
+                ['password' => $message]);
+        }
+        $_SESSION['secret_posts'] = isset($_SESSION['secret_posts']) && is_array($_SESSION['secret_posts'])
+            ? $_SESSION['secret_posts'] : [];
+        $_SESSION['secret_posts'][(string) $id] = \GnuCms\Auth\Acl::secretGrantFor($loaded['post']);
+
+        return $this->redirectToPost($request, $response, $id);
+    }
+
+    private function renderSecretPassword(ServerRequestInterface $request, ResponseInterface $response,
+        array $challenge, array $errors): ResponseInterface
+    {
+        return View::fromRequest($request)->render($response, 'posts/password', [
+            'post_id' => $challenge['post_id'], 'board' => $challenge['board'], 'errors' => $errors,
+        ]);
+    }
+
+    private function redirectToPost(ServerRequestInterface $request, ResponseInterface $response, int $id): ResponseInterface
+    {
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('posts.show', ['id' => (string) $id]);
+
+        return $response->withHeader('Location', $url)->withStatus(303);
     }
 
     private function assertCsrf(array $input): void

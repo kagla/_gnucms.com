@@ -51,9 +51,8 @@ final class PasswordThrottle
             return;
         }
 
-        $minutes = max(1, (int) ceil((self::WINDOW_SECONDS - $elapsed) / 60));
         throw DomainError::validation([
-            $field => '너무 많이 틀렸습니다. ' . $minutes . '분 뒤 다시 시도해 주세요.',
+            $field => $this->lockedMessage($row),
         ]);
     }
 
@@ -91,6 +90,25 @@ final class PasswordThrottle
         if (random_int(1, 20) === 1) {
             $this->sweepExpired();
         }
+    }
+
+    /**
+     * 실패를 기록하고 모든 비밀번호 화면에서 공통으로 쓸 안내 문구를 만든다.
+     * 다섯 번째 실패 응답부터 바로 잠금 사실을 알려 다음 요청을 해 보게 하지 않는다.
+     */
+    public function recordFailureMessage(string $key, string $invalidMessage): string
+    {
+        $this->recordFailure($key);
+        $row = $this->find($key);
+        $failures = (int) ($row['fail_count'] ?? 1);
+
+        if ($failures >= self::MAX_FAILURES) {
+            return $this->lockedMessage($row);
+        }
+
+        $remaining = self::MAX_FAILURES - $failures;
+
+        return $invalidMessage . ' (10분 내 5회 제한 · 남은 횟수 ' . $remaining . '회)';
     }
 
     /**
@@ -142,6 +160,15 @@ final class PasswordThrottle
             . ' WHERE attempt_key = ? AND client_ip = ?',
             [$this->keyOf($key), $this->clientIp]
         );
+    }
+
+    /** @param array<string,mixed>|null $row */
+    private function lockedMessage(?array $row): string
+    {
+        $elapsed = $row === null ? 0 : Clock::timestamp() - (int) $row['first_failed_at'];
+        $minutes = max(1, (int) ceil((self::WINDOW_SECONDS - $elapsed) / 60));
+
+        return '비밀번호를 5회 잘못 입력했습니다. ' . $minutes . '분 뒤 다시 시도해 주세요.';
     }
 
     private function keyOf(string $key): string

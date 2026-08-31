@@ -140,6 +140,61 @@ final class PostShowTest extends WebTestCase
         self::assertSame(403, $response->getStatusCode());
     }
 
+    /** @dataProvider connectionProvider */
+    public function testGuestSecretPostCanBeUnlockedWithItsPassword(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유게시판', 'perm_write' => 'guest', 'use_secret' => true,
+        ]);
+        $guest = new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::guest());
+        $post = $app->postService()->create($guest, 'free', [
+            'title' => '손님 비밀글', 'content' => '작성자만 볼 본문', 'is_secret' => true,
+            'author_name' => '손님', 'password' => 'guest-pass-123',
+        ]);
+
+        $prompt = $this->get($app, '/posts/' . $post['id']);
+        self::assertSame(200, $prompt->getStatusCode());
+        self::assertStringContainsString('비밀글 보기', $this->body($prompt));
+        self::assertStringNotContainsString('작성자만 볼 본문', $this->body($prompt));
+
+        $wrong = $this->post($app, '/posts/' . $post['id'] . '/password', [
+            'csrf_token' => $_SESSION['csrf_token'], 'password' => 'wrong-password',
+        ]);
+        self::assertSame(422, $wrong->getStatusCode());
+        self::assertStringContainsString('비밀번호가 올바르지 않습니다', $this->body($wrong));
+
+        $unlocked = $this->post($app, '/posts/' . $post['id'] . '/password', [
+            'csrf_token' => $_SESSION['csrf_token'], 'password' => 'guest-pass-123',
+        ]);
+        self::assertSame(303, $unlocked->getStatusCode());
+        self::assertSame('/posts/' . $post['id'], $unlocked->getHeaderLine('Location'));
+
+        $shown = $this->get($app, '/posts/' . $post['id']);
+        self::assertSame(200, $shown->getStatusCode());
+        self::assertStringContainsString('작성자만 볼 본문', $this->body($shown));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testOnlySecretPostOwnerOrAdminCanWriteComments(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'secret-owner', 'name' => '비밀글',
+            'perm_write' => 'member', 'perm_comment' => 'guest', 'use_secret' => true,
+        ]);
+        $owner = new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::user('42', '원글쓴이', false));
+        $other = new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::user('43', '다른회원', false));
+        $post = $app->postService()->create($owner, 'secret-owner', [
+            'title' => '회원 비밀글', 'content' => '본문', 'is_secret' => '1',
+        ]);
+        $loaded = $app->postService()->loadForRead($owner, (int) $post['id'], null);
+
+        self::assertTrue($owner->canCommentOnPost($loaded['board'], $loaded['post']));
+        self::assertTrue($this->adminAcl()->canCommentOnPost($loaded['board'], $loaded['post']));
+        self::assertFalse($other->canCommentOnPost($loaded['board'], $loaded['post']));
+    }
+
     /**
      * perm_read = admin 인 게시판은 게스트에게 401 이어야 한다 — 로그인하면
      * 될 수도 있다는 뜻. 이 판정은 BoardService::getEntity() -> Acl::assertCanRead()

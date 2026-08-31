@@ -4,7 +4,7 @@
     <li class="list-row">
       <?php if ($post['is_notice']): ?><span class="badge badge-primary badge-soft badge-sm">공지</span>
       <?php elseif ($post['category']): ?><span class="badge badge-ghost badge-sm"><?= $this->e($post['category']) ?></span><?php endif ?>
-      <a class="feed-line-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?></a>
+      <a class="feed-line-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>" title="<?= $this->e($post['title']) ?>"><?= $this->e($post['title']) ?></a>
       <?php $this->insert('posts/_count', ['post' => $post]) ?>
       <?php if ($post['is_secret']): ?><span class="feed-line-lock" title="비밀글" aria-label="비밀글"><?= $this->icon('lock', 12) ?></span><?php endif ?>
       <time class="feed-line-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'm.d') ?></time>

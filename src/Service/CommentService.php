@@ -115,8 +115,16 @@ final class CommentService
     {
         $loaded = $this->postService->loadForRead($acl, $postId, $password);
 
-        $rows = $this->comments->findByPost($postId);
+        // 비회원 소유권 지문을 확인하려면 해시가 필요하다. TreeBuilder 가 화면용 필드만
+        // 골라 내므로 guest_password 자체는 템플릿으로 전달되지 않는다.
+        $rows = $this->comments->findByPostWithSecret($postId);
         $rows = $this->maskSecrets($rows, $acl, $loaded['post'], $loaded['board']);
+        foreach ($rows as $index => $row) {
+            $rows[$index]['can_edit'] = $acl->canEditComment($loaded['board'], $row);
+            $rows[$index]['needs_edit_password'] = $row['author_id'] === null
+                && ($row['guest_password'] ?? null) !== null
+                && !$rows[$index]['can_edit'];
+        }
 
         return TreeBuilder::build($rows);
     }
@@ -127,7 +135,7 @@ final class CommentService
         $post = $loaded['post'];
         $board = $loaded['board'];
 
-        $acl->assertCanComment($board);
+        $acl->assertCanCommentOnPost($board, $post);
 
         if ($post['deleted_at'] !== null) {
             throw DomainError::forbidden('삭제된 글에는 댓글을 쓸 수 없습니다.');
@@ -166,7 +174,11 @@ final class CommentService
             $data['guest_password'] = null;
         }
 
-        $data['is_secret'] = $v->bool('is_secret', false) ? 1 : 0;
+        $secret = $v->bool('is_secret', false);
+        if ($identity->isGuest() && $secret) {
+            $v->fail('is_secret', '비회원은 댓글과 답글을 비밀로 작성할 수 없습니다.');
+        }
+        $data['is_secret'] = $secret ? 1 : 0;
 
         $v->check();
 
@@ -180,6 +192,84 @@ final class CommentService
         }
 
         return $this->present($this->comments->find($id));
+    }
+
+    public function guestOwnershipGrant(int $id): ?string
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['author_id'] !== null || ($comment['guest_password'] ?? null) === null) {
+            return null;
+        }
+
+        return Acl::commentSecretGrantFor($comment);
+    }
+
+    /** @return array{comment_id:int,post_id:int,grant:string} */
+    public function verifyGuestOwnership(Acl $acl, int $id, string $password): array
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['deleted_at'] !== null) {
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
+        }
+        if ($comment['author_id'] !== null || ($comment['guest_password'] ?? null) === null) {
+            throw DomainError::forbidden('회원 댓글은 작성한 계정으로 로그인해야 수정할 수 있습니다.');
+        }
+        $board = $this->boardOf($comment);
+        $acl->assertCanModify($board, $comment, $password);
+
+        return [
+            'comment_id' => (int) $comment['id'],
+            'post_id' => (int) $comment['post_id'],
+            'grant' => Acl::commentSecretGrantFor($comment),
+        ];
+    }
+
+    /** @return array{comment_id:int,post_id:int,board_key:string}|null */
+    public function secretChallenge(Acl $acl, int $id): ?array
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['deleted_at'] !== null || !(bool) $comment['is_secret']) {
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
+        }
+        $loaded = $this->postService->loadForRead($acl, (int) $comment['post_id'], null);
+        $parent = $comment['parent_id'] === null ? null : $this->comments->findWithSecret((int) $comment['parent_id']);
+        if ($acl->canViewSecretComment($loaded['board'], $loaded['post'], $comment, $parent)) {
+            return null;
+        }
+        if (($comment['guest_password'] ?? null) === null && ($loaded['post']['guest_password'] ?? null) === null
+            && ($parent['guest_password'] ?? null) === null) {
+            throw DomainError::forbidden('댓글 작성자와 원글 작성자만 볼 수 있는 댓글입니다.');
+        }
+
+        return [
+            'comment_id' => (int) $comment['id'],
+            'post_id' => (int) $comment['post_id'],
+            'board_key' => (string) $loaded['board']['board_key'],
+        ];
+    }
+
+    /** @return array{kind:string,grant:string,grant_comment_id:int,comment_id:int,post_id:int} */
+    public function unlockSecret(Acl $acl, int $id, string $password): array
+    {
+        $comment = $this->comments->findWithSecret($id);
+        if ($comment === null || $comment['deleted_at'] !== null || !(bool) $comment['is_secret']) {
+            throw DomainError::notFound('댓글을 찾을 수 없습니다.');
+        }
+        $loaded = $this->postService->loadForRead($acl, (int) $comment['post_id'], null);
+        $parent = $comment['parent_id'] === null ? null : $this->comments->findWithSecret((int) $comment['parent_id']);
+        $kind = $acl->verifySecretComment($loaded['board'], $loaded['post'], $comment, $password, $parent);
+        $grantResource = $kind === 'parent' && $parent !== null ? $parent : $comment;
+        $grant = $kind === 'post'
+            ? Acl::secretGrantFor($loaded['post'])
+            : Acl::commentSecretGrantFor($grantResource);
+
+        return [
+            'kind' => $kind,
+            'grant' => $grant,
+            'grant_comment_id' => (int) $grantResource['id'],
+            'comment_id' => (int) $comment['id'],
+            'post_id' => (int) $comment['post_id'],
+        ];
     }
 
     public function update(Acl $acl, int $id, array $input): array
@@ -196,7 +286,11 @@ final class CommentService
 
         $data = ['content' => $this->cleanContent($v->requiredString('content'))];
         if (array_key_exists('is_secret', $input)) {
-            $data['is_secret'] = $v->bool('is_secret', false) ? 1 : 0;
+            $secret = $v->bool('is_secret', false);
+            if ($comment['author_id'] === null && $secret) {
+                $v->fail('is_secret', '비회원은 댓글과 답글을 비밀로 작성할 수 없습니다.');
+            }
+            $data['is_secret'] = $secret ? 1 : 0;
         }
         $imageKey = $this->editorImageKey($v, $input);
         if ($imageKey !== null) {
@@ -249,14 +343,13 @@ final class CommentService
      */
     public function getForEdit(Acl $acl, int $id): array
     {
-        $comment = $this->comments->find($id);
+        $comment = $this->comments->findWithSecret($id);
         if ($comment === null || $comment['deleted_at'] !== null) {
             throw DomainError::notFound('댓글을 찾을 수 없습니다.');
         }
 
         $loaded = $this->postService->loadForRead($acl, (int) $comment['post_id'], null);
-        $masked = $this->maskSecrets([$comment], $acl, $loaded['post'], $loaded['board'])[0];
-        if ($masked['content'] === self::SECRET_PLACEHOLDER && (int) $comment['is_secret'] === 1) {
+        if (!$acl->canEditComment($loaded['board'], $comment)) {
             throw DomainError::notFound('댓글을 찾을 수 없습니다.');
         }
 
@@ -266,19 +359,23 @@ final class CommentService
 
     private function maskSecrets(array $rows, Acl $acl, array $post, array $board): array
     {
-        $sub = $acl->identity()->sub();
-        $isPostAuthor = $sub !== null && $post['author_id'] !== null && (string) $post['author_id'] === $sub;
-        $isAdmin = $acl->isAdminFor($board);
-
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
         foreach ($rows as $index => $row) {
             if ((int) $row['is_secret'] !== 1) {
                 continue;
             }
-            $isOwn = $sub !== null && $row['author_id'] !== null && (string) $row['author_id'] === $sub;
-            if ($isOwn || $isPostAuthor || $isAdmin) {
+            $parent = $row['parent_id'] === null ? null : ($byId[(int) $row['parent_id']] ?? null);
+            if ($acl->canViewSecretComment($board, $post, $row, $parent)) {
                 continue;
             }
             $rows[$index]['content'] = self::SECRET_PLACEHOLDER;
+            $rows[$index]['secret_masked'] = true;
+            $rows[$index]['secret_unlockable'] = ($row['guest_password'] ?? null) !== null
+                || ($post['guest_password'] ?? null) !== null
+                || ($parent['guest_password'] ?? null) !== null;
         }
 
         return $rows;

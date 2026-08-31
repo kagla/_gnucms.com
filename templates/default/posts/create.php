@@ -16,7 +16,7 @@
     <h1 class="card-title"><?= $this->icon('pencil', 19) ?> 글쓰기</h1>
     <p class="card-sub"><?= $this->e($board['name']) ?>에 남길 이야기를 적어 주세요.</p>
 
-    <form method="post" action="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>">
+    <form method="post" action="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>" data-post-create-form novalidate>
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
       <input type="hidden" name="image_key" value="<?= $this->e($values['image_key'] ?? '') ?>">
       <input type="hidden" name="uploaded_images" value="<?= $this->e($values['uploaded_images'] ?? '') ?>" data-uploaded-images>
@@ -31,7 +31,7 @@
           </fieldset>
           <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
             <legend class="fieldset-legend">비밀번호 <span class="legend-hint"><?= $this->e((string) $password_min) ?>자 이상 · 수정·삭제에 씁니다</span></legend>
-            <input class="input input-bordered input-block" type="password" name="password" autocomplete="new-password" required>
+            <input class="input input-bordered input-block" type="password" name="password" minlength="<?= $this->e((string) $password_min) ?>" autocomplete="new-password" required>
             <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
           </fieldset>
         </div>
@@ -75,8 +75,7 @@
 
       <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values, 'errors' => $errors]) ?><?php endif ?>
 
-      <div class="card-actions form-actions">
-        <a class="btn btn-ghost" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>">취소</a>
+      <div class="card-actions form-actions post-create-actions">
         <button class="btn btn-primary" type="submit">등록하기</button>
       </div>
     </form>
@@ -90,4 +89,54 @@
   'discard_url' => $this->url('board.editor.images.discard', ['key' => $board['board_key']]) . '?csrf_token=' . rawurlencode($csrf_token) . '&image_key=' . rawurlencode($values['image_key'] ?? ''),
   'editor_mini' => false,
 ], true) ?>
+<script>
+(function(){
+  var form=document.querySelector('[data-post-create-form]');if(!form){return}
+  function clearClientErrors(){
+    var hints=form.querySelectorAll('.client-validator-hint');
+    for(var i=0;i<hints.length;i++){
+      var box=hints[i].closest('.fieldset');hints[i].remove();
+      if(box&&!box.querySelector('.validator-hint')){box.classList.remove('is-invalid')}
+    }
+  }
+  function show(field,message,editor){
+    var box=field?field.closest('.fieldset'):null;if(!box){return}
+    box.classList.add('is-invalid');
+    var hint=box.querySelector('.validator-hint');
+    if(!hint){hint=document.createElement('p');box.appendChild(hint)}
+    hint.className='validator-hint client-validator-hint';hint.setAttribute('role','alert');hint.textContent=message;
+    box.scrollIntoView({behavior:'smooth',block:'center'});
+    window.setTimeout(function(){
+      if(editor){editor.focus()}else if(field){try{field.focus({preventScroll:true})}catch(e){field.focus()}}
+    },350);
+  }
+  form.addEventListener('submit',function(event){
+    clearClientErrors();
+    var textarea=document.getElementById('post-content'),editor=window.CKEDITOR&&window.CKEDITOR.instances['post-content'];
+    if(editor){editor.updateElement()}
+    var rules=[['author_name','이름을 입력해 주세요.'],['password','비밀번호를 입력해 주세요.'],
+      ['category','분류를 선택해 주세요.'],['title','제목을 입력해 주세요.']];
+    for(var i=0;i<rules.length;i++){
+      var field=form.elements[rules[i][0]];if(!field){continue}
+      var first=field.length!==undefined&&!field.tagName?field[0]:field;
+      var missing=first&&first.type==='radio'?!form.querySelector('[name="'+rules[i][0]+'"]:checked'):String(first.value||'').trim()==='';
+      if(missing){event.preventDefault();event.stopImmediatePropagation();show(first,rules[i][1],null);return}
+      var minLength=parseInt(first.getAttribute&&first.getAttribute('minlength'),10)||0;
+      if(minLength>0&&Array.from(String(first.value||'')).length<minLength){
+        event.preventDefault();event.stopImmediatePropagation();show(first,'비밀번호를 '+minLength+'자 이상 입력해 주세요.',null);return;
+      }
+    }
+    var plain=textarea?textarea.value.replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').replace(/\s/g,''):'';
+    if(plain===''){
+      event.preventDefault();event.stopImmediatePropagation();show(textarea,'내용을 입력해 주세요.',editor);return;
+    }
+    var minChars=parseInt(textarea&&textarea.getAttribute('data-min-chars'),10)||0;
+    if(minChars>0&&plain.length<minChars){
+      event.preventDefault();event.stopImmediatePropagation();show(textarea,'내용을 '+minChars+'자 이상 입력해 주세요. 현재 '+plain.length+'자입니다.',editor);
+    }
+  },true);
+  var firstServerError=form.querySelector('.fieldset.is-invalid');
+  if(firstServerError){window.setTimeout(function(){firstServerError.scrollIntoView({block:'center'})},0)}
+})();
+</script>
 <?php $this->stop() ?>

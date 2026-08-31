@@ -61,18 +61,20 @@
             <span><strong>비회원 글쓰기 허용</strong><small>손님(로그인하지 않은 사람)도 글을 쓸 수 있게 합니다. 게시판마다 쓰기를 “누구나”로 열어 두었더라도, 이 스위치가 꺼져 있으면 회원만 글을 쓸 수 있습니다.</small></span>
           </label>
         </fieldset>
-        <fieldset class="fieldset<?php if (array_key_exists('post_min_chars', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">본문 최소 글자수</legend>
-          <input class="input input-bordered input-block" type="number" name="post_min_chars" min="0" max="10000" value="<?= $this->e((string) ($values['post_min_chars'] ?? 0)) ?>" required>
-          <?php if (array_key_exists('post_min_chars', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['post_min_chars']) ?></p><?php endif ?>
-          <p class="fieldset-label">0 = 제한 없음. 태그와 공백을 뺀 글자 수로 셉니다.</p>
-        </fieldset>
-        <fieldset class="fieldset<?php if (array_key_exists('comment_min_chars', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">댓글 최소 글자수</legend>
-          <input class="input input-bordered input-block" type="number" name="comment_min_chars" min="0" max="1000" value="<?= $this->e((string) ($values['comment_min_chars'] ?? 0)) ?>" required>
-          <?php if (array_key_exists('comment_min_chars', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['comment_min_chars']) ?></p><?php endif ?>
-          <p class="fieldset-label">0 = 제한 없음. 글과 따로 정합니다.</p>
-        </fieldset>
+        <div class="settings-write-rules-row">
+          <fieldset class="fieldset<?php if (array_key_exists('post_min_chars', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">본문 최소 글자수</legend>
+            <input class="input input-bordered input-block" type="number" name="post_min_chars" min="0" max="10000" value="<?= $this->e((string) ($values['post_min_chars'] ?? 0)) ?>" required>
+            <?php if (array_key_exists('post_min_chars', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['post_min_chars']) ?></p><?php endif ?>
+            <p class="fieldset-label">0 = 제한 없음. 태그와 공백을 뺀 글자 수로 셉니다.</p>
+          </fieldset>
+          <fieldset class="fieldset<?php if (array_key_exists('comment_min_chars', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">댓글 최소 글자수</legend>
+            <input class="input input-bordered input-block" type="number" name="comment_min_chars" min="0" max="1000" value="<?= $this->e((string) ($values['comment_min_chars'] ?? 0)) ?>" required>
+            <?php if (array_key_exists('comment_min_chars', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['comment_min_chars']) ?></p><?php endif ?>
+            <p class="fieldset-label">0 = 제한 없음. 글과 따로 정합니다.</p>
+          </fieldset>
+        </div>
         <div class="settings-write-rules-row">
           <fieldset class="fieldset<?php if (array_key_exists('attach_limit', $errors)): ?> is-invalid<?php endif ?>">
             <legend class="fieldset-legend">글당 첨부 개수</legend>

@@ -21,17 +21,4 @@
     <li><a href="<?= $this->url('admin.settings') ?>"<?php if ($section === 'site'): ?> class="menu-active" aria-current="page"<?php endif ?> title="사이트 설정"><?= $this->icon('cog', 18) ?><span class="menu-text">사이트 설정</span></a></li>
     <li><a href="<?= $this->url('admin.mail') ?>"<?php if ($section === 'mail'): ?> class="menu-active" aria-current="page"<?php endif ?> title="메일 설정"><?= $this->icon('mail', 18) ?><span class="menu-text">메일 설정</span></a></li>
   </ul>
-
-  <div class="admin-sidebar-foot">
-    <div class="admin-user">
-      <span class="avatar avatar-placeholder avatar-sm">
-        <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></span>
-      </span>
-      <span class="admin-user-name"><?= $this->e($current_user['display_name']) ?></span>
-      <form method="post" action="<?= $this->url('auth.logout') ?>">
-        <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-        <button class="btn btn-ghost btn-square btn-sm" type="submit" aria-label="로그아웃" title="로그아웃"><?= $this->icon('logout', 17) ?></button>
-      </form>
-    </div>
-  </div>
 </aside>

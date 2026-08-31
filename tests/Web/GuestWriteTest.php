@@ -13,11 +13,26 @@ final class GuestWriteTest extends WebTestCase
     private function makeGuestBoard(array $dbConfig): \GnuCms\App
     {
         $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);
 
         return $app;
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testGuestWritingIsDisabledByDefault(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
+        ]);
+
+        $response = $this->get($app, '/boards/free/new');
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertStringContainsString('로그인이 필요합니다', $this->body($response));
     }
 
     #[DataProvider('connectionProvider')]
@@ -29,7 +44,9 @@ final class GuestWriteTest extends WebTestCase
 
         self::assertStringContainsString('name="author_name"', $body);
         self::assertStringContainsString('name="password"', $body);
+        self::assertStringContainsString('name="password" minlength="8"', $body);
         self::assertStringContainsString('수정·삭제에 씁니다', $body);
+        self::assertStringContainsString("'비밀번호를 '+minLength+'자 이상 입력해 주세요.'", $body);
     }
 
     #[DataProvider('connectionProvider')]
@@ -85,6 +102,21 @@ final class GuestWriteTest extends WebTestCase
         self::assertStringContainsString('필수 항목입니다', $body);
         // 다시 그린 폼에 입력값이 남는다.
         self::assertStringContainsString('지나가던손님', $body);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testEmptyWriteShowsMissingFieldSummary(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $this->get($app, '/boards/free/new');
+
+        $response = $this->post($app, '/boards/free/new', ['csrf_token' => $_SESSION['csrf_token']]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('name="author_name"', $body);
+        self::assertStringContainsString('fieldset is-invalid', $body);
+        self::assertStringNotContainsString('data-post-error-summary', $body);
     }
 
     #[DataProvider('connectionProvider')]
@@ -196,4 +228,3 @@ final class GuestWriteTest extends WebTestCase
         self::assertStringContainsString('20자', $this->body($response));
     }
 }
-

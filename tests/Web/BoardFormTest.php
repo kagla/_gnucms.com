@@ -94,6 +94,7 @@ final class BoardFormTest extends WebTestCase
     public function testMissingCategoryExplainsItself(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유게시판',
             'use_category' => true, 'categories' => ['잡담', '질문'], 'perm_write' => 'guest',
@@ -117,6 +118,7 @@ final class BoardFormTest extends WebTestCase
     public function testBoardWithoutCategoriesStillAcceptsPosts(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'plain', 'name' => '분류없음', 'perm_write' => 'guest',
         ]);
