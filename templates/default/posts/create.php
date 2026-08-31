@@ -78,15 +78,12 @@
         <fieldset class="fieldset<?php if (array_key_exists('notice', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
           <?php if (array_key_exists('notice', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['notice']) ?></p><?php endif ?>
-          <div class="chip-bar" role="radiogroup" aria-label="공지 범위">
+          <select class="select select-bordered select-block" name="notice" aria-label="공지 범위">
             <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
               <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
-              <label class="btn btn-sm chip-radio">
-                <input type="radio" name="notice" value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' checked' : '' ?>>
-                <span><?= $this->e($label) ?></span>
-              </label>
+              <option value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' selected' : '' ?>><?= $this->e($label) ?></option>
             <?php endforeach ?>
-          </div>
+          </select>
           <?php if (!empty($can_pin_global)): ?>
             <p class="fieldset-label">전체 게시판 공지는 이 게시판을 읽을 수 있는 사람에게만 보입니다.</p>
           <?php endif ?>

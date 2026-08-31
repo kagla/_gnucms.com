@@ -66,13 +66,13 @@ final class NoticeFormTest extends WebTestCase
         ]);
         $managerForm = $this->body($this->get($app, '/boards/free/new'));
         self::assertStringContainsString('name="notice"', $managerForm);
-        self::assertDoesNotMatchRegularExpression('/<input[^>]*name="notice"[^>]*value="global"/', $managerForm);
+        self::assertDoesNotMatchRegularExpression('/<option[^>]*value="global"/', $managerForm);
 
         $app2 = $this->makeApp($dbConfig);
         $app2->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유']);
         $this->loginAsAdmin($app2);
         $adminForm = $this->body($this->get($app2, '/boards/free/new'));
-        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"/', $adminForm);
+        self::assertMatchesRegularExpression('/<option[^>]*value="global"/', $adminForm);
     }
 
     #[DataProvider('connectionProvider')]
@@ -109,7 +109,7 @@ final class NoticeFormTest extends WebTestCase
 
         $body = $this->body($response);
         self::assertStringContainsString('name="notice"', $body);
-        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"[^>]*checked/', $body);
+        self::assertMatchesRegularExpression('/<option[^>]*value="global"[^>]*selected/', $body);
     }
 
     #[DataProvider('connectionProvider')]
@@ -125,7 +125,7 @@ final class NoticeFormTest extends WebTestCase
 
         $body = $this->body($this->get($app, '/posts/' . $post['id'] . '/edit'));
 
-        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"[^>]*checked/', $body);
+        self::assertMatchesRegularExpression('/<option[^>]*value="global"[^>]*selected/', $body);
     }
 
     /**
@@ -155,8 +155,8 @@ final class NoticeFormTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'manager@example.com', 'password' => 'manager-password-123',
         ]);
 
-        // 제목을 비워 검증 실패를 유도한다. 게시판 관리자용 폼에는 notice=global
-        // 라디오가 없으므로, 재전송 입력에도 notice 키가 없다.
+        // 제목을 비워 검증 실패를 유도한다. 이미 전체 공지인 글을 게시판 관리자가 고칠
+        // 때는 공지 칸이 잠겨 있어(값을 보내지 않아) 재전송 입력에도 notice 키가 없다.
         $invalidEdit = [
             'csrf_token' => $_SESSION['csrf_token'], 'title' => '', 'content' => '고친 본문입니다',
         ];
@@ -165,12 +165,11 @@ final class NoticeFormTest extends WebTestCase
 
         $body = $this->body($response);
         self::assertDoesNotMatchRegularExpression(
-            '/<input[^>]*name="notice"[^>]*value="none"[^>]*checked/',
+            '/<option[^>]*value="none"[^>]*selected/',
             $body,
-            '재렌더 폼이 "공지 아님"을 조용히 체크해서는 안 된다'
+            '재렌더 폼이 "공지 아님"을 조용히 골라 두어서는 안 된다'
         );
         // 숨은 notice 입력이 하나라도 있으면 화면에 없는 값을 몰래 실어 보낼 수 있다.
-        // 게시판 관리자용 폼에는 notice 가 라디오로만 있어야 한다.
         self::assertDoesNotMatchRegularExpression(
             '/<input[^>]*type="hidden"[^>]*name="notice"/',
             $body,
@@ -178,11 +177,13 @@ final class NoticeFormTest extends WebTestCase
         );
 
         // 422 상태 그대로(제목만 채워) 다시 제출한다. 전체 공지가 그대로 남아 있어야 한다.
-        // 재전송 값은 렌더된 폼을 그대로 읽어서 만든다 — 하드코딩된 배열은 체크된
-        // 라디오가 없다는 사실도, 몰래 끼어든 notice 값도 알아채지 못한다.
+        // 재전송 값은 렌더된 폼을 그대로 읽어서 만든다 — 하드코딩된 배열은 고를 수 없게
+        // 잠긴 칸도, 몰래 끼어든 notice 값도 알아채지 못한다. 다른 셀렉트의 값을 잘못
+        // 집어 오지 않도록 notice 셀렉트 안에서만 찾는다.
         $validEdit = ['csrf_token' => $_SESSION['csrf_token'], 'title' => '전체 공지(고침)', 'content' => '고친 본문입니다'];
-        if (preg_match('/<input[^>]*name="notice"[^>]*value="([^"]*)"[^>]*checked/', $body, $checked) === 1) {
-            $validEdit['notice'] = $checked[1];
+        if (preg_match('/<select[^>]*name="notice".*?<\/select>/s', $body, $box) === 1
+            && preg_match('/<option[^>]*value="([^"]*)"[^>]*selected/', $box[0], $chosen) === 1) {
+            $validEdit['notice'] = $chosen[1];
         }
         $resubmit = $this->post($app, '/posts/' . $post['id'] . '/edit', $validEdit);
         self::assertSame(303, $resubmit->getStatusCode());
