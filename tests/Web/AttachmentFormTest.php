@@ -9,9 +9,17 @@ use PHPUnit\Framework\Attributes\DataProvider;
 
 final class AttachmentFormTest extends WebTestCase
 {
-    private function loggedInApp(array $dbConfig, bool $useFile): \GnuCms\App
+    /**
+     * @param array $settings /login 요청보다 먼저 적용할 설정. Kernel 이 요청마다
+     *   CmsService::settings() 를 캐시하므로, 로그인 뒤에 바꾸면 첫 App::attachments()
+     *   호출이 캐시된 옛 값을 본다 — 그래서 로그인 전에 적용한다.
+     */
+    private function loggedInApp(array $dbConfig, bool $useFile, array $settings = []): \GnuCms\App
     {
         $app = $this->makeApp($dbConfig);
+        if ($settings !== []) {
+            $app->cms()->saveSettings($settings);
+        }
         $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
@@ -98,5 +106,48 @@ final class AttachmentFormTest extends WebTestCase
         $show = $this->body($this->get($app, '/posts/' . $post['id']));
         self::assertStringContainsString('남김.txt', $show);
         self::assertStringNotContainsString('뺌.txt', $show);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testTooManyAttachmentsShowsServerErrorInForm(array $dbConfig): void
+    {
+        $app = $this->loggedInApp($dbConfig, true, ['attach_limit' => '1']);
+        $acl = $this->adminAcl();
+        $first = $app->attachments()->upload($acl, 'free', $this->fakeUpload('하나.txt', '1'));
+        $second = $app->attachments()->upload($acl, 'free', $this->fakeUpload('둘.txt', '2'));
+
+        $response = $this->post($app, '/boards/free/write', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '한도 초과', 'content' => '본문',
+            'attachments' => [$first, $second],
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('첨부는 1개까지입니다.', $this->body($response));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSaveWorksWithoutControllerPreCallingAttachments(array $dbConfig): void
+    {
+        // PostController::create()/update() 는 더 이상 App::attachments() 를 미리
+        // 부르지 않는다(PostService 의 지연 resolver 가 대신한다). 이걸 확인하려고
+        // 이미 연결된 첨부 서비스 참조를 강제로 끊어, resolver 가 없으면 저장이
+        // "첨부 서비스가 연결되지 않았습니다" 500 으로 죽는다는 것을 재현한다.
+        $app = $this->loggedInApp($dbConfig, true);
+        $acl = $this->adminAcl();
+        $descriptor = $app->attachments()->upload($acl, 'free', $this->fakeUpload('지연.txt', '내용'));
+
+        (new \ReflectionProperty(\GnuCms\Service\PostService::class, 'attachments'))
+            ->setValue($app->postService(), null);
+        (new \ReflectionProperty(\GnuCms\App::class, 'attachmentService'))
+            ->setValue($app, null);
+
+        $created = $this->post($app, '/boards/free/write', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '지연 연결', 'content' => '본문',
+            'attachments' => [$descriptor],
+        ]);
+
+        self::assertSame(303, $created->getStatusCode());
     }
 }

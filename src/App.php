@@ -231,8 +231,12 @@ final class App
                 $this->htmlSanitizer(),
                 $this->contentImages()
             );
-            // attachments() 가 다시 postService() 를 부르므로 여기서 호출하면 무한 재귀가 된다.
-            // 첨부가 필요한 시점에 attachments() 가 setAttachmentService() 로 연결한다.
+            // attachments() 가 다시 postService() 를 부르므로 여기서 곧장 호출하면 무한
+            // 재귀가 된다. 대신 지연 콜백만 넘겨 둔다: PostService 는 첨부 검증이 실제로
+            // 필요한 순간(verifyAttachments())에야 이 콜백을 부른다. 이때는 postService()
+            // 가 이미 캐시돼 있어 재귀가 없다. 이러면 컨트롤러가 요청마다 attachments()
+            // 를 미리 불러 둬야 한다는 계약이 사라진다.
+            $this->postService->setAttachmentResolver(function () { $this->attachments(); });
         }
 
         return $this->postService;

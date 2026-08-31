@@ -84,8 +84,6 @@ final class PostController
         $input = $request->getParsedBody();
         $input = is_array($input) ? $input : [];
         $this->assertCsrf($input);
-        // create() 와 같은 이유로, 이 요청 프로세스에서도 첨부 서비스를 다시 연결해야 한다.
-        $this->app->attachments();
 
         try {
             $this->app->postService()->update($acl, $id, $input);
@@ -195,9 +193,6 @@ final class PostController
         $input = $request->getParsedBody();
         $input = is_array($input) ? $input : [];
         $this->assertCsrf($input);
-        // attachments() 를 불러야 postService 에 첨부 서비스가 연결된다. 업로드 요청은
-        // 다른 프로세스에서 이미 연결했지만, 이 요청(폼 제출)은 독립된 프로세스라 다시 연결해야 한다.
-        $this->app->attachments();
 
         try {
             $post = $this->app->postService()->create($acl, $key, $input);

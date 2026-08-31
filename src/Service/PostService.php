@@ -23,6 +23,9 @@ final class PostService
     /** @var AttachmentService|null 순환 의존을 피하려고 나중에 주입한다 */
     private $attachments = null;
 
+    /** @var callable|null 첨부 검증이 실제로 필요한 순간에 attachments 를 지연 연결한다 */
+    private $attachmentResolver = null;
+
     /** @var HtmlSanitizer */
     private $sanitizer;
 
@@ -75,6 +78,17 @@ final class PostService
     public function setAttachmentService(AttachmentService $attachments): void
     {
         $this->attachments = $attachments;
+    }
+
+    /**
+     * App::postService() 가 넣어 준다. 첨부 검증이 실제로 필요해질 때(요청 프로세스마다
+     * 한 번) 이 콜백이 App::attachments() 를 불러 setAttachmentService() 를 부수효과로
+     * 일으킨다. 컨트롤러가 매번 App::attachments() 를 미리 불러 둬야 한다는 계약을
+     * 잊어버려 500 이 나던 문제(e84ba23)를 서비스 안에서 없앤다.
+     */
+    public function setAttachmentResolver(callable $resolver): void
+    {
+        $this->attachmentResolver = $resolver;
     }
 
     public function setAttachmentLimit(int $limit): void
@@ -417,6 +431,9 @@ final class PostService
         }
         if ($this->attachmentLimit > 0 && count($input) > $this->attachmentLimit) {
             throw DomainError::validation(['attachments' => '첨부는 ' . $this->attachmentLimit . '개까지입니다.']);
+        }
+        if ($this->attachments === null && $this->attachmentResolver !== null) {
+            ($this->attachmentResolver)();
         }
         if ($this->attachments === null) {
             throw DomainError::internal('첨부 서비스가 연결되지 않았습니다.');
