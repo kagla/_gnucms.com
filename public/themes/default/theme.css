@@ -1655,3 +1655,10 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .attach-size { font-size: .75rem; opacity: .6; white-space: nowrap; }
 .attach-tools { display: flex; gap: .1rem; }
 .attach-error { color: var(--color-error, #d92d20); }
+
+/* 목록 도구 줄: 왼쪽 분류 칩, 오른쪽 목록 형태 선택. 옛 .view-switch 줄을 대신한다 */
+.list-tools{display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem}
+.list-tools .chip-bar{flex:1;min-width:0}
+.view-select{margin-left:auto;flex:none}
+.view-select-btn{gap:.375rem;border-radius:9999px;background:var(--color-base-100)}
+.view-menu{width:9.5rem}

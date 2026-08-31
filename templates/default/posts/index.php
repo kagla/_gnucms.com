@@ -71,23 +71,36 @@ $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view 
   </div>
 </div>
 
-<?php if ($board['use_category'] && $board['categories'] !== []): ?>
-<?php // 분류 칩. 설명 아래 한 줄. 글 개수는 위의 '글 N개' 가 이미 말하므로 다시 적지 않는다. ?>
-<div class="chip-bar" role="group" aria-label="분류 선택">
-  <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
-  <?php foreach ($board['categories'] as $name): ?>
-    <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
-  <?php endforeach ?>
-</div>
-<?php endif ?>
-
-<?php if ($filtered): ?>
-  <div class="filter-note">
-    <?php if ($query['category'] !== null && $query['category'] !== ''): ?><span class="badge badge-primary badge-soft"><?= $this->e($query['category']) ?></span><?php endif ?>
-    <?php if ($query['q'] !== null && $query['q'] !== ''): ?><span class="badge badge-soft">“<?= $this->e($query['q']) ?>”</span><?php endif ?>
-    <span>검색 결과 <?= $this->e($list['total']) ?>개</span>
-    <a class="link link-hover" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>">필터 지우기</a>
+<?php
+// 도구 줄: 왼쪽은 분류 칩, 오른쪽은 목록 형태 선택. 글 개수는 위의 '글 N개' 가 이미 말한다.
+$view_labels = ['list' => '목록', 'gallery' => '갤러리', 'magazine' => '매거진', 'news' => '뉴스형'];
+$view_icons = ['list' => 'board', 'gallery' => 'grid', 'magazine' => 'document', 'news' => 'megaphone'];
+$show_chips = $board['use_category'] && $board['categories'] !== [];
+$show_views = isset($view_types) && count($view_types) > 1;
+?>
+<?php if ($show_chips || $show_views): ?>
+<div class="list-tools">
+  <?php if ($show_chips): ?>
+  <div class="chip-bar" role="group" aria-label="분류 선택">
+    <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
+    <?php foreach ($board['categories'] as $name): ?>
+      <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
+    <?php endforeach ?>
   </div>
+  <?php endif ?>
+  <?php if ($show_views): ?>
+  <div class="dropdown dropdown-end view-select">
+    <div tabindex="0" role="button" class="btn btn-sm view-select-btn" aria-label="목록 형태 선택">
+      <?= $this->icon($view_icons[$view] ?? 'board', 14) ?> <?= $this->e($this->def($view_labels[$view] ?? null, $view)) ?> <?= $this->icon('chevron-down', 12) ?>
+    </div>
+    <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg view-menu">
+      <?php foreach ($view_types as $name): ?>
+        <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $listUrl($board, $query['q'], $query['category'], 1, $name) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
+      <?php endforeach ?>
+    </ul>
+  </div>
+  <?php endif ?>
+</div>
 <?php endif ?>
 
 <?php if ($list['notices'] !== []): ?>
@@ -101,22 +114,6 @@ $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view 
       </li>
     <?php endforeach ?>
   </ul>
-<?php endif ?>
-
-<?php if (isset($view_types) && count($view_types) > 1): ?>
-  <?php
-  $view_labels = ['list' => '목록', 'gallery' => '갤러리', 'magazine' => '매거진', 'news' => '뉴스형'];
-  $view_icons = ['list' => 'board', 'gallery' => 'grid', 'magazine' => 'document', 'news' => 'megaphone'];
-  ?>
-  <nav class="view-switch" aria-label="목록 형태 선택">
-    <?php foreach ($view_types as $name): ?>
-      <?php if ($name === $view): ?>
-        <span class="btn btn-sm btn-active" aria-current="true"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></span>
-      <?php else: ?>
-        <a class="btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], 1, $name) ?>"><?= $this->icon($view_icons[$name], 14) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a>
-      <?php endif ?>
-    <?php endforeach ?>
-  </nav>
 <?php endif ?>
 
 <?php if ($list['data'] === [] && $list['notices'] === []): ?>
