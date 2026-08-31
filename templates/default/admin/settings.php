@@ -58,7 +58,7 @@
         <fieldset class="fieldset toggle-list settings-write-toggle">
           <label class="label toggle-row">
             <input class="toggle toggle-primary" type="checkbox" name="guest_write_enabled" value="1"<?= ($values['guest_write_enabled'] ?? false) ? ' checked' : '' ?>>
-            <span><strong>비회원 글쓰기 허용</strong><small>켜면 쓰기 권한이 guest인 게시판에 로그인 없이 글을 쓸 수 있습니다.</small></span>
+            <span><strong>비회원 글쓰기 허용</strong><small>손님(로그인하지 않은 사람)도 글을 쓸 수 있게 합니다. 게시판마다 쓰기를 “누구나”로 열어 두었더라도, 이 스위치가 꺼져 있으면 회원만 글을 쓸 수 있습니다.</small></span>
           </label>
         </fieldset>
         <fieldset class="fieldset<?php if (array_key_exists('post_min_chars', $errors)): ?> is-invalid<?php endif ?>">
