@@ -210,4 +210,50 @@ final class PostListTest extends WebTestCase
         self::assertStringNotContainsString('<th class="post-col-board">게시판</th>', $board);
         self::assertStringNotContainsString('&amp;amp;', $all);
     }
+
+    /**
+     * 위 테스트의 '&amp;amp;' 검사는 글이 하나뿐이라 total_pages 가 1 이 되어 페이저 자체가
+     * 그려지지 않는다 — 즉 검사할 & 가 애초에 없어 항상 통과하는 헛검사였다. 검색어와 분류를
+     * 함께 건 상태에서 실제로 페이저 링크(q=...&category=...&page=2)가 나오게 만들어
+     * 이스케이프가 정말 동작하는지 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCombinedSearchAndCategoryQueryIsEscapedOnceInPagerAndChips(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key'    => 'free',
+            'name'         => '자유',
+            'per_page'     => 5,
+            'use_category' => true,
+            'categories'   => ['질문', '잡담'],
+        ]);
+
+        // '질문' 분류이면서 제목에 '글' 이 들어간 글을 per_page(5) 보다 많이 만들어
+        // 검색어+분류를 함께 걸었을 때도 total_pages > 1 이 되게 한다.
+        for ($i = 1; $i <= 7; $i++) {
+            $app->postService()->create($acl, 'free', [
+                'title'    => '글 ' . $i,
+                'content'  => '내용 ' . $i,
+                'category' => '질문',
+            ]);
+        }
+        // 분류가 다르거나 검색어에 안 걸리는 글도 섞어, 필터가 실제로 좁히는지 확인한다.
+        $app->postService()->create($acl, 'free', ['title' => '잡담 글', 'content' => '내용', 'category' => '잡담']);
+
+        $body = $this->body($this->get($app, '/boards/free', ['q' => '글', 'category' => '질문', 'page' => '1']));
+
+        // 페이저 링크(q=글&category=질문&page=2)와 '잡담' 분류 칩(q=글&category=잡담) 이
+        // 실제로 몸에 있어야 검사가 헛돌지 않는다.
+        $pagerRaw = 'q=' . rawurlencode('글') . '&category=' . rawurlencode('질문') . '&page=2';
+        $chipRaw  = 'q=' . rawurlencode('글') . '&category=' . rawurlencode('잡담');
+
+        // 원본(순수 &)은 절대 그대로 나오면 안 되고, 딱 한 번 이스케이프된 형태(&amp;)만 있어야 한다.
+        self::assertStringNotContainsString($pagerRaw, $body);
+        self::assertStringNotContainsString($chipRaw, $body);
+        self::assertStringContainsString(str_replace('&', '&amp;', $pagerRaw), $body);
+        self::assertStringContainsString(str_replace('&', '&amp;', $chipRaw), $body);
+        self::assertStringNotContainsString('&amp;amp;', $body);
+    }
 }

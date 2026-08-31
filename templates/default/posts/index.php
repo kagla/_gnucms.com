@@ -82,9 +82,9 @@ $show_views = isset($view_types) && count($view_types) > 1;
 <div class="list-tools">
   <?php if ($show_chips): ?>
   <div class="chip-bar" role="group" aria-label="분류 선택">
-    <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
+    <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $this->e($listUrl($board, $query['q'], null, 1)) ?>">전체</a>
     <?php foreach ($board['categories'] as $name): ?>
-      <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
+      <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $this->e($listUrl($board, $query['q'], $name, 1)) ?>"><?= $this->e($name) ?></a>
     <?php endforeach ?>
   </div>
   <?php endif ?>
@@ -95,7 +95,7 @@ $show_views = isset($view_types) && count($view_types) > 1;
     </div>
     <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg view-menu">
       <?php foreach ($view_types as $name): ?>
-        <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $listUrl($board, $query['q'], $query['category'], 1, $name) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
+        <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $this->e($listUrl($board, $query['q'], $query['category'], 1, $name)) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
       <?php endforeach ?>
     </ul>
   </div>
