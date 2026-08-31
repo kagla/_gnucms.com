@@ -100,12 +100,12 @@
           <div class="grid-2" data-guest-fields>
             <fieldset class="fieldset<?php if (array_key_exists('author_name', $comment_errors)): ?> is-invalid<?php endif ?>" data-name-field>
               <legend class="fieldset-legend">이름</legend>
-              <input class="input input-bordered input-block" type="text" name="author_name" value="<?= $this->e($comment_values['author_name'] ?? '') ?>" maxlength="100" required>
+              <input class="input input-bordered input-block" type="text" name="author_name" autocomplete="off" value="<?= $this->e($comment_values['author_name'] ?? '') ?>" maxlength="100" required>
               <?php if (array_key_exists('author_name', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['author_name']) ?></p><?php endif ?>
             </fieldset>
             <fieldset class="fieldset<?php if (array_key_exists('password', $comment_errors)): ?> is-invalid<?php endif ?>">
               <legend class="fieldset-legend">비밀번호 <span class="legend-hint">수정·삭제에 씁니다</span></legend>
-              <input class="input input-bordered input-block" type="password" name="password" required>
+              <input class="input input-bordered input-block" type="password" name="password" autocomplete="new-password" required>
               <?php if (array_key_exists('password', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['password']) ?></p><?php endif ?>
             </fieldset>
           </div>

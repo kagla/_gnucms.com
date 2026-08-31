@@ -25,7 +25,7 @@
       <?php if ($needs_password): ?>
         <fieldset class="fieldset<?php if (array_key_exists('password', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">비밀번호 <span class="legend-hint">글을 쓸 때 정한 비밀번호</span></legend>
-          <input class="input input-bordered input-block" type="password" name="password" required autofocus>
+          <input class="input input-bordered input-block" type="password" name="password" autocomplete="new-password" required autofocus>
           <?php if (array_key_exists('password', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password']) ?></p><?php endif ?>
         </fieldset>
       <?php endif ?>
