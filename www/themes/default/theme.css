@@ -1195,7 +1195,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .comment-form{
   display:flex;flex-direction:column;gap:.625rem;
   margin-top:1.5rem;padding-top:1.5rem;
-  border-top:var(--border) solid var(--bc-10);
 }
 .comment-form .fieldset{margin-block:0}
 .comment-reply-to{
@@ -1212,7 +1211,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .comment-form-foot .btn[data-submit]{margin-left:auto}
 .comment-denied{
   margin-top:1.5rem;padding-top:1.5rem;
-  border-top:var(--border) solid var(--bc-10);
   color:var(--bc-mid);font-size:13.5px;
 }
 
@@ -1848,3 +1846,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
+
+/* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
+.notice-list .notice-scope{white-space:nowrap}
+
+/* 공지 선택은 세 항목뿐이라 칸을 가득 채울 이유가 없다 */
+.notice-select{width:100%;max-width:16rem}

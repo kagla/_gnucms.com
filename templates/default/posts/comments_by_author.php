@@ -16,7 +16,7 @@ $who = $list['author_name'] ?? null;
     <p class="page-sub"><?php if ($who !== null): ?>이 회원이 남긴 댓글을 최신순으로 모았습니다. 댓글 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php else: ?>회원을 찾을 수 없습니다.<?php endif ?></p>
   </div>
   <?php if ($who !== null): ?>
-  <div class="page-head-actions"><a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>?author=<?= $this->e((string) $list['author']) ?>">이 사람의 글</a></div>
+  <div class="page-head-actions"><a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>?author=<?= $this->e((string) $list['author']) ?>">이 회원의 글</a></div>
   <?php endif ?>
 </div>
 

@@ -46,7 +46,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '11';
+    public const VERSION = '12';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -174,6 +174,9 @@ final class Schema
     {
         $this->addColumnIfMissing('boards', 'list_type', 'VARCHAR(20) NOT NULL DEFAULT \'list\'');
         $this->addColumnIfMissing('boards', 'home_limit', 'INTEGER NOT NULL DEFAULT 5');
+
+        // 공지가 이 게시판만인지 전체인지. 옛 공지는 전부 이 게시판 공지로 본다.
+        $this->addColumnIfMissing('posts', 'notice_scope', "VARCHAR(10) NOT NULL DEFAULT 'board'");
     }
 
     /** 글·댓글 본문 편집기가 올린 이미지를 묶어 두는 키. 업그레이드할 때 한 번 부른다. */
@@ -459,6 +462,7 @@ final class Schema
                 author_name    VARCHAR(100) NOT NULL,
                 guest_password VARCHAR(255) NULL,
                 is_notice      SMALLINT     NOT NULL DEFAULT 0,
+                notice_scope   VARCHAR(10)  NOT NULL DEFAULT \'board\',
                 is_secret      SMALLINT     NOT NULL DEFAULT 0,
                 view_count     INTEGER      NOT NULL DEFAULT 0,
                 comment_count  INTEGER      NOT NULL DEFAULT 0,

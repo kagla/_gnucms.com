@@ -54,7 +54,7 @@ function page(int $step, string $title, string $body): void
         . 'main{max-width:680px;margin:auto;padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:20px;background:var(--panel)}'
         . '.brand{color:var(--primary);font-weight:800;margin-bottom:18px}'
         . 'ol.steps{display:flex;gap:6px;list-style:none;margin:0 0 26px;padding:0;font-size:12px;color:var(--muted)}'
-        . 'ol.steps li{flex:1;padding:6px 0;border-top:3px solid var(--line)}ol.steps li span{display:block;font-weight:800}'
+        . 'ol.steps li{flex:1;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{display:block;font-weight:800}'
         . 'ol.steps li.now{border-color:var(--primary);color:var(--fg)}ol.steps li.done{border-color:var(--ok)}'
         . 'h1{margin:0 0 8px;font-size:26px;letter-spacing:-.03em}.intro{margin:0 0 22px;color:var(--muted)}'
         . 'label{display:block;margin-top:16px;font-weight:700}.hint{display:block;color:var(--muted);font-weight:400;font-size:12px}'
@@ -271,7 +271,7 @@ if ($method === 'POST') {
             . ($result['admin_email'] !== null ? '<p>관리자: <code>' . h($result['admin_email']) . '</code></p>' : '')
             . '</div>';
         $body .= $result['self_deleted'] === false
-            ? '<p class="alert"><strong>install.php 를 지우지 못했습니다.</strong> 지금 <code>public/install.php</code> 를 손으로 삭제하세요. 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>'
+            ? '<p class="alert"><strong>install.php 를 지우지 못했습니다.</strong> 지금 <code>www/install.php</code> 를 손으로 삭제하세요. 남겨 두면 설정 파일을 지운 사람이 재설치할 수 있습니다.</p>'
             : '<p class="notice">설치기(<code>install.php</code>)는 스스로 삭제했습니다.</p>';
         $body .= '<p><a href="./login">로그인하러 가기</a> · <a href="./">사이트로 이동</a></p>';
         page(5, '완료', $body);

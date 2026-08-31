@@ -4,8 +4,8 @@
     <h3 class="author-modal-title" data-author-modal-name></h3>
     <p class="author-modal-sub">이 회원이 남긴 것을 모아 봅니다.</p>
     <div class="author-modal-links">
-      <a class="btn btn-outline btn-block" href="#" data-author-modal-posts><?= $this->icon('board', 16) ?> 이 사람의 글</a>
-      <a class="btn btn-outline btn-block" href="#" data-author-modal-comments><?= $this->icon('comment', 16) ?> 이 사람의 댓글</a>
+      <a class="btn btn-outline btn-block" href="#" data-author-modal-posts><?= $this->icon('board', 16) ?> 이 회원의 글</a>
+      <a class="btn btn-outline btn-block" href="#" data-author-modal-comments><?= $this->icon('comment', 16) ?> 이 회원의 댓글</a>
     </div>
     <form method="dialog" class="modal-action"><button class="btn btn-ghost">닫기</button></form>
   </div>

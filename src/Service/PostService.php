@@ -165,8 +165,15 @@ final class PostService
             $summaries[] = $this->summary($row);
         }
 
+        // 전체 공지는 읽을 수 있는 게시판의 것만 온다. 관리자 전용 게시판의 공지가
+        // 제목만이라도 새어 나가지 않게 한다.
+        $readableBoardIds = [];
+        foreach ($this->boards->listBoards($acl) as $readable) {
+            $readableBoardIds[] = (int) $readable['id'];
+        }
+
         $notices = [];
-        foreach ($this->posts->notices((int) $board['id']) as $row) {
+        foreach ($this->posts->notices((int) $board['id'], $readableBoardIds) as $row) {
             $notices[] = $this->summary($row);
         }
 
@@ -227,6 +234,31 @@ final class PostService
             'author'      => $authorId,
             'author_name' => $authorName,
         ];
+    }
+
+    /**
+     * 폼의 공지 선택을 읽는다. none|board|global 이며 그 밖의 값은 공지 아님으로 본다.
+     * notice 가 아예 없을 때만 옛 is_notice 입력을 본다(옛 폼 호환).
+     *
+     * @return array{is_notice: int, notice_scope: string}
+     */
+    private function noticeFrom(Validator $v, array $input): array
+    {
+        if (array_key_exists('notice', $input)) {
+            // inList() 는 알 수 없는 값을 검증 오류로 등록해 v->check() 에서 요청 전체를
+            // 실패시킨다. 여기서는 알 수 없는 값을 '공지 아님'으로 조용히 받아들여야
+            // 하므로 직접 비교로 적는다.
+            $raw = $input['notice'];
+            $choice = is_scalar($raw) && in_array((string) $raw, ['none', 'board', 'global'], true)
+                ? (string) $raw
+                : 'none';
+        } else {
+            $choice = $v->bool('is_notice', false) ? 'board' : 'none';
+        }
+
+        return $choice === 'none'
+            ? ['is_notice' => 0, 'notice_scope' => 'board']
+            : ['is_notice' => 1, 'notice_scope' => $choice];
     }
 
     /** 회원 번호로 표시 이름을 읽는다. 없거나 차단된 회원이면 null. */
@@ -384,11 +416,15 @@ final class PostService
 
         $data['category'] = $this->validateCategory($v, $board, $input);
         $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
-        $data['is_notice'] = 0;
-
-        if (array_key_exists('is_notice', $input) && $v->bool('is_notice', false)) {
+        $notice = $this->noticeFrom($v, $input);
+        $data['is_notice'] = $notice['is_notice'];
+        $data['notice_scope'] = $notice['notice_scope'];
+        if ($data['is_notice'] === 1 && $notice['notice_scope'] === 'global') {
+            // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올린다.
+            $acl->assertGlobalAdmin();
+        } elseif ($data['is_notice'] === 1) {
+            // 이 게시판 공지는 사이트 관리자 또는 그 게시판 관리자가 올릴 수 있다.
             $acl->assertAdminFor($board);
-            $data['is_notice'] = 1;
         }
 
         $this->assertContentNotEmpty($v, (string) $data['content']);
@@ -450,9 +486,23 @@ final class PostService
         if (array_key_exists('is_secret', $input)) {
             $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
         }
-        if (array_key_exists('is_notice', $input)) {
-            $acl->assertAdminFor($board);
-            $data['is_notice'] = $v->bool('is_notice', false) ? 1 : 0;
+        if (array_key_exists('notice', $input) || array_key_exists('is_notice', $input)) {
+            $notice = $this->noticeFrom($v, $input);
+            // 전체 공지는 사이트 관리자의 것이라 내리는 것도 사이트 관리자만 한다.
+            // 저장된 글이 이미 전체 공지라면, 요청이 무엇을 보내든(none 이든 board 든)
+            // 이 검사를 거친다 — 그래야 게시판 관리자가 notice=none 으로 몰래
+            // 사이트 관리자의 전체 공지를 내리지 못한다.
+            $storedIsGlobalNotice = $post['is_notice'] === 1 && $post['notice_scope'] === 'global';
+            if ($storedIsGlobalNotice || ($notice['is_notice'] === 1 && $notice['notice_scope'] === 'global')) {
+                // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올리거나 내릴 수 있다.
+                $acl->assertGlobalAdmin();
+            } else {
+                // 이 게시판 공지로 올리거나 공지를 내리는 것은 사이트 관리자 또는
+                // 그 게시판 관리자면 된다.
+                $acl->assertAdminFor($board);
+            }
+            $data['is_notice'] = $notice['is_notice'];
+            $data['notice_scope'] = $notice['notice_scope'];
         }
 
         if (array_key_exists('attachments', $input)) {
@@ -604,6 +654,7 @@ final class PostService
             'author_id'     => $row['author_id'],
             'author_name'   => $row['author_name'],
             'is_notice'     => (bool) $row['is_notice'],
+            'notice_scope'  => ($row['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board',
             'is_secret'     => $secret,
             'view_count'    => (int) $row['view_count'],
             'comment_count' => (int) $row['comment_count'],

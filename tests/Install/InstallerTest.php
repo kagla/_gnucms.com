@@ -19,14 +19,14 @@ final class InstallerTest extends TestCase
         $this->workDir = sys_get_temp_dir() . '/' . GNUCMS_ID . '-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
-        mkdir($this->workDir . '/public', 0775, true);
-        file_put_contents($this->workDir . '/public/install.php', '<?php // 설치기');
+        mkdir($this->workDir . '/www', 0775, true);
+        file_put_contents($this->workDir . '/www/install.php', '<?php // 설치기');
     }
 
     protected function tearDown(): void
     {
         @chmod($this->workDir . '/config', 0775);
-        foreach (['config/config.php', 'storage/board.sqlite', 'public/install.php'] as $file) {
+        foreach (['config/config.php', 'storage/board.sqlite', 'www/install.php'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
         foreach (['config', 'storage/uploads', 'storage/editor', 'storage/logs', 'storage', 'public', ''] as $dir) {
@@ -46,7 +46,7 @@ final class InstallerTest extends TestCase
         self::assertSame('sqlite', $result['dialect']);
         self::assertSame('owner@example.com', $result['admin_email']);
         self::assertTrue($result['self_deleted']);
-        self::assertFileDoesNotExist($this->workDir . '/public/install.php');
+        self::assertFileDoesNotExist($this->workDir . '/www/install.php');
         self::assertTrue($this->installer()->isInstalled());
 
         $config = require $this->configPath();
@@ -155,7 +155,7 @@ final class InstallerTest extends TestCase
         $result = $installer->finish($this->dbConfig(), $this->site(), $this->admin());
 
         self::assertNull($result['self_deleted']);
-        self::assertFileExists($this->workDir . '/public/install.php');
+        self::assertFileExists($this->workDir . '/www/install.php');
     }
 
     public function testSiteFromValidatesUrlAndMail(): void
@@ -197,7 +197,7 @@ final class InstallerTest extends TestCase
 
     private function installer(): Installer
     {
-        return new Installer($this->configPath(), $this->workDir . '/storage', $this->workDir . '/public/install.php');
+        return new Installer($this->configPath(), $this->workDir . '/storage', $this->workDir . '/www/install.php');
     }
 
     private function configPath(): string

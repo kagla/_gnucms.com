@@ -108,7 +108,11 @@ $show_views = isset($view_types) && count($view_types) > 1;
     <?php foreach ($list['notices'] as $post): ?>
       <li class="list-row">
         <span class="notice-ico" aria-hidden="true"><?= $this->icon('megaphone', 16) ?></span>
-        <span class="badge badge-primary badge-soft badge-sm">공지</span>
+        <?php if (($post['notice_scope'] ?? 'board') === 'global'): ?>
+          <span class="badge badge-accent badge-soft badge-sm notice-scope">전체 공지</span>
+        <?php else: ?>
+          <span class="badge badge-primary badge-soft badge-sm">공지</span>
+        <?php endif ?>
         <a class="notice-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?></a>
         <time class="notice-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time>
       </li>

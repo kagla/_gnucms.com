@@ -28,13 +28,13 @@ final class Kernel
         $slim->setBasePath($basePath);
 
         // 배포 뒤 첫 요청에서 스스로 새 판으로 옮긴다. 백업·잠금·실패 기록은 SchemaUpgrader 가 한다.
-        // 못 옮기면 MaintenanceRequired 가 나고 public/index.php 가 점검 화면을 낸다.
+        // 못 옮기면 MaintenanceRequired 가 나고 www/index.php 가 점검 화면을 낸다.
         $app->schemaUpgrader()->run();
 
         $site = $app->cmsService()->settings();
         $themes = new ThemeManager(
             $templateDir,
-            dirname($templateDir) . '/public/themes',
+            dirname($templateDir) . '/www/themes',
             (string) $site['theme']
         );
         $site['theme'] = $themes->name();

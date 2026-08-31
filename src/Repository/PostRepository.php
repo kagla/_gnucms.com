@@ -15,7 +15,7 @@ final class PostRepository
      * 이 목록에 없는 컬럼은 findWithSecret() 로만 얻을 수 있다.
      */
     private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name,'
-        . ' is_notice, is_secret, view_count, comment_count, attachments, image_key,'
+        . ' is_notice, notice_scope, is_secret, view_count, comment_count, attachments, image_key,'
         . ' created_at, updated_at, deleted_at';
 
     private const DEFAULTS = [
@@ -23,6 +23,7 @@ final class PostRepository
         'author_id'      => null,
         'guest_password' => null,
         'is_notice'      => 0,
+        'notice_scope'   => 'board',
         'is_secret'      => 0,
         'view_count'     => 0,
         'comment_count'  => 0,
@@ -167,12 +168,32 @@ final class PostRepository
         return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
     }
 
-    public function notices(int $boardId): array
+    /**
+     * 목록 맨 위에 붙일 공지. 이 게시판의 공지와, 읽을 수 있는 게시판에 올라온
+     * 전체 공지를 함께 뽑는다. 전체 공지가 먼저, 각각 최신순이다.
+     *
+     * @param int[] $readableBoardIds 읽을 수 있는 게시판 번호. 전체 공지는 이 안에서만 온다
+     */
+    public function notices(int $boardId, array $readableBoardIds = []): array
     {
+        $params = ['board_id' => $boardId];
+        $globalClause = '';
+        if ($readableBoardIds !== []) {
+            $marks = [];
+            foreach (array_values($readableBoardIds) as $i => $id) {
+                $marks[] = ':r' . $i;
+                $params['r' . $i] = (int) $id;
+            }
+            $globalClause = " OR (notice_scope = 'global' AND board_id IN (" . implode(', ', $marks) . '))';
+        }
+
         $rows = $this->db->select(
             'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
-            . ' WHERE board_id = ? AND deleted_at IS NULL AND is_notice = 1 ORDER BY id DESC',
-            [$boardId]
+            . ' WHERE deleted_at IS NULL AND is_notice = 1'
+            . ' AND (board_id = :board_id' . $globalClause . ')'
+            // 전체 공지를 먼저. 방언마다 불리언 정렬이 달라 CASE 로 적는다.
+            . " ORDER BY CASE WHEN notice_scope = 'global' THEN 0 ELSE 1 END, id DESC",
+            $params
         );
 
         return array_map([$this, 'hydrate'], $rows);
@@ -281,7 +302,14 @@ final class PostRepository
 
     public function setNotice(int $id, bool $isNotice): void
     {
-        $this->db->update('posts', ['is_notice' => $isNotice ? 1 : 0], 'id = :id', ['id' => $id]);
+        $data = ['is_notice' => $isNotice ? 1 : 0];
+        // 공지를 내릴 때는 범위도 기본값(board)으로 되돌린다. PostService::noticeFrom() 이
+        // '공지 아님' 을 항상 notice_scope='board' 로 저장하는 규칙과 맞춘다. 올릴 때는
+        // 이미 정해진 범위를 그대로 둔다 — 이 메서드는 범위를 알지 못한다.
+        if (!$isNotice) {
+            $data['notice_scope'] = 'board';
+        }
+        $this->db->update('posts', $data, 'id = :id', ['id' => $id]);
     }
 
     public function adjustCommentCount(int $id, int $delta): void
@@ -312,6 +340,8 @@ final class PostRepository
         foreach (['id', 'board_id', 'is_notice', 'is_secret', 'view_count', 'comment_count'] as $column) {
             $row[$column] = (int) $row[$column];
         }
+
+        $row['notice_scope'] = ($row['notice_scope'] ?? '') === 'global' ? 'global' : 'board';
 
         return $row;
     }

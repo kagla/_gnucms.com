@@ -25,7 +25,7 @@ if (!is_file($configFile)) {
     }
     http_response_code(500);
     header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><meta charset="utf-8"><p>설치가 필요합니다. public/install.php 를 올리고 브라우저로 여세요.</p>';
+    echo '<!doctype html><meta charset="utf-8"><p>설치가 필요합니다. www/install.php 를 올리고 브라우저로 여세요.</p>';
     exit;
 }
 

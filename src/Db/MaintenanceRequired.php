@@ -9,7 +9,7 @@ use Throwable;
 
 /**
  * 스키마를 새 판으로 옮기지 못해 요청을 처리할 수 없을 때 던진다.
- * Slim 바깥(Kernel::create)에서 나므로 public/index.php 가 잡아 점검 화면을 낸다.
+ * Slim 바깥(Kernel::create)에서 나므로 www/index.php 가 잡아 점검 화면을 낸다.
  */
 final class MaintenanceRequired extends RuntimeException
 {

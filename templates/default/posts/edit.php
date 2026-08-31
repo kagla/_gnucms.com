@@ -64,6 +64,34 @@
         </label>
       <?php endif ?>
 
+      <?php if (!empty($can_manage_board)): ?>
+        <?php // 공지는 그 게시판의 관리자만 올린다. 회원에게는 이 칸이 아예 없다. ?>
+        <fieldset class="fieldset<?php if (array_key_exists('notice', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
+          <?php if (array_key_exists('notice', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['notice']) ?></p><?php endif ?>
+          <?php // 이미 전체 공지인 글을 게시판 관리자가 고칠 때. 셀렉트는 라디오와 달리
+                // 언제나 값을 보내므로, 고를 수 없는 사람에게 열린 셀렉트를 주면 첫 항목
+                // ('공지 아님')이 제출돼 공지가 내려가거나 403 이 난다. 잠근 셀렉트는
+                // 아무것도 보내지 않으므로 글만 고치고 공지는 그대로 남는다. ?>
+          <?php if (empty($can_pin_global) && ($notice_current ?? 'none') === 'global'): ?>
+            <select class="select select-bordered notice-select" aria-label="공지 범위" disabled>
+              <option selected>전체 게시판 공지</option>
+            </select>
+            <p class="fieldset-label">현재 전체 공지입니다. 사이트 관리자만 바꿀 수 있습니다.</p>
+          <?php else: ?>
+            <select class="select select-bordered notice-select" name="notice" aria-label="공지 범위">
+              <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
+                <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
+                <option value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' selected' : '' ?>><?= $this->e($label) ?></option>
+              <?php endforeach ?>
+            </select>
+          <?php endif ?>
+          <?php if (!empty($can_pin_global)): ?>
+            <p class="fieldset-label">전체 게시판 공지는 이 게시판을 읽을 수 있는 사람에게만 보입니다.</p>
+          <?php endif ?>
+        </fieldset>
+      <?php endif ?>
+
       <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values, 'errors' => $errors]) ?><?php endif ?>
 
       <div class="card-actions form-actions">
