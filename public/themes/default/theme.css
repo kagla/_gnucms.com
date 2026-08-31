@@ -38,10 +38,10 @@
 [data-theme="light"]{
   color-scheme:light;
 
-  /* 옅은 하늘색 바탕. 흰 카드와 따뜻한 강조 면이 또렷하게 갈린다. */
+  /* 차가운 흰색 바탕. 사진과 글이 앞으로 나오게 뒤로 물러난다. */
   --color-base-100:#ffffff;
-  --color-base-200:#f0f7fc;
-  --color-base-300:#e1edf5;
+  --color-base-200:#f6f8fa;
+  --color-base-300:#e7edf3;
   --color-base-content:#1c2531;
 
   /* 맑은 하늘빛 파랑. 흰 바탕에서 5.1:1 이라 글자색으로 써도 AA 를 넘는다.
@@ -67,10 +67,7 @@
   /* 배너·리본처럼 글자를 얹지 않는 자리에만 쓰는 원색 (오늘의집 계열 하늘색) */
   --brand-vivid:#35c5f0;
   --brand-deep:#075a9e;
-  --brand-wash:#e3f2fc;
-  --brand-line:#9bc8e6;
-  --feature-wash:#e7eafb;
-  --feature-line:#aeb8df;
+  --brand-wash:#eef7fd;
 
   --radius-selector:9999px;
   --radius-field:.625rem;
@@ -123,9 +120,6 @@
   --brand-vivid:#8ad3f5;
   --brand-deep:#3aa4dd;
   --brand-wash:#132234;
-  --brand-line:#29445d;
-  --feature-wash:#1c2238;
-  --feature-line:#3e4a72;
 
   --tone-0:#7cc4f0; --tone-1:#5eead4; --tone-2:#a5b4fc;
   --tone-3:#7dd3fc; --tone-4:#f9a8d4; --tone-5:#c4b5fd;
@@ -164,9 +158,6 @@
     --brand-vivid:#8ad3f5;
     --brand-deep:#3aa4dd;
     --brand-wash:#132234;
-    --brand-line:#29445d;
-    --feature-wash:#1c2238;
-    --feature-line:#3e4a72;
     --tone-0:#7cc4f0; --tone-1:#5eead4; --tone-2:#a5b4fc;
     --tone-3:#7dd3fc; --tone-4:#f9a8d4; --tone-5:#c4b5fd;
     --shadow-1:0 1px 2px rgba(0,0,0,.5);
@@ -401,8 +392,8 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 .drawer-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .drawer-user{
   display:flex;align-items:center;gap:.75rem;padding:.875rem;
-  border:var(--border) solid var(--brand-line);border-radius:var(--radius-box);
-  background:var(--brand-wash);
+  border-radius:var(--radius-box);
+  background:linear-gradient(135deg,var(--brand-wash),var(--color-base-200));
 }
 .drawer-user strong{display:block;font-size:14px;font-weight:700}
 .drawer-foot{display:grid;gap:.5rem;margin-top:auto;padding-top:1rem;border-top:var(--border) solid var(--bc-10)}
@@ -761,7 +752,7 @@ a.stat:hover{border-color:var(--p-line);transform:translateY(-2px)}
 a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 
 /* --- 10 홈: 배너 · 카테고리 원형 · 캐러셀 · 작품 카드 ------- */
-/* 첫 화면의 큰 배너. 하늘색 페이지 바탕과 구분되는 쿨 라벤더 면을 쓴다. */
+/* 아이디어스 첫 화면의 큰 배너. 사진 대신 손그림 같은 그러데이션을 깐다. */
 .hero{
   display:block;
   /* daisyUI 의 place-items:center 는 최신 브라우저에서 block 의 자식도 가운데로 모아
@@ -770,12 +761,15 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   position:relative;overflow:hidden;
   margin-bottom:1.75rem;
   border:0;
-  background:var(--feature-wash);
+  background:
+    radial-gradient(120% 130% at 88% -10%,color-mix(in srgb,var(--brand-vivid) 55%,transparent),transparent 58%),
+    radial-gradient(90% 120% at 8% 110%,color-mix(in srgb,var(--color-accent) 22%,transparent),transparent 60%),
+    linear-gradient(120deg,var(--brand-wash),var(--color-base-100) 72%);
 }
 .hero::after{
   /* 종이에 눌러 찍은 듯한 테두리 */
   content:"";position:absolute;inset:0;pointer-events:none;
-  border-radius:inherit;border:var(--border) solid var(--feature-line);
+  border-radius:inherit;border:var(--border) solid var(--bc-10);
 }
 .hero-content{display:flex;align-items:center;justify-content:space-between;gap:1.5rem 2.5rem;flex-wrap:wrap;padding:1.75rem 2rem}
 .hero-copy{flex:1 1 22rem;max-width:36rem;min-width:0}
@@ -830,7 +824,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .post-card .post-cover{
   border-radius:var(--radius-box);
   aspect-ratio:1/1;
-  box-shadow:inset 0 0 0 var(--border) var(--bc-20);
+  box-shadow:inset 0 0 0 var(--border) var(--bc-10);
 }
 .post-card .card-body{padding:.75rem .125rem 0;gap:.3125rem}
 .post-card .card-title{
@@ -844,7 +838,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .post-cover{
   position:relative;display:block;aspect-ratio:16/10;overflow:hidden;margin:0;
   container-type:inline-size;
-  background:color-mix(in srgb,var(--tone,var(--tone-0)) 11%,var(--color-base-200));
+  background:
+    radial-gradient(120% 90% at 82% 12%,color-mix(in srgb,var(--tone,var(--tone-0)) 30%,transparent),transparent 62%),
+    color-mix(in srgb,var(--tone,var(--tone-0)) 11%,var(--color-base-200));
 }
 .post-cover-img{width:100%;height:100%;object-fit:cover;display:block}
 /* 사진이 없는 글의 커버. 제목 첫 글자를 가운데 도장처럼 찍는다. */
@@ -891,7 +887,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   border-bottom:var(--border) solid var(--bc-10);
 }
 .subnav-inner{display:flex;align-items:center;gap:.75rem;min-height:3.5rem}
-.chip-bar{display:flex;gap:.4375rem;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding-block:.625rem}
+/* 가로 스크롤 상자라 안쪽 여백이 없으면 첫·끝 칩의 테두리와 포커스 링(2px+offset 2px)이 잘린다.
+   여백만큼 음수 마진으로 당겨 다른 칸들과 왼쪽 정렬을 지킨다. */
+.chip-bar{display:flex;gap:.4375rem;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:.625rem .25rem;margin-inline:-.25rem;scroll-padding-inline:.25rem}
 .chip-bar::-webkit-scrollbar{display:none}
 .chip{flex:none;border-radius:9999px;background:var(--color-base-100);font-weight:600}
 .chip.btn-active{background:var(--color-primary);color:var(--color-primary-content);border-color:transparent;font-weight:800}
@@ -1004,7 +1002,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 /* --- 11 글 상세 · prose · chat 댓글 ------------------------- */
 .read-progress{
   position:fixed;left:0;top:0;z-index:80;width:100%;height:3px;
-  background:var(--color-primary);
+  background:linear-gradient(90deg,var(--brand-vivid),var(--color-primary));
   transform:scaleX(0);transform-origin:0 50%;display:none;
 }
 @supports (animation-timeline: scroll()){
@@ -1279,8 +1277,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .admin-sidebar-head{
   display:flex;align-items:center;gap:.375rem;
   padding:.625rem .5rem;
-  border:var(--border) solid var(--brand-line);border-radius:var(--radius-box);
-  background:var(--brand-wash);
+  border-radius:var(--radius-box);
+  background:linear-gradient(135deg,var(--brand-wash),transparent 80%);
 }
 .admin-sidebar-head .brand{flex:1;min-width:0;padding-inline:.125rem}
 .admin-brand-copy{display:grid;min-width:0;line-height:1.32}
@@ -1344,7 +1342,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   html[data-admin-sidebar="collapsed"] .admin-brand-copy,
   html[data-admin-sidebar="collapsed"] .admin-menu .menu-text,
   html[data-admin-sidebar="collapsed"] .admin-user-name{display:none}
-  html[data-admin-sidebar="collapsed"] .admin-sidebar-head{flex-direction:column;background:none;border-color:transparent}
+  html[data-admin-sidebar="collapsed"] .admin-sidebar-head{flex-direction:column;background:none}
   html[data-admin-sidebar="collapsed"] .admin-sidebar-head .brand{justify-content:center;padding:0}
   html[data-admin-sidebar="collapsed"] .admin-menu li > a{justify-content:center;padding-inline:0}
   html[data-admin-sidebar="collapsed"] .admin-menu .menu-title{height:1px;padding:.5rem 0 0;overflow:hidden;text-indent:-999px;border-top:var(--border) solid var(--bc-10)}
@@ -1600,8 +1598,10 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   display:flex;align-items:center;justify-content:space-between;gap:1.25rem;flex-wrap:wrap;
   margin-bottom:1.5rem;padding:1.5rem 1.625rem;
   border-radius:var(--radius-box);
-  background:var(--feature-wash);
-  border:var(--border) solid var(--feature-line);
+  background:
+    radial-gradient(120% 160% at 92% -20%,color-mix(in srgb,var(--brand-vivid) 40%,transparent),transparent 60%),
+    linear-gradient(120deg,var(--brand-wash),var(--color-base-100) 70%);
+  border:var(--border) solid var(--bc-10);
 }
 .admin-hello h1{font-size:22px;font-weight:800;letter-spacing:-.035em}
 .admin-hello p{margin-top:.375rem;color:var(--bc-mid);font-size:13.5px}
