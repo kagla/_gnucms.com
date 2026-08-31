@@ -337,7 +337,8 @@ final class AdminPageTest extends WebTestCase
         ]);
 
         $page = $this->body($this->get($app, '/admin/settings'));
-        self::assertStringContainsString('파일 첨부', $page);
+        self::assertStringContainsString('쓰기 규칙', $page);
+        self::assertStringContainsString('name="post_min_chars"', $page);
         self::assertStringContainsString('name="attach_max_mb"', $page);
         self::assertStringContainsString('name="attach_limit"', $page);
         self::assertStringContainsString('0 = 무제한', $page);
@@ -347,11 +348,12 @@ final class AdminPageTest extends WebTestCase
             'site_name' => '사이트', 'site_tagline' => '소개', 'home_title' => '홈', 'home_intro' => '소개',
             'registration_enabled' => '1', 'theme' => 'default',
         ];
-        $saved = $this->post($app, '/admin/settings', $base + ['attach_max_mb' => '20', 'attach_limit' => '0']);
+        $saved = $this->post($app, '/admin/settings', $base + ['attach_max_mb' => '20', 'attach_limit' => '0', 'post_min_chars' => '10']);
         self::assertSame(303, $saved->getStatusCode());
         $settings = $app->cmsService()->settings();
         self::assertSame(20, $settings['attach_max_mb']);
         self::assertSame(0, $settings['attach_limit']);
+        self::assertSame(10, $settings['post_min_chars']);
 
         // Validator::int 는 범위를 벗어나면 실패가 아니라 잘라낸다(clamp)이므로
         // 여기서는 422 가 아니라 1024 로 잘린 값을 확인한다.

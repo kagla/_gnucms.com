@@ -32,6 +32,26 @@ final class PostService
     /** @var ContentImageService */
     private $images;
 
+    /** 본문 최소 글자수(태그·공백 제외). 0 = 제한 없음. App 이 사이트 설정에서 넣는다. */
+    private int $contentMinChars = 0;
+
+    public function setContentMinChars(int $min): void
+    {
+        $this->contentMinChars = max(0, $min);
+    }
+
+    /** 편집기가 감싼 태그와 공백으로 길이를 속일 수 없게 글자만 센다. */
+    private function assertContentLongEnough(Validator $v, string $content): void
+    {
+        if ($this->contentMinChars <= 0) {
+            return;
+        }
+        $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+        if (mb_strlen($text) < $this->contentMinChars) {
+            $v->fail('content', '본문은 ' . $this->contentMinChars . '자 이상 적어 주세요.');
+        }
+    }
+
     /** 글당 첨부 개수 한도. 0 = 무제한. App 이 사이트 설정에서 넣는다. */
     private int $attachmentLimit = 0;
 
@@ -305,6 +325,8 @@ final class PostService
             $data['is_notice'] = 1;
         }
 
+        $this->assertContentLongEnough($v, (string) $data['content']);
+
         if (array_key_exists('attachments', $input)) {
             $data['attachments'] = $this->verifyAttachments($board, $input['attachments']);
         }
@@ -338,6 +360,7 @@ final class PostService
         }
         if (array_key_exists('content', $input)) {
             $data['content'] = $this->cleanContent($v->requiredString('content'));
+            $this->assertContentLongEnough($v, (string) $data['content']);
         }
         $updateKey = $this->editorImageKey($v, $input);
         if ($updateKey !== null) {

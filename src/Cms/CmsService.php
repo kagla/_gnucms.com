@@ -18,6 +18,7 @@ final class CmsService
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
         'registration_enabled' => '1',
         'theme' => 'default',
+        'post_min_chars' => '0',
         'attach_max_mb' => '5',
         'attach_limit' => '5',
     ];
@@ -63,6 +64,7 @@ final class CmsService
         }
         $settings = array_merge(self::DEFAULT_SETTINGS, $stored);
         $settings['registration_enabled'] = $settings['registration_enabled'] === '1';
+        $settings['post_min_chars'] = max(0, (int) $settings['post_min_chars']);
         $settings['attach_max_mb'] = max(1, (int) $settings['attach_max_mb']);
         $settings['attach_limit'] = max(0, (int) $settings['attach_limit']);
 
@@ -216,6 +218,7 @@ final class CmsService
             'home_intro' => $v->requiredString('home_intro', 500),
             'registration_enabled' => $v->bool('registration_enabled', false) ? '1' : '0',
             'theme' => $theme,
+            'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
             'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),
             'attach_limit' => (string) $v->int('attach_limit', 5, 0, 999),
         ];

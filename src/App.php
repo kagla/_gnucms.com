@@ -232,6 +232,8 @@ final class App
                 $this->htmlSanitizer(),
                 $this->contentImages()
             );
+            // 쓰기 규칙은 사이트 설정이 정한다. settings() 는 요청당 한 번만 DB 를 읽는다.
+            $this->postService->setContentMinChars((int) $this->cmsService()->settings()['post_min_chars']);
             // attachments() 가 다시 postService() 를 부르므로 여기서 곧장 호출하면 무한
             // 재귀가 된다. 대신 지연 콜백만 넘겨 둔다: PostService 는 첨부 검증이 실제로
             // 필요한 순간(verifyAttachments())에야 이 콜백을 부른다. 이때는 postService()

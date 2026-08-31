@@ -54,7 +54,13 @@
         </fieldset>
       </div>
       <div class="form-section">
-        <h2 class="form-section-title">파일 첨부</h2>
+        <h2 class="form-section-title">쓰기 규칙</h2>
+        <fieldset class="fieldset<?php if (array_key_exists('post_min_chars', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">본문 최소 글자수</legend>
+          <input class="input input-bordered input-block" type="number" name="post_min_chars" min="0" max="10000" value="<?= $this->e((string) ($values['post_min_chars'] ?? 0)) ?>" required>
+          <?php if (array_key_exists('post_min_chars', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['post_min_chars']) ?></p><?php endif ?>
+          <p class="fieldset-label">0 = 제한 없음. 태그와 공백을 뺀 글자 수로 셉니다.</p>
+        </fieldset>
         <fieldset class="fieldset<?php if (array_key_exists('attach_max_mb', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">파일당 최대 용량 (MB)</legend>
           <input class="input input-bordered input-block" type="number" name="attach_max_mb" min="1" max="1024" value="<?= $this->e((string) ($values['attach_max_mb'] ?? 5)) ?>" required>
