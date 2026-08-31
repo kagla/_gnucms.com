@@ -27,24 +27,6 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 </form>
 <?php $this->stop() ?>
 
-<?php $this->start('subnav') ?>
-<div class="subnav">
-  <div class="wrap subnav-inner">
-    <div class="chip-bar" role="group" aria-label="분류 선택">
-      <?php if ($board['use_category'] && $board['categories'] !== []): ?>
-        <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
-        <?php foreach ($board['categories'] as $name): ?>
-          <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
-        <?php endforeach ?>
-      <?php else: ?>
-        <span class="btn btn-sm chip btn-active">전체</span>
-      <?php endif ?>
-    </div>
-    <span class="badge badge-ghost"><?= $this->e($list['total']) ?>개</span>
-  </div>
-</div>
-<?php $this->stop() ?>
-
 <?php $this->start('body') ?>
 <?php
 $filtered = ($query['q'] !== null && $query['q'] !== '') || ($query['category'] !== null && $query['category'] !== '');
@@ -88,6 +70,16 @@ $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view 
     <?php endif ?>
   </div>
 </div>
+
+<?php if ($board['use_category'] && $board['categories'] !== []): ?>
+<?php // 분류 칩. 설명 아래 한 줄. 글 개수는 위의 '글 N개' 가 이미 말하므로 다시 적지 않는다. ?>
+<div class="chip-bar" role="group" aria-label="분류 선택">
+  <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], null, 1) ?>">전체</a>
+  <?php foreach ($board['categories'] as $name): ?>
+    <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $listUrl($board, $query['q'], $name, 1) ?>"><?= $this->e($name) ?></a>
+  <?php endforeach ?>
+</div>
+<?php endif ?>
 
 <?php if ($filtered): ?>
   <div class="filter-note">
