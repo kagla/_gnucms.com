@@ -128,6 +128,53 @@ final class AuthorCommentsTest extends WebTestCase
     }
 
     /**
+     * 비밀글에 달린 댓글은 회원 댓글 목록에서 빠져야 한다.
+     * 게스트는 /posts/{id} 에서 비밀글 자체를 403 으로 못 보는데, /comments?author= 가
+     * 그 안의 댓글 본문을 그대로 흘리면 글은 못 보면서 답만 보이는 구멍이 생긴다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCommentsOnSecretPostsAreHidden(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_secret' => true]);
+        $memberId = $app->users()->create('writer@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '댓쓴사람');
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'writer@example.com', 'password' => 'member-password-123',
+        ]);
+
+        // 비밀글은 글쓴이 본인이나 관리자만 댓글을 달 수 있으므로, 두 글 모두 이 회원이 쓴다.
+        $normalCreate = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'title' => '평범한 글', 'content' => '본문입니다',
+        ]);
+        preg_match('#/posts/(\d+)#', $normalCreate->getHeaderLine('Location'), $m1);
+        $normalPostId = (int) $m1[1];
+
+        $secretCreate = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'title' => '비밀 문의', 'content' => '본문입니다', 'is_secret' => '1',
+        ]);
+        preg_match('#/posts/(\d+)#', $secretCreate->getHeaderLine('Location'), $m2);
+        $secretPostId = (int) $m2[1];
+
+        $this->post($app, '/posts/' . $normalPostId . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'], 'content' => '평범한 댓글입니다',
+        ]);
+        $this->post($app, '/posts/' . $secretPostId . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'], 'content' => '비밀글에 남긴 댓글 본문',
+        ]);
+
+        // 로그아웃해서 게스트로 요청한다 — /comments 는 항상 요청 시점의 신원을 쓴다.
+        $this->post($app, '/logout', ['csrf_token' => $_SESSION['csrf_token'] ?? '']);
+        $body = $this->body($this->get($app, '/comments', ['author' => (string) $memberId]));
+
+        self::assertStringContainsString('평범한 댓글입니다', $body);
+        self::assertStringNotContainsString('비밀글에 남긴 댓글 본문', $body);
+    }
+
+    /**
      * 읽기 권한이 회원 이상인 게시판의 댓글은 게스트에게 보이면 안 된다.
      * 회원 댓글 목록은 항상 게스트 권한으로 렌더링되기 때문이다.
      */

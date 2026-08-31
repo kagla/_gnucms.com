@@ -122,8 +122,12 @@ final class CommentRepository
             $params['b' . $i] = (int) $id;
         }
         // 글이 지워지면 그 글의 댓글도 목록에서 빠진다 — 링크가 404 인 줄을 보여 주지 않기 위해서.
+        // 비밀글도 마찬가지다 — 비밀글은 글 자체가 잠겨 있으니 그 안의 댓글도 목록에 내지 않는다.
+        // 게스트는 /posts/{id} 에서 비밀글을 403으로 못 보는데, 여기서 걸러 주지 않으면
+        // 이 목록은 게스트 권한으로 렌더링되면서도 댓글 본문을 그대로 보여 주게 된다.
         $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')'
-            . ' AND post_id IN (SELECT id FROM ' . $this->db->q('posts') . ' WHERE deleted_at IS NULL)';
+            . ' AND post_id IN (SELECT id FROM ' . $this->db->q('posts')
+            . ' WHERE deleted_at IS NULL AND is_secret = 0)';
 
         $total = (int) $this->db->selectOne(
             'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE ' . $where,
