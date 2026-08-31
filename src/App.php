@@ -275,6 +275,7 @@ final class App
                 $this->contentImages(),
                 $this->notificationService()
             );
+            $this->commentService->setContentMinChars((int) $this->cmsService()->settings()['comment_min_chars']);
         }
 
         return $this->commentService;
@@ -494,6 +495,7 @@ final class App
     {
         $acl = new Acl($this->identity);
         $acl->setPasswordThrottle($this->passwordThrottle());
+        $acl->setGuestWriteEnabled((bool) $this->cmsService()->settings()['guest_write_enabled']);
 
         return $acl;
     }

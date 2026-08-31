@@ -193,11 +193,21 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
       editor.updateElement();
       /* CKEditor 가 textarea 를 숨기므로 브라우저의 "필수" 검사가 동작하지 않는다.
          그래서 required 대신 data-required 를 두고 여기서 직접 확인한다. */
-      if(textarea.getAttribute('data-required')){
-        var text=textarea.value.replace(/<[^>]*>/g,'').replace(/&nbsp;|\s/g,'');
-        if(text===''){
+      /* 태그·공백을 뺀 글자만 센다. 서버의 검사와 같은 셈법이라 두 곳의 판정이 갈리지 않는다. */
+      var plain=textarea.value.replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ');
+      if(textarea.getAttribute('data-required') && plain.replace(/\s/g,'')===''){
+        event.preventDefault();
+        window.alert('내용을 입력해 주세요.');
+        editor.focus();
+
+        return;
+      }
+      var minChars=parseInt(textarea.getAttribute('data-min-chars'),10)||0;
+      if(minChars>0){
+        var counted=plain.replace(/\s+/g,' ').trim();
+        if(counted.length<minChars){
           event.preventDefault();
-          window.alert('내용을 입력해 주세요.');
+          window.alert('내용을 '+minChars+'자 이상 적어 주세요. 지금 '+counted.length+'자입니다.');
           editor.focus();
 
           return;

@@ -32,7 +32,7 @@
 
       <fieldset class="fieldset<?php if (array_key_exists('content', $errors)): ?> is-invalid<?php endif ?>">
         <legend class="fieldset-legend sr-only">댓글 내용</legend>
-        <textarea class="textarea textarea-bordered textarea-block" id="comment-edit-content" name="content" rows="5" data-required="1"><?= $this->e($this->def($values['content'] ?? null, $comment['content'])) ?></textarea>
+        <textarea class="textarea textarea-bordered textarea-block" id="comment-edit-content" name="content" rows="5" data-required="1" data-min-chars="<?= $this->e((string) ($site['comment_min_chars'] ?? 0)) ?>"><?= $this->e($this->def($values['content'] ?? null, $comment['content'])) ?></textarea>
         <?php if (array_key_exists('content', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['content']) ?></p><?php endif ?>
       </fieldset>
 

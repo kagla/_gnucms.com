@@ -66,4 +66,46 @@ final class WriteRulesTest extends WebTestCase
 
         self::assertSame(303, $response->getStatusCode());
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testShortCommentIsRejectedWhenCommentMinimumIsSet(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['comment_min_chars' => '5']);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
+        ]);
+        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문입니다']);
+        $this->get($app, '/posts/' . $post['id']);
+
+        $short = $this->post($app, '/posts/' . $post['id'] . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'author_name' => '손님', 'password' => 'comment-pass-1', 'content' => '<p>넵</p>',
+        ]);
+        self::assertSame(422, $short->getStatusCode());
+        self::assertStringContainsString('5자 이상', $this->body($short));
+
+        $ok = $this->post($app, '/posts/' . $post['id'] . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'author_name' => '손님', 'password' => 'comment-pass-1', 'content' => '<p>충분히 긴 댓글입니다</p>',
+        ]);
+        self::assertSame(303, $ok->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testEditorsCarryTheMinimumSoTheyCanWarnBeforeSubmit(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['post_min_chars' => '10', 'comment_min_chars' => '5']);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
+        ]);
+        // 최소 글자수가 10자이므로 씨앗 글도 그만큼 길어야 한다.
+        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '열 글자가 넘는 본문입니다']);
+
+        // 편집기가 textarea 를 숨겨 브라우저 검사가 못 도므로, 제출 전 알림에 쓸 값을 칸에 실어 보낸다.
+        self::assertStringContainsString('data-min-chars="10"', $this->body($this->get($app, '/boards/free/new')));
+        self::assertStringContainsString('data-min-chars="5"', $this->body($this->get($app, '/posts/' . $post['id'])));
+    }
 }
+

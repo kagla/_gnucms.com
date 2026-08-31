@@ -113,7 +113,7 @@
 
         <fieldset class="fieldset<?php if (array_key_exists('content', $comment_errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend sr-only">댓글 내용</legend>
-          <textarea class="textarea textarea-bordered textarea-block" id="comment-content" name="content" rows="4" required data-required="1" placeholder="댓글을 남겨 주세요"><?= $this->e($comment_values['content'] ?? '') ?></textarea>
+          <textarea class="textarea textarea-bordered textarea-block" id="comment-content" name="content" rows="4" required data-required="1" placeholder="댓글을 남겨 주세요" data-min-chars="<?= $this->e((string) ($site['comment_min_chars'] ?? 0)) ?>"><?= $this->e($comment_values['content'] ?? '') ?></textarea>
           <?php if (array_key_exists('content', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['content']) ?></p><?php endif ?>
         </fieldset>
 

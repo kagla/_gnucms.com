@@ -60,7 +60,7 @@
 
       <fieldset class="fieldset<?php if (array_key_exists('content', $errors)): ?> is-invalid<?php endif ?>">
         <legend class="fieldset-legend">내용</legend>
-        <textarea class="textarea textarea-bordered textarea-block" id="post-content" name="content" rows="14" data-required="1" placeholder="어떤 이야기를 나누고 싶으신가요?"><?= $this->e($values['content'] ?? '') ?></textarea>
+        <textarea class="textarea textarea-bordered textarea-block" id="post-content" name="content" rows="14" data-required="1" placeholder="어떤 이야기를 나누고 싶으신가요?" data-min-chars="<?= $this->e((string) ($site['post_min_chars'] ?? 0)) ?>"><?= $this->e($values['content'] ?? '') ?></textarea>
         <?php if (array_key_exists('content', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['content']) ?></p><?php endif ?>
       </fieldset>
 

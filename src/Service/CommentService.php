@@ -57,6 +57,26 @@ final class CommentService
         return $this->sanitizer->clean($raw);
     }
 
+    /** 댓글 최소 글자수(태그·공백 제외). 0 = 제한 없음. App 이 사이트 설정에서 넣는다. */
+    private int $contentMinChars = 0;
+
+    public function setContentMinChars(int $min): void
+    {
+        $this->contentMinChars = max(0, $min);
+    }
+
+    /** 편집기가 감싼 태그와 공백으로 길이를 속일 수 없게 글자만 센다. */
+    private function assertContentLongEnough(Validator $v, string $content): void
+    {
+        if ($this->contentMinChars <= 0) {
+            return;
+        }
+        $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+        if (mb_strlen($text) < $this->contentMinChars) {
+            $v->fail('content', '댓글은 ' . $this->contentMinChars . '자 이상 적어 주세요.');
+        }
+    }
+
     /**
      * 편집기는 빈 입력에도 <p><br></p> 같은 껍데기를 남겨 "필수" 검사를 통과한다.
      * 태그·공백을 빼고도 글자가 없으면 빈 내용으로 본다. 사진만 있는 내용은 허용한다.
@@ -120,6 +140,7 @@ final class CommentService
             'content'  => $this->cleanContent($v->requiredString('content')),
         ];
         $this->assertContentNotEmpty($v, (string) $data['content']);
+        $this->assertContentLongEnough($v, (string) $data['content']);
         $data['image_key'] = $this->editorImageKey($v, $input);
 
         $parentId = $v->int('parent_id', 0, 0, PHP_INT_MAX);
