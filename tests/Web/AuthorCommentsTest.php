@@ -176,7 +176,8 @@ final class AuthorCommentsTest extends WebTestCase
 
     /**
      * 읽기 권한이 회원 이상인 게시판의 댓글은 게스트에게 보이면 안 된다.
-     * 회원 댓글 목록은 항상 게스트 권한으로 렌더링되기 때문이다.
+     * 회원 댓글 목록은 요청자 권한으로 그려지므로, 로그아웃한 게스트로 요청하면
+     * 회원 전용 게시판의 댓글은 그 권한 기준으로 걸러진다.
      */
     #[DataProvider('connectionProvider')]
     public function testCommentsInUnreadableBoardsAreHidden(array $dbConfig): void
@@ -207,5 +208,36 @@ final class AuthorCommentsTest extends WebTestCase
 
         self::assertStringContainsString('공개 게시판 댓글입니다', $body);
         self::assertStringNotContainsString('회원 게시판 댓글입니다', $body);
+    }
+
+    /**
+     * 차단된 회원은 없는 회원과 같게 다뤄야 한다.
+     * CommentService::listByAuthor() 는 status === 'active' 가 아니면 회원을 못 찾은
+     * 것으로 치는데, 댓글 목록 경로에는 이를 확인하는 테스트가 없었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBlockedAuthorIsTreatedAsUnknown(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $post = $app->postService()->create($acl, 'free', ['title' => '이야기 글', 'content' => '본문입니다']);
+        $memberId = $app->users()->create('writer@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '댓쓴사람');
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'writer@example.com', 'password' => 'member-password-123',
+        ]);
+        $this->post($app, '/posts/' . $post['id'] . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'], 'content' => '차단 전에 남긴 댓글입니다',
+        ]);
+
+        $app->users()->setStatus($memberId, 'blocked');
+
+        $body = $this->body($this->get($app, '/comments', ['author' => (string) $memberId]));
+
+        self::assertStringContainsString('회원을 찾을 수 없습니다', $body);
+        self::assertStringNotContainsString('차단 전에 남긴 댓글입니다', $body);
     }
 }

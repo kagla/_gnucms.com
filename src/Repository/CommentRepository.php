@@ -121,10 +121,11 @@ final class CommentRepository
             $marks[] = ':b' . $i;
             $params['b' . $i] = (int) $id;
         }
-        // 글이 지워지면 그 글의 댓글도 목록에서 빠진다 — 링크가 404 인 줄을 보여 주지 않기 위해서.
-        // 비밀글도 마찬가지다 — 비밀글은 글 자체가 잠겨 있으니 그 안의 댓글도 목록에 내지 않는다.
-        // 게스트는 /posts/{id} 에서 비밀글을 403으로 못 보는데, 여기서 걸러 주지 않으면
-        // 이 목록은 게스트 권한으로 렌더링되면서도 댓글 본문을 그대로 보여 주게 된다.
+        // 이 목록은 요청자 권한으로 그려지지만, 비밀글은 글 자체가 403 인데 댓글 본문만
+        // 새는 구멍이 있어 글 단위로 막는다. 지운 글도 같다 — 링크가 404 인 줄을 보여
+        // 주지 않기 위해서다.
+        // 이 필터는 권한과 무관하게 걸리므로 글쓴이 본인과 관리자에게도 그 줄이 보이지
+        // 않는다 (의도된 선택).
         $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')'
             . ' AND post_id IN (SELECT id FROM ' . $this->db->q('posts')
             . ' WHERE deleted_at IS NULL AND is_secret = 0)';
