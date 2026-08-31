@@ -28,21 +28,21 @@ final class BasePathTest extends TestCase
             'root, no rewrite, with path'                => ['/index.php', '/index.php/boards/free', '/index.php'],
 
             // 서브디렉터리, mod_rewrite 있음.
-            'subdir, rewrite, /board/'        => ['/board/public/index.php', '/board/', '/board/public'],
-            'subdir, rewrite, /board/boards/free'  => ['/board/public/index.php', '/board/boards/free', '/board/public'],
+            'subdir, rewrite, /board/'        => ['/board/www/index.php', '/board/', '/board/www'],
+            'subdir, rewrite, /board/boards/free'  => ['/board/www/index.php', '/board/boards/free', '/board/www'],
 
             // 서브디렉터리, mod_rewrite 없음.
             'subdir, no rewrite, bare, no trailing slash' => [
-                '/board/public/index.php', '/board/public/index.php', '/board/public/index.php',
+                '/board/www/index.php', '/board/www/index.php', '/board/www/index.php',
             ],
             'subdir, no rewrite, bare, trailing slash' => [
-                '/board/public/index.php', '/board/public/index.php/', '/board/public/index.php',
+                '/board/www/index.php', '/board/www/index.php/', '/board/www/index.php',
             ],
         ];
     }
 
     /**
-     * public/index.php 의 "/index.php" -> "/index.php/" 리다이렉트 결정을 뽑아 둔
+     * www/index.php 의 "/index.php" -> "/index.php/" 리다이렉트 결정을 뽑아 둔
      * 순수 함수. 이 리다이렉트가 없으면 rewrite 가 없는 호스팅에서 방문자가
      * 가장 먼저 입력할 만한 주소가 404 가 났다 — 그 버그를 고친 코드 경로다.
      *
@@ -74,20 +74,20 @@ final class BasePathTest extends TestCase
             ],
 
             // 서브디렉터리, mod_rewrite 있음: 이미 올바른 경로라 리다이렉트 불필요.
-            'subdir, rewrite, /board/'        => ['/board/public/index.php', '/board/', null],
-            'subdir, rewrite, /board/boards/free'  => ['/board/public/index.php', '/board/boards/free', null],
+            'subdir, rewrite, /board/'        => ['/board/www/index.php', '/board/', null],
+            'subdir, rewrite, /board/boards/free'  => ['/board/www/index.php', '/board/boards/free', null],
 
             // 서브디렉터리, mod_rewrite 없음, 슬래시 없이.
             'subdir, no rewrite, bare, no trailing slash' => [
-                '/board/public/index.php', '/board/public/index.php', '/board/public/index.php/',
+                '/board/www/index.php', '/board/www/index.php', '/board/www/index.php/',
             ],
             // 도착지에는 리다이렉트하지 않는다 — 무한 루프 방지.
             'subdir, no rewrite, bare, trailing slash' => [
-                '/board/public/index.php', '/board/public/index.php/', null,
+                '/board/www/index.php', '/board/www/index.php/', null,
             ],
             // 서브디렉터리에서도 쿼리스트링이 살아 있어야 한다.
             'subdir, no rewrite, bare, with query string' => [
-                '/board/public/index.php', '/board/public/index.php?page=2', '/board/public/index.php/?page=2',
+                '/board/www/index.php', '/board/www/index.php?page=2', '/board/www/index.php/?page=2',
             ],
         ];
     }
@@ -115,9 +115,9 @@ final class BasePathTest extends TestCase
         return [
             'root, no rewrite, bare'               => ['/index.php', '/index.php'],
             'root, no rewrite, bare, with query'    => ['/index.php', '/index.php?page=2'],
-            'subdir, no rewrite, bare'              => ['/board/public/index.php', '/board/public/index.php'],
+            'subdir, no rewrite, bare'              => ['/board/www/index.php', '/board/www/index.php'],
             'subdir, no rewrite, bare, with query'  => [
-                '/board/public/index.php', '/board/public/index.php?page=2',
+                '/board/www/index.php', '/board/www/index.php?page=2',
             ],
         ];
     }

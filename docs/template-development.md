@@ -12,7 +12,7 @@ templates/{테마}/layout.php         공개 화면 셸 (머리글·탭·바닥�
 templates/{테마}/admin/layout.php   관리 콘솔 셸. 안에서 layout.php 를 다시 감싼다
 templates/{테마}/_icons.php         아이콘 이름 -> SVG 요소 배열
 templates/{테마}/{영역}/{화면}.php    home/ boards/ posts/ pages/ auth/ notifications/ admin/
-public/themes/{테마}/theme.css      정적 파일
+www/themes/{테마}/theme.css      정적 파일
 ```
 
 - 컨트롤러는 `View::fromRequest($request)->render($response, 'posts/index', $data)` 처럼
@@ -29,11 +29,11 @@ public/themes/{테마}/theme.css      정적 파일
 
 ```bash
 cp -r templates/default templates/mytheme
-cp -r public/themes/default public/themes/mytheme
+cp -r www/themes/default www/themes/mytheme
 ```
 
 `templates/mytheme/theme.php` 의 `label` 을 바꾸고, 관리 콘솔 > 사이트 설정에서 고른다.
-그 다음 바꾸고 싶은 화면만 고친다. 정적 파일은 선택한 테마에 없으면 `public/themes/default/`
+그 다음 바꾸고 싶은 화면만 고친다. 정적 파일은 선택한 테마에 없으면 `www/themes/default/`
 의 것이 쓰이므로 CSS 만 바꿔도 된다.
 
 테마 이름은 영문 소문자·숫자·`_`·`-` 만 쓴다.
@@ -62,9 +62,9 @@ cp -r public/themes/default public/themes/mytheme
 
 ## 4. CSS·이미지·JavaScript
 
-`public/themes/{테마}/` 에 두고 `$this->asset('theme.css')` 로 연결한다. 주소에는 내용 해시가
+`www/themes/{테마}/` 에 두고 `$this->asset('theme.css')` 로 연결한다. 주소에는 내용 해시가
 붙어(`?v=…`) 파일을 고치면 브라우저 캐시가 갱신된다. 선택한 테마에 파일이 없으면
-`public/themes/default/` 의 주소가 나간다.
+`www/themes/default/` 의 주소가 나간다.
 
 daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 composer·npm·컴파일을 쓸 수
 없으므로 빌드가 필요한 자산은 넣지 않는다.
@@ -118,7 +118,7 @@ daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 compo
 
 ## 10. 본문 편집기와 사진
 
-글·댓글·내용 편집은 CKEditor 4 (`public/vendor/ckeditor4/`)를 `posts/_editor.php`·
+글·댓글·내용 편집은 CKEditor 4 (`www/vendor/ckeditor4/`)를 `posts/_editor.php`·
 `admin/_editor.php` 가 띄운다. 업로드 주소와 버릴 주소를 `$this->json()` 으로 스크립트에 넣는다.
 `image_key` 는 폼을 그릴 때 컨트롤러가 만드는 난수이고, 저장 전 올린 사진을 묶는 열쇠다.
 본문 사진은 원본과 축소본(`-thumb`, `-view`)으로 저장되고 `$this->html()` 이 축소본 + 원본

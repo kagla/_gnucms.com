@@ -17,7 +17,7 @@ const GNUCMS_URL = 'https://gnucms.gnuboard.net';
 
 /**
  * 저장 키·CSS 클래스·쿠키·편집기 플러그인 이름 앞에 붙는 기술 식별자.
- * public/themes 아래 theme.css 와 public/assets/editor-content.css 에도
+ * www/themes 아래 theme.css 와 www/assets/editor-content.css 에도
  * 같은 접두사가 글자 그대로 박혀 있으니, 이 값을 바꾸면 그 파일들도 같이 고쳐야 한다.
  */
 const GNUCMS_ID = 'gnucms';

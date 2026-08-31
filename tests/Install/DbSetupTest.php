@@ -48,7 +48,7 @@ final class DbSetupTest extends TestCase
     public function testSqliteRejectsPathUnderPublic(): void
     {
         $this->assertValidation(
-            ['type' => 'sqlite', 'sqlite_path' => dirname(__DIR__, 2) . '/public/board.sqlite'],
+            ['type' => 'sqlite', 'sqlite_path' => dirname(__DIR__, 2) . '/www/board.sqlite'],
             'sqlite_path'
         );
     }

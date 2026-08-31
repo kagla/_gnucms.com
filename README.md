@@ -13,14 +13,14 @@ SQLite / MySQL / PostgreSQL 을 가리지 않고 동작하는 API 우선 게시�
 
 ## 설치
 
-1. 파일 전체를 올린다. 문서 루트는 `public/` 을 가리키게 한다.
-   문서 루트를 바꿀 수 없는 호스팅이라면 `public/` 안의 내용을 루트에 두고 나머지 폴더를
+1. 파일 전체를 올린다. 문서 루트는 `www/` 을 가리키게 한다.
+   문서 루트를 바꿀 수 없는 호스팅이라면 `www/` 안의 내용을 루트에 두고 나머지 폴더를
    그 위 디렉터리에 둔다. `storage/` 가 웹으로 접근 가능한 위치에 있으면 안 된다.
 2. 브라우저로 사이트를 연다. 설정 파일이 없으면 `install.php` 로 자동 이동한다.
 3. 다섯 단계를 따라간다: 서버 점검 → 데이터베이스(종류를 고르고 접속 시험) → 사이트 이름·주소·발신 메일
    → 첫 관리자 → 완료. `config/config.php` 는 마지막에 쓰인다. 파일을 올린 뒤에는 바로 설치를
    끝낸다. 설정 파일이 생기기 전에는 누구나 설치기를 열어 첫 관리자가 될 수 있다.
-4. 설치가 끝나면 `public/install.php` 는 스스로 삭제된다. 못 지웠다고 나오면 손으로 지운다.
+4. 설치가 끝나면 `www/install.php` 는 스스로 삭제된다. 못 지웠다고 나오면 손으로 지운다.
 5. 로그인해 관리 콘솔에서 게시판을 만든다.
 
 ### 코드를 새 판으로 올릴 때
@@ -162,7 +162,7 @@ pgsql:host=127.0.0.1;port=5432;dbname=board
 1. **먼저 지금 `config/config.php` 의 `auth.secret` 을 복사해 둔다.** 재설치는 시크릿을
    새로 만든다. 그대로 두면 저장된 메일 비밀번호를 풀 수 없게 된다.
 2. `config/config.php` 를 지운다.
-3. `public/install.php` 를 다시 올리고 새 DB 로 설치한다. 2단계에서 표가 없는 빈 DB 를
+3. `www/install.php` 를 다시 올리고 새 DB 로 설치한다. 2단계에서 표가 없는 빈 DB 를
    고른다.
 4. 새로 생긴 `config/config.php` 의 `auth.secret` 을 1번에서 복사해 둔 값으로 되돌린다.
 
@@ -225,7 +225,7 @@ function issueBoardToken(string $userId, string $displayName, bool $isAdmin): st
 전체 명세는 **OpenAPI 3.0** 문서로 있다.
 
 - 스펙 원본: [`docs/openapi.yaml`](docs/openapi.yaml)
-- 브라우저에서 보기: `public/docs.php` (Swagger UI). 예) `https://example.com/docs.php`
+- 브라우저에서 보기: `www/docs.php` (Swagger UI). 예) `https://example.com/docs.php`
   - 스펙만 받으려면 `docs.php?spec`
   - 이 화면은 Swagger UI 를 CDN 에서 받아 쓴다. 게시판 자체의 런타임 의존성이 아니라
     이 파일 하나의 의존성이며, 지워도 API 는 그대로 동작한다. 외부 접속이 막힌 곳이라면

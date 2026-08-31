@@ -16,8 +16,8 @@ final class ThemeManagerTest extends TestCase
         $this->root = sys_get_temp_dir() . '/' . GNUCMS_ID . '-theme-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/templates/default', 0777, true);
         mkdir($this->root . '/templates/modern', 0777, true);
-        mkdir($this->root . '/public/themes/default', 0777, true);
-        mkdir($this->root . '/public/themes/modern', 0777, true);
+        mkdir($this->root . '/www/themes/default', 0777, true);
+        mkdir($this->root . '/www/themes/modern', 0777, true);
         // theme.php 가 있어야 테마다.
         file_put_contents($this->root . '/templates/default/theme.php', "<?php return ['label' => '기본'];");
         file_put_contents($this->root . '/templates/modern/theme.php', "<?php return ['label' => '모던'];");
@@ -43,20 +43,20 @@ final class ThemeManagerTest extends TestCase
 
     public function testAssetUsesSelectedFileAndFallsBackToDefault(): void
     {
-        file_put_contents($this->root . '/public/themes/default/theme.css', 'default');
-        file_put_contents($this->root . '/public/themes/default/logo.png', 'default logo');
-        file_put_contents($this->root . '/public/themes/modern/theme.css', 'modern');
+        file_put_contents($this->root . '/www/themes/default/theme.css', 'default');
+        file_put_contents($this->root . '/www/themes/default/logo.png', 'default logo');
+        file_put_contents($this->root . '/www/themes/modern/theme.css', 'modern');
 
         $themes = $this->manager('modern');
 
         self::assertSame(
             '/community/themes/modern/theme.css?v='
-                . substr(hash_file('sha256', $this->root . '/public/themes/modern/theme.css'), 0, 12),
+                . substr(hash_file('sha256', $this->root . '/www/themes/modern/theme.css'), 0, 12),
             $themes->assetUrl('theme.css', '/community')
         );
         self::assertSame(
             '/community/themes/default/logo.png?v='
-                . substr(hash_file('sha256', $this->root . '/public/themes/default/logo.png'), 0, 12),
+                . substr(hash_file('sha256', $this->root . '/www/themes/default/logo.png'), 0, 12),
             $themes->assetUrl('logo.png', '/community')
         );
     }
@@ -71,7 +71,7 @@ final class ThemeManagerTest extends TestCase
     {
         // 화면 없이 폴더만 있는 것(옛 테마 보관본)은 목록에 오르지 않는다.
         mkdir($this->root . '/templates/archive', 0777, true);
-        mkdir($this->root . '/public/themes/minimal', 0777, true);
+        mkdir($this->root . '/www/themes/minimal', 0777, true);
 
         self::assertSame(['default', 'modern'], $this->manager('default')->availableThemes());
         self::assertSame('default', $this->manager('archive')->name(), 'theme.php 없는 폴더는 고를 수 없다');
@@ -105,7 +105,7 @@ final class ThemeManagerTest extends TestCase
     {
         return new ThemeManager(
             $this->root . '/templates',
-            $this->root . '/public/themes',
+            $this->root . '/www/themes',
             $theme
         );
     }

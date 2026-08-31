@@ -38,8 +38,8 @@ return ['label' => '기본 (하늘빛)'];
 | `$this->icon('home', 18)` | `_icons.php` 의 아이콘 SVG |
 | `$this->date($v, 'Y.m.d')`, `$this->json($v)`, `$this->def($v, $기본값)` | 날짜 · JSON · 비었으면 기본값 |
 
-정적 파일은 `public/themes/{테마 이름}/` 에 두고 `$this->asset()` 으로 연결합니다.
-선택한 테마에 해당 파일이 없으면 `public/themes/default/` 의 파일 주소가 쓰입니다.
+정적 파일은 `www/themes/{테마 이름}/` 에 두고 `$this->asset()` 으로 연결합니다.
+선택한 테마에 해당 파일이 없으면 `www/themes/default/` 의 파일 주소가 쓰입니다.
 
 ```php
 <link rel="stylesheet" href="<?= $this->asset('theme.css') ?>">
