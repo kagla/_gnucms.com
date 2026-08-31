@@ -5,7 +5,7 @@
 <div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li aria-current="page">약관</li></ul></div>
 <div class="page-head">
   <div><h1>약관 관리</h1><p class="page-sub">약관마다 사용처를 정합니다. 회원가입 동의는 가입 화면에 붙고, 신청서·등록 동의는 그런 기능이 생기면 그 화면에 붙습니다. 안내만 하는 약관은 어디에도 붙지 않습니다.</p></div>
-  <div class="page-head-actions">
+  <div class="page-head-actions page-head-actions-end">
     <a class="btn btn-primary" href="<?= $this->url('admin.terms.create') ?>"><?= $this->icon('plus', 16) ?> 약관 만들기</a>
   </div>
 </div>

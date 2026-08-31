@@ -916,6 +916,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .page-head h1{font-size:25px;font-weight:800;letter-spacing:-.04em}
 .page-sub{margin-top:.4375rem;color:var(--bc-mid);font-size:13.5px}
 .page-head-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.page-head-actions-end{justify-content:flex-end;margin-left:auto}
 .page-note{margin-top:1rem;color:var(--bc-soft);font-size:12.5px}
 .section-title{display:flex;align-items:center;gap:.5rem;font-size:16px;font-weight:800;letter-spacing:-.02em}
 
