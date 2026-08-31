@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
 use GnuCms\Tests\Support\WebTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 final class PostListTest extends WebTestCase
 {
@@ -189,5 +190,24 @@ final class PostListTest extends WebTestCase
         $pageLinks = substr_count($body, '?page=');
         self::assertGreaterThan(0, $pageLinks);
         self::assertLessThanOrEqual(13, $pageLinks);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAllPostsAndBoardListShareTheSameTablePartial(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $app->postService()->create($acl, 'free', ['title' => '첫 글', 'content' => '본문입니다']);
+
+        $all = $this->body($this->get($app, '/posts'));
+        $board = $this->body($this->get($app, '/boards/free'));
+
+        // 한 조각이 두 화면을 그린다: 표 클래스가 같고, 각자 자기 칸을 낸다.
+        self::assertStringContainsString('class="table table-zebra posts-table"', $all);
+        self::assertStringContainsString('class="table table-zebra posts-table"', $board);
+        self::assertStringContainsString('<th class="post-col-board">게시판</th>', $all);
+        self::assertStringNotContainsString('<th class="post-col-board">게시판</th>', $board);
+        self::assertStringNotContainsString('&amp;amp;', $all);
     }
 }

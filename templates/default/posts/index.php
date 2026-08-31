@@ -1,14 +1,14 @@
 <?php $this->layout('layout') ?>
 <?php
 // 목록 주소 만들기. 이 파일 안에서만 쓰는 클로저다.
-// 결과는 이미 이스케이프된 HTML(& 는 &amp;)이므로 호출부에서 e() 를 쓰지 않는다.
+// 결과는 이스케이프하지 않은 순수 주소(& 그대로)다. 출력할 때 템플릿이 이스케이프한다.
 $listUrl = function (array $board, $q, $category, $page, $view = null): string {
     $params = [];
     if ($q) { $params[] = 'q=' . rawurlencode((string) $q); }
     if ($category) { $params[] = 'category=' . rawurlencode((string) $category); }
     if ($view) { $params[] = 'view=' . $view; }
     if ($page && $page > 1) { $params[] = 'page=' . $page; }
-    return $this->url('posts.index', ['key' => $board['board_key']]) . ($params !== [] ? '?' . implode('&amp;', $params) : '');
+    return $this->url('posts.index', ['key' => $board['board_key']]) . ($params !== [] ? '?' . implode('&', $params) : '');
 };
 ?>
 
@@ -138,34 +138,10 @@ $show_views = isset($view_types) && count($view_types) > 1;
   ?>
 <?php endif ?>
 
-<?php if ($list['total_pages'] > 1): ?>
-  <?php
-  $window = 3;
-  $start = max(1, $list['page'] - $window);
-  $end = min($list['total_pages'], $list['page'] + $window);
-  ?>
-  <nav class="pager" aria-label="페이지 이동">
-    <div class="join">
-      <?php if ($list['page'] > 1): ?><a class="join-item btn btn-sm" rel="prev" href="<?= $listUrl($board, $query['q'], $query['category'], $list['page'] - 1, $view_param) ?>" aria-label="이전 페이지"><?= $this->icon('chevron-left', 15) ?></a><?php endif ?>
-      <?php if ($start > 1): ?>
-        <a class="join-item btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], 1, $view_param) ?>" aria-label="1 페이지">1</a>
-        <?php if ($start > 2): ?><span class="join-item btn btn-sm btn-disabled" aria-hidden="true">…</span><?php endif ?>
-      <?php endif ?>
-      <?php for ($p = $start; $p <= $end; $p++): ?>
-        <?php if ($p === $list['page']): ?>
-          <span class="join-item btn btn-sm btn-active" aria-current="page"><?= $this->e($p) ?></span>
-        <?php else: ?>
-          <a class="join-item btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], $p, $view_param) ?>" aria-label="<?= $this->e($p) ?> 페이지"><?= $this->e($p) ?></a>
-        <?php endif ?>
-      <?php endfor ?>
-      <?php if ($end < $list['total_pages']): ?>
-        <?php if ($end < $list['total_pages'] - 1): ?><span class="join-item btn btn-sm btn-disabled" aria-hidden="true">…</span><?php endif ?>
-        <a class="join-item btn btn-sm" href="<?= $listUrl($board, $query['q'], $query['category'], $list['total_pages'], $view_param) ?>" aria-label="<?= $this->e($list['total_pages']) ?> 페이지"><?= $this->e($list['total_pages']) ?></a>
-      <?php endif ?>
-      <?php if ($list['page'] < $list['total_pages']): ?><a class="join-item btn btn-sm" rel="next" href="<?= $listUrl($board, $query['q'], $query['category'], $list['page'] + 1, $view_param) ?>" aria-label="다음 페이지"><?= $this->icon('chevron-right', 15) ?></a><?php endif ?>
-    </div>
-  </nav>
-<?php endif ?>
+<?php $this->insert('posts/_pager', [
+  'list' => $list,
+  'page_url' => fn (int $page): string => $listUrl($board, $query['q'], $query['category'], $page, $view_param),
+]) ?>
 
 <?php if ($can_write): ?>
   <a class="fab btn btn-primary btn-circle" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>" aria-label="글쓰기"><?= $this->icon('pencil', 22) ?></a>
