@@ -121,7 +121,9 @@ final class CommentRepository
             $marks[] = ':b' . $i;
             $params['b' . $i] = (int) $id;
         }
-        $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')';
+        // 글이 지워지면 그 글의 댓글도 목록에서 빠진다 — 링크가 404 인 줄을 보여 주지 않기 위해서.
+        $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')'
+            . ' AND post_id IN (SELECT id FROM ' . $this->db->q('posts') . ' WHERE deleted_at IS NULL)';
 
         $total = (int) $this->db->selectOne(
             'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE ' . $where,
