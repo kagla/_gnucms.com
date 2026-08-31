@@ -426,14 +426,17 @@ final class PostService
         if (!is_array($input)) {
             throw DomainError::validation(['attachments' => '배열이어야 합니다.']);
         }
+        // resolver 는 개수 한도 검사보다 먼저 돌려야 한다: App::attachments() 를 부르는
+        // 부수효과로 $attachmentLimit 도 함께 설정되기 때문이다. 검사부터 먼저 하면
+        // 지연 연결 전에는 한도가 기본값 0(무제한)으로 읽혀 한도 검사를 그냥 통과해 버린다.
+        if ($this->attachments === null && $this->attachmentResolver !== null) {
+            ($this->attachmentResolver)();
+        }
         if ($input !== [] && (int) $board['use_file'] !== 1) {
             throw DomainError::validation(['attachments' => '이 게시판은 첨부를 쓰지 않습니다.']);
         }
         if ($this->attachmentLimit > 0 && count($input) > $this->attachmentLimit) {
             throw DomainError::validation(['attachments' => '첨부는 ' . $this->attachmentLimit . '개까지입니다.']);
-        }
-        if ($this->attachments === null && $this->attachmentResolver !== null) {
-            ($this->attachmentResolver)();
         }
         if ($this->attachments === null) {
             throw DomainError::internal('첨부 서비스가 연결되지 않았습니다.');

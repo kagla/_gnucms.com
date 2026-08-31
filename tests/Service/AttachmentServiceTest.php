@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 
 final class AttachmentServiceTest extends WebTestCase
 {
-    public function testServerMaxMbIsPositive(): void
+    public function testServerMaxMbIsNonNegative(): void
     {
         // php.ini 값에 따라 다르지만, 둘 다 무제한이 아닌 한 0 보다 큰 정수여야 한다.
         // 0 은 "서버 쪽 한계 없음"이라는 별도 의미이므로 이 값 자체는 배제하지 않는다.

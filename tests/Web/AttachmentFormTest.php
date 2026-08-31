@@ -130,9 +130,10 @@ final class AttachmentFormTest extends WebTestCase
     public function testSaveWorksWithoutControllerPreCallingAttachments(array $dbConfig): void
     {
         // PostController::create()/update() 는 더 이상 App::attachments() 를 미리
-        // 부르지 않는다(PostService 의 지연 resolver 가 대신한다). 이걸 확인하려고
-        // 이미 연결된 첨부 서비스 참조를 강제로 끊어, resolver 가 없으면 저장이
-        // "첨부 서비스가 연결되지 않았습니다" 500 으로 죽는다는 것을 재현한다.
+        // 부르지 않는다(PostService 의 지연 resolver 가 대신한다). 이 테스트는 그
+        // resolver 배선이 살아 있는지를 지킨다: 이미 연결된 첨부 서비스 참조를 강제로
+        // 끊어 둔 채로도 저장이 되는지 본다. App::postService() 에서
+        // setAttachmentResolver() 호출을 지우면 이 테스트가 실패한다.
         $app = $this->loggedInApp($dbConfig, true);
         $acl = $this->adminAcl();
         $descriptor = $app->attachments()->upload($acl, 'free', $this->fakeUpload('지연.txt', '내용'));
@@ -149,5 +150,36 @@ final class AttachmentFormTest extends WebTestCase
         ]);
 
         self::assertSame(303, $created->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAttachmentLimitIsEnforcedEvenWithoutControllerPreCallingAttachments(array $dbConfig): void
+    {
+        // resolver 는 개수 한도 검사보다 먼저 돌아야 한다: App::attachments() 를
+        // 부르는 부수효과로 $attachmentLimit 도 함께 채워지기 때문이다. 순서가
+        // 뒤바뀌면(한도 검사 → resolver) 지연 연결 전에는 한도가 기본값 0(무제한)으로
+        // 읽혀 개수 제한이 조용히 뚫린다. 실제 다중 프로세스 배포에서 App::attachments()
+        // 를 미리 부른 적이 없는 첫 요청을 흉내 내려고, 이미 연결된 참조들을 전부
+        // reflection 으로 끊어 둔다.
+        $app = $this->loggedInApp($dbConfig, true, ['attach_limit' => '1']);
+        $acl = $this->adminAcl();
+        $first = $app->attachments()->upload($acl, 'free', $this->fakeUpload('하나.txt', '1'));
+        $second = $app->attachments()->upload($acl, 'free', $this->fakeUpload('둘.txt', '2'));
+
+        (new \ReflectionProperty(\GnuCms\App::class, 'attachmentService'))
+            ->setValue($app, null);
+        (new \ReflectionProperty(\GnuCms\Service\PostService::class, 'attachments'))
+            ->setValue($app->postService(), null);
+        (new \ReflectionProperty(\GnuCms\Service\PostService::class, 'attachmentLimit'))
+            ->setValue($app->postService(), 0);
+
+        $response = $this->post($app, '/boards/free/write', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '한도 초과', 'content' => '본문',
+            'attachments' => [$first, $second],
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('첨부는 1개까지입니다.', $this->body($response));
     }
 }

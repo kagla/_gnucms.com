@@ -64,7 +64,7 @@
         </label>
       <?php endif ?>
 
-      <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values]) ?><?php endif ?>
+      <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values, 'errors' => $errors]) ?><?php endif ?>
 
       <div class="card-actions form-actions">
         <a class="btn btn-ghost" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>">취소</a>
