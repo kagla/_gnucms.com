@@ -105,7 +105,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   function build(){
   return CKEDITOR.replace(textarea.id,{
     language:'ko',
-    height:mini?160:360,
+    height:mini?160:280,
     versionCheck:false,
     resize_minWidth:0,
     contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css') ?>],

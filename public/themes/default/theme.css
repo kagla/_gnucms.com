@@ -1195,7 +1195,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .comment-form{
   display:flex;flex-direction:column;gap:.625rem;
   margin-top:1.5rem;padding-top:1.5rem;
-  border-top:var(--border) solid var(--bc-10);
 }
 .comment-form .fieldset{margin-block:0}
 .comment-reply-to{
@@ -1212,7 +1211,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .comment-form-foot .btn[data-submit]{margin-left:auto}
 .comment-denied{
   margin-top:1.5rem;padding-top:1.5rem;
-  border-top:var(--border) solid var(--bc-10);
   color:var(--bc-mid);font-size:13.5px;
 }
 
