@@ -575,6 +575,9 @@ final class PostService
         $view['updated_at'] = $row['updated_at'];
         $view['attachments'] = [];
         foreach ($row['attachments'] as $index => $file) {
+            // id·path 는 화면에 뿌리는 값이 아니라 수정 폼이 AttachmentService::withSignature()
+            // 로 서명을 다시 붙여 hidden input 에 되싣는 재료다. 절대 템플릿에 그대로 찍지 않는다
+            // (path 는 서버 파일 경로를 드러낸다).
             $view['attachments'][] = [
                 'index' => $index,
                 'id'    => $file['id'] ?? '',

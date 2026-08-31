@@ -36,6 +36,8 @@ return [
 
     'uploads' => [
         'dir'         => __DIR__ . '/../storage/uploads',
+        // 설치 전 기본값일 뿐이다. 설치 후에는 사이트 설정(관리자 화면의 attach_max_mb)이
+        // 우선하며, App::attachments() 가 이 값을 그 설정으로 덮어써 넘긴다.
         'max_bytes'   => 5 * 1024 * 1024,
         'allowed_ext' => [
             'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'txt',
