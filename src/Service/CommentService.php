@@ -346,11 +346,21 @@ final class CommentService
         $perPage = 20;
 
         $user = $author > 0 && $this->users !== null ? $this->users->findById($author) : null;
+        // 차단된 회원은 없는 회원과 같게 다룬다. 다른 곳도 모두 status === 'active' 를 요구한다.
+        if ($user !== null && $user['status'] !== 'active') {
+            $user = null;
+        }
         $empty = [
             'data' => [], 'page' => $page, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 0,
             'author' => null, 'author_name' => null,
         ];
         if ($user === null) {
+            return $empty;
+        }
+
+        // boards 도 users 처럼 나중에 주입되는 선택 의존이다. 없으면 읽을 수 있는
+        // 게시판이 없는 것으로 보고 빈 결과를 낸다 — 직접 만든 서비스가 죽지 않게.
+        if ($this->boards === null) {
             return $empty;
         }
 
@@ -361,7 +371,7 @@ final class CommentService
 
         $result = $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage);
 
-        // 글 제목은 한 번에 읽는다. 줄마다 읽으면 스무 번 물어보게 된다.
+        // 페이지당 최대 20건이라 한 건씩 낱개로 읽는다.
         $titles = [];
         $postIds = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['post_id'], $result['rows'])));
         foreach ($postIds as $postId) {

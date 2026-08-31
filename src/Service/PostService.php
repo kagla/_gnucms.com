@@ -229,12 +229,15 @@ final class PostService
         ];
     }
 
-    /** 회원 번호로 표시 이름을 읽는다. 없는 회원이면 null. */
+    /** 회원 번호로 표시 이름을 읽는다. 없거나 차단된 회원이면 null. */
     private function displayNameOf(int $userId): ?string
     {
         $user = $this->users === null ? null : $this->users->findById($userId);
+        if ($user === null || $user['status'] !== 'active') {
+            return null;
+        }
 
-        return $user === null ? null : (string) $user['display_name'];
+        return (string) $user['display_name'];
     }
 
     public function listAllPosts(Acl $acl, array $query): array

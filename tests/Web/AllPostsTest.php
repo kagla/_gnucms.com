@@ -80,6 +80,32 @@ final class AllPostsTest extends WebTestCase
         self::assertStringContainsString('회원 글', $body);
         self::assertStringNotContainsString('관리자 글', $body);
         self::assertStringContainsString('글쓴사람 님의 글', $body);
+        // 검색창에서 다시 찾아도 글쓴이 거르기가 풀리면 안 된다 — 검색 폼이 author 를 함께 실어 날라야 한다.
+        self::assertMatchesRegularExpression(
+            '#<form class="header-search"[^>]*>.*?<input type="hidden" name="author" value="' . $memberId . '">#s',
+            $body
+        );
+    }
+
+    /**
+     * 차단된 회원은 없는 회원과 같이 다룬다. 안 그러면 차단된 회원의 번호를 아는 사람이
+     * 여전히 "○○ 님의 글" 로 그 사람 글만 모아 볼 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBlockedAuthorFallsBackToTheWholeList(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $app->postService()->create($acl, 'free', ['title' => '관리자 글', 'content' => '본문입니다']);
+        $memberId = $app->users()->create('writer@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '차단될사람');
+        $app->users()->verifyEmail($memberId);
+        $app->users()->setStatus($memberId, 'blocked');
+
+        $body = $this->body($this->get($app, '/posts', ['author' => (string) $memberId]));
+
+        self::assertStringContainsString('관리자 글', $body);
+        self::assertStringNotContainsString('님의 글', $body);
     }
 
     #[DataProvider('connectionProvider')]

@@ -11,6 +11,7 @@ $allUrl = function ($q, $page) use ($list): string {
 <?php $this->start('nav_section') ?>all<?php $this->stop() ?>
 <?php $this->start('header_search') ?>
 <form class="header-search" method="get" action="<?= $this->url('posts.all') ?>" role="search">
+  <?php if (($list['author'] ?? null) !== null): ?><input type="hidden" name="author" value="<?= $this->e((string) $list['author']) ?>"><?php endif ?>
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
     <input type="search" name="q" value="<?= $this->e($query['q'] ?? '') ?>" placeholder="모든 게시판에서 검색해 보세요" aria-label="전체 글 검색" data-search-input>

@@ -204,7 +204,7 @@ final class Routes
 
         $comments = new CommentController($app);
         $slim->post('/posts/{id:[0-9]+}/comments', [$comments, 'create'])->setName('comments.create');
-        // 정적 주소가 먼저와야 한다. 아래 {id:...} 변수 라우트에 가려진 전례가 있다.
+        // 정적인 회원 댓글 목록 주소다.
         $slim->get('/comments', [$comments, 'byAuthor'])->setName('comments.byAuthor');
         $slim->get('/comments/{id:[0-9]+}/password', [$comments, 'passwordForm'])->setName('comments.password');
         $slim->post('/comments/{id:[0-9]+}/password', [$comments, 'unlockSecret']);
