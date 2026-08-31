@@ -168,12 +168,32 @@ final class PostRepository
         return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
     }
 
-    public function notices(int $boardId): array
+    /**
+     * 목록 맨 위에 붙일 공지. 이 게시판의 공지와, 읽을 수 있는 게시판에 올라온
+     * 전체 공지를 함께 뽑는다. 전체 공지가 먼저, 각각 최신순이다.
+     *
+     * @param int[] $readableBoardIds 읽을 수 있는 게시판 번호. 전체 공지는 이 안에서만 온다
+     */
+    public function notices(int $boardId, array $readableBoardIds = []): array
     {
+        $params = ['board_id' => $boardId];
+        $globalClause = '';
+        if ($readableBoardIds !== []) {
+            $marks = [];
+            foreach (array_values($readableBoardIds) as $i => $id) {
+                $marks[] = ':r' . $i;
+                $params['r' . $i] = (int) $id;
+            }
+            $globalClause = " OR (notice_scope = 'global' AND board_id IN (" . implode(', ', $marks) . '))';
+        }
+
         $rows = $this->db->select(
             'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
-            . ' WHERE board_id = ? AND deleted_at IS NULL AND is_notice = 1 ORDER BY id DESC',
-            [$boardId]
+            . ' WHERE deleted_at IS NULL AND is_notice = 1'
+            . ' AND (board_id = :board_id' . $globalClause . ')'
+            // 전체 공지를 먼저. 방언마다 불리언 정렬이 달라 CASE 로 적는다.
+            . " ORDER BY CASE WHEN notice_scope = 'global' THEN 0 ELSE 1 END, id DESC",
+            $params
         );
 
         return array_map([$this, 'hydrate'], $rows);

@@ -1756,3 +1756,6 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
+
+/* 전체 공지 뱃지는 게시판 공지와 색으로 갈린다 */
+.notice-list .notice-scope{white-space:nowrap}
