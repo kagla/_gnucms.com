@@ -78,7 +78,7 @@ daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 compo
 
 | 이름 | 내용 |
 |---|---|
-| `site` | `site_name`, `site_tagline`, `home_title`, `home_intro`, `theme`, `registration_enabled` |
+| `site` | `site_name`, `site_tagline`, `home_title`, `home_intro`, `theme`, `registration_enabled`, `attach_max_mb`, `attach_limit` |
 | `current_user` | `is_guest`, `id`, `display_name`, `is_admin` |
 | `csrf_token` | 모든 POST 폼의 hidden 값 |
 | `unread_notifications` | 머리글 알림 배지 수 |
