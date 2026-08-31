@@ -133,6 +133,34 @@ final class NoticeScopeTest extends WebTestCase
         }
     }
 
+    /**
+     * create() 의 게시판 공지 가드를 못박는다. 관리자도 게시판 관리자도 아닌
+     * 평범한 회원은 notice=board 로도, 옛 입력 is_notice=1 로도 공지를
+     * 올릴 수 없어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testPlainMemberCannotPinABoardNoticeOnCreate(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'perm_write' => 'member',
+        ]);
+        $member = new Acl(Identity::user('7', '회원사람', false));
+
+        foreach ([['notice' => 'board'], ['is_notice' => '1']] as $input) {
+            try {
+                $app->postService()->create($member, 'free', array_merge(
+                    ['title' => '몰래 게시판 공지', 'content' => '본문입니다'],
+                    $input
+                ));
+                self::fail('평범한 회원은 게시판 공지를 올릴 수 없어야 한다');
+            } catch (DomainError $e) {
+                self::assertContains($e->status(), [401, 403]);
+                self::assertSame('이 게시판의 관리자만 할 수 있습니다.', $e->getMessage());
+            }
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testUnknownNoticeValueIsTreatedAsNotANotice(array $dbConfig): void
     {

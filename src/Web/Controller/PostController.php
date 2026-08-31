@@ -74,9 +74,7 @@ final class PostController
             'is_secret' => (bool) $loaded['post']['is_secret'],
             'image_key' => (string) ($loaded['post']['image_key'] ?? '') ?: bin2hex(random_bytes(16)),
             'attachments' => $attachments,
-            'notice' => $loaded['post']['is_notice']
-                ? (($loaded['post']['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board')
-                : 'none',
+            'notice' => $this->noticeChoiceOf($loaded['post']),
         ], []);
     }
 
@@ -153,6 +151,15 @@ final class PostController
         $loaded = $this->app->postService()->loadForRead($acl, $id, null);
         $post = $loaded['post'];
 
+        // 422 재렌더는 원 요청 그대로인 $values 를 쓴다. 게시판 관리자에게는 전체 공지
+        // 라디오가 없으므로 그 관리자가 제출한 요청에는 notice 키가 아예 없을 수 있는데,
+        // 그걸 그냥 두면 화면의 def() 가 '공지 아님'으로 떨어져 폼에 잘못 체크되고,
+        // 그대로 재제출하면 이미 있던 전체 공지가 조용히 내려간다. GET 폼(editForm())과
+        // 똑같이 저장된 상태에서 채워 넣어야 그 재렌더가 안전하다.
+        if (!array_key_exists('notice', $values)) {
+            $values['notice'] = $this->noticeChoiceOf($post);
+        }
+
         return View::fromRequest($request)->render($response, 'posts/edit', [
             'board'  => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'post'   => ['id' => $id, 'author_id' => $post['author_id']],
@@ -165,6 +172,16 @@ final class PostController
             // 공지까지만 고를 수 있다.
             'can_pin_global' => $acl->isGlobalAdmin(),
         ]);
+    }
+
+    /** 저장된 글의 공지 상태를 폼의 notice 라디오 값(none|board|global)으로 바꾼다. */
+    private function noticeChoiceOf(array $post): string
+    {
+        if (!$post['is_notice']) {
+            return 'none';
+        }
+
+        return ($post['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board';
     }
 
     /**

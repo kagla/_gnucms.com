@@ -174,6 +174,23 @@ final class PostRepositoryTest extends DatabaseTestCase
         $this->assertSame(['공지 2', '공지 1'], array_column($repo->notices($boardId), 'title'));
     }
 
+    /** setNotice(false) 는 공지를 내리면서 범위도 기본값(board)으로 되돌려야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testSetNoticeFalseRevertsScopeToBoard(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $id = $repo->create($this->post($boardId, '전체 공지'));
+        $repo->update($id, ['notice_scope' => 'global']);
+        $repo->setNotice($id, true);
+        $this->assertSame('global', $repo->find($id)['notice_scope']);
+
+        $repo->setNotice($id, false);
+
+        $post = $repo->find($id);
+        $this->assertSame(0, $post['is_notice']);
+        $this->assertSame('board', $post['notice_scope']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testSoftDeleteAndRestore(array $config): void
     {
