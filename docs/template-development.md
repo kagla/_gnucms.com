@@ -113,6 +113,9 @@ daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 compo
 목록 항목에는 `excerpt`, `thumbnail`, `comment_count`, `view_count` 가 실려 온다. 비밀글은
 발췌와 썸네일이 비어 온다.
 
+목록 위의 공지 줄에는 그 게시판의 공지와 전체 공지가 함께 온다. 항목의 `notice_scope`
+가 `global` 이면 "전체 공지" 뱃지를 붙인다.
+
 ## 10. 본문 편집기와 사진
 
 글·댓글·내용 편집은 CKEditor 4 (`public/vendor/ckeditor4/`)를 `posts/_editor.php`·
