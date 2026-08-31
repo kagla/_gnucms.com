@@ -161,6 +161,40 @@ final class NoticeScopeTest extends WebTestCase
         }
     }
 
+    /**
+     * "사이트 관리자만 바꿀 수 있습니다" 라는 문구가 실제로 지켜지는지 못박는다.
+     * 저장된 글이 이미 전체 공지라면, 게시판 관리자가 notice=none 을 보내
+     * 내리려 해도 막혀야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBoardManagerCannotLowerAStoredGlobalNotice(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'managers' => ['7'],
+        ]);
+        $manager = new Acl(Identity::user('7', '게시판지기', false));
+        $global = $app->postService()->create($this->adminAcl(), 'free', [
+            'title' => '전체 공지', 'content' => '본문입니다', 'notice' => 'global',
+        ]);
+
+        try {
+            $app->postService()->update($manager, $global['id'], [
+                'title' => '전체 공지', 'content' => '본문입니다', 'notice' => 'none',
+            ]);
+            self::fail('게시판 관리자는 전체 공지를 내릴 수 없어야 한다');
+        } catch (DomainError $e) {
+            self::assertContains($e->status(), [401, 403]);
+        }
+
+        // 공지 칸을 건드리지 않고 제목·내용만 고치는 것은 여전히 된다.
+        $updated = $app->postService()->update($manager, $global['id'], [
+            'title' => '전체 공지(고침)', 'content' => '고친 본문입니다',
+        ]);
+        self::assertTrue($updated['is_notice']);
+        self::assertSame('global', $updated['notice_scope']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testUnknownNoticeValueIsTreatedAsNotANotice(array $dbConfig): void
     {

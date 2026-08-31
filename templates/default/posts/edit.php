@@ -66,12 +66,13 @@
 
       <?php if (!empty($can_manage_board)): ?>
         <?php // 공지는 그 게시판의 관리자만 올린다. 회원에게는 이 칸이 아예 없다. ?>
-        <fieldset class="fieldset">
+        <fieldset class="fieldset<?php if (array_key_exists('notice', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
+          <?php if (array_key_exists('notice', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['notice']) ?></p><?php endif ?>
           <?php // 이미 전체 공지인 글을 게시판 관리자가 볼 때는 global 라디오 자체가 없어
                 // 아무 것도 선택되지 않은 채로 보인다. 마치 공지가 아닌 것처럼 보이지
                 // 않도록, 이 경우에는 상태를 문장으로 따로 알려 준다. ?>
-          <?php if (empty($can_pin_global) && ($values['notice'] ?? 'none') === 'global'): ?>
+          <?php if (empty($can_pin_global) && ($notice_current ?? 'none') === 'global'): ?>
             <p class="fieldset-label">현재 전체 공지입니다. 사이트 관리자만 바꿀 수 있습니다.</p>
           <?php endif ?>
           <div class="chip-bar" role="radiogroup" aria-label="공지 범위">

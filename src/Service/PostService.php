@@ -488,8 +488,13 @@ final class PostService
         }
         if (array_key_exists('notice', $input) || array_key_exists('is_notice', $input)) {
             $notice = $this->noticeFrom($v, $input);
-            if ($notice['is_notice'] === 1 && $notice['notice_scope'] === 'global') {
-                // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올린다.
+            // 전체 공지는 사이트 관리자의 것이라 내리는 것도 사이트 관리자만 한다.
+            // 저장된 글이 이미 전체 공지라면, 요청이 무엇을 보내든(none 이든 board 든)
+            // 이 검사를 거친다 — 그래야 게시판 관리자가 notice=none 으로 몰래
+            // 사이트 관리자의 전체 공지를 내리지 못한다.
+            $storedIsGlobalNotice = $post['is_notice'] === 1 && $post['notice_scope'] === 'global';
+            if ($storedIsGlobalNotice || ($notice['is_notice'] === 1 && $notice['notice_scope'] === 'global')) {
+                // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올리거나 내릴 수 있다.
                 $acl->assertGlobalAdmin();
             } else {
                 // 이 게시판 공지로 올리거나 공지를 내리는 것은 사이트 관리자 또는

@@ -14,6 +14,14 @@ use GnuCms\View\View;
 
 final class PostController
 {
+    /**
+     * PostService::update() 의 공지 가드(Acl::assertGlobalAdmin/assertAdminFor)가
+     * 던지는, 상세 없는 401/403 메시지. update() 안에서 이 문구가 나올 곳은
+     * 공지 가드뿐이므로(다른 권한 거부는 다른 문구를 쓴다) 이걸로 오류를
+     * password 칸이 아니라 공지 칸으로 보낼지 가른다.
+     */
+    private const NOTICE_GUARD_MESSAGES = ['전역 관리자만 할 수 있습니다.', '이 게시판의 관리자만 할 수 있습니다.'];
+
     /** @var App */
     private $app;
 
@@ -95,7 +103,11 @@ final class PostController
             }
             $errors = $e->details();
             if ($errors === []) {
-                $errors = ['password' => $e->getMessage()];
+                // needs_password 가 거짓인 요청(예: 자기 게시판 글을 고치는 게시판
+                // 관리자)에는 password 칸이 아예 없어, 그리로 보내면 오류가 화면 어디에도
+                // 나타나지 않는다. 공지 가드가 던진 오류는 공지 칸 아래로 보낸다.
+                $field = in_array($e->getMessage(), self::NOTICE_GUARD_MESSAGES, true) ? 'notice' : 'password';
+                $errors = [$field => $e->getMessage()];
             }
 
             return $this->renderEditForm($request, $response->withStatus(422), $id, $input, $errors);
@@ -171,6 +183,9 @@ final class PostController
             // 전체 공지 선택지는 사이트 관리자에게만 보인다. 게시판 관리자는 이 게시판
             // 공지까지만 고를 수 있다.
             'can_pin_global' => $acl->isGlobalAdmin(),
+            // 상태 줄("현재 전체 공지입니다")은 제출된 값이 아니라 저장된 값을 본다.
+            // $values['notice'] 는 요청이 조작할 수 있어 이걸로 판단하면 안 된다.
+            'notice_current' => $this->noticeChoiceOf($post),
         ]);
     }
 

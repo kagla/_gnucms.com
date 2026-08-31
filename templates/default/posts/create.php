@@ -75,8 +75,9 @@
 
       <?php if (!empty($can_manage_board)): ?>
         <?php // 공지는 그 게시판의 관리자만 올린다. 회원에게는 이 칸이 아예 없다. ?>
-        <fieldset class="fieldset">
+        <fieldset class="fieldset<?php if (array_key_exists('notice', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
+          <?php if (array_key_exists('notice', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['notice']) ?></p><?php endif ?>
           <div class="chip-bar" role="radiogroup" aria-label="공지 범위">
             <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
               <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
@@ -86,7 +87,9 @@
               </label>
             <?php endforeach ?>
           </div>
-          <p class="fieldset-label">전체 게시판 공지는 이 게시판을 읽을 수 있는 사람에게만 보입니다.</p>
+          <?php if (!empty($can_pin_global)): ?>
+            <p class="fieldset-label">전체 게시판 공지는 이 게시판을 읽을 수 있는 사람에게만 보입니다.</p>
+          <?php endif ?>
         </fieldset>
       <?php endif ?>
 

@@ -169,10 +169,21 @@ final class NoticeFormTest extends WebTestCase
             $body,
             '재렌더 폼이 "공지 아님"을 조용히 체크해서는 안 된다'
         );
+        // 숨은 notice 입력이 하나라도 있으면 화면에 없는 값을 몰래 실어 보낼 수 있다.
+        // 게시판 관리자용 폼에는 notice 가 라디오로만 있어야 한다.
+        self::assertDoesNotMatchRegularExpression(
+            '/<input[^>]*type="hidden"[^>]*name="notice"/',
+            $body,
+            '숨은 notice 입력으로 값을 몰래 정하면 안 된다'
+        );
 
         // 422 상태 그대로(제목만 채워) 다시 제출한다. 전체 공지가 그대로 남아 있어야 한다.
-        $validEdit = $invalidEdit;
-        $validEdit['title'] = '전체 공지(고침)';
+        // 재전송 값은 렌더된 폼을 그대로 읽어서 만든다 — 하드코딩된 배열은 체크된
+        // 라디오가 없다는 사실도, 몰래 끼어든 notice 값도 알아채지 못한다.
+        $validEdit = ['csrf_token' => $_SESSION['csrf_token'], 'title' => '전체 공지(고침)', 'content' => '고친 본문입니다'];
+        if (preg_match('/<input[^>]*name="notice"[^>]*value="([^"]*)"[^>]*checked/', $body, $checked) === 1) {
+            $validEdit['notice'] = $checked[1];
+        }
         $resubmit = $this->post($app, '/posts/' . $post['id'] . '/edit', $validEdit);
         self::assertSame(303, $resubmit->getStatusCode());
 
