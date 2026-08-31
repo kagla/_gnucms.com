@@ -46,6 +46,29 @@ final class PasswordThrottleWebTest extends WebTestCase
         self::assertStringContainsString('너무 많이 틀렸습니다', $this->body($locked));
     }
 
+    /** 대소문자만 다른 이메일은 authenticate() 가 소문자로 정규화한 뒤 스로틀 키를 만들므로 같은 잠금을 공유한다. */
+    #[DataProvider('connectionProvider')]
+    public function testLoginLockKeyIgnoresEmailCase(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('victim@example.com', password_hash('correct-pass-123', PASSWORD_DEFAULT), '피해자');
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+
+        for ($i = 0; $i < 5; $i++) {
+            $response = $this->post($app, '/login', [
+                'csrf_token' => $_SESSION['csrf_token'], 'email' => 'Victim@Example.com', 'password' => 'wrong-' . $i,
+            ]);
+            self::assertSame(422, $response->getStatusCode());
+        }
+
+        $locked = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'victim@example.com', 'password' => 'correct-pass-123',
+        ]);
+        self::assertSame(422, $locked->getStatusCode());
+        self::assertStringContainsString('너무 많이', $this->body($locked));
+    }
+
     #[DataProvider('connectionProvider')]
     public function testSuccessfulLoginClearsEarlierFailures(array $dbConfig): void
     {

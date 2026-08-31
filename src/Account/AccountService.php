@@ -107,19 +107,23 @@ final class AccountService
         $password = isset($input['password']) && is_scalar($input['password'])
             ? (string) $input['password'] : '';
         // 계정별+IP 별 대입 방어. 잠긴 동안은 맞는 비밀번호도 검사하지 않는다.
-        if ($this->throttle !== null && $email !== '') {
+        // 이메일 형태가 아닌 값(공격자가 아무 문자열이나 넣은 것)은 기록하지 않는다 —
+        // 그런 값마다 영구 행을 하나씩 만들면 표가 무한히 늘어난다. assertNotLocked·
+        // recordFailure·clear 세 곳 모두 같은 조건으로 가른다.
+        $useThrottle = $this->throttle !== null && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+        if ($useThrottle) {
             $this->throttle->assertNotLocked('login:' . $email, 'email');
         }
         $user = $email === '' ? null : $this->users->findByEmail($email);
 
         if ($user === null || $user['status'] !== 'active' || $user['password_hash'] === null
             || !password_verify($password, (string) $user['password_hash'])) {
-            if ($this->throttle !== null && $email !== '') {
+            if ($useThrottle) {
                 $this->throttle->recordFailure('login:' . $email);
             }
             throw DomainError::validation(['email' => '이메일 또는 비밀번호를 확인해 주세요.']);
         }
-        if ($this->throttle !== null && $email !== '') {
+        if ($useThrottle) {
             // 비밀번호까지 맞은 사람이다(미인증 분기 포함). 이전 실패는 잊는다.
             $this->throttle->clear('login:' . $email);
         }

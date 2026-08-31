@@ -140,7 +140,14 @@ final class Acl
 
         $allowed = $this->canModify($board, $post, $password);
         if ($useThrottle) {
-            $allowed ? $this->throttle->clear($key) : $this->throttle->recordFailure($key);
+            // 관리자 단락 평가로 통과했을 뿐 비밀번호를 검증한 게 아니면(아무 문자열이나
+            // 넘어와도 canModify 가 true 다) 대입 기록을 지우지 않는다. 실제로 비밀번호로
+            // 소유를 증명했을 때만 지운다. 그 외 진짜로 틀린 경우만 기록한다.
+            if ($this->owns($post, $password)) {
+                $this->throttle->clear($key);
+            } elseif (!$allowed) {
+                $this->throttle->recordFailure($key);
+            }
         }
 
         return $allowed;
@@ -158,7 +165,10 @@ final class Acl
         }
 
         if ($this->canModify($board, $resource, $password)) {
-            if ($useThrottle) {
+            // 관리자 단락 평가로 통과했을 뿐 비밀번호를 검증한 게 아니면(아무 문자열이나
+            // 넘어와도 canModify 가 true 다) 대입 기록을 지우지 않는다. 실제로 비밀번호로
+            // 소유를 증명했을 때만 지운다.
+            if ($useThrottle && $this->owns($resource, $password)) {
                 $this->throttle->clear($key);
             }
 

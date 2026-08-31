@@ -724,6 +724,13 @@ final class Schema
         ];
     }
 
+    /**
+     * first_failed_at 은 유닉스 초를 담는 칸이라 MySQL 의 INTEGER(4바이트, 2038년 만료)로는
+     * 부족해 BIGINT 를 쓴다. fail_count 는 5 안팎의 작은 값이라 INTEGER 로 충분하다.
+     * migratePasswordThrottle() 은 표가 없을 때만 새로 만드는 멱등 마이그레이션이라,
+     * 이 표는 이번 릴리스에서 처음 생기는 것이고 이보다 앞서 INTEGER 로 만들어진
+     * MySQL 설치는 아직 존재하지 않는다 — 그래서 폭을 넓히는 별도 ALTER 는 필요 없다.
+     */
     private function passwordThrottleStatements(): array
     {
         return [
@@ -732,7 +739,7 @@ final class Schema
                 attempt_key     VARCHAR(120) NOT NULL,
                 client_ip       VARCHAR(64)  NOT NULL,
                 fail_count      INTEGER      NOT NULL DEFAULT 0,
-                first_failed_at INTEGER      NOT NULL
+                first_failed_at BIGINT       NOT NULL
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_password_attempts ON password_attempts (attempt_key, client_ip)',
         ];
