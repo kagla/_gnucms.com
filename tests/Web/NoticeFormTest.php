@@ -46,6 +46,35 @@ final class NoticeFormTest extends WebTestCase
         self::assertStringNotContainsString('name="notice"', $this->body($this->get($app2, '/boards/free/new')));
     }
 
+    /**
+     * 게시판 관리자는 이 게시판 공지까지만 고를 수 있다. 전체 공지 선택지는
+     * 사이트 관리자에게만 보인다 (PostController::can_pin_global).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBoardManagerDoesNotSeeGlobalOptionButSiteAdminDoes(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $managerId = $app->users()->create('manager@example.com', password_hash('manager-password-123', PASSWORD_DEFAULT), '게시판지기');
+        $app->users()->verifyEmail($managerId);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'managers' => [(string) $managerId],
+        ]);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'manager@example.com', 'password' => 'manager-password-123',
+        ]);
+        $managerForm = $this->body($this->get($app, '/boards/free/new'));
+        self::assertStringContainsString('name="notice"', $managerForm);
+        self::assertDoesNotMatchRegularExpression('/<input[^>]*name="notice"[^>]*value="global"/', $managerForm);
+
+        $app2 = $this->makeApp($dbConfig);
+        $app2->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유']);
+        $this->loginAsAdmin($app2);
+        $adminForm = $this->body($this->get($app2, '/boards/free/new'));
+        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"/', $adminForm);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testAdminCanPinThroughTheForm(array $dbConfig): void
     {

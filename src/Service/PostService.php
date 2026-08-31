@@ -420,8 +420,11 @@ final class PostService
         $notice = $this->noticeFrom($v, $input);
         $data['is_notice'] = $notice['is_notice'];
         $data['notice_scope'] = $notice['notice_scope'];
-        if ($data['is_notice'] === 1) {
-            // 공지는 그 게시판의 관리자만 올릴 수 있다.
+        if ($data['is_notice'] === 1 && $notice['notice_scope'] === 'global') {
+            // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올린다.
+            $acl->assertGlobalAdmin();
+        } elseif ($data['is_notice'] === 1) {
+            // 이 게시판 공지는 사이트 관리자 또는 그 게시판 관리자가 올릴 수 있다.
             $acl->assertAdminFor($board);
         }
 
@@ -485,8 +488,15 @@ final class PostService
             $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
         }
         if (array_key_exists('notice', $input) || array_key_exists('is_notice', $input)) {
-            $acl->assertAdminFor($board);
             $notice = $this->noticeFrom($v, $input);
+            if ($notice['is_notice'] === 1 && $notice['notice_scope'] === 'global') {
+                // 전체 공지는 모든 게시판에 붙으므로 사이트 관리자만 올린다.
+                $acl->assertGlobalAdmin();
+            } else {
+                // 이 게시판 공지로 올리거나 공지를 내리는 것은 사이트 관리자 또는
+                // 그 게시판 관리자면 된다.
+                $acl->assertAdminFor($board);
+            }
             $data['is_notice'] = $notice['is_notice'];
             $data['notice_scope'] = $notice['notice_scope'];
         }

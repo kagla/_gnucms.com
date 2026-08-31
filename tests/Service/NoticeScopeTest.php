@@ -76,6 +76,33 @@ final class NoticeScopeTest extends WebTestCase
         }
     }
 
+    /** 게시판 관리자는 그 게시판 공지까지만 올릴 수 있다. 전체 공지는 사이트 관리자만. */
+    #[DataProvider('connectionProvider')]
+    public function testBoardManagerCannotPinGlobally(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'managers' => ['7'],
+        ]);
+        $manager = new Acl(Identity::user('7', '게시판지기', false));
+
+        $board = $app->postService()->create($manager, 'free', [
+            'title' => '게시판 공지', 'content' => '본문입니다', 'notice' => 'board',
+        ]);
+        self::assertTrue($board['is_notice']);
+        self::assertSame('board', $board['notice_scope']);
+
+        try {
+            $app->postService()->create($manager, 'free', [
+                'title' => '몰래 전체 공지', 'content' => '본문입니다', 'notice' => 'global',
+            ]);
+            self::fail('게시판 관리자는 전체 공지를 올릴 수 없어야 한다');
+        } catch (DomainError $e) {
+            self::assertContains($e->status(), [401, 403]);
+            self::assertSame('전역 관리자만 할 수 있습니다.', $e->getMessage());
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testUnknownNoticeValueIsTreatedAsNotANotice(array $dbConfig): void
     {

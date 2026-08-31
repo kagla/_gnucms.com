@@ -79,6 +79,7 @@
           <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
           <div class="chip-bar" role="radiogroup" aria-label="공지 범위">
             <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
+              <?php if ($value === 'global' && empty($can_pin_global)): continue; endif ?>
               <label class="btn btn-sm chip-radio">
                 <input type="radio" name="notice" value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' checked' : '' ?>>
                 <span><?= $this->e($label) ?></span>

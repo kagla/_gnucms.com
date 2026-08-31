@@ -161,6 +161,9 @@ final class PostController
             // 비회원이 쓴 글은 비밀번호로 주인을 확인한다. 관리자는 그냥 고칠 수 있다.
             'needs_password' => $post['author_id'] === null && !$acl->isAdminFor($loaded['board']),
             'can_manage_board' => $acl->isAdminFor($loaded['board']),
+            // 전체 공지 선택지는 사이트 관리자에게만 보인다. 게시판 관리자는 이 게시판
+            // 공지까지만 고를 수 있다.
+            'can_pin_global' => $acl->isGlobalAdmin(),
         ]);
     }
 
@@ -193,6 +196,8 @@ final class PostController
             // 편집기가 올린 이미지를 한 폴더로 묶는 키. 저장할 때 본문에 남은 것만 남긴다.
             'values' => ['image_key' => bin2hex(random_bytes(16))],
             'can_manage_board' => $acl->isAdminFor($entity),
+            // 전체 공지 선택지는 사이트 관리자에게만 보인다.
+            'can_pin_global' => $acl->isGlobalAdmin(),
         ]);
     }
 
@@ -220,6 +225,8 @@ final class PostController
                     // 관리자에게만 보이는 공지 선택지. 여기서 빠뜨리면 검증 실패로 폼이
                     // 되돌아올 때 고른 공지 범위가 화면에서 사라진다.
                     'can_manage_board' => $acl->isAdminFor($this->app->boardService()->getEntity($acl, $key)),
+                    // 전체 공지 선택지는 사이트 관리자에게만 보인다.
+                    'can_pin_global' => $acl->isGlobalAdmin(),
                 ]
             );
         }
