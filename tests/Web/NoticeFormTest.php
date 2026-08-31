@@ -109,7 +109,7 @@ final class NoticeFormTest extends WebTestCase
 
         $body = $this->body($response);
         self::assertStringContainsString('name="notice"', $body);
-        self::assertMatchesRegularExpression('/value="global"[^>]*checked/', $body);
+        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"[^>]*checked/', $body);
     }
 
     #[DataProvider('connectionProvider')]
@@ -125,6 +125,6 @@ final class NoticeFormTest extends WebTestCase
 
         $body = $this->body($this->get($app, '/posts/' . $post['id'] . '/edit'));
 
-        self::assertMatchesRegularExpression('/value="global"[^>]*checked/', $body);
+        self::assertMatchesRegularExpression('/<input[^>]*name="notice"[^>]*value="global"[^>]*checked/', $body);
     }
 }

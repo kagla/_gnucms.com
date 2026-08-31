@@ -65,6 +65,50 @@ final class NoticeListTest extends WebTestCase
 
         $body = $this->body($this->get($app, '/boards/free'));
 
-        self::assertSame(1, substr_count($body, '한 번만 보이는 공지'));
+        // 문서 전체가 아니라 공지 목록(<ul class="notice-list">) 안에서만 센다.
+        // 문서 전체로 세면 목록 아래 본문 미리보기 등에 같은 글자가 다시 나와도
+        // 통과해 버려 "한 번만" 이라는 단언이 실제로는 아무것도 못박지 못한다.
+        self::assertMatchesRegularExpression('/<ul class="list card notice-list".*?<\/ul>/s', $body);
+        preg_match('/<ul class="list card notice-list".*?<\/ul>/s', $body, $matches);
+        self::assertSame(1, substr_count($matches[0], '한 번만 보이는 공지'));
+    }
+
+    /** 지운 전체 공지는 다른 게시판 공지 띠에도 남으면 안 된다. deleted_at IS NULL 조건을 못박는다. */
+    #[DataProvider('connectionProvider')]
+    public function testSoftDeletedGlobalNoticeIsHiddenFromOtherBoards(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $app->boardService()->create($acl, ['board_key' => 'qna', 'name' => '질문']);
+
+        $post = $app->postService()->create($acl, 'free', [
+            'title' => '지워질 전체 공지', 'content' => '본문입니다', 'notice' => 'global',
+        ]);
+        $app->postService()->delete($acl, $post['id'], null);
+
+        $qna = $this->body($this->get($app, '/boards/qna'));
+        self::assertStringNotContainsString('지워질 전체 공지', $qna);
+    }
+
+    /**
+     * 전체 공지가 게시판 공지보다 먼저, 각각 최신순으로 나온다.
+     * PostRepository::notices() 의 CASE WHEN … ORDER BY 를 못박는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testNoticesListGlobalFirstThenBoardMostRecentFirst(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+
+        $app->postService()->create($acl, 'free', ['title' => '게시판 공지 1', 'content' => '본문입니다', 'notice' => 'board']);
+        $app->postService()->create($acl, 'free', ['title' => '전체 공지 1', 'content' => '본문입니다', 'notice' => 'global']);
+        $app->postService()->create($acl, 'free', ['title' => '게시판 공지 2', 'content' => '본문입니다', 'notice' => 'board']);
+        $app->postService()->create($acl, 'free', ['title' => '전체 공지 2', 'content' => '본문입니다', 'notice' => 'global']);
+
+        $list = $app->postService()->listPosts($acl, 'free', []);
+
+        self::assertSame(['global', 'global', 'board', 'board'], array_column($list['notices'], 'notice_scope'));
     }
 }

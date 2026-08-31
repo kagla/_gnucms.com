@@ -302,7 +302,14 @@ final class PostRepository
 
     public function setNotice(int $id, bool $isNotice): void
     {
-        $this->db->update('posts', ['is_notice' => $isNotice ? 1 : 0], 'id = :id', ['id' => $id]);
+        $data = ['is_notice' => $isNotice ? 1 : 0];
+        // 공지를 내릴 때는 범위도 기본값(board)으로 되돌린다. PostService::noticeFrom() 이
+        // '공지 아님' 을 항상 notice_scope='board' 로 저장하는 규칙과 맞춘다. 올릴 때는
+        // 이미 정해진 범위를 그대로 둔다 — 이 메서드는 범위를 알지 못한다.
+        if (!$isNotice) {
+            $data['notice_scope'] = 'board';
+        }
+        $this->db->update('posts', $data, 'id = :id', ['id' => $id]);
     }
 
     public function adjustCommentCount(int $id, int $delta): void

@@ -1757,5 +1757,5 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
 
-/* 전체 공지 뱃지는 게시판 공지와 색으로 갈린다 */
+/* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
 .notice-list .notice-scope{white-space:nowrap}

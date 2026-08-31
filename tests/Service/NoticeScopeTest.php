@@ -73,6 +73,7 @@ final class NoticeScopeTest extends WebTestCase
             self::fail('관리자가 아니면 공지를 올릴 수 없어야 한다');
         } catch (DomainError $e) {
             self::assertContains($e->status(), [401, 403]);
+            self::assertSame('전역 관리자만 할 수 있습니다.', $e->getMessage());
         }
     }
 
@@ -100,6 +101,35 @@ final class NoticeScopeTest extends WebTestCase
         } catch (DomainError $e) {
             self::assertContains($e->status(), [401, 403]);
             self::assertSame('전역 관리자만 할 수 있습니다.', $e->getMessage());
+        }
+    }
+
+    /**
+     * update() 의 공지 가드가 실제로 걸려 있는지 못박는다. 자기 글이라도
+     * notice=global / is_notice=1 을 보내면 회원은 막혀야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testNonAdminCannotSetNoticeOnOwnPostViaUpdate(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free', 'name' => '자유', 'perm_write' => 'member',
+        ]);
+        $member = new Acl(Identity::user('7', '회원사람', false));
+        $post = $app->postService()->create($member, 'free', [
+            'title' => '글', 'content' => '본문입니다',
+        ]);
+
+        foreach ([['notice' => 'global'], ['is_notice' => '1']] as $input) {
+            try {
+                $app->postService()->update($member, $post['id'], array_merge(
+                    ['title' => '글', 'content' => '본문입니다'],
+                    $input
+                ));
+                self::fail('회원은 자기 글이라도 공지로 만들 수 없어야 한다');
+            } catch (DomainError $e) {
+                self::assertContains($e->status(), [401, 403]);
+            }
         }
     }
 
