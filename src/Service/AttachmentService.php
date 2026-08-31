@@ -193,8 +193,21 @@ final class AttachmentService
         if (!hash_equals($this->sign($normalized), $signature)) {
             throw DomainError::validation(['attachments' => '첨부 서명이 올바르지 않습니다.']);
         }
+        // 파일 이름은 항상 upload() 가 만든 32자리 16진수다. 형식부터 어긋나면
+        // 실제 경로를 계산할 것도 없이 거부한다.
+        if (preg_match('/^[0-9a-f]{32}$/D', basename($normalized['path'])) !== 1) {
+            throw DomainError::validation(['attachments' => '첨부 정보가 올바르지 않습니다.']);
+        }
         if (!is_file($normalized['path'])) {
             throw DomainError::validation(['attachments' => '업로드된 파일을 찾을 수 없습니다.']);
+        }
+        // 서명 비밀키가 새거나 약해도 디스크립터가 가리킬 수 있는 파일은 업로드
+        // 폴더 안으로만 묶는다. 심볼릭 링크나 '..' 조각으로 밖을 가리키지 못하게
+        // realpath 로 실제 경로를 확인한다.
+        $root = realpath(rtrim((string) $this->config['dir'], '/'));
+        $realPath = realpath($normalized['path']);
+        if ($root === false || $realPath === false || strncmp($realPath, $root . '/', strlen($root) + 1) !== 0) {
+            throw DomainError::validation(['attachments' => '첨부 정보가 올바르지 않습니다.']);
         }
 
         return $normalized;

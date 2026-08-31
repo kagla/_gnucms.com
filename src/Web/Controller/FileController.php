@@ -145,7 +145,14 @@ final class FileController
         }
         if ((int) $uploaded->getError() === UPLOAD_ERR_OK) {
             // moveTo() 는 실제 SAPI 에서는 move_uploaded_file 을 쓰고, 테스트에서는 rename 한다.
-            $uploaded->moveTo($tmp);
+            try {
+                $uploaded->moveTo($tmp);
+            } catch (\Throwable $e) {
+                // tempnam() 이 만든 빈 파일을 그대로 두면 실패한 이동의 찌꺼기가 tmp 를
+                // 오염시킨다. 재던지기 전에 지운다.
+                @unlink($tmp);
+                throw $e;
+            }
         }
 
         return [

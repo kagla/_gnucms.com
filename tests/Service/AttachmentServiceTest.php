@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Service;
 
+use GnuCms\Error\DomainError;
 use GnuCms\Service\AttachmentService;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -77,5 +78,38 @@ final class AttachmentServiceTest extends WebTestCase
 
         self::assertFileExists($kept['path']);
         self::assertSame(0, $result['deleted']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testVerifyRejectsPathOutsideUploadsDir(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+
+        // 업로드 폴더 밖에, 그러나 정상 업로드처럼 32자리 16진수 이름을 가진 파일을 둔다.
+        // 서명 비밀키가 새거나 약해서 공격자가 유효한 서명을 만들어 내더라도,
+        // verify() 는 경로가 업로드 폴더 밖이면 거부해야 한다.
+        $outsideDir = sys_get_temp_dir() . '/gnucms-outside-' . bin2hex(random_bytes(4));
+        mkdir($outsideDir);
+        $id = bin2hex(random_bytes(16));
+        $outsidePath = $outsideDir . '/' . $id;
+        file_put_contents($outsidePath, '바깥');
+
+        $signed = $app->attachments()->withSignature([
+            'id'   => $id,
+            'name' => '바깥.txt',
+            'size' => 6,
+            'mime' => 'text/plain',
+            'path' => $outsidePath,
+        ]);
+
+        try {
+            $app->attachments()->verify($signed);
+            self::fail('업로드 폴더 밖 경로는 422 로 거부돼야 한다');
+        } catch (DomainError $e) {
+            self::assertSame(422, $e->status());
+        } finally {
+            @unlink($outsidePath);
+            @rmdir($outsideDir);
+        }
     }
 }
