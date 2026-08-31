@@ -229,7 +229,33 @@ final class PostService
         ];
     }
 
+    /**
+     * 폼의 공지 선택을 읽는다. none|board|global 이며 그 밖의 값은 공지 아님으로 본다.
+     * notice 가 아예 없을 때만 옛 is_notice 입력을 본다(옛 폼 호환).
+     *
+     * @return array{is_notice: int, notice_scope: string}
+     */
+    private function noticeFrom(Validator $v, array $input): array
+    {
+        if (array_key_exists('notice', $input)) {
+            // inList() 는 알 수 없는 값을 검증 오류로 등록해 v->check() 에서 요청 전체를
+            // 실패시킨다. 여기서는 알 수 없는 값을 '공지 아님'으로 조용히 받아들여야
+            // 하므로 직접 비교로 적는다.
+            $raw = $input['notice'];
+            $choice = is_scalar($raw) && in_array((string) $raw, ['none', 'board', 'global'], true)
+                ? (string) $raw
+                : 'none';
+        } else {
+            $choice = $v->bool('is_notice', false) ? 'board' : 'none';
+        }
+
+        return $choice === 'none'
+            ? ['is_notice' => 0, 'notice_scope' => 'board']
+            : ['is_notice' => 1, 'notice_scope' => $choice];
+    }
+
     /** 회원 번호로 표시 이름을 읽는다. 없거나 차단된 회원이면 null. */
+
     private function displayNameOf(int $userId): ?string
     {
         $user = $this->users === null ? null : $this->users->findById($userId);
@@ -384,11 +410,12 @@ final class PostService
 
         $data['category'] = $this->validateCategory($v, $board, $input);
         $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
-        $data['is_notice'] = 0;
-
-        if (array_key_exists('is_notice', $input) && $v->bool('is_notice', false)) {
+        $notice = $this->noticeFrom($v, $input);
+        $data['is_notice'] = $notice['is_notice'];
+        $data['notice_scope'] = $notice['notice_scope'];
+        if ($data['is_notice'] === 1) {
+            // 공지는 그 게시판의 관리자만 올릴 수 있다.
             $acl->assertAdminFor($board);
-            $data['is_notice'] = 1;
         }
 
         $this->assertContentNotEmpty($v, (string) $data['content']);
@@ -450,9 +477,11 @@ final class PostService
         if (array_key_exists('is_secret', $input)) {
             $data['is_secret'] = $this->validateSecret($v, $board, $v->bool('is_secret', false)) ? 1 : 0;
         }
-        if (array_key_exists('is_notice', $input)) {
+        if (array_key_exists('notice', $input) || array_key_exists('is_notice', $input)) {
             $acl->assertAdminFor($board);
-            $data['is_notice'] = $v->bool('is_notice', false) ? 1 : 0;
+            $notice = $this->noticeFrom($v, $input);
+            $data['is_notice'] = $notice['is_notice'];
+            $data['notice_scope'] = $notice['notice_scope'];
         }
 
         if (array_key_exists('attachments', $input)) {
@@ -604,6 +633,7 @@ final class PostService
             'author_id'     => $row['author_id'],
             'author_name'   => $row['author_name'],
             'is_notice'     => (bool) $row['is_notice'],
+            'notice_scope'  => ($row['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board',
             'is_secret'     => $secret,
             'view_count'    => (int) $row['view_count'],
             'comment_count' => (int) $row['comment_count'],
