@@ -240,6 +240,7 @@ final class App
             // 가 이미 캐시돼 있어 재귀가 없다. 이러면 컨트롤러가 요청마다 attachments()
             // 를 미리 불러 둬야 한다는 계약이 사라진다.
             $this->postService->setAttachmentResolver(function () { $this->attachments(); });
+            $this->postService->setUserRepository($this->users());
         }
 
         return $this->postService;

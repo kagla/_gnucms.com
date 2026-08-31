@@ -1,8 +1,9 @@
 <?php $this->layout('layout') ?>
 <?php // 전체 글 주소 만들기. 이 파일 안에서만 쓰는 클로저다. 출력할 때 템플릿이 이스케이프한다.
-$allUrl = function ($q, $page): string {
+$allUrl = function ($q, $page) use ($list): string {
     $params = [];
     if ($q !== null && $q !== '') { $params[] = 'q=' . rawurlencode((string) $q); }
+    if (($list['author'] ?? null) !== null) { $params[] = 'author=' . (int) $list['author']; }
     if ($page && $page > 1) { $params[] = 'page=' . (int) $page; }
     return $this->url('posts.all') . ($params !== [] ? '?' . implode('&', $params) : '');
 }; ?>
@@ -20,11 +21,11 @@ $allUrl = function ($q, $page): string {
 <?php $this->start('body') ?>
 <div class="page-head">
   <div>
-    <h1>전체 글</h1>
-    <p class="page-sub">읽을 수 있는 모든 게시판의 글을 최신순으로 모았습니다.<?php if ($query['q'] !== null && $query['q'] !== ''): ?> “<?= $this->e($query['q']) ?>” 검색 결과 <?= $this->e($list['total']) ?>건<?php endif ?></p>
+    <h1><?php if (($list['author_name'] ?? null) !== null): ?><?= $this->e($list['author_name']) ?> 님의 글<?php else: ?>전체 글<?php endif ?></h1>
+    <p class="page-sub"><?php if (($list['author_name'] ?? null) !== null): ?>이 회원이 쓴 글을 최신순으로 모았습니다. 글 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php else: ?>읽을 수 있는 모든 게시판의 글을 최신순으로 모았습니다.<?php if ($query['q'] !== null && $query['q'] !== ''): ?> “<?= $this->e($query['q']) ?>” 검색 결과 <?= $this->e((string) $list['total']) ?>건<?php endif ?><?php endif ?></p>
   </div>
-  <?php if ($query['q'] !== null && $query['q'] !== ''): ?>
-  <div class="page-head-actions"><a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>">검색 지우기</a></div>
+  <?php if (($list['author_name'] ?? null) !== null || ($query['q'] !== null && $query['q'] !== '')): ?>
+  <div class="page-head-actions"><a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>">전체 글 보기</a></div>
   <?php endif ?>
 </div>
 

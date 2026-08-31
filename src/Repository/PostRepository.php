@@ -115,7 +115,8 @@ final class PostRepository
         ?string $q = null,
         ?int $boardId = null,
         bool $includeDeleted = false,
-        ?array $boardIds = null
+        ?array $boardIds = null,
+        ?int $authorId = null
     ): array {
         $where = $includeDeleted ? '1 = 1' : 'deleted_at IS NULL';
         $params = [];
@@ -144,6 +145,11 @@ final class PostRepository
         if ($boardId !== null) {
             $where .= ' AND board_id = :board_id';
             $params['board_id'] = $boardId;
+        }
+
+        if ($authorId !== null) {
+            $where .= ' AND author_id = :author_id';
+            $params['author_id'] = (string) $authorId;
         }
 
         $total = (int) $this->db->selectOne(

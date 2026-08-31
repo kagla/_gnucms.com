@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Service;
 
+use GnuCms\Account\UserRepository;
 use GnuCms\Auth\Acl;
 use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\ContentRenderer;
@@ -31,6 +32,14 @@ final class PostService
 
     /** @var ContentImageService */
     private $images;
+
+    /** 글쓴이 표시 이름을 읽을 때만 쓴다. App 이 넣어 준다. */
+    private ?UserRepository $users = null;
+
+    public function setUserRepository(UserRepository $users): void
+    {
+        $this->users = $users;
+    }
 
     /** 본문 최소 글자수(태그·공백 제외). 0 = 제한 없음. App 이 사이트 설정에서 넣는다. */
     private int $contentMinChars = 0;
@@ -185,6 +194,7 @@ final class PostService
         $v = new Validator($query);
         $page = $v->int('page', 1, 1, 100000);
         $q = $v->optionalString('q', 100);
+        $author = $v->int('author', 0, 0, PHP_INT_MAX);
         $v->check();
         $perPage = 20;
 
@@ -193,7 +203,11 @@ final class PostService
             $boards[(int) $board['id']] = $board;
         }
 
-        $result = $this->posts->paginateAll($page, $perPage, $q, null, false, array_keys($boards));
+        // 없는 회원이면 거르지 않고 평소 목록을 낸다.
+        $authorName = $author > 0 && $this->users !== null ? $this->displayNameOf($author) : null;
+        $authorId = $authorName === null ? null : $author;
+
+        $result = $this->posts->paginateAll($page, $perPage, $q, null, false, array_keys($boards), $authorId);
 
         $rows = [];
         foreach ($result['rows'] as $row) {
@@ -210,7 +224,17 @@ final class PostService
             'per_page'    => $perPage,
             'total'       => $result['total'],
             'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+            'author'      => $authorId,
+            'author_name' => $authorName,
         ];
+    }
+
+    /** 회원 번호로 표시 이름을 읽는다. 없는 회원이면 null. */
+    private function displayNameOf(int $userId): ?string
+    {
+        $user = $this->users === null ? null : $this->users->findById($userId);
+
+        return $user === null ? null : (string) $user['display_name'];
     }
 
     public function listAllPosts(Acl $acl, array $query): array

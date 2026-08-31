@@ -52,4 +52,47 @@ final class AllPostsTest extends WebTestCase
         $second = $this->body($this->get($app, '/posts', ['page' => '2']));
         self::assertStringContainsString('>글 1 ', $second);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testAuthorFilterShowsOnlyThatMembersPosts(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        // adminAcl() 의 회원 번호가 '1' 로 고정돼 있다. 빈 DB에서 첫 회원도 1번을
+        // 받으므로, 자리를 하나 채워 두지 않으면 관리자 글의 author_id 와 회원 번호가
+        // 우연히 같아져 거르기 테스트가 뜻대로 되지 않는다.
+        $app->users()->create('placeholder@example.com', password_hash('placeholder-password-123', PASSWORD_DEFAULT), '자리채우기');
+        $memberId = $app->users()->create('writer@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '글쓴사람');
+        $app->users()->verifyEmail($memberId);
+
+        $app->postService()->create($acl, 'free', ['title' => '관리자 글', 'content' => '본문입니다']);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'writer@example.com', 'password' => 'member-password-123',
+        ]);
+        $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'], 'title' => '회원 글', 'content' => '본문입니다',
+        ]);
+
+        $body = $this->body($this->get($app, '/posts', ['author' => (string) $memberId]));
+
+        self::assertStringContainsString('회원 글', $body);
+        self::assertStringNotContainsString('관리자 글', $body);
+        self::assertStringContainsString('글쓴사람 님의 글', $body);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testUnknownAuthorFallsBackToTheWholeList(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $app->postService()->create($acl, 'free', ['title' => '관리자 글', 'content' => '본문입니다']);
+
+        $body = $this->body($this->get($app, '/posts', ['author' => '99999']));
+
+        self::assertStringContainsString('관리자 글', $body);
+        self::assertStringNotContainsString('님의 글', $body);
+    }
 }
