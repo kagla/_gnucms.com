@@ -206,4 +206,24 @@ final class CommentWriteTest extends WebTestCase
 
         return (int) $post['id'];
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testEditorEmptyShellIsRejectedAsEmptyContent(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $postId = $this->seed($app, 'guest');
+        $this->get($app, '/posts/' . $postId);
+
+        // CKEditor 는 빈 입력에도 <p><br></p> 같은 껍데기를 남긴다. 필수 검사를 통과하면 안 된다.
+        $response = $this->post($app, '/posts/' . $postId . '/comments', [
+            'csrf_token'  => $_SESSION['csrf_token'] ?? '',
+            'author_name' => '지나가던 사람',
+            'password'    => 'comment-pass-1',
+            'content'     => '<p><br>&nbsp;</p>',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('내용을 입력해 주세요', $this->body($response));
+    }
 }
+

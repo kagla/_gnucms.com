@@ -57,6 +57,21 @@ final class CommentService
         return $this->sanitizer->clean($raw);
     }
 
+    /**
+     * 편집기는 빈 입력에도 <p><br></p> 같은 껍데기를 남겨 "필수" 검사를 통과한다.
+     * 태그·공백을 빼고도 글자가 없으면 빈 내용으로 본다. 사진만 있는 내용은 허용한다.
+     */
+    private function assertContentNotEmpty(Validator $v, string $content): void
+    {
+        if (stripos($content, '<img') !== false) {
+            return;
+        }
+        $text = trim(preg_replace('/\s+/u', '', html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+        if ($text === '') {
+            $v->fail('content', '내용을 입력해 주세요.');
+        }
+    }
+
     /** 편집기가 올린 이미지를 묶는 폴더 이름. */
     private function editorImageKey(Validator $v, array $input): ?string
     {
@@ -104,6 +119,7 @@ final class CommentService
             'post_id'  => $postId,
             'content'  => $this->cleanContent($v->requiredString('content')),
         ];
+        $this->assertContentNotEmpty($v, (string) $data['content']);
         $data['image_key'] = $this->editorImageKey($v, $input);
 
         $parentId = $v->int('parent_id', 0, 0, PHP_INT_MAX);
