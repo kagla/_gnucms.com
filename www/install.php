@@ -54,7 +54,7 @@ function page(int $step, string $title, string $body): void
         . 'main{max-width:680px;margin:auto;padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:20px;background:var(--panel)}'
         . '.brand{color:var(--primary);font-weight:800;margin-bottom:18px}'
         . 'ol.steps{display:flex;gap:6px;list-style:none;margin:0 0 26px;padding:0;font-size:12px;color:var(--muted)}'
-        . 'ol.steps li{flex:1;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{display:block;font-weight:800}'
+        . 'ol.steps li{display:flex;flex:1;align-items:center;justify-content:center;gap:5px;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{font-weight:800}'
         . 'ol.steps li.now{border-color:var(--primary);color:var(--fg)}ol.steps li.done{border-color:var(--ok)}'
         . 'h1{margin:0 0 8px;font-size:26px;letter-spacing:-.03em}.intro{margin:0 0 22px;color:var(--muted)}'
         . 'label{display:block;margin-top:16px;font-weight:700}.hint{display:block;color:var(--muted);font-weight:400;font-size:12px}'
