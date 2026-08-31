@@ -2,8 +2,11 @@
 // 첨부 UI. use_file 게시판의 쓰기/수정 폼이 insert 한다.
 //   board   게시판 (board_key)
 //   values  폼 값. values['attachments'] = [ {id,name,size,mime,path,sig}, ... ]
+//   errors  422 재렌더일 때의 검증 오류. insert() 가 부모 화면 지역 변수를 그대로
+//           물려주므로 보통 있지만, 혹시 없는 경로를 대비해 기본값을 둔다.
 // 파일은 고르는 즉시 boards.files.upload 로 올라가고, 서명된 디스크립터가
 // hidden input 으로 실린다. 목록의 DOM 순서가 곧 저장 순서다.
+$errors = $errors ?? [];
 $attach_rows = [];
 foreach (($values['attachments'] ?? []) as $row) {
     if (is_array($row) && isset($row['sig'])) {
@@ -18,6 +21,7 @@ foreach (($values['attachments'] ?? []) as $row) {
   <legend class="fieldset-legend"><?= $this->icon('clip', 15) ?> 첨부파일
     <span class="legend-hint">파일당 <?= $this->e((string) ($site['attach_max_mb'] ?? 5)) ?>MB<?php if ((int) ($site['attach_limit'] ?? 5) > 0): ?> · <?= $this->e((string) $site['attach_limit']) ?>개까지<?php endif ?></span>
   </legend>
+  <?php if (array_key_exists('attachments', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['attachments']) ?></p><?php endif ?>
   <div class="attach-zone" data-attach-zone>
     <p>파일을 여기에 끌어다 놓거나</p>
     <label class="btn btn-sm">파일 선택<input type="file" multiple hidden data-attach-input></label>
@@ -35,7 +39,7 @@ foreach (($values['attachments'] ?? []) as $row) {
         <button type="button" class="btn btn-ghost btn-xs" data-attach-remove aria-label="삭제"><?= $this->icon('close', 13) ?></button>
       </span>
       <?php foreach (['id', 'name', 'size', 'mime', 'path', 'sig'] as $field): ?>
-      <input type="hidden" data-field="<?= $field ?>" name="attachments[<?= $i ?>][<?= $field ?>]" value="<?= $this->e((string) ($row[$field] ?? '')) ?>">
+      <input type="hidden" data-field="<?= $this->e($field) ?>" name="attachments[<?= $this->e((string) $i) ?>][<?= $this->e($field) ?>]" value="<?= $this->e((string) ($row[$field] ?? '')) ?>">
       <?php endforeach ?>
     </li>
     <?php endforeach ?>
@@ -70,16 +74,6 @@ foreach (($values['attachments'] ?? []) as $row) {
     });
   }
 
-  function doneCount() {
-    return list.querySelectorAll('li:not(.is-uploading)').length;
-  }
-
-  function sizeLabel(bytes) {
-    if (bytes >= 1048576) { return (bytes / 1048576).toFixed(1) + ' MB'; }
-    if (bytes >= 1024) { return (bytes / 1024).toFixed(1) + ' KB'; }
-    return bytes + ' B';
-  }
-
   function makeRow(name) {
     var row = document.createElement('li');
     row.className = 'attach-row is-uploading';
@@ -96,7 +90,10 @@ foreach (($values['attachments'] ?? []) as $row) {
   }
 
   function addFile(file) {
-    if (limit > 0 && doneCount() >= limit) {
+    // 업로드 중인 행과 이미 끝난 행 모두 자리를 차지한다. 실패한 행만 빼야
+    // 여러 파일을 한 번에 고르거나(멀티 선택), 아직 응답이 안 온 파일들까지
+    // 한도에 반영된다. 실패한 행을 세면 그 자리가 영영 못 채워진다.
+    if (limit > 0 && list.querySelectorAll('li:not(.is-failed)').length >= limit) {
       showError('첨부는 ' + limit + '개까지입니다.');
       return;
     }
@@ -134,7 +131,9 @@ foreach (($values['attachments'] ?? []) as $row) {
     input.value = '';
   });
   ['dragover', 'dragleave', 'drop'].forEach(function (type) {
-    zone.addEventListener(type, function (event) {
+    // zone 이 아니라 전체 상자(box)에 건다. 사용자가 존 몇 픽셀을 벗어나 떨어뜨려도
+    // 브라우저가 파일을 열어버리며 페이지를 벗어나는 일을 막기 위해서다.
+    box.addEventListener(type, function (event) {
       // 행 드래그(순서 조정)는 무시하고 밖에서 온 파일만 받는다.
       if (!event.dataTransfer || Array.prototype.indexOf.call(event.dataTransfer.types, 'Files') === -1) { return; }
       event.preventDefault();
