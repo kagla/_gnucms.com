@@ -44,7 +44,7 @@ $allUrl = function ($q, $page): string {
             <a class="cell-title link link-hover" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></a>
             <?php if ($post['file_count'] > 0): ?><span class="post-row-clip" title="첨부파일 있음" aria-label="첨부파일 있음"><?= $this->icon('clip', 12) ?></span><?php endif ?>
           </td>
-          <td data-label="글쓴이"><?= $this->e($post['author_name']) ?></td>
+          <td data-label="글쓴이" class="cell-author"><?= $this->e($post['author_name']) ?></td>
           <td data-label="날짜"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'Y.m.d') ?></time></td>
           <td data-label="조회" class="right"><?= $this->e($post['view_count']) ?></td>
         </tr>

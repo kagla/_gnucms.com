@@ -1662,3 +1662,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .view-select{margin-left:auto;flex:none}
 .view-select-btn{gap:.375rem;border-radius:9999px;background:var(--color-base-100)}
 .view-menu{width:9.5rem}
+
+/* 글쓴이 칸은 옛 데이터에 긴 이름이 남아 있어도 줄임표로 접는다 */
+.cell-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}

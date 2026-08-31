@@ -179,5 +179,21 @@ final class GuestWriteTest extends WebTestCase
         self::assertStringContainsString('비밀번호가 올바르지 않습니다', $body);
         self::assertStringNotContainsString('입력값을 확인해 주세요', $body);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testGuestNameLongerThanTwentyCharsIsRejected(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $this->get($app, '/boards/free/new');
+
+        $response = $this->post($app, '/boards/free/new', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'title' => '손님 글', 'content' => '본문',
+            'author_name' => str_repeat('가', 21), 'password' => 'guest-pass-123',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('20자', $this->body($response));
+    }
 }
 

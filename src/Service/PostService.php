@@ -286,7 +286,7 @@ final class PostService
         if ($identity->isGuest()) {
             // 비회원 글: author_id 는 NULL 이고 비밀번호가 소유 증명 수단이 된다.
             $data['author_id'] = null;
-            $data['author_name'] = $v->requiredString('author_name', 100);
+            $data['author_name'] = $v->requiredString('author_name', 20);
             $password = $v->requiredPassword('password');
             $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
         } else {

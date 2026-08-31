@@ -100,7 +100,7 @@
           <div class="grid-2" data-guest-fields>
             <fieldset class="fieldset<?php if (array_key_exists('author_name', $comment_errors)): ?> is-invalid<?php endif ?>" data-name-field>
               <legend class="fieldset-legend">이름</legend>
-              <input class="input input-bordered input-block" type="text" name="author_name" autocomplete="off" value="<?= $this->e($comment_values['author_name'] ?? '') ?>" maxlength="100" required>
+              <input class="input input-bordered input-block" type="text" name="author_name" autocomplete="off" value="<?= $this->e($comment_values['author_name'] ?? '') ?>" maxlength="20" required>
               <?php if (array_key_exists('author_name', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['author_name']) ?></p><?php endif ?>
             </fieldset>
             <fieldset class="fieldset<?php if (array_key_exists('password', $comment_errors)): ?> is-invalid<?php endif ?>">

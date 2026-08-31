@@ -120,7 +120,7 @@ final class CommentService
         $identity = $acl->identity();
         if ($identity->isGuest()) {
             $data['author_id'] = null;
-            $data['author_name'] = $v->requiredString('author_name', 100);
+            $data['author_name'] = $v->requiredString('author_name', 20);
             $password = $v->requiredPassword('password');
             $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
         } else {
