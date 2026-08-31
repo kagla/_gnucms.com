@@ -73,6 +73,22 @@
         </fieldset>
       <?php endif ?>
 
+      <?php if (!empty($can_manage_board)): ?>
+        <?php // 공지는 그 게시판의 관리자만 올린다. 회원에게는 이 칸이 아예 없다. ?>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><?= $this->icon('megaphone', 15) ?> 공지</legend>
+          <div class="chip-bar" role="radiogroup" aria-label="공지 범위">
+            <?php foreach (['none' => '공지 아님', 'board' => '이 게시판 공지', 'global' => '전체 게시판 공지'] as $value => $label): ?>
+              <label class="btn btn-sm chip-radio">
+                <input type="radio" name="notice" value="<?= $this->e($value) ?>"<?= $this->def($values['notice'] ?? null, 'none') === $value ? ' checked' : '' ?>>
+                <span><?= $this->e($label) ?></span>
+              </label>
+            <?php endforeach ?>
+          </div>
+          <p class="fieldset-label">전체 게시판 공지는 이 게시판을 읽을 수 있는 사람에게만 보입니다.</p>
+        </fieldset>
+      <?php endif ?>
+
       <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values, 'errors' => $errors]) ?><?php endif ?>
 
       <div class="card-actions form-actions post-create-actions">
