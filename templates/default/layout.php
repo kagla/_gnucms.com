@@ -238,9 +238,11 @@
       <ul class="menu">
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
-        <?php foreach (($boards ?? []) as $navBoard): ?>
-          <li><a href="<?= $this->url('posts.index', ['key' => $navBoard['board_key']]) ?>"><?= $this->icon('board', 18) ?> <?= $this->e($navBoard['name']) ?></a></li>
-        <?php endforeach ?>
+        <li><a href="<?= $this->url('posts.all') ?>"><?= $this->icon('document', 18) ?> 전체 글</a></li>
+        <?php // 상단 탭과 동일하게, 게시판 화면에서는 현재 게시판만 이어서 보여 준다. ?>
+        <?php if (isset($board['board_key'])): ?>
+          <li><a href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('board', 18) ?> <?= $this->e($board['name']) ?></a></li>
+        <?php endif ?>
         <?php if (!empty($site_menu)): ?><li class="menu-title">안내</li><?php endif ?>
         <?php foreach ($site_menu as $item): ?><li><a href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->icon('document', 18) ?> <?= $this->e($item['title']) ?></a></li><?php endforeach ?>
         <?php if (!$current_user['is_guest']): ?>

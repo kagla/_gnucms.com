@@ -719,7 +719,7 @@ final class PostService
     {
         foreach (array_values($attachments) as $index => $file) {
             $mime = (string) ($file['mime'] ?? '');
-            if (str_starts_with($mime, 'image/')) {
+            if (strpos($mime, 'image/') === 0) {
                 return $index;
             }
         }

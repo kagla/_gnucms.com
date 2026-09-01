@@ -66,7 +66,7 @@ final class DbSetup
             }
             $webRoot = realpath(dirname(__DIR__, 2) . '/www');
             $realFolder = realpath($folder);
-            if ($webRoot !== false && $realFolder !== false && str_starts_with($realFolder . '/', $webRoot . '/')) {
+            if ($webRoot !== false && $realFolder !== false && strpos($realFolder . '/', $webRoot . '/') === 0) {
                 throw DomainError::validation(['sqlite_path' => '웹에서 접근할 수 있는 www/ 아래에는 둘 수 없습니다.']);
             }
 

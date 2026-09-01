@@ -205,7 +205,7 @@ final class AdminCmsController
             // form:{이름} 을 지켜, 일괄 저장이 이름을 조용히 지우지 않게 한다.
             $keepScope = null;
             foreach ($page['uses'] as $use) {
-                if (str_starts_with((string) $use['scope'], 'form')) {
+                if (strpos((string) $use['scope'], 'form') === 0) {
                     $keepScope = (string) $use['scope'];
                     break;
                 }
@@ -372,7 +372,7 @@ final class AdminCmsController
         $scope = $use === null ? '' : (string) $use['scope'];
         $values['consent_usage'] = $use === null ? 'none' : ($scope === 'signup' ? 'signup' : 'form');
         // 신청서 자리는 form:{이름} 으로 저장된다. 이름이 없으면 이름 없는 한 통이다.
-        $values['consent_scope_key'] = str_starts_with($scope, 'form:') ? substr($scope, 5) : '';
+        $values['consent_scope_key'] = strpos($scope, 'form:') === 0 ? substr($scope, 5) : '';
         $values['consent_required'] = $use === null ? 1 : (int) $use['required'];
         $values['consent_order'] = $use === null ? 0 : (int) $use['sort_order'];
         return $values;

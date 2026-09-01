@@ -664,6 +664,16 @@ select.select:-webkit-autofill:focus{
 .post-create-actions{border-top:0;padding-top:0}
 .grid-2{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid-3{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(0,1fr))}
+.permission-grid{align-items:stretch;margin-top:.5rem}
+.permission-field{
+  min-width:0;margin:0;padding:1rem;
+  border:var(--border) solid var(--bc-10);border-radius:var(--radius-box);
+  background:var(--color-base-100);
+}
+.permission-field .fieldset-legend{justify-content:flex-start;font-size:14px}
+.permission-help{min-height:2.9em;margin:.3rem 0 .75rem;color:var(--bc-soft);font-size:12.5px;line-height:1.45;word-break:keep-all}
+.permission-field .select{margin-top:auto}
+@media (max-width:899px){.permission-help{min-height:0}}
 .danger-zone{
   display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
   margin:0 1.75rem 1.75rem;padding:1.125rem 1.375rem;

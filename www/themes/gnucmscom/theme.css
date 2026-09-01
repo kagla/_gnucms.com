@@ -393,18 +393,19 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
   position:relative;
   display:grid;
   place-items:center;
+  align-items:center;
+  justify-content:center;
   width:var(--header-control-h);
   height:var(--header-control-h);
   flex:none;
   padding:0;
-  border:1px solid var(--header-line);
-  border-radius:7px;
+  border:0;
   background:transparent;
   color:var(--header-text);
   cursor:pointer;
-  transition:background .18s ease,border-color .18s ease;
+  transition:color .18s ease,opacity .18s ease;
 }
-.site-icon-button:hover{background:var(--header-surface);border-color:color-mix(in srgb,var(--header-text) 22%,var(--header-line))}
+.site-icon-button:hover{background:transparent;color:var(--color-primary);opacity:.72}
 .site-icon-button.drawer-button{display:none}
 .site-header .navbar-end>.dropdown{align-items:center;height:var(--header-control-h)}
 .site-header .navbar-end>.dropdown>.avatar{width:var(--header-control-h);height:var(--header-control-h);min-height:var(--header-control-h)}
@@ -781,6 +782,16 @@ select.select:-webkit-autofill:focus{
 .post-create-actions{border-top:0;padding-top:0}
 .grid-2{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid-3{display:grid;gap:1rem;grid-template-columns:repeat(3,minmax(0,1fr))}
+.permission-grid{align-items:stretch;margin-top:.5rem}
+.permission-field{
+  min-width:0;margin:0;padding:1rem;
+  border:var(--border) solid var(--bc-10);border-radius:var(--radius-box);
+  background:var(--color-base-100);
+}
+.permission-field .fieldset-legend{justify-content:flex-start;font-size:14px}
+.permission-help{min-height:2.9em;margin:.3rem 0 .75rem;color:var(--bc-soft);font-size:12.5px;line-height:1.45;word-break:keep-all}
+.permission-field .select{margin-top:auto}
+@media (max-width:899px){.permission-help{min-height:0}}
 .danger-zone{
   display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
   margin:0 1.75rem 1.75rem;padding:1.125rem 1.375rem;
@@ -1642,7 +1653,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 @media (max-width: 899px){
   .drawer-button{display:inline-flex}
   .site-header-inner{
-    width:min(960px,calc(100% - 32px));
+    width:100%;
     max-width:none;
     min-height:62px;
     padding-inline:0;
@@ -2456,8 +2467,8 @@ body:not(.admin-page) :focus-visible{outline:2px solid var(--premium-text);outli
 .site-primary-nav,.site-header-link{font-weight:650}
 .site-primary-nav a,.site-header-link{transition:color .18s ease,opacity .18s ease}
 .site-primary-nav a:hover,.site-header-link:hover{opacity:.68}
-.site-icon-button{border-radius:10px;border-color:var(--header-line);background:color-mix(in srgb,var(--header-bg) 72%,transparent)}
-.site-icon-button:hover{background:var(--header-surface);border-color:var(--header-line);box-shadow:0 6px 16px rgba(0,0,0,.06)}
+.site-icon-button{background:transparent}
+.site-icon-button:hover{background:transparent;box-shadow:none}
 .site-header-cta{border-radius:10px;padding-inline:1rem;box-shadow:0 7px 18px rgba(0,0,0,.1)}
 
 /* 제품 메인 */
@@ -2628,7 +2639,7 @@ body:not(.admin-page){
 }
 .site-primary-nav a:hover,.site-primary-nav a.is-active,.site-header-link:hover{color:var(--premium-accent)}
 .site-primary-nav a.is-active::after{background:var(--premium-accent)}
-.site-icon-button:hover{color:var(--premium-accent);border-color:color-mix(in srgb,var(--premium-accent) 35%,var(--premium-line))}
+.site-icon-button:hover{color:var(--premium-accent)}
 .site-header-cta{border-color:var(--premium-accent);background:var(--premium-accent);color:var(--premium-accent-text);box-shadow:0 8px 22px color-mix(in srgb,var(--premium-accent) 22%,transparent)}
 
 .product-home{
@@ -2756,7 +2767,7 @@ body:not(.admin-page) .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent
 .admin-page .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-warning):not(.btn-success):not(.btn-info):not(.btn-ghost):not(.btn-link){
   border-color:color-mix(in srgb,var(--premium-text) 30%,transparent);
 }
-.product-button:not(.product-button-primary),.site-icon-button{
+.product-button:not(.product-button-primary){
   border-color:color-mix(in srgb,var(--premium-text) 30%,transparent);
 }
 

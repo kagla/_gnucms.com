@@ -87,7 +87,8 @@ final class PhpTemplate
 
     // ---- 헬퍼. 템플릿이 $this-> 로 부른다 ----
 
-    public function e(mixed $v): string
+    /** @param mixed $v */
+    public function e($v): string
     {
         if ($v === null) {
             return '';
@@ -96,10 +97,11 @@ final class PhpTemplate
     }
 
     /** 비었으면 기본값. null·''·false·[] 를 '비었다' 로 본다. ?? 는 null 만 보므로 다르다. */
-    public function def(mixed $v, mixed $default): mixed
+    /** @param mixed $v @param mixed $default @return mixed */
+    public function def($v, $default)
     {
         if ($v instanceof \Countable) { return count($v) === 0 ? $default : $v; }
-        if ($v instanceof \Stringable) { return (string) $v === '' ? $default : $v; }
+        if (is_object($v) && method_exists($v, '__toString')) { return (string) $v === '' ? $default : $v; }
         return ($v === '' || $v === false || $v === null || $v === []) ? $default : $v;
     }
 
@@ -191,7 +193,8 @@ final class PhpTemplate
             . '</svg>';
     }
 
-    public function date(mixed $v, string $format): string
+    /** @param mixed $v */
+    public function date($v, string $format): string
     {
         if ($v === null || $v === '') {
             return '';
@@ -200,7 +203,8 @@ final class PhpTemplate
         return $ts === false ? '' : date($format, $ts);
     }
 
-    public function compactDate(mixed $v): string
+    /** @param mixed $v */
+    public function compactDate($v): string
     {
         if ($v === null || $v === '') {
             return '';
@@ -215,7 +219,8 @@ final class PhpTemplate
             : date('m-d', $ts);
     }
 
-    public function truncate(mixed $v, int $length): string
+    /** @param mixed $v */
+    public function truncate($v, int $length): string
     {
         $text = (string) $v;
         if ($length < 1 || mb_strlen($text) <= $length) {
@@ -225,7 +230,8 @@ final class PhpTemplate
         return mb_substr($text, 0, $length) . '…';
     }
 
-    public function json(mixed $v): string
+    /** @param mixed $v */
+    public function json($v): string
     {
         // 기본 옵션 그대로. 값은 서버가 만든 주소·토큰이라 < 가 들어올 일이 없다.
         return (string) json_encode($v);

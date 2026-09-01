@@ -22,7 +22,30 @@ final class BoardListTest extends WebTestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('자유게시판', $this->body($response));
         self::assertStringContainsString('/boards/free', $this->body($response));
+        self::assertMatchesRegularExpression(
+            '#<nav class="site-primary-nav"[^>]*>.*href="/boards/free"[^>]*>자유게시판</a>#s',
+            $this->body($response)
+        );
         self::assertStringContainsString('/themes/gnucmscom/theme.css', $this->body($response));
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testFreeBoardIsActiveOnceInTopNavigation(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'free',
+            'name'      => '자유게시판',
+        ]);
+
+        $body = $this->body($this->get($app, '/boards/free'));
+        preg_match('#<nav class="site-primary-nav"[^>]*>(.*?)</nav>#s', $body, $nav);
+
+        self::assertSame(1, substr_count($nav[1] ?? '', '>자유게시판</a>'));
+        self::assertMatchesRegularExpression(
+            '#href="/boards/free" class="is-active" aria-current="page">자유게시판</a>#',
+            $nav[1] ?? ''
+        );
     }
 
     /** @dataProvider connectionProvider */

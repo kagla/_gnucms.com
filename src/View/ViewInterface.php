@@ -18,5 +18,6 @@ interface ViewInterface
     /** 문자열로. 오류 화면과 파리티 테스트가 쓴다. */
     public function fetch(string $template, array $data = []): string;
 
-    public function addGlobal(string $name, mixed $value): void;
+    /** @param mixed $value */
+    public function addGlobal(string $name, $value): void;
 }

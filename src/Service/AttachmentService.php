@@ -62,12 +62,12 @@ final class AttachmentService
         }
         $unit = strtoupper(substr($value, -1));
         $number = (float) $value;
-        $bytes = match ($unit) {
-            'G' => $number * 1073741824,
-            'M' => $number * 1048576,
-            'K' => $number * 1024,
-            default => $number,
-        };
+        switch ($unit) {
+            case 'G': $bytes = $number * 1073741824; break;
+            case 'M': $bytes = $number * 1048576; break;
+            case 'K': $bytes = $number * 1024; break;
+            default: $bytes = $number;
+        }
         if ($bytes <= 0) {
             return PHP_INT_MAX;
         }

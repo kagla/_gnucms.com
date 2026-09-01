@@ -65,7 +65,7 @@ final class ServerCheckTest extends TestCase
 
     public function testOldPhpFails(): void
     {
-        $result = $this->check(self::ALL, '8.0.30')->run();
+        $result = $this->check(self::ALL, '7.3.33')->run();
 
         self::assertFalse($result['ok']);
         self::assertFalse($this->item($result, 'PHP')['ok']);

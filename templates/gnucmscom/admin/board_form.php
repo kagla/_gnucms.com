@@ -49,12 +49,15 @@
         <h2 class="form-section-title">이용 권한</h2>
         <?php // 값(guest·member·admin)은 그대로 두고 이름만 사람 말로 보인다. ?>
         <?php $perm_labels = ['guest' => '누구나', 'member' => '회원', 'admin' => '관리자']; ?>
-        <div class="grid-3">
-          <fieldset class="fieldset"><legend class="fieldset-legend">읽기</legend>
+        <div class="grid-3 permission-grid">
+          <fieldset class="fieldset permission-field"><legend class="fieldset-legend">읽기</legend>
+            <p class="permission-help">게시글을 볼 수 있는 최소 권한입니다.</p>
             <select class="select select-bordered select-block" name="perm_read"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_read'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
-          <fieldset class="fieldset"><legend class="fieldset-legend">쓰기 <span class="legend-hint">“누구나”는 사이트 설정에서 비회원 글쓰기를 켜야 실제로 열립니다</span></legend>
+          <fieldset class="fieldset permission-field"><legend class="fieldset-legend">쓰기</legend>
+            <p class="permission-help">‘누구나’는 사이트 설정에서 비회원 글쓰기를 켜야 적용됩니다.</p>
             <select class="select select-bordered select-block" name="perm_write"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_write'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
-          <fieldset class="fieldset"><legend class="fieldset-legend">댓글</legend>
+          <fieldset class="fieldset permission-field"><legend class="fieldset-legend">댓글</legend>
+            <p class="permission-help">댓글을 작성할 수 있는 최소 권한입니다.</p>
             <select class="select select-bordered select-block" name="perm_comment"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_comment'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
         </div>
       </div>

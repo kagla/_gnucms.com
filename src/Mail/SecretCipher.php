@@ -26,7 +26,7 @@ final class SecretCipher
 
     public function decrypt(string $encoded): string
     {
-        if (!str_starts_with($encoded, 'v1:')) {
+        if (strpos($encoded, 'v1:') !== 0) {
             throw DomainError::internal('저장된 메일 비밀번호 형식을 확인할 수 없습니다.');
         }
         $payload = base64_decode(substr($encoded, 3), true);

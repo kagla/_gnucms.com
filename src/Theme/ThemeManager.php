@@ -119,7 +119,7 @@ final class ThemeManager
     private function validatedAssetPath(string $path): string
     {
         $path = str_replace('\\', '/', trim($path, '/'));
-        if ($path === '' || str_contains($path, "\0")) {
+        if ($path === '' || strpos($path, "\0") !== false) {
             throw new InvalidArgumentException('테마 파일 경로가 올바르지 않습니다.');
         }
         foreach (explode('/', $path) as $segment) {

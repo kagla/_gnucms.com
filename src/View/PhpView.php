@@ -59,7 +59,8 @@ final class PhpView implements ViewInterface
         return (new PhpTemplate($this, $data + $this->globals, $this->basePath))->run($template);
     }
 
-    public function addGlobal(string $name, mixed $value): void
+    /** @param mixed $value */
+    public function addGlobal(string $name, $value): void
     {
         $this->globals[$name] = $value;
     }
@@ -85,7 +86,7 @@ final class PhpView implements ViewInterface
     /** '{이름}.php' 의 실제 경로. 없으면 예외 — 다른 테마로 조용히 폴백하지 않는다. */
     public function resolve(string $template): string
     {
-        if ($template === '' || str_contains($template, '..') || str_contains($template, "\0")) {
+        if ($template === '' || strpos($template, '..') !== false || strpos($template, "\0") !== false) {
             throw new RuntimeException('템플릿 이름이 올바르지 않습니다: ' . $template);
         }
         foreach ($this->paths as $path) {
