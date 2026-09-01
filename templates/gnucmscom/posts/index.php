@@ -13,6 +13,8 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 ?>
 
 <?php $this->start('title') ?><?= $this->e($board['name']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $this->start('seo_description') ?><?= $this->e($board['description'] ?: $board['name'] . '의 최신 글과 GNUCMS 커뮤니티 소식을 확인하세요.') ?><?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($board['description'] ?: $board['name'] . '의 최신 글과 GNUCMS 커뮤니티 소식을 확인하세요.') ?>"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
 <?php $this->start('extra_tabs') ?><a class="tab tab-active" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" aria-current="page"><?= $this->e($board['name']) ?></a><?php $this->stop() ?>
 
@@ -45,6 +47,7 @@ $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view 
 
 <div class="page-head">
   <div>
+    <p class="board-eyebrow">GNUCMS COMMUNITY</p>
     <h1><?= $this->e($board['name']) ?></h1>
     <?php if ($board['description']): ?><p class="page-sub"><?= $this->e($board['description']) ?></p><?php endif ?>
     <p class="page-count">글 <strong><?= $this->e($list['total']) ?></strong>개<?php if ($list['notices'] !== []): ?> · 공지 <?= $this->e(count($list['notices'])) ?>개<?php endif ?></p>

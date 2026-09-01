@@ -1,13 +1,16 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>로그인 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $this->start('body_class') ?>auth-page<?php $this->stop() ?>
+<?php $this->start('nav_section') ?>auth<?php $this->stop() ?>
 <?php $this->start('body') ?>
 <div class="auth-wrap">
   <section class="card auth-card">
     <div class="card-body">
       <div class="auth-head">
-        <span class="auth-mark" aria-hidden="true"><?= $this->icon('brand', 22) ?></span>
+        <span class="auth-mark auth-brand-mark" aria-hidden="true"><?php $this->insert('_brand', ['compact' => true]) ?></span>
+        <p class="auth-eyebrow">GNUCMS ACCOUNT</p>
         <h1 class="card-title"><?= $this->e($site['site_name']) ?>에 로그인</h1>
-        <p class="card-sub">이야기를 이어서 나눠 보세요.</p>
+        <p class="card-sub">갤러리와 커뮤니티 활동을 이어가세요.</p>
       </div>
       <?php if ($unverified_email !== null): ?>
         <div class="alert alert-warning alert-soft auth-notice">

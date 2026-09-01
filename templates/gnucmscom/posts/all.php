@@ -8,6 +8,8 @@ $allUrl = function ($q, $page) use ($list): string {
     return $this->url('posts.all') . ($params !== [] ? '?' . implode('&', $params) : '');
 }; ?>
 <?php $this->start('title') ?>전체 글 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS 커뮤니티의 공지, 개발 소식, 질문과 사용 경험을 최신순으로 확인하세요.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS 커뮤니티의 공지, 개발 소식, 질문과 사용 경험을 최신순으로 확인하세요."><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>all<?php $this->stop() ?>
 <?php $this->start('header_search') ?>
 <form class="header-search" method="get" action="<?= $this->url('posts.all') ?>" role="search">
@@ -22,6 +24,7 @@ $allUrl = function ($q, $page) use ($list): string {
 <?php $this->start('body') ?>
 <div class="page-head">
   <div>
+    <p class="board-eyebrow">GNUCMS COMMUNITY</p>
     <h1><?php if (($list['author_name'] ?? null) !== null): ?><?= $this->e($list['author_name']) ?> 님의 글<?php else: ?>전체 글<?php endif ?></h1>
     <p class="page-sub"><?php if (($list['author_name'] ?? null) !== null): ?>이 회원이 쓴 글을 최신순으로 모았습니다. 글 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php else: ?>읽을 수 있는 모든 게시판의 글을 최신순으로 모았습니다.<?php if ($query['q'] !== null && $query['q'] !== ''): ?> “<?= $this->e($query['q']) ?>” 검색 결과 <?= $this->e((string) $list['total']) ?>건<?php endif ?><?php endif ?></p>
   </div>

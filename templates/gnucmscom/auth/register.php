@@ -1,13 +1,16 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>회원가입 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $this->start('body_class') ?>auth-page<?php $this->stop() ?>
+<?php $this->start('nav_section') ?>auth<?php $this->stop() ?>
 <?php $this->start('body') ?>
 <div class="auth-wrap">
   <section class="card auth-card">
     <div class="card-body">
       <div class="auth-head">
-        <span class="auth-mark" aria-hidden="true"><?= $this->icon('sparkle', 22) ?></span>
+        <span class="auth-mark auth-brand-mark" aria-hidden="true"><?php $this->insert('_brand', ['compact' => true]) ?></span>
+        <p class="auth-eyebrow">JOIN GNUCMS</p>
         <h1 class="card-title"><?= $this->e($site['site_name']) ?> 시작하기</h1>
-        <p class="card-sub">1분이면 가입할 수 있어요.</p>
+        <p class="card-sub">GNUCMS 사이트와 이야기를 함께 나눠보세요.</p>
       </div>
       <form method="post" action="<?= $this->url('auth.register') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">

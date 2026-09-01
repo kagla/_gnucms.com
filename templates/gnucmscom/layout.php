@@ -4,10 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101720" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="<?= $this->asset('favicon.svg') ?>">
 <title><?php $this->start('title') ?><?= $this->e($site['site_name']) ?><?php $this->stop() ?></title>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
+<?php
+$__seo_title = trim(strip_tags($this->block('title', (string) $site['site_name'])));
+$__seo_description = trim($this->block('seo_description', (string) $site['site_tagline']));
+$__seo_path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+$__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/' . $__seo_path);
+?>
+<link rel="canonical" href="<?= $this->e($__canonical) ?>">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="GNUCMS">
+<meta property="og:title" content="<?= $this->e($__seo_title) ?>">
+<meta property="og:description" content="<?= $this->e($__seo_description) ?>">
+<meta property="og:url" content="<?= $this->e($__canonical) ?>">
+<meta property="og:image" content="https://gnucms.com/og.png">
+<meta property="og:image:width" content="1731">
+<meta property="og:image:height" content="909">
+<meta property="og:image:alt" content="GNUCMS · 가벼운 오픈소스 PHP CMS">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= $this->e($__seo_title) ?>">
+<meta name="twitter:description" content="<?= $this->e($__seo_description) ?>">
+<meta name="twitter:image" content="https://gnucms.com/og.png">
+<?php $this->start('extra_head') ?><?php $this->stop() ?>
 <script>
 (function(){
   var d=document.documentElement,t=null;
@@ -43,36 +66,41 @@
           // 아니면 아래 기본 본문의 결과를 본다. has() 로는 "안 잡힘" 과 "빈 값" 을 못 가르므로
           // 살피개(sentinel)로 갈라, 안 잡혔을 때는 기본 본문과 같은 조건을 그대로 따진다.
     $__hs = $this->block('header_search', "\0");
-    $has_search = $__hs === "\0" ? isset($board['board_key']) : trim($__hs) !== ''; ?>
+    // gnucms.com 은 전 페이지 같은 헤더라서 검색을 숨기지 않는다.
+    $has_search = true; ?>
 
     <header class="site-header">
-      <div class="navbar wrap">
+      <div class="navbar wrap site-header-inner">
         <div class="navbar-start">
-          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기"><?= $this->icon('menu', 21) ?></label>
-          <a class="brand" href="<?= $this->url('boards.index') ?>">
-            <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 19) ?></span>
-            <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
+          <label for="nav-drawer" class="site-icon-button drawer-button" role="button" tabindex="0" aria-label="메뉴 열기"><?= $this->icon('menu', 20) ?></label>
+          <a class="brand site-brand" href="<?= $this->url('boards.index') ?>" aria-label="<?= $this->e($site['site_name']) ?> 홈">
+            <?php $this->insert('_brand') ?>
           </a>
         </div>
 
-        <?php // 오른쪽은 아이콘 줄 하나로 모은다. 예전 맨 윗줄에 있던 길도 여기로 들어왔다. ?>
-        <div class="navbar-end">
-          <?php if ($has_search): ?>
-            <label for="search-modal" class="btn btn-ghost btn-circle" role="button" tabindex="0"
-                   aria-label="검색 열기" title="검색 (/)"><?= $this->icon('search', 20) ?></label>
-          <?php endif ?>
+        <?php $__is_free_board = isset($board['board_key']) && $board['board_key'] === 'free'; ?>
+        <nav class="site-primary-nav" aria-label="주요 메뉴">
+          <a href="<?= $this->url('boards.index') ?>#about">소개</a>
+          <a href="<?= $this->url('boards.index') ?>#features">기능</a>
+          <a href="<?= $this->url('boards.index') ?>#install">설치</a>
+          <a href="<?= $this->url('boards.index') ?>#gallery">갤러리</a>
+          <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"<?php if ($__is_free_board): ?> class="is-active" aria-current="page"<?php endif ?>>자유게시판</a>
+          <a href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> class="is-active" aria-current="page"<?php endif ?>>전체 글</a>
+          <?php foreach ($site_menu as $item): ?><a href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->e($item['title']) ?></a><?php endforeach ?>
+        </nav>
 
+        <div class="navbar-end">
           <?php if ($current_user['is_guest']): ?>
-            <a class="btn btn-ghost btn-sm hide-sm" href="<?= $this->url('auth.login') ?>">로그인</a>
-            <?php if ($registration_available): ?><a class="btn btn-primary btn-sm hide-sm" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
+            <a class="site-header-link hide-sm" href="<?= $this->url('auth.login') ?>">로그인</a>
+            <?php if ($registration_available): ?><a class="site-header-cta hide-sm" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
           <?php else: ?>
-            <a class="btn btn-ghost btn-circle bell-link" href="<?= $this->url('notifications.index') ?>"
+            <a class="site-icon-button bell-link" href="<?= $this->url('notifications.index') ?>"
                aria-label="알림<?php if ($unread_notifications > 0): ?> <?= $this->e($unread_notifications) ?>개<?php endif ?>" title="알림">
               <?= $this->icon('bell', 20) ?>
               <?php if ($unread_notifications > 0): ?><span class="bell-dot" aria-hidden="true"><?= $this->e($unread_notifications > 99 ? '99+' : $unread_notifications) ?></span><?php endif ?>
             </a>
             <?php if ($current_user['is_admin']): ?>
-              <a class="btn btn-ghost btn-circle admin-link hide-sm" href="<?= $this->url('admin.index') ?>"
+              <a class="site-icon-button admin-link hide-sm" href="<?= $this->url('admin.index') ?>"
                  aria-label="관리 콘솔" title="관리 콘솔"><?= $this->icon('cog', 20) ?></a>
             <?php endif ?>
             <div class="dropdown dropdown-end hide-sm">
@@ -94,23 +122,16 @@
             </div>
           <?php endif ?>
 
-          <button class="btn btn-ghost btn-circle theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
-            <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
-            <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>
-          </button>
-        </div>
-      </div>
-
-      <?php // 카테고리 줄. 왼쪽의 '전체' 는 서랍을 여는 단추다. ?>
-      <div class="header-tabs">
-        <div class="wrap">
-          <label for="nav-drawer" class="gnb-all" role="button" tabindex="0"><?= $this->icon('grid', 15) ?> 전체</label>
-          <nav class="tabs tabs-border" aria-label="주요 메뉴">
-            <a class="tab<?php if (trim($this->block('nav_section')) === 'home'): ?> tab-active<?php endif ?>" href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> aria-current="page"<?php endif ?>>홈</a>
-            <a class="tab<?php if (trim($this->block('nav_section')) === 'all'): ?> tab-active<?php endif ?>" href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> aria-current="page"<?php endif ?>>전체 글</a>
-            <?php $this->start('extra_tabs') ?><?php $this->stop() ?>
-            <?php foreach ($site_menu as $item): ?><a class="tab" href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->e($item['title']) ?></a><?php endforeach ?>
-          </nav>
+          <div class="site-utility-icons">
+            <?php if ($has_search): ?>
+              <label for="search-modal" class="site-icon-button" role="button" tabindex="0"
+                     aria-label="검색 열기" title="검색 (/)"><?= $this->icon('search', 20) ?></label>
+            <?php endif ?>
+            <button class="site-icon-button theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환">
+              <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
+              <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -127,17 +148,14 @@
             <label for="search-modal" class="btn btn-ghost btn-square btn-sm" role="button" tabindex="0" aria-label="검색 닫기"><?= $this->icon('close', 18) ?></label>
           </div>
           <?php $this->start('header_search') ?>
-            <?php // 게시판 문맥이 있는 화면(글 보기·쓰기·고치기)은 그 게시판을 검색한다.
-                  // home 과 posts/index 는 이 블록을 자기 것으로 덮어쓴다. ?>
-            <?php if (isset($board['board_key'])): ?>
-              <form class="header-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
+            <?php $__sk = $board['board_key'] ?? 'free'; $__sn = $board['name'] ?? '자유게시판'; ?>
+              <form class="header-search" method="get" action="<?= $this->url('posts.index', ['key' => $__sk]) ?>" role="search">
                 <label class="input input-bordered">
                   <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
-                  <input type="search" name="q" value="" placeholder="<?= $this->e($board['name']) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
+                  <input type="search" name="q" value="" placeholder="<?= $this->e($__sn) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
                 </label>
                 <button class="btn btn-primary header-search-btn" type="submit">검색</button>
               </form>
-            <?php endif ?>
           <?php $this->stop() ?>
         </div>
       </div>
@@ -149,27 +167,33 @@
     <main class="wrap main-area" id="main"><?php $this->start('body') ?><?php $this->stop() ?></main>
 
     <?php $this->start('site_footer') ?>
-    <footer class="footer">
-      <div class="wrap footer-inner">
-        <aside class="footer-brand">
-          <span class="brand-logo brand-logo-sm" aria-hidden="true"><?= $this->icon('brand', 16) ?></span>
-          <div>
-            <strong><?= $this->e($site['site_name']) ?></strong>
-            <p><?= $this->e($site['site_tagline']) ?></p>
-          </div>
-        </aside>
-        <nav class="footer-nav" aria-label="사이트 메뉴">
-          <a class="link link-hover" href="<?= $this->url('boards.index') ?>">홈</a>
-          <?php // '상단 메뉴에 표시' 는 말 그대로 상단 메뉴다. 하단에는 약관만 모아 둔다. ?>
-          <?php // 약관은 으레 하단에 모아 둔다. 공개된 약관은 사용처와 무관하게 전부 나온다. ?>
-          <?php foreach ($legal_pages as $doc): ?>
-            <a class="link link-hover" href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
-          <?php endforeach ?>
-        </nav>
-        <p class="footer-note">
-          <?= $this->e($site['site_name']) ?> 은 회원이 직접 올린 글과 사진으로 채워집니다.
-          각 글의 저작권은 글쓴이에게 있으며, 신고가 접수된 글은 운영 기준에 따라 처리됩니다.
-        </p>
+    <footer class="footer site-footer">
+      <div class="wrap footer-inner site-footer-shell">
+        <div class="site-footer-main">
+          <aside class="footer-brand">
+            <a class="brand footer-brand-logo" href="<?= $this->url('boards.index') ?>" aria-label="GNUCMS 홈"><?php $this->insert('_brand') ?></a>
+            <p>일반 PHP 호스팅에서도 빠르게 시작하는<br>가벼운 오픈소스 CMS</p>
+          </aside>
+          <nav class="footer-nav" aria-label="프로젝트 메뉴">
+            <strong>프로젝트</strong>
+            <a href="<?= $this->url('boards.index') ?>#about">GNUCMS 소개</a>
+            <a href="<?= $this->url('boards.index') ?>#features">주요 기능</a>
+            <a href="<?= $this->url('boards.index') ?>#install">설치 방법</a>
+            <a href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub</a>
+          </nav>
+          <nav class="footer-nav" aria-label="커뮤니티 메뉴">
+            <strong>커뮤니티</strong>
+            <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>">자유게시판</a>
+            <a href="<?= $this->url('posts.all') ?>">전체 글</a>
+            <?php foreach ($legal_pages as $doc): ?>
+              <a href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
+            <?php endforeach ?>
+          </nav>
+        </div>
+        <div class="site-footer-bottom">
+          <span>© <?= date('Y') ?> GNUCMS</span>
+          <span>PHP 7.4+ · MIT License</span>
+        </div>
       </div>
     </footer>
     <?php $this->stop() ?>
@@ -178,9 +202,9 @@
       <a href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> class="dock-active" aria-current="page"<?php endif ?>>
         <?= $this->icon('home', 21) ?><span class="dock-label">홈</span>
       </a>
-      <label for="nav-drawer" role="button" tabindex="0">
-        <?= $this->icon('grid', 21) ?><span class="dock-label">카테고리</span>
-      </label>
+      <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"<?php if (isset($board['board_key']) && $board['board_key'] === 'free'): ?> class="dock-active" aria-current="page"<?php endif ?>>
+        <?= $this->icon('board', 21) ?><span class="dock-label">게시판</span>
+      </a>
       <?php if ($current_user['is_guest']): ?>
         <a href="<?= $this->url('auth.login') ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
       <?php else: ?>
@@ -202,8 +226,7 @@
     <div class="drawer-panel">
       <div class="drawer-head">
         <span class="brand">
-          <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 18) ?></span>
-          <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
+          <?php $this->insert('_brand') ?>
         </span>
         <?php // 화면 테마 토글은 머리글에 있다. 서랍은 머리글 위에 열리므로 여기 또 두면 둘이 나란히 보인다. ?>
         <label for="nav-drawer" class="btn btn-ghost btn-square btn-sm" aria-label="메뉴 닫기"><?= $this->icon('close', 18) ?></label>
@@ -224,9 +247,12 @@
       <ul class="menu">
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
-        <?php foreach (($boards ?? []) as $navBoard): ?>
-          <li><a href="<?= $this->url('posts.index', ['key' => $navBoard['board_key']]) ?>"><?= $this->icon('board', 18) ?> <?= $this->e($navBoard['name']) ?></a></li>
-        <?php endforeach ?>
+        <li><a href="<?= $this->url('boards.index') ?>#about"><?= $this->icon('info', 18) ?> 소개</a></li>
+        <li><a href="<?= $this->url('boards.index') ?>#features"><?= $this->icon('sparkle', 18) ?> 기능</a></li>
+        <li><a href="<?= $this->url('boards.index') ?>#install"><?= $this->icon('document', 18) ?> 설치</a></li>
+        <li><a href="<?= $this->url('boards.index') ?>#gallery"><?= $this->icon('grid', 18) ?> 사이트 갤러리</a></li>
+        <li><a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"><?= $this->icon('board', 18) ?> 자유게시판</a></li>
+        <li><a href="https://github.com/kagla/gnucms" target="_blank" rel="noopener"><?= $this->icon('star', 18) ?> GitHub</a></li>
         <?php if (!empty($site_menu)): ?><li class="menu-title">안내</li><?php endif ?>
         <?php foreach ($site_menu as $item): ?><li><a href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->icon('document', 18) ?> <?= $this->e($item['title']) ?></a></li><?php endforeach ?>
         <?php if (!$current_user['is_guest']): ?>

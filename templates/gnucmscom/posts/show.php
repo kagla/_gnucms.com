@@ -1,6 +1,8 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?><?= $this->e($post['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e(mb_substr(strip_tags((string) $post['content']), 0, 150)) ?>"><?php $this->stop() ?>
+<?php $__post_description = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $post['content']))) ?: $post['title']; ?>
+<?php $this->start('seo_description') ?><?= $this->e(mb_substr($__post_description, 0, 155)) ?><?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e(mb_substr($__post_description, 0, 155)) ?>"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
 <?php $this->start('extra_tabs') ?><a class="tab tab-active" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" aria-current="page"><?= $this->e($board['name']) ?></a><?php $this->stop() ?>
 <?php $this->start('body') ?>
