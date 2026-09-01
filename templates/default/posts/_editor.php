@@ -51,6 +51,28 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
       el.addClass(isDark()?'<?= $this->e(GNUCMS_ID) ?>-editor-dark':'<?= $this->e(GNUCMS_ID) ?>-editor-light');
     });
   }
+  /* 기존 본문 이미지는 한 번 404로 캐시되었더라도 수정 화면에서 다시 요청한다.
+     저장할 때는 캐시용 쿼리와 편집기 전용 속성을 제거해 원래 주소만 남긴다. */
+  function refreshStoredImages(editor){
+    if(!editor.document){return}
+    var images=editor.document.find('img');
+    for(var i=0;i<images.count();i++){
+      var image=images.getItem(i),src=image.getAttribute('src')||'';
+      if(!/\/media\/editor\//.test(src)){continue}
+      var clean=src.split('?')[0];
+      image.setAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src',clean);image.addClass('<?= $this->e(GNUCMS_ID) ?>-image-loading');
+      image.on('load',function(event){event.listenerData.removeClass('<?= $this->e(GNUCMS_ID) ?>-image-loading')},null,image);
+      image.setAttribute('src',clean+'?editor_preview='+Date.now());
+    }
+  }
+  function restoreImageUrls(editor){
+    if(!editor.document){return}
+    var images=editor.document.find('img[data-<?= $this->e(GNUCMS_ID) ?>-src]');
+    for(var i=0;i<images.count();i++){
+      var image=images.getItem(i);image.setAttribute('src',image.getAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src'));
+      image.removeAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src');image.removeClass('<?= $this->e(GNUCMS_ID) ?>-image-loading');
+    }
+  }
 
   /* 표준 Image 다이얼로그는 URL 을 직접 넣는 자리다. 사진을 고르는 흐름이 아니라
      파일 선택창에서 여러 장을 골라 바로 본문에 넣는 방식을 쓴다.
@@ -59,6 +81,22 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   function insertImage(editor,url,name){
     var paragraph=new CKEDITOR.dom.element('p'),image=new CKEDITOR.dom.element('img');
     image.setAttributes({src:url,alt:name});paragraph.append(image);editor.insertElement(paragraph);
+  }
+  async function readUploadResponse(response){
+    var text=await response.text(),data=null;
+    try{data=text?JSON.parse(text):null}catch(error){}
+    if(data&&data.uploaded&&data.url){return data}
+    if(data&&data.error&&data.error.message){throw new Error(data.error.message)}
+    var messages={
+      401:'로그인이 필요하거나 로그인 시간이 만료되었습니다.',
+      403:'이미지를 올릴 권한이 없거나 요청 확인 시간이 만료되었습니다. 화면을 새로고침해 주세요.',
+      404:'이미지 업로드 주소를 찾을 수 없습니다.',
+      413:'서버에서 허용한 업로드 용량을 초과했습니다.',
+      422:'서버가 이미지 파일을 처리하지 못했습니다.',
+      500:'서버가 이미지를 저장하지 못했습니다. 저장 공간과 폴더 권한을 확인해 주세요.'
+    };
+    var message=messages[response.status]||'서버가 올바른 업로드 응답을 보내지 않았습니다.';
+    throw new Error(message+' (HTTP '+response.status+')');
   }
   function chooseImages(editor){
     var input=document.createElement('input');
@@ -79,11 +117,13 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
         try{
           var formData=new FormData();formData.append('upload',valid[i],valid[i].name);
           var response=await fetch(uploadUrl,{method:'POST',body:formData,credentials:'same-origin',headers:{Accept:'application/json'}});
-          var data=await response.json();
-          if(!response.ok||!data.uploaded||!data.url){throw new Error(data.error&&data.error.message?data.error.message:'업로드에 실패했습니다.')}
+          var data=await readUploadResponse(response);
           remember(data.url);
           editor.focus();insertImage(editor,data.url,valid[i].name);
-        }catch(error){failed.push(valid[i].name+': '+(error.message||'업로드 실패'))}
+        }catch(error){
+          var reason=error instanceof TypeError?'업로드 서버에 연결하지 못했습니다. 네트워크 상태를 확인해 주세요.':(error.message||'업로드 실패');
+          failed.push(valid[i].name+': '+reason)
+        }
         notice.update({message:'사진 '+valid.length+'장 중 '+(i+1)+'장 처리 중',progress:(i+1)/valid.length});
       }
       uploading--;
@@ -113,6 +153,9 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:uploadUrl+'&responseType=json',
     extraPlugins:'uploadimage,notification,<?= $this->e(GNUCMS_ID) ?>postimages',
+    /* 사진 버튼은 자체 명령이라 CKEditor ACF가 기본 Image 기능을 사용 중이라고 알지 못한다.
+       명시하지 않으면 저장된 본문의 img가 수정 화면을 여는 순간 제거된다. */
+    extraAllowedContent:'img[alt,src,title]',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',
     format_tags:'p;h2;h3;h4;pre',
@@ -155,7 +198,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   });
   }
   function wire(e){
-    e.on('instanceReady',function(){syncTheme(e)});
+    e.on('instanceReady',function(){syncTheme(e);refreshStoredImages(e)});
     e.on('fileUploadResponse',function(event){
       try{
         var data=JSON.parse(event.data.fileLoader.xhr.responseText||'{}');
@@ -173,6 +216,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   window.<?= $this->e(GNUCMS_ID) ?>Editor=window.<?= $this->e(GNUCMS_ID) ?>Editor||{};
   window.<?= $this->e(GNUCMS_ID) ?>Editor[textarea.id]={
     remount:function(move){
+      restoreImageUrls(editor);
       editor.destroy();
       if(typeof move==='function'){move()}
       editor=wire(build());
@@ -190,6 +234,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
 
         return;
       }
+      restoreImageUrls(editor);
       editor.updateElement();
       /* CKEditor 가 textarea 를 숨기므로 브라우저의 "필수" 검사가 동작하지 않는다.
          그래서 required 대신 data-required 를 두고 여기서 직접 확인한다. */

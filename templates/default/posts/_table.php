@@ -9,6 +9,8 @@ $show_board = $show_board ?? false;
 $show_category = $show_category ?? false;
 $compact = $compact ?? false;
 $empty_text = $empty_text ?? '아직 글이 없습니다.';
+$notices = $notices ?? [];
+$rows = array_merge($notices, $list['data']);
 $columns = 4 + ($show_board ? 1 : 0) + ($show_category ? 1 : 0);
 ?>
 <section class="card">
@@ -25,10 +27,10 @@ $columns = 4 + ($show_board ? 1 : 0) + ($show_category ? 1 : 0);
         </tr>
       </thead>
       <tbody>
-      <?php if ($list['data'] === []): ?>
+      <?php if ($rows === []): ?>
         <tr class="table-empty"><td colspan="<?= $this->e((string) $columns) ?>"><?= $this->e($empty_text) ?></td></tr>
-      <?php else: foreach ($list['data'] as $post): ?>
-        <tr>
+      <?php else: foreach ($rows as $post): ?>
+        <tr<?php if ($post['is_notice']): ?> class="post-notice-row"<?php endif ?>>
           <?php if ($show_board): ?>
             <td data-label="게시판" class="post-col-board"><a class="badge badge-ghost badge-sm" href="<?= $this->url('posts.index', ['key' => $post['board_key']]) ?>"><?= $this->e($post['board_name']) ?></a></td>
           <?php endif ?>
@@ -37,7 +39,13 @@ $columns = 4 + ($show_board ? 1 : 0) + ($show_category ? 1 : 0);
           <?php endif ?>
           <td data-label="제목" class="post-col-title">
             <div class="post-title-line">
-              <?php if ($post['is_notice']): ?><span class="badge badge-primary badge-soft badge-sm">공지</span><?php endif ?>
+              <?php if ($post['is_notice']): ?>
+                <?php if (($post['notice_scope'] ?? 'board') === 'global'): ?>
+                  <span class="badge badge-accent badge-soft badge-sm">전체 공지</span>
+                <?php else: ?>
+                  <span class="badge badge-primary badge-soft badge-sm">공지</span>
+                <?php endif ?>
+              <?php endif ?>
               <?php if ($post['is_secret']): ?><span class="post-row-lock" title="비밀글" aria-label="비밀글"><?= $this->icon('lock', 16) ?></span><?php endif ?>
               <a class="cell-title link link-hover" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>" title="<?= $this->e($post['title']) ?>"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></a>
               <?php if ($post['file_count'] > 0): ?><span class="post-row-clip" title="첨부파일 있음" aria-label="첨부파일 있음"><?= $this->icon('clip', 16) ?></span><?php endif ?>

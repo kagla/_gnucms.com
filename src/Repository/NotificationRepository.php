@@ -30,7 +30,7 @@ final class NotificationRepository
     public function find(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('notifications') . ' WHERE id = ?',
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('notifications') . ' WHERE id = ?',
             [$id]
         );
 
@@ -40,7 +40,7 @@ final class NotificationRepository
     public function unreadCount(string $userId): int
     {
         return (int) $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('notifications')
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('notifications')
             . ' WHERE user_id = ? AND is_read = 0',
             [$userId]
         )['c'];
@@ -49,13 +49,13 @@ final class NotificationRepository
     public function paginate(string $userId, int $page, int $perPage): array
     {
         $total = (int) $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('notifications') . ' WHERE user_id = ?',
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('notifications') . ' WHERE user_id = ?',
             [$userId]
         )['c'];
 
         $offset = max(0, ($page - 1) * $perPage);
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('notifications')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('notifications')
             . ' WHERE user_id = :user_id ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             ['user_id' => $userId]
         );
@@ -67,7 +67,7 @@ final class NotificationRepository
     {
         // user_id 를 조건에 함께 두어 남의 알림은 건드릴 수 없게 한다.
         $this->db->execute(
-            'UPDATE ' . $this->db->q('notifications') . ' SET is_read = 1 WHERE id = ? AND user_id = ?',
+            'UPDATE ' . $this->db->table('notifications') . ' SET is_read = 1 WHERE id = ? AND user_id = ?',
             [$id, $userId]
         );
     }
@@ -75,7 +75,7 @@ final class NotificationRepository
     public function markAllRead(string $userId): void
     {
         $this->db->execute(
-            'UPDATE ' . $this->db->q('notifications') . ' SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+            'UPDATE ' . $this->db->table('notifications') . ' SET is_read = 1 WHERE user_id = ? AND is_read = 0',
             [$userId]
         );
     }

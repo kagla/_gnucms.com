@@ -9,13 +9,14 @@ use GnuCms\Support\Clock;
 
 final class CommentRepository
 {
-    private const COLUMNS = 'id, board_id, post_id, parent_id, depth, content, author_id, author_name,'
+    private const COLUMNS = 'id, board_id, post_id, parent_id, depth, content, author_id, author_name, author_ip,'
         . ' is_secret, image_key, created_at, updated_at, deleted_at';
 
     private const DEFAULTS = [
         'parent_id'      => null,
         'author_id'      => null,
         'guest_password' => null,
+        'author_ip'      => null,
         'is_secret'      => 0,
         'image_key'      => null,
     ];
@@ -31,7 +32,7 @@ final class CommentRepository
     public function findByPost(int $postId): array
     {
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('comments')
             . ' WHERE post_id = ? ORDER BY id ASC',
             [$postId]
         );
@@ -43,7 +44,7 @@ final class CommentRepository
     public function findByPostWithSecret(int $postId): array
     {
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('comments')
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->table('comments')
             . ' WHERE post_id = ? ORDER BY id ASC',
             [$postId]
         );
@@ -54,7 +55,7 @@ final class CommentRepository
     public function find(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('comments') . ' WHERE id = ?',
             [$id]
         );
 
@@ -64,7 +65,7 @@ final class CommentRepository
     public function findWithSecret(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->table('comments') . ' WHERE id = ?',
             [$id]
         );
 
@@ -127,17 +128,17 @@ final class CommentRepository
         // 이 필터는 권한과 무관하게 걸리므로 글쓴이 본인과 관리자에게도 그 줄이 보이지
         // 않는다 (의도된 선택).
         $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')'
-            . ' AND post_id IN (SELECT id FROM ' . $this->db->q('posts')
+            . ' AND post_id IN (SELECT id FROM ' . $this->db->table('posts')
             . ' WHERE deleted_at IS NULL AND is_secret = 0)';
 
         $total = (int) $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE ' . $where,
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('comments') . ' WHERE ' . $where,
             $params
         )['c'];
 
         $offset = max(0, ($page - 1) * $perPage);
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('comments')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('comments')
             . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );
@@ -148,7 +149,7 @@ final class CommentRepository
     public function hasChildren(int $id): bool
     {
         $row = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('comments') . ' WHERE parent_id = ?',
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('comments') . ' WHERE parent_id = ?',
             [$id]
         );
 
@@ -162,7 +163,7 @@ final class CommentRepository
         }
 
         $row = $this->db->selectOne(
-            'SELECT depth FROM ' . $this->db->q('comments') . ' WHERE id = ?',
+            'SELECT depth FROM ' . $this->db->table('comments') . ' WHERE id = ?',
             [$parentId]
         );
 

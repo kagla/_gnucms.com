@@ -5,7 +5,7 @@
       <?php $this->insert('posts/_thumb', ['post' => $post, 'board_badge' => false]) ?>
       <div class="card-body">
         <h2 class="card-title"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></h2>
-        <?php $this->insert('posts/_meta', ['post' => $post]) ?>
+        <?php $this->insert('posts/_meta', ['post' => $post, 'inline_views' => true]) ?>
       </div>
     </a>
   <?php endforeach ?>

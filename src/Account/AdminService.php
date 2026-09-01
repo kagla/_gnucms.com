@@ -27,7 +27,7 @@ final class AdminService
     {
         $acl->assertGlobalAdmin();
         $post = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('posts') . ' WHERE deleted_at IS NULL'
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('posts') . ' WHERE deleted_at IS NULL'
         );
         $boards = $this->boards->listBoards($acl);
         return [

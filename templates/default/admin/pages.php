@@ -15,10 +15,10 @@
 <section class="card">
   <div class="table-wrap">
     <table class="table table-zebra">
-      <thead><tr><th>제목</th><th>주소</th><th>상태</th><th>메뉴</th><th class="right">관리</th></tr></thead>
+      <thead><tr><th>제목</th><th>주소</th><th>상태</th><th>메뉴</th><th class="right">정렬</th><th class="right">관리</th></tr></thead>
       <tbody>
       <?php if ($pages === []): ?>
-        <tr class="table-empty"><td colspan="5">아직 등록된 내용이 없습니다.</td></tr>
+        <tr class="table-empty"><td colspan="6">아직 등록된 내용이 없습니다.</td></tr>
       <?php else: foreach ($pages as $page): ?>
         <tr>
           <td data-label="제목">
@@ -28,6 +28,7 @@
           <td data-label="주소"><code class="kbd kbd-sm">/content/<?= $this->e($page['slug']) ?></code></td>
           <td data-label="상태"><span class="badge badge-sm badge-soft <?= $page['status'] === 'published' ? 'badge-success' : 'badge-ghost' ?>"><?= $page['status'] === 'published' ? '공개' : '초안' ?></span></td>
           <td data-label="메뉴"><?= $page['show_in_menu'] ? '표시' : '숨김' ?></td>
+          <td data-label="정렬" class="right"><?= $this->e($page['sort_order']) ?></td>
           <td data-label="관리" class="right">
             <div class="row-actions">
               <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.content.preview', ['id' => $page['id']]) ?>" target="_blank" rel="noopener">미리보기</a>

@@ -121,7 +121,7 @@ final class PasswordThrottle
     private function tryAtomicUpdate(string $k, int $now): int
     {
         return $this->db->execute(
-            'UPDATE ' . $this->db->q('password_attempts')
+            'UPDATE ' . $this->db->table('password_attempts')
             . ' SET fail_count = CASE WHEN :now - first_failed_at >= :win THEN 1 ELSE fail_count + 1 END,'
             . ' first_failed_at = CASE WHEN :now2 - first_failed_at >= :win2 THEN :now3 ELSE first_failed_at END'
             . ' WHERE attempt_key = :k AND client_ip = :ip',
@@ -156,7 +156,7 @@ final class PasswordThrottle
     private function find(string $key): ?array
     {
         return $this->db->selectOne(
-            'SELECT id, fail_count, first_failed_at FROM ' . $this->db->q('password_attempts')
+            'SELECT id, fail_count, first_failed_at FROM ' . $this->db->table('password_attempts')
             . ' WHERE attempt_key = ? AND client_ip = ?',
             [$this->keyOf($key), $this->clientIp]
         );

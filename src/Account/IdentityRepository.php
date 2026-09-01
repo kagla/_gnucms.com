@@ -20,8 +20,8 @@ final class IdentityRepository
     {
         return $this->db->selectOne(
             'SELECT u.id, u.email, u.email_verified, u.password_hash, u.display_name, u.is_admin, u.status, u.session_epoch'
-            . ' FROM ' . $this->db->q('user_identities') . ' i'
-            . ' JOIN ' . $this->db->q('users') . ' u ON u.id = i.user_id'
+            . ' FROM ' . $this->db->table('user_identities') . ' i'
+            . ' JOIN ' . $this->db->table('users') . ' u ON u.id = i.user_id'
             . ' WHERE i.provider = ? AND i.provider_uid = ?',
             [$provider, $providerUid]
         );
@@ -40,7 +40,7 @@ final class IdentityRepository
     public function countForUser(int $userId): int
     {
         $row = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('user_identities') . ' WHERE user_id = ?',
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('user_identities') . ' WHERE user_id = ?',
             [$userId]
         );
         return (int) ($row['c'] ?? 0);

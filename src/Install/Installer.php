@@ -81,7 +81,7 @@ final class Installer
     }
 
     /**
-     * @param array{dsn: string, username: ?string, password: ?string} $dbConfig
+     * @param array{dsn: string, username: ?string, password: ?string, prefix?: string} $dbConfig
      * @param array{site_name: string, app_url: string, mail_from: string} $site
      * @param array{email: string, display_name: string, password: string}|null $admin null 이면 관리자를 만들지 않는다(이어 쓰기)
      * @param bool $reuse 이미 표가 있는 DB 를 이어 쓴다. 표를 새로 만들지 않고 새 판으로 옮긴다
@@ -112,7 +112,7 @@ final class Installer
         // 롤백되어야, 재시도할 때 findByEmail() 이 "이미 있는 이메일" 로 막히지 않는다.
         $adminEmail = $db->transaction(function () use ($db, $dbConfig, $site, $admin): ?string {
             $db->execute(
-                'UPDATE ' . $db->q('site_settings') . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                'UPDATE ' . $db->table('site_settings') . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
                 [$site['site_name'], Clock::now(), 'site_name']
             );
 
@@ -130,7 +130,7 @@ final class Installer
                 );
                 $users->verifyEmail($id);
                 $db->execute(
-                    'UPDATE ' . $db->q('site_state') . ' SET state_value = ? WHERE state_key = ?',
+                    'UPDATE ' . $db->table('site_state') . ' SET state_value = ? WHERE state_key = ?',
                     ['1', 'first_admin_claimed']
                 );
                 $adminEmail = $admin['email'];
@@ -155,7 +155,7 @@ final class Installer
     }
 
     /**
-     * @param array{dsn: string, username: ?string, password: ?string} $dbConfig
+     * @param array{dsn: string, username: ?string, password: ?string, prefix?: string} $dbConfig
      * @param array{site_name: string, app_url: string, mail_from: string} $site
      */
     private function writeConfig(array $dbConfig, array $site): void
@@ -177,6 +177,7 @@ final class Installer
                 'dsn'      => $dbConfig['dsn'],
                 'username' => ($dbConfig['username'] ?? '') === '' ? null : $dbConfig['username'],
                 'password' => ($dbConfig['password'] ?? '') === '' ? null : $dbConfig['password'],
+                'prefix'   => (string) ($dbConfig['prefix'] ?? ''),
             ],
             'auth' => [
                 'secret'       => Base64Url::encode(random_bytes(32)),

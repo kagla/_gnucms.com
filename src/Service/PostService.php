@@ -12,6 +12,7 @@ use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Error\DomainError;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Validation\Validator;
+use GnuCms\Support\IpAddress;
 
 final class PostService
 {
@@ -387,7 +388,7 @@ final class PostService
         return $this->detail($post);
     }
 
-    public function create(Acl $acl, string $boardKey, array $input): array
+    public function create(Acl $acl, string $boardKey, array $input, ?string $clientIp = null): array
     {
         $board = $this->boards->getEntity($acl, $boardKey);
         $acl->assertCanWrite($board);
@@ -405,12 +406,14 @@ final class PostService
             // 비회원 글: author_id 는 NULL 이고 비밀번호가 소유 증명 수단이 된다.
             $data['author_id'] = null;
             $data['author_name'] = $v->requiredString('author_name', 20);
+            $data['author_ip'] = IpAddress::normalize($clientIp);
             $password = $v->requiredPassword('password');
             $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
         } else {
             // 로그인 사용자는 요청의 author_name 을 무시한다. 사칭 방지.
             $data['author_id'] = $identity->sub();
             $data['author_name'] = (string) $identity->displayName();
+            $data['author_ip'] = null;
             $data['guest_password'] = null;
         }
 
@@ -653,6 +656,7 @@ final class PostService
             'title'         => $row['title'],
             'author_id'     => $row['author_id'],
             'author_name'   => $row['author_name'],
+            'author_ip_masked' => $row['author_id'] === null ? IpAddress::mask($row['author_ip'] ?? null) : null,
             'is_notice'     => (bool) $row['is_notice'],
             'notice_scope'  => ($row['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board',
             'is_secret'     => $secret,

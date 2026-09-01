@@ -79,6 +79,16 @@ final class Kernel
         $view->addGlobal('consent_documents', $consentDocuments);
         $view->addGlobal('legal_pages', $legalPages);
         $view->addGlobal('site_menu', $app->cmsService()->menu());
+        $headerBoards = [];
+        try {
+            $headerBoards = array_values(array_filter(
+                $app->boardService()->listBoards($app->guestAcl()),
+                static fn (array $board): bool => !empty($board['show_in_header'])
+            ));
+        } catch (DomainError $e) {
+            // 스키마가 깨진 요청도 오류 미들웨어까지 도달해야 상세를 숨긴 500 화면을 낼 수 있다.
+        }
+        $view->addGlobal('header_boards', $headerBoards);
         $view->addGlobal('base_path', $basePath);
         $view->addGlobal('active_theme', $themes->name());
         $view->addGlobal('available_themes', $themes->availableThemes());

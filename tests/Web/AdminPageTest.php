@@ -94,7 +94,7 @@ final class AdminPageTest extends WebTestCase
             'board_key' => 'notice', 'name' => '공지사항', 'description' => '중요한 소식',
             'categories_text' => "안내, 업데이트\n새 소식", 'managers_text' => '',
             'perm_read' => 'guest', 'perm_write' => 'admin', 'perm_comment' => 'member',
-            'per_page' => '20', 'sort_order' => '-10', 'use_category' => '1',
+            'per_page' => '20', 'sort_order' => '-10', 'use_category' => '1', 'show_in_header' => '1',
         ]);
 
         self::assertSame(303, $response->getStatusCode());
@@ -103,8 +103,29 @@ final class AdminPageTest extends WebTestCase
         self::assertSame('공지사항', $board['name']);
         self::assertSame(['안내, 업데이트', '새 소식'], $board['categories']);
         self::assertSame('admin', $board['perm_write']);
+        self::assertSame(1, $board['show_in_header']);
+        self::assertStringContainsString('href="/boards/notice">공지사항</a>', $this->body($this->get($app, '/')));
+        $boardPage = $this->body($this->get($app, '/boards/notice'));
+        self::assertMatchesRegularExpression('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $boardPage);
+        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $boardPage, $headerTabs);
+        self::assertSame(1, substr_count($headerTabs[1] ?? '', 'href="/boards/notice"'),
+            '현재 게시판은 활성 탭으로만 한 번 나와야 한다');
+        self::assertStringContainsString('class="tab tab-active" href="/boards/notice" aria-current="page"',
+            $headerTabs[1] ?? '');
+
+        $app->boardService()->create($this->adminAcl(), [
+            'board_key' => 'gallery', 'name' => '갤러리', 'show_in_header' => '1', 'sort_order' => '20',
+        ]);
+        $galleryPage = $this->body($this->get($app, '/boards/gallery'));
+        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $galleryPage, $galleryTabs);
+        self::assertMatchesRegularExpression(
+            '#href="/boards/notice"[^>]*>공지사항</a>.*class="tab tab-active" href="/boards/gallery" aria-current="page">갤러리</a>#s',
+            $galleryTabs[1] ?? '',
+            '선택된 게시판도 관리자가 정한 원래 순서에 있어야 한다'
+        );
         $savedPage = $this->get($app, '/admin/boards?saved=1');
         self::assertStringContainsString('공지사항', $this->body($savedPage));
+        self::assertStringContainsString('상단 메뉴', $this->body($savedPage));
         self::assertStringContainsString('게시판 설정을 저장했습니다.', $this->body($savedPage));
     }
 

@@ -13,6 +13,7 @@ $nested = $nested ?? false;
     <div class="chat-header">
       <?php if ($comment['deleted']): ?>삭제된 댓글<?php else: ?><?= $this->e($comment['author_name']) ?><?php endif ?>
       <time datetime="<?= $this->e($comment['created_at']) ?>"><?= $this->date($comment['created_at'], 'y-m-d H:i:s') ?></time>
+      <?php if (!$comment['deleted'] && !empty($comment['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($comment['author_ip_masked']) ?></span><?php endif ?>
     </div>
     <div class="chat-bubble<?php if ($comment['is_secret']): ?> chat-bubble-secret<?php endif ?>">
       <?php if ($comment['is_secret']): ?>

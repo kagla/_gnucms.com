@@ -22,10 +22,14 @@ final class Connection
     /** @var DialectInterface */
     private $dialect;
 
-    private function __construct(PDO $pdo, DialectInterface $dialect)
+    /** @var string */
+    private $prefix;
+
+    private function __construct(PDO $pdo, DialectInterface $dialect, string $prefix)
     {
         $this->pdo = $pdo;
         $this->dialect = $dialect;
+        $this->prefix = $prefix;
     }
 
     public static function create(array $dbConfig): self
@@ -33,6 +37,10 @@ final class Connection
         $dsn = (string) ($dbConfig['dsn'] ?? '');
         if ($dsn === '') {
             throw DomainError::internal('db.dsn 설정이 비어 있습니다.');
+        }
+        $prefix = (string) ($dbConfig['prefix'] ?? '');
+        if ($prefix !== '' && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,28}_$/D', $prefix) !== 1) {
+            throw DomainError::internal('db.prefix 는 영문으로 시작하고 영문·숫자·밑줄만 쓰며, 밑줄로 끝나는 30자 이하 문자열이어야 합니다.');
         }
 
         $dialect = DialectFactory::fromDsn($dsn);
@@ -54,7 +62,7 @@ final class Connection
 
         $dialect->afterConnect($pdo);
 
-        return new self($pdo, $dialect);
+        return new self($pdo, $dialect, $prefix);
     }
 
     public function pdo(): PDO
@@ -70,6 +78,29 @@ final class Connection
     public function q(string $identifier): string
     {
         return $this->dialect->quoteIdentifier($identifier);
+    }
+
+    public function prefix(): string
+    {
+        return $this->prefix;
+    }
+
+    /** 설정된 프리픽스를 붙인 실제 테이블 이름. */
+    public function tableName(string $logicalName): string
+    {
+        return $this->prefix . $logicalName;
+    }
+
+    /** 테이블 이름 전용 인용. 컬럼 인용인 q() 와 구분해 실수로 프리픽스를 붙이지 않는다. */
+    public function table(string $logicalName): string
+    {
+        return $this->q($this->tableName($logicalName));
+    }
+
+    /** PostgreSQL에서는 인덱스도 테이블과 같은 이름 공간을 쓰므로 함께 격리한다. */
+    public function index(string $logicalName): string
+    {
+        return $this->q($this->prefix . $logicalName);
     }
 
     public function select(string $sql, array $params = []): array
@@ -98,13 +129,13 @@ final class Connection
             return ':' . $c;
         }, $columns);
 
-        $sql = 'INSERT INTO ' . $this->q($table)
+        $sql = 'INSERT INTO ' . $this->table($table)
             . ' (' . implode(', ', $quoted) . ')'
             . ' VALUES (' . implode(', ', $placeholders) . ')';
 
         $this->run($sql, $data);
 
-        return $this->dialect->lastInsertId($this->pdo, $table);
+        return $this->dialect->lastInsertId($this->pdo, $this->tableName($table));
     }
 
     /**
@@ -129,7 +160,7 @@ final class Connection
             $params['set_' . $column] = $value;
         }
 
-        $sql = 'UPDATE ' . $this->q($table)
+        $sql = 'UPDATE ' . $this->table($table)
             . ' SET ' . implode(', ', $assignments)
             . ' WHERE ' . $where;
 
@@ -138,7 +169,7 @@ final class Connection
 
     public function delete(string $table, string $where, array $whereParams = []): int
     {
-        return $this->execute('DELETE FROM ' . $this->q($table) . ' WHERE ' . $where, $whereParams);
+        return $this->execute('DELETE FROM ' . $this->table($table) . ' WHERE ' . $where, $whereParams);
     }
 
     /**

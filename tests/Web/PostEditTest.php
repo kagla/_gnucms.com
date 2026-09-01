@@ -19,7 +19,11 @@ final class PostEditTest extends WebTestCase
 
         $form = $this->get($app, '/posts/' . $id . '/edit');
         self::assertSame(200, $form->getStatusCode());
-        self::assertStringContainsString('name="password"', $this->body($form));
+        $formBody = $this->body($form);
+        self::assertStringContainsString('name="password"', $formBody);
+        self::assertStringContainsString('refreshStoredImages(e)', $formBody);
+        self::assertStringContainsString('restoreImageUrls(editor)', $formBody);
+        self::assertStringContainsString("extraAllowedContent:'img[alt,src,title]'", $formBody);
 
         $response = $this->post($app, '/posts/' . $id . '/edit', [
             'csrf_token' => $_SESSION['csrf_token'] ?? '',

@@ -86,14 +86,22 @@ final class ContentImageService
         $this->assertKey($key);
         $error = $upload->getError();
         if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
-            throw DomainError::tooLarge('이미지 파일이 너무 큽니다.');
+            throw DomainError::tooLarge('이미지 파일이 서버에서 허용한 용량보다 큽니다.');
         }
         if ($error !== UPLOAD_ERR_OK) {
-            throw DomainError::validation(['upload' => '이미지 업로드에 실패했습니다.']);
+            $messages = [
+                UPLOAD_ERR_PARTIAL => '이미지 일부만 전송되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+                UPLOAD_ERR_NO_FILE => '업로드할 이미지를 선택해 주세요.',
+                UPLOAD_ERR_NO_TMP_DIR => '서버의 임시 업로드 폴더가 없습니다. 관리자에게 알려 주세요.',
+                UPLOAD_ERR_CANT_WRITE => '서버가 이미지 파일을 저장하지 못했습니다. 저장 공간과 폴더 권한을 확인해 주세요.',
+                UPLOAD_ERR_EXTENSION => '서버 설정이 이미지 업로드를 중단했습니다. 관리자에게 알려 주세요.',
+            ];
+            throw DomainError::validation(['upload' => $messages[$error] ?? '이미지 업로드 중 알 수 없는 오류가 발생했습니다.']);
         }
         $size = (int) ($upload->getSize() ?? 0);
         if ($size < 1 || $size > $this->maxBytes) {
-            throw DomainError::tooLarge('이미지는 5MB 이하만 올릴 수 있습니다.');
+            $maxMb = max(1, (int) floor($this->maxBytes / 1048576));
+            throw DomainError::tooLarge('이미지는 ' . $maxMb . 'MB 이하만 올릴 수 있습니다.');
         }
 
         $directory = $this->root . '/' . $key;

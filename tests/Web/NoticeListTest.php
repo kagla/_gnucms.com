@@ -62,15 +62,15 @@ final class NoticeListTest extends WebTestCase
         $app->postService()->create($acl, 'free', [
             'title' => '한 번만 보이는 공지', 'content' => '본문입니다', 'notice' => 'global',
         ]);
+        $app->postService()->create($acl, 'free', [
+            'title' => '일반 게시물', 'content' => '본문입니다',
+        ]);
 
         $body = $this->body($this->get($app, '/boards/free'));
 
-        // 문서 전체가 아니라 공지 목록(<ul class="notice-list">) 안에서만 센다.
-        // 문서 전체로 세면 목록 아래 본문 미리보기 등에 같은 글자가 다시 나와도
-        // 통과해 버려 "한 번만" 이라는 단언이 실제로는 아무것도 못박지 못한다.
-        self::assertMatchesRegularExpression('/<ul class="list card notice-list".*?<\/ul>/s', $body);
-        preg_match('/<ul class="list card notice-list".*?<\/ul>/s', $body, $matches);
-        self::assertSame(1, substr_count($matches[0], '한 번만 보이는 공지'));
+        self::assertStringNotContainsString('class="list card notice-list"', $body);
+        self::assertMatchesRegularExpression('/<thead>.*?<\/thead>\s*<tbody>.*?한 번만 보이는 공지.*?일반 게시물/s', $body);
+        self::assertSame(1, substr_count($body, 'class="post-notice-row"'));
     }
 
     /** 지운 전체 공지는 다른 게시판 공지 띠에도 남으면 안 된다. deleted_at IS NULL 조건을 못박는다. */

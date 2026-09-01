@@ -54,7 +54,7 @@ function page(int $step, string $title, string $body): void
         . 'main{max-width:680px;margin:auto;padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:20px;background:var(--panel)}'
         . '.brand{color:var(--primary);font-weight:800;margin-bottom:18px}'
         . 'ol.steps{display:flex;gap:6px;list-style:none;margin:0 0 26px;padding:0;font-size:12px;color:var(--muted)}'
-        . 'ol.steps li{flex:1;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{display:block;font-weight:800}'
+        . 'ol.steps li{display:flex;flex:1;align-items:center;justify-content:center;gap:5px;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{font-weight:800}'
         . 'ol.steps li.now{border-color:var(--primary);color:var(--fg)}ol.steps li.done{border-color:var(--ok)}'
         . 'h1{margin:0 0 8px;font-size:26px;letter-spacing:-.03em}.intro{margin:0 0 22px;color:var(--muted)}'
         . 'label{display:block;margin-top:16px;font-weight:700}.hint{display:block;color:var(--muted);font-weight:400;font-size:12px}'
@@ -145,7 +145,7 @@ if ($step === 2) {
     $values = array_merge([
         'type' => in_array('sqlite', $types, true) ? 'sqlite' : (string) ($types[0] ?? ''),
         'sqlite_path' => $storageDir . '/board.sqlite',
-        'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '',
+        'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '', 'prefix' => '',
     ], (array) ($saved['input'] ?? []), $post);
     $probe = null;
     if ($method === 'POST') {
@@ -182,7 +182,8 @@ if ($step === 2) {
         . field('DB 이름', 'name', $values['name'], $errors)
         . field('DB 계정', 'user', $values['user'], $errors)
         . field('DB 비밀번호', 'password', '', $errors, 'password', '', 'autocomplete="off"')
-        . '</div>';
+        . '</div>'
+        . field('테이블 프리픽스', 'prefix', $values['prefix'], $errors, 'text', '선택 사항. 한 DB에 여러 사이트를 설치할 때 사용합니다. 예: site1_', 'maxlength="30" pattern="[A-Za-z][A-Za-z0-9_]{0,28}_"');
     if (isset($errors['reuse'])) {
         // $errors['reuse'] 는 위에서 h() 로 이미 이스케이프해 만든 문자열이다. 여기서 또
         // h() 를 씌우면 두 번 이스케이프된다.
@@ -286,6 +287,7 @@ foreach ($errors as $message) {
     $body .= '<p class="alert">' . h((string) $message) . '</p>';
 }
 $body .= '<dl><dt>데이터베이스</dt><dd>' . h($dbLabel) . ($reuse ? ' (기존 DB 이어 쓰기)' : '') . '</dd>'
+    . '<dt>테이블 프리픽스</dt><dd>' . h((string) ($db['config']['prefix'] ?? '')) . (((string) ($db['config']['prefix'] ?? '')) === '' ? '사용 안 함' : '') . '</dd>'
     . '<dt>사이트 이름</dt><dd>' . h((string) ($site['site_name'] ?? '')) . '</dd>'
     . '<dt>사이트 주소</dt><dd>' . h((string) ($site['app_url'] ?? '')) . '</dd>'
     . '<dt>발신 이메일</dt><dd>' . h((string) ($site['mail_from'] ?? '')) . '</dd>'

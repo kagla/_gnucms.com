@@ -31,8 +31,8 @@ final class ConsentUseRepository
     public function listForScope(string $scope, bool $publishedOnly = false): array
     {
         $sql = 'SELECT c.*, u.required, u.sort_order AS use_sort_order, u.scope'
-            . ' FROM ' . $this->db->q('consent_uses') . ' u'
-            . ' JOIN ' . $this->db->q('contents') . ' c ON c.id = u.content_id'
+            . ' FROM ' . $this->db->table('consent_uses') . ' u'
+            . ' JOIN ' . $this->db->table('contents') . ' c ON c.id = u.content_id'
             . ' WHERE u.scope = ? AND c.deleted_at IS NULL AND c.is_consent = 1';
         if ($publishedOnly) {
             $sql .= " AND c.status = 'published'";
@@ -45,7 +45,7 @@ final class ConsentUseRepository
     public function listForContent(int $contentId): array
     {
         return $this->db->select(
-            'SELECT * FROM ' . $this->db->q('consent_uses')
+            'SELECT * FROM ' . $this->db->table('consent_uses')
             . ' WHERE content_id = ? ORDER BY scope ASC',
             [$contentId]
         );
@@ -55,7 +55,7 @@ final class ConsentUseRepository
     public function attach(string $scope, int $contentId, bool $required, int $sortOrder): void
     {
         $row = $this->db->selectOne(
-            'SELECT id FROM ' . $this->db->q('consent_uses') . ' WHERE scope = ? AND content_id = ?',
+            'SELECT id FROM ' . $this->db->table('consent_uses') . ' WHERE scope = ? AND content_id = ?',
             [$scope, $contentId]
         );
         if ($row === null) {
@@ -69,7 +69,7 @@ final class ConsentUseRepository
             return;
         }
         $this->db->execute(
-            'UPDATE ' . $this->db->q('consent_uses') . ' SET required = ?, sort_order = ? WHERE id = ?',
+            'UPDATE ' . $this->db->table('consent_uses') . ' SET required = ?, sort_order = ? WHERE id = ?',
             [$required ? 1 : 0, $sortOrder, (int) $row['id']]
         );
     }

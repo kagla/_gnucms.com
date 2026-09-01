@@ -29,7 +29,7 @@ final class CommentWriteTest extends WebTestCase
             'author_name' => '지나가던 사람',
             'password'    => 'comment-pass-1',
             'content'     => '반갑습니다',
-        ]);
+        ], ['REMOTE_ADDR' => '198.51.100.42']);
 
         self::assertSame(303, $response->getStatusCode());
         self::assertStringContainsString('#comments', $response->getHeaderLine('Location'));
@@ -37,6 +37,11 @@ final class CommentWriteTest extends WebTestCase
         $body = $this->body($this->get($app, '/posts/' . $postId));
         self::assertStringContainsString('반갑습니다', $body);
         self::assertStringContainsString('지나가던 사람', $body);
+        self::assertStringContainsString('198.51.xxx.42', $body);
+        self::assertStringNotContainsString('198.51.100.42', $body);
+        self::assertMatchesRegularExpression('/<time[^>]*>[^<]+<\/time>\s*<span class="author-ip">198\.51\.xxx\.42<\/span>/', $body);
+        $stored = $app->db()->selectOne('SELECT author_ip FROM ' . $app->db()->table('comments') . ' WHERE post_id = ?', [$postId]);
+        self::assertSame('198.51.100.42', $stored['author_ip']);
     }
 
     /** 권한이 없으면 폼 자체가 나오지 않아야 한다. 눌러도 막히는 것보다 낫다. */
@@ -413,11 +418,25 @@ final class CommentWriteTest extends WebTestCase
         self::assertSame(1, $payload['uploaded'] ?? null);
         self::assertStringContainsString('/media/editor/' . $key . '/', (string) ($payload['url'] ?? ''));
 
+        $failedUpload = new UploadedFile('', '사진.png', 'image/png', null, UPLOAD_ERR_CANT_WRITE);
+        $failed = $this->upload($app, '/boards/open/editor/images' . $query, ['upload' => $failedUpload]);
+        self::assertSame(422, $failed->getStatusCode());
+        self::assertSame(
+            '서버가 이미지 파일을 저장하지 못했습니다. 저장 공간과 폴더 권한을 확인해 주세요.',
+            json_decode($this->body($failed), true)['error']['message'] ?? null
+        );
+
         // Acl 은 게스트에게 401(로그인 필요), 로그인했는데 권한이 없으면 403 을 준다.
         // 어느 쪽이든 편집기가 JSON 200 으로 성공처럼 받아서는 안 된다.
-        $denied = $this->upload($app, '/boards/closed/editor/images' . $query, ['upload' => $this->png()]);
+        $denied = $this->upload(
+            $app,
+            '/boards/closed/editor/images' . $query,
+            ['upload' => $this->png()],
+            ['Accept' => 'application/json']
+        );
         self::assertSame(401, $denied->getStatusCode());
-        self::assertStringNotContainsString('"uploaded"', $this->body($denied));
+        self::assertStringContainsString('application/json', $denied->getHeaderLine('Content-Type'));
+        self::assertSame('로그인이 필요합니다.', json_decode($this->body($denied), true)['error']['message'] ?? null);
     }
 
     private function png(): UploadedFile

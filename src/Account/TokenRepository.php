@@ -37,7 +37,7 @@ final class TokenRepository
     public function consume(string $hash, string $purpose): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT id, user_id, expires_at FROM ' . $this->db->q('user_tokens')
+            'SELECT id, user_id, expires_at FROM ' . $this->db->table('user_tokens')
             . ' WHERE token_hash = ? AND purpose = ? AND used_at IS NULL',
             [$hash, $purpose]
         );

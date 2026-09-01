@@ -54,26 +54,48 @@ final class ErrorPageMiddleware implements MiddlewareInterface
         try {
             return $handler->handle($request);
         } catch (HttpNotFoundException $e) {
-            return $this->render(404, '찾을 수 없습니다.', '요청하신 주소에 해당하는 것이 없습니다.');
+            return $this->respond($request, 404, '찾을 수 없습니다.', '요청하신 주소에 해당하는 것이 없습니다.');
         } catch (HttpException $e) {
             // 404 는 위에서 먼저 잡힌다. 여기는 405(허용되지 않은 메서드) 같은 나머지
             // Slim 라우팅 예외다. 이름으로 잡지 않으면 Throwable 로 떨어져 500 이 된다.
             $status = $e->getCode() > 0 ? $e->getCode() : 500;
 
-            return $this->render($status, $this->titleFor($status), '요청을 처리할 수 없습니다.');
+            return $this->respond($request, $status, $this->titleFor($status), '요청을 처리할 수 없습니다.');
         } catch (DomainError $e) {
             if ($e->code() === 'INTERNAL') {
                 $this->log($e);
 
-                return $this->render(500, '오류가 발생했습니다.', $this->safeMessage($e));
+                return $this->respond($request, 500, '오류가 발생했습니다.', $this->safeMessage($e));
             }
 
-            return $this->render($e->status(), $this->titleFor($e->status()), $e->getMessage(), $e->details());
+            return $this->respond($request, $e->status(), $this->titleFor($e->status()), $e->getMessage(), $e->details());
         } catch (Throwable $e) {
             $this->log($e);
 
-            return $this->render(500, '오류가 발생했습니다.', $this->safeMessage($e));
+            return $this->respond($request, 500, '오류가 발생했습니다.', $this->safeMessage($e));
         }
+    }
+
+    /** 편집기 같은 JSON 요청에는 HTML 오류 페이지 대신 해석 가능한 오류를 돌려준다. */
+    private function respond(
+        ServerRequestInterface $request,
+        int $status,
+        string $title,
+        string $message,
+        array $details = []
+    ): ResponseInterface {
+        if (stripos($request->getHeaderLine('Accept'), 'application/json') === false) {
+            return $this->render($status, $title, $message, $details);
+        }
+
+        $detail = reset($details);
+        $exactMessage = is_scalar($detail) && (string) $detail !== '' ? (string) $detail : $message;
+        $response = (new Response())->withStatus($status)->withHeader('Content-Type', 'application/json; charset=utf-8');
+        $response->getBody()->write((string) json_encode([
+            'error' => ['message' => $exactMessage, 'status' => $status],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return $response;
     }
 
     private function titleFor(int $status): string

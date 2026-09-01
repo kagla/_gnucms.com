@@ -23,6 +23,7 @@ final class BoardRepository
         'use_category' => 0,
         'list_type'    => 'list',
         'home_limit'   => 5,
+        'show_in_header' => 0,
         'per_page'     => 20,
         'sort_order'   => 0,
     ];
@@ -40,21 +41,21 @@ final class BoardRepository
 
     public function findAll(): array
     {
-        $rows = $this->db->select('SELECT * FROM ' . $this->db->q('boards') . ' ORDER BY sort_order ASC, id ASC');
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('boards') . ' ORDER BY sort_order ASC, id ASC');
 
         return array_map([$this, 'hydrate'], $rows);
     }
 
     public function findByKey(string $key): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('boards') . ' WHERE board_key = ?', [$key]);
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('boards') . ' WHERE board_key = ?', [$key]);
 
         return $row === null ? null : $this->hydrate($row);
     }
 
     public function findById(int $id): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('boards') . ' WHERE id = ?', [$id]);
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('boards') . ' WHERE id = ?', [$id]);
 
         return $row === null ? null : $this->hydrate($row);
     }
@@ -88,8 +89,8 @@ final class BoardRepository
             $row[$column] = ($raw === null || $raw === '') ? [] : Json::decode((string) $raw);
         }
 
-        foreach (['id', 'use_secret', 'use_file', 'use_category', 'per_page', 'sort_order'] as $column) {
-            $row[$column] = (int) $row[$column];
+        foreach (['id', 'use_secret', 'use_file', 'use_category', 'show_in_header', 'per_page', 'sort_order'] as $column) {
+            $row[$column] = (int) ($row[$column] ?? 0);
         }
 
         return $row;

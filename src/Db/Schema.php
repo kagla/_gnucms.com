@@ -16,7 +16,17 @@ final class Schema
     public const TABLES = [
         'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities', 'site_state',
         'site_settings', 'mail_settings', 'contents', 'user_consents', 'consent_uses',
-        'consents_given', 'password_attempts',
+        'consents_given', 'notifications', 'password_attempts',
+    ];
+
+    private const INDEXES = [
+        'ux_boards_key', 'ix_posts_list', 'ix_posts_category', 'ix_comments_post',
+        'ux_users_email', 'ux_users_display_name', 'ux_user_tokens_hash', 'ix_user_tokens_user',
+        'ux_user_identities_provider', 'ix_user_identities_user', 'ux_site_state_key',
+        'ux_site_settings_key', 'ux_mail_settings_key', 'ux_contents_slug', 'ix_contents_public',
+        'ux_contents_consent', 'ix_contents_is_consent', 'ix_notifications_user',
+        'ux_password_attempts', 'ux_user_consents_type', 'ix_user_consents_content',
+        'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
     ];
 
     /** @var Connection */
@@ -30,7 +40,7 @@ final class Schema
     public function exists(): bool
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('boards'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('boards'));
 
             return true;
         } catch (DomainError $e) {
@@ -46,7 +56,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '12';
+    public const VERSION = '14';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -67,7 +77,7 @@ final class Schema
     {
         try {
             $row = $this->db->selectOne(
-                'SELECT setting_value FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+                'SELECT setting_value FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
                 ['schema_version']
             );
         } catch (DomainError $e) {
@@ -107,7 +117,7 @@ final class Schema
         $stamp = $this->stamp();
         $this->ensureSiteSetting('schema_version', $stamp);
         $this->db->execute(
-            'UPDATE ' . $this->db->q('site_settings')
+            'UPDATE ' . $this->db->table('site_settings')
             . ' SET setting_value = ? WHERE setting_key = ?',
             [$stamp, 'schema_version']
         );
@@ -131,7 +141,7 @@ final class Schema
     public function migrateAccounts(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
         } catch (DomainError $e) {
             foreach ($this->accountStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -140,22 +150,22 @@ final class Schema
         }
 
         try {
-            $this->db->selectOne('SELECT email_verified FROM ' . $this->db->q('users') . ' LIMIT 1');
+            $this->db->selectOne('SELECT email_verified FROM ' . $this->db->table('users') . ' LIMIT 1');
         } catch (DomainError $e) {
             $this->db->execute(
-                'ALTER TABLE ' . $this->db->q('users')
+                'ALTER TABLE ' . $this->db->table('users')
                 . ' ADD COLUMN email_verified SMALLINT NOT NULL DEFAULT 0'
             );
         }
 
         try {
-            $this->db->selectOne('SELECT display_name FROM ' . $this->db->q('users') . ' LIMIT 1');
+            $this->db->selectOne('SELECT display_name FROM ' . $this->db->table('users') . ' LIMIT 1');
         } catch (DomainError $e) {
             $this->renameUserDisplayNameColumn();
         }
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('user_tokens'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('user_tokens'));
         } catch (DomainError $e) {
             foreach ($this->tokenStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -174,9 +184,12 @@ final class Schema
     {
         $this->addColumnIfMissing('boards', 'list_type', 'VARCHAR(20) NOT NULL DEFAULT \'list\'');
         $this->addColumnIfMissing('boards', 'home_limit', 'INTEGER NOT NULL DEFAULT 5');
+        $this->addColumnIfMissing('boards', 'show_in_header', 'SMALLINT NOT NULL DEFAULT 0');
 
         // 공지가 이 게시판만인지 전체인지. 옛 공지는 전부 이 게시판 공지로 본다.
         $this->addColumnIfMissing('posts', 'notice_scope', "VARCHAR(10) NOT NULL DEFAULT 'board'");
+        $this->addColumnIfMissing('posts', 'author_ip', 'VARCHAR(45) NULL');
+        $this->addColumnIfMissing('comments', 'author_ip', 'VARCHAR(45) NULL');
     }
 
     /** 글·댓글 본문 편집기가 올린 이미지를 묶어 두는 키. 업그레이드할 때 한 번 부른다. */
@@ -191,7 +204,7 @@ final class Schema
     public function migrateNotifications(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('notifications'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('notifications'));
         } catch (DomainError $e) {
             foreach ($this->notificationStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -203,7 +216,7 @@ final class Schema
     public function migratePasswordThrottle(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('password_attempts'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('password_attempts'));
         } catch (DomainError $e) {
             foreach ($this->passwordThrottleStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -218,15 +231,15 @@ final class Schema
     private function addColumnIfMissing(string $table, string $column, string $definition): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q($table));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table($table));
         } catch (DomainError $e) {
             return;
         }
 
         try {
-            $this->db->selectOne('SELECT ' . $column . ' FROM ' . $this->db->q($table) . ' LIMIT 1');
+            $this->db->selectOne('SELECT ' . $column . ' FROM ' . $this->db->table($table) . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q($table)
+            $this->db->execute('ALTER TABLE ' . $this->db->table($table)
                 . ' ADD COLUMN ' . $column . ' ' . $definition);
         }
     }
@@ -234,7 +247,7 @@ final class Schema
     public function migrateCms(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('site_settings'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('site_settings'));
         } catch (DomainError $e) {
             foreach ($this->settingsStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -243,7 +256,7 @@ final class Schema
         $this->ensureSiteSetting('theme', 'default');
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('contents'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('contents'));
         } catch (DomainError $e) {
             foreach ($this->contentStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -251,44 +264,44 @@ final class Schema
         }
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('mail_settings'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('mail_settings'));
         } catch (DomainError $e) {
             foreach ($this->mailSettingsStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
         try {
-            $this->db->selectOne('SELECT deleted_at FROM ' . $this->db->q('contents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT deleted_at FROM ' . $this->db->table('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents') . ' ADD COLUMN deleted_at '
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents') . ' ADD COLUMN deleted_at '
                 . $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
         }
         try {
-            $this->db->selectOne('SELECT image_key FROM ' . $this->db->q('contents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT image_key FROM ' . $this->db->table('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN image_key VARCHAR(32) NULL');
         }
 
         // 약관을 내용과 한 표에서 다루기 위한 표시. 값이 있으면 가입 화면의 동의 항목이 된다.
         try {
-            $this->db->selectOne('SELECT consent_key FROM ' . $this->db->q('contents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT consent_key FROM ' . $this->db->table('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN consent_key VARCHAR(20) NULL');
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN consent_order INTEGER NOT NULL DEFAULT 0');
             // 이미 있던 이용약관·개인정보 처리방침을 그대로 동의 항목으로 삼는다.
             foreach ([['terms', 10], ['privacy', 20]] as [$slug, $order]) {
                 $this->db->execute(
-                    'UPDATE ' . $this->db->q('contents')
+                    'UPDATE ' . $this->db->table('contents')
                     . ' SET consent_key = ?, consent_order = ? WHERE slug = ?',
                     [$slug, $order, $slug]
                 );
             }
             try {
-                $this->db->execute('CREATE UNIQUE INDEX ux_contents_consent ON '
-                    . $this->db->q('contents') . ' (consent_key)');
+                $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_contents_consent') . ' ON '
+                    . $this->db->table('contents') . ' (consent_key)');
             } catch (DomainError $e) {
                 // 이미 있으면 그대로 둔다
             }
@@ -296,14 +309,14 @@ final class Schema
 
         // 동의를 다 필수로 받던 시절의 표. 마케팅 수신처럼 선택으로 받아야 하는 항목이 있다.
         try {
-            $this->db->selectOne('SELECT consent_required FROM ' . $this->db->q('contents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT consent_required FROM ' . $this->db->table('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN consent_required INTEGER NOT NULL DEFAULT 1');
         }
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('user_consents'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('user_consents'));
         } catch (DomainError $e) {
             foreach ($this->consentStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -313,23 +326,23 @@ final class Schema
         // 선택 동의가 생기면서 '동의함' 뿐 아니라 '동의 안 함' 도 남겨야 한다.
         // 예전 줄은 동의한 것만 있었으니 기본값 1 이 그대로 맞다.
         try {
-            $this->db->selectOne('SELECT agreed FROM ' . $this->db->q('user_consents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT agreed FROM ' . $this->db->table('user_consents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('user_consents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('user_consents')
                 . ' ADD COLUMN agreed SMALLINT NOT NULL DEFAULT 1');
         }
 
         // 약관 여부를 토글 한 칸으로 옮긴다. 옛 칸은 되돌릴 길로 한 판 동안 남긴다.
         try {
-            $this->db->selectOne('SELECT is_consent FROM ' . $this->db->q('contents') . ' LIMIT 1');
+            $this->db->selectOne('SELECT is_consent FROM ' . $this->db->table('contents') . ' LIMIT 1');
         } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('contents')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN is_consent SMALLINT NOT NULL DEFAULT 0');
-            $this->db->execute('UPDATE ' . $this->db->q('contents')
+            $this->db->execute('UPDATE ' . $this->db->table('contents')
                 . ' SET is_consent = 1 WHERE consent_key IS NOT NULL');
             try {
-                $this->db->execute('CREATE INDEX ix_contents_is_consent ON '
-                    . $this->db->q('contents') . ' (is_consent)');
+                $this->db->execute('CREATE INDEX ' . $this->db->index('ix_contents_is_consent') . ' ON '
+                    . $this->db->table('contents') . ' (is_consent)');
             } catch (DomainError $e) {
                 // 이미 있으면 그대로 둔다
             }
@@ -337,13 +350,13 @@ final class Schema
 
         // 붙임 표. 옛 필수·차례를 회원가입 자리의 붙임으로 옮긴다.
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consent_uses'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('consent_uses'));
         } catch (DomainError $e) {
             foreach ($this->consentUseStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
             $rows = $this->db->select('SELECT id, consent_required, consent_order FROM '
-                . $this->db->q('contents') . ' WHERE is_consent = 1');
+                . $this->db->table('contents') . ' WHERE is_consent = 1');
             foreach ($rows as $row) {
                 $this->db->insert('consent_uses', [
                     'scope' => 'signup',
@@ -357,13 +370,13 @@ final class Schema
 
         // 이용약관의 slug 를 terms -> service 로 옮긴다. 정식 주소가 /terms/{slug} 가 되면서
         // /terms/terms 라는 어색한 주소가 생기기 때문이다. service 자리가 이미 차 있으면 건드리지 않는다.
-        $termsRow = $this->db->selectOne('SELECT id FROM ' . $this->db->q('contents')
+        $termsRow = $this->db->selectOne('SELECT id FROM ' . $this->db->table('contents')
             . " WHERE slug = 'terms' AND is_consent = 1 AND deleted_at IS NULL");
         if ($termsRow !== null) {
-            $taken = $this->db->selectOne('SELECT id FROM ' . $this->db->q('contents')
+            $taken = $this->db->selectOne('SELECT id FROM ' . $this->db->table('contents')
                 . " WHERE slug = 'service'");
             if ($taken === null) {
-                $this->db->execute('UPDATE ' . $this->db->q('contents')
+                $this->db->execute('UPDATE ' . $this->db->table('contents')
                     . " SET slug = 'service' WHERE id = ?", [(int) $termsRow['id']]);
             }
         }
@@ -371,10 +384,10 @@ final class Schema
         // 약관의 show_in_menu 는 이제 '하단에 표시' 라는 뜻이다. 표시를 걸러 내기 시작하면
         // 기존 약관이 하단에서 통째로 사라지므로, 처음 한 번만 전부 켜 준다.
         // 파일이 바뀔 때마다 마이그레이션이 다시 도니, 관리자가 끈 것을 되켜지 않게 잠근다.
-        $footerDone = $this->db->selectOne('SELECT state_value FROM ' . $this->db->q('site_state')
+        $footerDone = $this->db->selectOne('SELECT state_value FROM ' . $this->db->table('site_state')
             . " WHERE state_key = 'consent_footer_defaulted'");
         if ($footerDone === null) {
-            $this->db->execute('UPDATE ' . $this->db->q('contents')
+            $this->db->execute('UPDATE ' . $this->db->table('contents')
                 . ' SET show_in_menu = 1 WHERE is_consent = 1');
             $this->db->insert('site_state', [
                 'state_key' => 'consent_footer_defaulted', 'state_value' => '1',
@@ -383,12 +396,12 @@ final class Schema
 
         // 동의 기록을 회원 밖으로 넓힌 표로 옮긴다. 옛 표는 남겨 둔다.
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('consents_given'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('consents_given'));
         } catch (DomainError $e) {
             foreach ($this->consentsGivenStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
-            $rows = $this->db->select('SELECT * FROM ' . $this->db->q('user_consents'));
+            $rows = $this->db->select('SELECT * FROM ' . $this->db->table('user_consents'));
             foreach ($rows as $row) {
                 $this->db->insert('consents_given', [
                     'subject_type' => 'user',
@@ -410,7 +423,7 @@ final class Schema
     {
         foreach (array_reverse(self::TABLES) as $table) {
             try {
-                $this->db->execute('DROP TABLE IF EXISTS ' . $this->db->q($table));
+                $this->db->execute('DROP TABLE IF EXISTS ' . $this->db->table($table));
             } catch (DomainError $e) {
                 // 이미 없는 경우는 성공으로 본다.
             }
@@ -422,7 +435,19 @@ final class Schema
         $map = $this->db->dialect()->typeMap();
         $map['{SUFFIX}'] = $this->db->dialect()->tableSuffix();
 
-        return strtr($sql, $map);
+        $sql = strtr($sql, $map);
+        $identifiers = array_merge(self::INDEXES, self::TABLES);
+        usort($identifiers, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        $pattern = '/\\b(?:' . implode('|', array_map(
+            static fn (string $name): string => preg_quote($name, '/'),
+            $identifiers
+        )) . ')\\b/';
+
+        return (string) preg_replace_callback($pattern, function (array $match): string {
+            return in_array($match[0], self::INDEXES, true)
+                ? $this->db->index($match[0])
+                : $this->db->table($match[0]);
+        }, $sql);
     }
 
     /** @return string[] */
@@ -444,6 +469,7 @@ final class Schema
                 use_category  SMALLINT     NOT NULL DEFAULT 0,
                 list_type     VARCHAR(20)  NOT NULL DEFAULT \'list\',
                 home_limit    INTEGER      NOT NULL DEFAULT 5,
+                show_in_header SMALLINT    NOT NULL DEFAULT 0,
                 per_page      INTEGER      NOT NULL DEFAULT 20,
                 sort_order    INTEGER      NOT NULL DEFAULT 0,
                 created_at    {DATETIME}   NOT NULL,
@@ -460,6 +486,7 @@ final class Schema
                 content        {TEXT}       NOT NULL,
                 author_id      VARCHAR(64)  NULL,
                 author_name    VARCHAR(100) NOT NULL,
+                author_ip      VARCHAR(45)  NULL,
                 guest_password VARCHAR(255) NULL,
                 is_notice      SMALLINT     NOT NULL DEFAULT 0,
                 notice_scope   VARCHAR(10)  NOT NULL DEFAULT \'board\',
@@ -485,6 +512,7 @@ final class Schema
                 content        {TEXT}       NOT NULL,
                 author_id      VARCHAR(64)  NULL,
                 author_name    VARCHAR(100) NOT NULL,
+                author_ip      VARCHAR(45)  NULL,
                 guest_password VARCHAR(255) NULL,
                 is_secret      SMALLINT     NOT NULL DEFAULT 0,
                 image_key      VARCHAR(32)  NULL,
@@ -598,20 +626,20 @@ final class Schema
     private function migrateContentTableName(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('contents'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('contents'));
             return; // 이미 새 이름이다
         } catch (DomainError $e) {
             // 아직 옛 이름이거나, 둘 다 없다
         }
 
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('pages'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('pages'));
         } catch (DomainError $e) {
             return; // 옛 표도 없다. migrateCms() 가 새로 만든다
         }
 
         $this->db->execute(
-            'ALTER TABLE ' . $this->db->q('pages') . ' RENAME TO ' . $this->db->q('contents')
+            'ALTER TABLE ' . $this->db->table('pages') . ' RENAME TO ' . $this->db->table('contents')
         );
 
         $mysql = $this->db->dialect()->name() === 'mysql';
@@ -621,8 +649,8 @@ final class Schema
         ] as [$oldIndex, $createSql]) {
             try {
                 $this->db->execute($mysql
-                    ? 'DROP INDEX ' . $this->db->q($oldIndex) . ' ON ' . $this->db->q('contents')
-                    : 'DROP INDEX ' . $this->db->q($oldIndex));
+                    ? 'DROP INDEX ' . $this->db->index($oldIndex) . ' ON ' . $this->db->table('contents')
+                    : 'DROP INDEX ' . $this->db->index($oldIndex));
             } catch (DomainError $e) {
                 // 옛 인덱스가 없으면 그대로 둔다
             }
@@ -644,7 +672,7 @@ final class Schema
             'native', 'nova', 'studio'];
         $marks = implode(',', array_fill(0, count($gone), '?'));
         $this->db->execute(
-            'UPDATE ' . $this->db->q('site_settings')
+            'UPDATE ' . $this->db->table('site_settings')
             . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ? AND setting_value IN (' . $marks . ')',
             array_merge(['default', '2026-08-30 00:00:00', 'theme'], $gone)
         );
@@ -653,12 +681,12 @@ final class Schema
     private function ensureSiteSetting(string $key, string $value): void
     {
         $existing = $this->db->selectOne(
-            'SELECT setting_key FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+            'SELECT setting_key FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
             [$key]
         );
         if ($existing === null) {
             $this->db->execute(
-                'INSERT INTO ' . $this->db->q('site_settings')
+                'INSERT INTO ' . $this->db->table('site_settings')
                 . ' (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
                 [$key, $value, '2026-08-28 00:00:00']
             );
@@ -817,11 +845,11 @@ final class Schema
     private function migrateDisplayNames(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
         } catch (DomainError $e) {
             return;
         }
-        $rows = $this->db->select('SELECT id, display_name FROM ' . $this->db->q('users') . ' ORDER BY id ASC');
+        $rows = $this->db->select('SELECT id, display_name FROM ' . $this->db->table('users') . ' ORDER BY id ASC');
         $seen = [];
         foreach ($rows as $row) {
             $name = (string) $row['display_name'];
@@ -837,11 +865,12 @@ final class Schema
                 }
             }
             $seen[mb_strtolower($candidate)] = true;
-            $this->db->execute('UPDATE ' . $this->db->q('users') . ' SET display_name = ? WHERE id = ?',
+            $this->db->execute('UPDATE ' . $this->db->table('users') . ' SET display_name = ? WHERE id = ?',
                 [$candidate, (int) $row['id']]);
         }
         try {
-            $this->db->execute('CREATE UNIQUE INDEX ux_users_display_name ON ' . $this->db->q('users') . ' (display_name)');
+            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_display_name')
+                . ' ON ' . $this->db->table('users') . ' (display_name)');
         } catch (DomainError $e) {
             // 이미 있으면 그대로 둔다
         }
@@ -850,21 +879,21 @@ final class Schema
     private function migrateFirstAdminState(): void
     {
         try {
-            $state = $this->db->selectOne('SELECT state_value FROM ' . $this->db->q('site_state')
+            $state = $this->db->selectOne('SELECT state_value FROM ' . $this->db->table('site_state')
                 . " WHERE state_key = 'first_admin_claimed'");
             if ($state !== null) {
                 return;
             }
         } catch (DomainError $e) {
-            $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+            $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
             foreach ($this->stateStatements((int) ($row['c'] ?? 0) > 0) as $sql) {
                 $this->db->execute($this->expand($sql));
             }
             return;
         }
-        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
         $this->db->execute(
-            'INSERT INTO ' . $this->db->q('site_state') . ' (state_key, state_value) VALUES (?, ?)',
+            'INSERT INTO ' . $this->db->table('site_state') . ' (state_key, state_value) VALUES (?, ?)',
             ['first_admin_claimed', (int) ($row['c'] ?? 0) > 0 ? '1' : '0']
         );
     }
@@ -872,7 +901,7 @@ final class Schema
     private function migrateOauth(): void
     {
         try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('user_identities'));
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('user_identities'));
         } catch (DomainError $e) {
             foreach ($this->identityStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
@@ -881,7 +910,7 @@ final class Schema
 
         $name = $this->db->dialect()->name();
         if ($name === 'sqlite') {
-            $columns = $this->db->select('PRAGMA table_info(users)');
+            $columns = $this->db->select('PRAGMA table_info(' . $this->db->table('users') . ')');
             foreach ($columns as $column) {
                 if (($column['name'] ?? '') === 'password_hash' && (int) ($column['notnull'] ?? 0) === 1) {
                     $this->rebuildSqliteUsers();
@@ -889,34 +918,38 @@ final class Schema
                 }
             }
         } elseif ($name === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('users') . ' MODIFY password_hash VARCHAR(255) NULL');
+            $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' MODIFY password_hash VARCHAR(255) NULL');
         } elseif ($name === 'pgsql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('users') . ' ALTER COLUMN password_hash DROP NOT NULL');
+            $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' ALTER COLUMN password_hash DROP NOT NULL');
         }
     }
 
     private function renameUserDisplayNameColumn(): void
     {
         if ($this->db->dialect()->name() === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->q('users')
+            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
                 . ' CHANGE ' . $this->db->q('name') . ' ' . $this->db->q('display_name')
                 . ' VARCHAR(100) NOT NULL');
             return;
         }
-        $this->db->execute('ALTER TABLE ' . $this->db->q('users')
+        $this->db->execute('ALTER TABLE ' . $this->db->table('users')
             . ' RENAME COLUMN ' . $this->db->q('name') . ' TO ' . $this->db->q('display_name'));
     }
 
     private function rebuildSqliteUsers(): void
     {
         $this->db->transaction(function (): void {
-            $this->db->execute('ALTER TABLE users RENAME TO users_before_oauth');
+            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
+                . ' RENAME TO ' . $this->db->table('users_before_oauth'));
             $this->db->execute($this->expand($this->usersTableStatement()));
             $columns = 'id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at';
-            $this->db->execute('INSERT INTO users (' . $columns . ') SELECT ' . $columns . ' FROM users_before_oauth');
-            $this->db->execute('DROP TABLE users_before_oauth');
-            $this->db->execute('CREATE UNIQUE INDEX ux_users_email ON users (email)');
-            $this->db->execute('CREATE UNIQUE INDEX ux_users_display_name ON users (display_name)');
+            $this->db->execute('INSERT INTO ' . $this->db->table('users') . ' (' . $columns . ') SELECT '
+                . $columns . ' FROM ' . $this->db->table('users_before_oauth'));
+            $this->db->execute('DROP TABLE ' . $this->db->table('users_before_oauth'));
+            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_email')
+                . ' ON ' . $this->db->table('users') . ' (email)');
+            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_display_name')
+                . ' ON ' . $this->db->table('users') . ' (display_name)');
         });
     }
 }
