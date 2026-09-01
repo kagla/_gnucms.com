@@ -145,7 +145,7 @@ if ($step === 2) {
     $values = array_merge([
         'type' => in_array('sqlite', $types, true) ? 'sqlite' : (string) ($types[0] ?? ''),
         'sqlite_path' => $storageDir . '/board.sqlite',
-        'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '',
+        'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '', 'prefix' => '',
     ], (array) ($saved['input'] ?? []), $post);
     $probe = null;
     if ($method === 'POST') {
@@ -182,7 +182,8 @@ if ($step === 2) {
         . field('DB 이름', 'name', $values['name'], $errors)
         . field('DB 계정', 'user', $values['user'], $errors)
         . field('DB 비밀번호', 'password', '', $errors, 'password', '', 'autocomplete="off"')
-        . '</div>';
+        . '</div>'
+        . field('테이블 프리픽스', 'prefix', $values['prefix'], $errors, 'text', '선택 사항. 한 DB에 여러 사이트를 설치할 때 사용합니다. 예: site1_', 'maxlength="30" pattern="[A-Za-z][A-Za-z0-9_]{0,28}_"');
     if (isset($errors['reuse'])) {
         // $errors['reuse'] 는 위에서 h() 로 이미 이스케이프해 만든 문자열이다. 여기서 또
         // h() 를 씌우면 두 번 이스케이프된다.
@@ -286,6 +287,7 @@ foreach ($errors as $message) {
     $body .= '<p class="alert">' . h((string) $message) . '</p>';
 }
 $body .= '<dl><dt>데이터베이스</dt><dd>' . h($dbLabel) . ($reuse ? ' (기존 DB 이어 쓰기)' : '') . '</dd>'
+    . '<dt>테이블 프리픽스</dt><dd>' . h((string) ($db['config']['prefix'] ?? '')) . (((string) ($db['config']['prefix'] ?? '')) === '' ? '사용 안 함' : '') . '</dd>'
     . '<dt>사이트 이름</dt><dd>' . h((string) ($site['site_name'] ?? '')) . '</dd>'
     . '<dt>사이트 주소</dt><dd>' . h((string) ($site['app_url'] ?? '')) . '</dd>'
     . '<dt>발신 이메일</dt><dd>' . h((string) ($site['mail_from'] ?? '')) . '</dd>'

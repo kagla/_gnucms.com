@@ -224,6 +224,7 @@ final class BoardService
             'list_type'    => $this->listTypeOf($board),
             // 0 이면 메인에 이 게시판을 내지 않는다.
             'home_limit'   => $this->homeLimitOf($board),
+            'show_in_header' => (bool) ($board['show_in_header'] ?? false),
             'per_page'     => (int) $board['per_page'],
             'sort_order'   => (int) $board['sort_order'],
             'created_at'   => $board['created_at'],
@@ -287,7 +288,7 @@ final class BoardService
                 $data[$field] = $v->inList($field, self::PERM_LEVELS, $default);
             }
         }
-        foreach (['use_secret', 'use_file', 'use_category'] as $field) {
+        foreach (['use_secret', 'use_file', 'use_category', 'show_in_header'] as $field) {
             if ($isCreate || array_key_exists($field, $input)) {
                 $data[$field] = $v->bool($field, false) ? 1 : 0;
             }

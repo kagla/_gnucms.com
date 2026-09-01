@@ -50,12 +50,21 @@
         <?php // 값(guest·member·admin)은 그대로 두고 이름만 사람 말로 보인다. ?>
         <?php $perm_labels = ['guest' => '누구나', 'member' => '회원', 'admin' => '관리자']; ?>
         <div class="grid-3">
-          <fieldset class="fieldset"><legend class="fieldset-legend">읽기</legend>
-            <select class="select select-bordered select-block" name="perm_read"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_read'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
-          <fieldset class="fieldset"><legend class="fieldset-legend">쓰기 <span class="legend-hint">“누구나”는 사이트 설정에서 비회원 글쓰기를 켜야 실제로 열립니다</span></legend>
-            <select class="select select-bordered select-block" name="perm_write"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_write'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
-          <fieldset class="fieldset"><legend class="fieldset-legend">댓글</legend>
-            <select class="select select-bordered select-block" name="perm_comment"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_comment'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select></fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">읽기</legend>
+            <select class="select select-bordered select-block" name="perm_read"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_read'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select>
+            <p class="fieldset-label">게시판과 글을 볼 수 있는 범위입니다.</p>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">쓰기</legend>
+            <select class="select select-bordered select-block" name="perm_write"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_write'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select>
+            <p class="fieldset-label">“누구나”는 사이트 설정에서 비회원 글쓰기도 켜야 합니다.</p>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">댓글</legend>
+            <select class="select select-bordered select-block" name="perm_comment"><?php foreach (['guest', 'member', 'admin'] as $p): ?><option value="<?= $this->e($p) ?>"<?= ($values['perm_comment'] ?? null) === $p ? ' selected' : '' ?>><?= $this->e($perm_labels[$p] ?? $p) ?></option><?php endforeach ?></select>
+            <p class="fieldset-label">글에 댓글을 남길 수 있는 범위입니다.</p>
+          </fieldset>
         </div>
       </div>
 
@@ -93,6 +102,7 @@
           <p class="fieldset-label">첫 화면에 이 게시판의 최신 글을 몇 개 보일지 정합니다. 0 으로 두면 게시판은 그대로 열리되 첫 화면에는 나오지 않습니다.</p>
         </fieldset>
         <fieldset class="fieldset toggle-list">
+          <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="show_in_header" value="1"<?= ($values['show_in_header'] ?? false) ? ' checked' : '' ?>><span><strong>상단 메뉴에 표시</strong><small>읽기 권한이 있는 방문자의 상단 메뉴에 게시판을 표시합니다.</small></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_category" value="1"<?= ($values['use_category'] ?? false) ? ' checked' : '' ?>><span><strong>분류 사용</strong></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_secret" value="1"<?= ($values['use_secret'] ?? false) ? ' checked' : '' ?>><span><strong>비밀글 사용</strong></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_file" value="1"<?= ($values['use_file'] ?? false) ? ' checked' : '' ?>><span><strong>첨부파일 사용</strong></span></label>

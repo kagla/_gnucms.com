@@ -212,7 +212,7 @@ final class SchemaUpgrader
     {
         try {
             $row = $this->db->selectOne(
-                'SELECT setting_value FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+                'SELECT setting_value FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
                 [$key]
             );
         } catch (DomainError $e) {
@@ -224,7 +224,7 @@ final class SchemaUpgrader
 
     private function upsertSetting(string $key, string $value): void
     {
-        $table = $this->db->q('site_settings');
+        $table = $this->db->table('site_settings');
         $now = Clock::now();
         if ($this->setting($key) === null) {
             $this->db->execute(

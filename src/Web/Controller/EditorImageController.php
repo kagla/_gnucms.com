@@ -73,19 +73,16 @@ final class EditorImageController
         $upload = $request->getUploadedFiles()['upload'] ?? null;
 
         if ($upload === null) {
-            return $this->json($response, ['error' => ['message' => '이미지를 찾을 수 없습니다.']]);
+            return $this->json($response, ['error' => ['message' => '업로드할 이미지를 받지 못했습니다. 서버의 업로드 용량 제한을 확인해 주세요.']], 422);
         }
 
         try {
             $image = $store($this->app->guestAcl(), $upload, $key);
         } catch (DomainError $e) {
-            // 파일이 크거나 형식이 틀린 것은 편집기가 메시지로 보여 준다.
-            // 권한·존재 여부 같은 판단은 삼키지 않고 그대로 상태코드로 내보낸다.
-            if (!in_array($e->status(), [413, 422], true)) {
-                throw $e;
-            }
+            $detail = $e->details()['upload'] ?? null;
+            $message = is_scalar($detail) && (string) $detail !== '' ? (string) $detail : $e->getMessage();
 
-            return $this->json($response, ['error' => ['message' => $e->getMessage()]]);
+            return $this->json($response, ['error' => ['message' => $message]], $e->status());
         }
 
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('editor.owned_image', $image);
@@ -111,11 +108,11 @@ final class EditorImageController
         return $this->app->postService()->loadForRead($this->app->guestAcl(), $postId, null)['board'];
     }
 
-    private function json(ResponseInterface $response, array $payload): ResponseInterface
+    private function json(ResponseInterface $response, array $payload, int $status = 200): ResponseInterface
     {
         $response->getBody()->write((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        return $response->withHeader('Content-Type', 'application/json; charset=utf-8');
+        return $response->withStatus($status)->withHeader('Content-Type', 'application/json; charset=utf-8');
     }
 
     private function assertCsrf(array $input): void

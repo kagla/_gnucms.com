@@ -60,6 +60,22 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
     var paragraph=new CKEDITOR.dom.element('p'),image=new CKEDITOR.dom.element('img');
     image.setAttributes({src:url,alt:name});paragraph.append(image);editor.insertElement(paragraph);
   }
+  async function readUploadResponse(response){
+    var text=await response.text(),data=null;
+    try{data=text?JSON.parse(text):null}catch(error){}
+    if(data&&data.uploaded&&data.url){return data}
+    if(data&&data.error&&data.error.message){throw new Error(data.error.message)}
+    var messages={
+      401:'로그인이 필요하거나 로그인 시간이 만료되었습니다.',
+      403:'이미지를 올릴 권한이 없거나 요청 확인 시간이 만료되었습니다. 화면을 새로고침해 주세요.',
+      404:'이미지 업로드 주소를 찾을 수 없습니다.',
+      413:'서버에서 허용한 업로드 용량을 초과했습니다.',
+      422:'서버가 이미지 파일을 처리하지 못했습니다.',
+      500:'서버가 이미지를 저장하지 못했습니다. 저장 공간과 폴더 권한을 확인해 주세요.'
+    };
+    var message=messages[response.status]||'서버가 올바른 업로드 응답을 보내지 않았습니다.';
+    throw new Error(message+' (HTTP '+response.status+')');
+  }
   function chooseImages(editor){
     var input=document.createElement('input');
     input.type='file';input.accept='image/jpeg,image/png,image/gif,image/webp';input.multiple=true;input.hidden=true;
@@ -79,11 +95,13 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
         try{
           var formData=new FormData();formData.append('upload',valid[i],valid[i].name);
           var response=await fetch(uploadUrl,{method:'POST',body:formData,credentials:'same-origin',headers:{Accept:'application/json'}});
-          var data=await response.json();
-          if(!response.ok||!data.uploaded||!data.url){throw new Error(data.error&&data.error.message?data.error.message:'업로드에 실패했습니다.')}
+          var data=await readUploadResponse(response);
           remember(data.url);
           editor.focus();insertImage(editor,data.url,valid[i].name);
-        }catch(error){failed.push(valid[i].name+': '+(error.message||'업로드 실패'))}
+        }catch(error){
+          var reason=error instanceof TypeError?'업로드 서버에 연결하지 못했습니다. 네트워크 상태를 확인해 주세요.':(error.message||'업로드 실패');
+          failed.push(valid[i].name+': '+reason)
+        }
         notice.update({message:'사진 '+valid.length+'장 중 '+(i+1)+'장 처리 중',progress:(i+1)/valid.length});
       }
       uploading--;

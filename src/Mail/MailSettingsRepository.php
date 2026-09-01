@@ -20,7 +20,7 @@ final class MailSettingsRepository
     {
         $settings = [];
         foreach ($this->db->select('SELECT setting_key, setting_value FROM '
-            . $this->db->q('mail_settings')) as $row) {
+            . $this->db->table('mail_settings')) as $row) {
             $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
         }
         return $settings;
@@ -35,7 +35,7 @@ final class MailSettingsRepository
                     'updated_at' => Clock::now(),
                 ], 'setting_key = :key', ['key' => $key]);
                 if ($changed === 0 && $this->db->selectOne(
-                    'SELECT setting_key FROM ' . $this->db->q('mail_settings') . ' WHERE setting_key = ?',
+                    'SELECT setting_key FROM ' . $this->db->table('mail_settings') . ' WHERE setting_key = ?',
                     [$key]
                 ) === null) {
                     $this->db->insert('mail_settings', [

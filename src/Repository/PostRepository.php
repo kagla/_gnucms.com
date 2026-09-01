@@ -14,7 +14,7 @@ final class PostRepository
      * 기본 조회 컬럼. guest_password 가 빠져 있는 것이 핵심이다.
      * 이 목록에 없는 컬럼은 findWithSecret() 로만 얻을 수 있다.
      */
-    private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name,'
+    private const COLUMNS = 'id, board_id, category, title, content, author_id, author_name, author_ip,'
         . ' is_notice, notice_scope, is_secret, view_count, comment_count, attachments, image_key,'
         . ' created_at, updated_at, deleted_at';
 
@@ -22,6 +22,7 @@ final class PostRepository
         'category'       => null,
         'author_id'      => null,
         'guest_password' => null,
+        'author_ip'      => null,
         'is_notice'      => 0,
         'notice_scope'   => 'board',
         'is_secret'      => 0,
@@ -45,7 +46,7 @@ final class PostRepository
     public function find(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts') . ' WHERE id = ?',
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts') . ' WHERE id = ?',
             [$id]
         );
 
@@ -55,7 +56,7 @@ final class PostRepository
     public function findWithSecret(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->q('posts') . ' WHERE id = ?',
+            'SELECT ' . self::COLUMNS . ', guest_password FROM ' . $this->db->table('posts') . ' WHERE id = ?',
             [$id]
         );
 
@@ -92,13 +93,13 @@ final class PostRepository
         }
 
         $total = (int) $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('posts') . ' WHERE ' . $where,
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('posts') . ' WHERE ' . $where,
             $params
         )['c'];
 
         $offset = max(0, ($page - 1) * $perPage);
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts')
             . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );
@@ -154,13 +155,13 @@ final class PostRepository
         }
 
         $total = (int) $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('posts') . ' WHERE ' . $where,
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('posts') . ' WHERE ' . $where,
             $params
         )['c'];
 
         $offset = max(0, ($page - 1) * $perPage);
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts')
             . ' WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );
@@ -188,7 +189,7 @@ final class PostRepository
         }
 
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts')
             . ' WHERE deleted_at IS NULL AND is_notice = 1'
             . ' AND (board_id = :board_id' . $globalClause . ')'
             // 전체 공지를 먼저. 방언마다 불리언 정렬이 달라 CASE 로 적는다.
@@ -204,7 +205,7 @@ final class PostRepository
     {
         $limit = max(1, min(10, $limit));
         $rows = $this->db->select(
-            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->q('posts')
+            'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts')
             . ' WHERE board_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ' . $limit,
             [$boardId]
         );
@@ -256,7 +257,7 @@ final class PostRepository
     public function allAttachmentPaths(): array
     {
         $rows = $this->db->select(
-            'SELECT attachments FROM ' . $this->db->q('posts') . ' WHERE attachments IS NOT NULL'
+            'SELECT attachments FROM ' . $this->db->table('posts') . ' WHERE attachments IS NOT NULL'
         );
 
         $paths = [];
@@ -295,7 +296,7 @@ final class PostRepository
     public function incrementViews(int $id): void
     {
         $this->db->execute(
-            'UPDATE ' . $this->db->q('posts') . ' SET view_count = view_count + 1 WHERE id = ?',
+            'UPDATE ' . $this->db->table('posts') . ' SET view_count = view_count + 1 WHERE id = ?',
             [$id]
         );
     }
@@ -316,7 +317,7 @@ final class PostRepository
     {
         // 0 미만으로 내려가지 않도록 GREATEST 대신 CASE 를 쓴다. 세 DB 공통 문법이다.
         $this->db->execute(
-            'UPDATE ' . $this->db->q('posts')
+            'UPDATE ' . $this->db->table('posts')
             . ' SET comment_count = CASE WHEN comment_count + ? < 0 THEN 0 ELSE comment_count + ? END'
             . ' WHERE id = ?',
             [$delta, $delta, $id]

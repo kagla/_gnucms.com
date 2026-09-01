@@ -51,7 +51,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at'
-            . ' FROM ' . $this->db->q('users') . ' WHERE id = ?',
+            . ' FROM ' . $this->db->table('users') . ' WHERE id = ?',
             [$id]
         );
     }
@@ -60,7 +60,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at'
-            . ' FROM ' . $this->db->q('users') . ' WHERE email = ?',
+            . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
     }
@@ -85,7 +85,7 @@ final class UserRepository
     /** 표시 이름으로 찾는다. 대소문자는 가리지 않는다. $exceptId 는 본인을 제외할 때 쓴다. */
     public function findByDisplayName(string $displayName, ?int $exceptId = null): ?array
     {
-        $sql = 'SELECT id, email, display_name FROM ' . $this->db->q('users')
+        $sql = 'SELECT id, email, display_name FROM ' . $this->db->table('users')
             . ' WHERE LOWER(display_name) = LOWER(?)';
         $params = [$displayName];
         if ($exceptId !== null) {
@@ -121,7 +121,7 @@ final class UserRepository
     {
         return $this->db->transaction(function () use ($email, $passwordHash, $displayName): int {
             $isFirst = $this->db->execute(
-                'UPDATE ' . $this->db->q('site_state') . ' SET state_value = ?'
+                'UPDATE ' . $this->db->table('site_state') . ' SET state_value = ?'
                 . ' WHERE state_key = ? AND state_value = ?',
                 ['1', 'first_admin_claimed', '0']
             ) === 1;
@@ -138,7 +138,7 @@ final class UserRepository
     {
         return $this->db->transaction(function () use ($email, $displayName): int {
             $isFirst = $this->db->execute(
-                'UPDATE ' . $this->db->q('site_state') . ' SET state_value = ?'
+                'UPDATE ' . $this->db->table('site_state') . ' SET state_value = ?'
                 . ' WHERE state_key = ? AND state_value = ?',
                 ['1', 'first_admin_claimed', '0']
             ) === 1;
@@ -180,7 +180,7 @@ final class UserRepository
     {
         $limit = max(1, min(200, $limit));
         $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, created_at'
-            . ' FROM ' . $this->db->q('users');
+            . ' FROM ' . $this->db->table('users');
         $params = [];
         if ($query !== '') {
             $sql .= ' WHERE LOWER(email) LIKE ? OR LOWER(display_name) LIKE ?';
@@ -194,14 +194,14 @@ final class UserRepository
 
     public function countAll(): int
     {
-        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->q('users'));
+        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
         return (int) ($row['c'] ?? 0);
     }
 
     public function countAdmins(): int
     {
         $row = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('users') . ' WHERE is_admin = 1 AND status = ?',
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('users') . ' WHERE is_admin = 1 AND status = ?',
             ['active']
         );
         return (int) ($row['c'] ?? 0);

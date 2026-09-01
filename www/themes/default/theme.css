@@ -900,7 +900,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   border-radius:9999px;background:var(--color-base-100);color:var(--bc-mid);box-shadow:var(--shadow-1);
 }
 .post-meta{display:flex;align-items:center;gap:.375rem;color:var(--bc-mid);font-size:12px}
+.post-meta-views{display:inline-flex;align-items:center;gap:.25rem;color:var(--bc-soft);font-weight:600}
 .post-author,.post-list-author{max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--bc-strong)}
+.author-ip{color:var(--bc-soft);font-size:11.5px;font-weight:500;white-space:nowrap}
 .post-list-author{display:block}
 .post-stats{display:flex;align-items:center;gap:.75rem;color:var(--bc-soft);font-size:12px;font-weight:600}
 .post-stats span{display:inline-flex;align-items:center;gap:.25rem}

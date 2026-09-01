@@ -47,6 +47,7 @@ final class GuestWriteTest extends WebTestCase
         self::assertStringContainsString('name="password" minlength="8"', $body);
         self::assertStringContainsString('수정·삭제에 씁니다', $body);
         self::assertStringContainsString("'비밀번호를 '+minLength+'자 이상 입력해 주세요.'", $body);
+        self::assertStringContainsString('서버에서 허용한 업로드 용량을 초과했습니다.', $body);
     }
 
     #[DataProvider('connectionProvider')]
@@ -67,6 +68,27 @@ final class GuestWriteTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testMemberPostAndCommentDoNotStoreIp(array $dbConfig): void
+    {
+        $app = $this->makeGuestBoard($dbConfig);
+        $post = $app->postService()->create($this->adminAcl(), 'free', [
+            'title' => '회원 글', 'content' => '본문입니다',
+        ], '203.0.113.90');
+        $app->commentService()->create($this->adminAcl(), (int) $post['id'], [
+            'content' => '회원 댓글',
+        ], '203.0.113.91');
+
+        self::assertNull($app->db()->selectOne(
+            'SELECT author_ip FROM ' . $app->db()->table('posts') . ' WHERE id = ?',
+            [(int) $post['id']]
+        )['author_ip']);
+        self::assertNull($app->db()->selectOne(
+            'SELECT author_ip FROM ' . $app->db()->table('comments') . ' WHERE post_id = ?',
+            [(int) $post['id']]
+        )['author_ip']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testGuestCanWriteAPostThroughTheForm(array $dbConfig): void
     {
         $app = $this->makeGuestBoard($dbConfig);
@@ -76,12 +98,17 @@ final class GuestWriteTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'],
             'title' => '손님의 글', 'content' => '본문입니다',
             'author_name' => '지나가던손님', 'password' => 'guest-pass-123',
-        ]);
+        ], ['REMOTE_ADDR' => '203.0.113.77']);
 
         self::assertSame(303, $created->getStatusCode());
         $show = $this->body($this->get($app, $created->getHeaderLine('Location')));
         self::assertStringContainsString('손님의 글', $show);
         self::assertStringContainsString('지나가던손님', $show);
+        self::assertStringContainsString('203.0.xxx.77', $show);
+        self::assertStringNotContainsString('203.0.113.77', $show);
+        self::assertMatchesRegularExpression('/<time[^>]*>[^<]+<\/time>\s*<span class="author-ip">203\.0\.xxx\.77<\/span>/', $show);
+        $stored = $app->db()->selectOne('SELECT author_ip FROM ' . $app->db()->table('posts') . ' WHERE title = ?', ['손님의 글']);
+        self::assertSame('203.0.113.77', $stored['author_ip']);
     }
 
     #[DataProvider('connectionProvider')]

@@ -38,12 +38,18 @@ final class DbSetup
         ));
     }
 
-    /** @return array{dsn: string, username: ?string, password: ?string} */
+    /** @return array{dsn: string, username: ?string, password: ?string, prefix: string} */
     public static function dsnFrom(array $input): array
     {
         $type = (string) ($input['type'] ?? '');
         if (!isset(self::TYPES[$type])) {
             throw DomainError::validation(['type' => 'DB 종류를 고르세요.']);
+        }
+        $prefix = trim((string) ($input['prefix'] ?? ''));
+        if ($prefix !== '' && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,28}_$/D', $prefix) !== 1) {
+            throw DomainError::validation([
+                'prefix' => '영문으로 시작하고 영문·숫자·밑줄만 사용해 밑줄로 끝내세요. 최대 30자입니다.',
+            ]);
         }
 
         if ($type === 'sqlite') {
@@ -64,7 +70,7 @@ final class DbSetup
                 throw DomainError::validation(['sqlite_path' => '웹에서 접근할 수 있는 www/ 아래에는 둘 수 없습니다.']);
             }
 
-            return ['dsn' => 'sqlite:' . $path, 'username' => null, 'password' => null];
+            return ['dsn' => 'sqlite:' . $path, 'username' => null, 'password' => null, 'prefix' => $prefix];
         }
 
         $errors = [];
@@ -94,7 +100,7 @@ final class DbSetup
             ? 'mysql:host=' . $host . ';port=' . $port . ';dbname=' . $name . ';charset=utf8mb4'
             : 'pgsql:host=' . $host . ';port=' . $port . ';dbname=' . $name;
 
-        return ['dsn' => $dsn, 'username' => $user, 'password' => (string) ($input['password'] ?? '')];
+        return ['dsn' => $dsn, 'username' => $user, 'password' => (string) ($input['password'] ?? ''), 'prefix' => $prefix];
     }
 
     /**
@@ -115,7 +121,7 @@ final class DbSetup
         $hasAdmin = false;
         if ($hasTables) {
             try {
-                $row = $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q('users') . ' WHERE is_admin = 1');
+                $row = $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table('users') . ' WHERE is_admin = 1');
                 $hasAdmin = (int) ($row['c'] ?? 0) > 0;
             } catch (DomainError $e) {
                 // users 표가 없는 아주 오래된 설치. 관리자가 없다고 본다.

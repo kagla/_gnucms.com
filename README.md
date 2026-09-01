@@ -61,6 +61,12 @@ curl 'https://example.com/index.php?p=/health'
 테이블(`boards`, `posts`, `comments`)은 설치 마법사가 직접 만든다. 그래서 게시판이 쓸
 DB 계정에는 `CREATE TABLE` 과 `CREATE INDEX` 권한이 있어야 한다.
 
+하나의 DB에 여러 사이트를 설치해야 한다면 설치 2단계의 **테이블 프리픽스**에
+`site1_`, `site2_`처럼 서로 다른 값을 넣는다. 비워 두면 기존과 같이 `boards` 등의
+이름을 그대로 쓴다. 프리픽스는 영문으로 시작하고 영문·숫자·밑줄만 사용할 수 있으며
+밑줄로 끝나야 한다. 설치 후 값을 바꾸면 다른 테이블을 가리키므로 변경하지 않는다.
+가능하다면 사이트별 DB(SQLite는 별도 파일)를 쓰는 편이 권한과 백업을 분리하기 쉽다.
+
 ### SQLite
 
 준비할 것이 없다. 파일이 없으면 설치할 때 만들어진다.
@@ -152,6 +158,7 @@ pgsql:host=127.0.0.1;port=5432;dbname=board
     'dsn'      => 'pgsql:host=127.0.0.1;port=5432;dbname=board',
     'username' => 'board',
     'password' => '비밀번호',
+    'prefix'   => '',
 ],
 ```
 

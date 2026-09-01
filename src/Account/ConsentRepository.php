@@ -33,7 +33,7 @@ final class ConsentRepository
     ): void {
         $contentId = (int) $content['id'];
         $row = $this->db->selectOne(
-            'SELECT id FROM ' . $this->db->q('consents_given')
+            'SELECT id FROM ' . $this->db->table('consents_given')
             . ' WHERE subject_type = ? AND subject_id = ? AND scope = ? AND content_id = ?',
             [$subjectType, $subjectId, $scope, $contentId]
         );
@@ -55,7 +55,7 @@ final class ConsentRepository
             return;
         }
         $this->db->execute(
-            'UPDATE ' . $this->db->q('consents_given')
+            'UPDATE ' . $this->db->table('consents_given')
             . ' SET consent_type = ?, content_updated_at = ?, agreed = ?, agreed_at = ?,'
             . ' agreed_ip = ?, agreed_ua = ? WHERE id = ?',
             [$values['consent_type'], $values['content_updated_at'], $values['agreed'],
@@ -66,7 +66,7 @@ final class ConsentRepository
     public function forSubject(string $subjectType, int $subjectId): array
     {
         return $this->db->select(
-            'SELECT * FROM ' . $this->db->q('consents_given')
+            'SELECT * FROM ' . $this->db->table('consents_given')
             . ' WHERE subject_type = ? AND subject_id = ? ORDER BY id ASC',
             [$subjectType, $subjectId]
         );
@@ -82,8 +82,8 @@ final class ConsentRepository
             'SELECT g.consent_type, g.scope, g.agreed, g.agreed_at, g.content_updated_at,'
             . ' g.agreed_ip, c.title AS content_title, c.slug AS content_slug,'
             . ' c.updated_at AS content_current_updated_at'
-            . ' FROM ' . $this->db->q('consents_given') . ' g'
-            . ' LEFT JOIN ' . $this->db->q('contents') . ' c ON c.id = g.content_id'
+            . ' FROM ' . $this->db->table('consents_given') . ' g'
+            . ' LEFT JOIN ' . $this->db->table('contents') . ' c ON c.id = g.content_id'
             . ' WHERE g.subject_type = ? AND g.subject_id = ? ORDER BY g.id ASC',
             [$subjectType, $subjectId]
         );
@@ -94,8 +94,8 @@ final class ConsentRepository
     {
         return $this->db->select(
             'SELECT g.*, u.email AS user_email, u.display_name AS user_display_name'
-            . ' FROM ' . $this->db->q('consents_given') . ' g'
-            . ' LEFT JOIN ' . $this->db->q('users') . " u"
+            . ' FROM ' . $this->db->table('consents_given') . ' g'
+            . ' LEFT JOIN ' . $this->db->table('users') . " u"
             . "   ON g.subject_type = 'user' AND u.id = g.subject_id"
             . ' WHERE g.content_id = ? ORDER BY g.id DESC',
             [$contentId]
@@ -106,7 +106,7 @@ final class ConsentRepository
     public function countsForContent(int $contentId): array
     {
         $rows = $this->db->select(
-            'SELECT agreed, COUNT(*) AS c FROM ' . $this->db->q('consents_given')
+            'SELECT agreed, COUNT(*) AS c FROM ' . $this->db->table('consents_given')
             . ' WHERE content_id = ? GROUP BY agreed',
             [$contentId]
         );

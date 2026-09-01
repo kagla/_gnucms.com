@@ -202,6 +202,7 @@ final class AdminController
             'use_secret' => isset($input['use_secret']) ? '1' : '0',
             'use_file' => isset($input['use_file']) ? '1' : '0',
             'use_category' => isset($input['use_category']) ? '1' : '0',
+            'show_in_header' => isset($input['show_in_header']) ? '1' : '0',
             'list_type' => (string) ($input['list_type'] ?? 'list'),
             'home_limit' => (string) ($input['home_limit'] ?? '5'),
             'per_page' => (string) ($input['per_page'] ?? '20'),
@@ -233,6 +234,7 @@ final class AdminController
         return ['board_key' => '', 'name' => '', 'description' => '', 'categories_text' => '', 'managers_text' => '',
             'perm_read' => 'guest', 'perm_write' => 'member', 'perm_comment' => 'member', 'use_secret' => false,
             'use_file' => false, 'use_category' => false, 'list_type' => 'list',
+            'show_in_header' => false,
             'home_limit' => 5, 'per_page' => 20, 'sort_order' => 0];
     }
 

@@ -104,7 +104,11 @@ final class BoardListViewTest extends WebTestCase
 
         self::assertStringContainsString(
             '/posts/' . $post['id'] . '/images/0',
-            $this->body($this->get($app, '/boards/free'))
+            $body = $this->body($this->get($app, '/boards/free'))
+        );
+        self::assertMatchesRegularExpression(
+            '/<time[^>]*>[^<]+<\/time>\s*<span class="post-meta-views">.*?' . $post['view_count'] . '<\/span>/s',
+            $body
         );
 
         $response = $this->get($app, '/posts/' . $post['id'] . '/images/0');

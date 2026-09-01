@@ -10,4 +10,5 @@ $author_id = $post['author_id'] ?? null;
   <button type="button" class="link-author" data-author-id="<?= $this->e((string) $author_id) ?>" data-author-name="<?= $this->e($author_name) ?>" title="<?= $this->e($author_name) ?>"><?= $this->e($shown) ?></button>
 <?php else: ?>
   <span class="post-list-author" title="<?= $this->e($author_name) ?>"><?= $this->e($shown) ?></span>
+  <?php if (!empty($post['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($post['author_ip_masked']) ?></span><?php endif ?>
 <?php endif ?>

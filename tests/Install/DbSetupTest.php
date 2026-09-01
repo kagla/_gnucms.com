@@ -36,7 +36,7 @@ final class DbSetupTest extends TestCase
     {
         $db = DbSetup::dsnFrom(['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite']);
 
-        self::assertSame(['dsn' => 'sqlite:' . $this->dir . '/board.sqlite', 'username' => null, 'password' => null], $db);
+        self::assertSame(['dsn' => 'sqlite:' . $this->dir . '/board.sqlite', 'username' => null, 'password' => null, 'prefix' => ''], $db);
     }
 
     public function testSqliteRejectsRelativePathAndUnwritableFolder(): void
@@ -86,6 +86,29 @@ final class DbSetupTest extends TestCase
         $this->assertValidation(['type' => 'oracle'], 'type');
     }
 
+    public function testPrefixIsValidatedAndSeparatesSites(): void
+    {
+        $base = ['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite'];
+        $firstConfig = DbSetup::dsnFrom($base + ['prefix' => 'first_']);
+        $secondConfig = DbSetup::dsnFrom($base + ['prefix' => 'second_']);
+
+        $first = Connection::create($firstConfig);
+        $second = Connection::create($secondConfig);
+        (new Schema($first))->create();
+        (new Schema($second))->create();
+        $first->insert('boards', $this->boardRow('first'));
+        $second->insert('boards', $this->boardRow('second'));
+
+        self::assertSame('first_boards', $first->tableName('boards'));
+        self::assertSame('first', $first->selectOne('SELECT board_key FROM ' . $first->table('boards'))['board_key']);
+        self::assertSame('second', $second->selectOne('SELECT board_key FROM ' . $second->table('boards'))['board_key']);
+        self::assertTrue(DbSetup::probe($firstConfig)['has_tables']);
+        self::assertTrue(DbSetup::probe($secondConfig)['has_tables']);
+
+        $this->assertValidation($base + ['prefix' => 'bad-prefix_'], 'prefix');
+        $this->assertValidation($base + ['prefix' => 'missing_separator'], 'prefix');
+    }
+
     public function testProbeReportsEmptyThenTablesThenAdmin(): void
     {
         $config = DbSetup::dsnFrom(['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite']);
@@ -125,5 +148,16 @@ final class DbSetupTest extends TestCase
             self::assertSame(422, $e->status());
             self::assertArrayHasKey($field, $e->details());
         }
+    }
+
+    private function boardRow(string $key): array
+    {
+        return [
+            'board_key' => $key, 'name' => $key, 'description' => null, 'categories' => '[]',
+            'managers' => '[]', 'perm_read' => 'guest', 'perm_write' => 'member',
+            'perm_comment' => 'member', 'use_secret' => 0, 'use_file' => 0, 'use_category' => 0,
+            'list_type' => 'list', 'home_limit' => 5, 'show_in_header' => 0, 'per_page' => 20,
+            'sort_order' => 0, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+        ];
     }
 }

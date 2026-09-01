@@ -7,6 +7,7 @@ namespace GnuCms\Web\Controller;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
 use GnuCms\Service\BoardService;
+use GnuCms\Support\IpAddress;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
@@ -242,7 +243,12 @@ final class PostController
         $this->assertCsrf($input);
 
         try {
-            $post = $this->app->postService()->create($acl, $key, $input);
+            $post = $this->app->postService()->create(
+                $acl,
+                $key,
+                $input,
+                IpAddress::fromServer($request->getServerParams())
+            );
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;

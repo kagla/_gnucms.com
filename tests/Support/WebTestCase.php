@@ -78,17 +78,20 @@ abstract class WebTestCase extends DatabaseTestCase
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }
 
-    protected function post(App $app, string $path, array $body): ResponseInterface
+    protected function post(App $app, string $path, array $body, array $server = []): ResponseInterface
     {
-        $request = (new ServerRequestFactory())->createServerRequest('POST', $path)->withParsedBody($body);
+        $request = (new ServerRequestFactory())->createServerRequest('POST', $path, $server)->withParsedBody($body);
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }
 
     /** @param array<string, UploadedFileInterface> $files */
-    protected function upload(App $app, string $path, array $files): ResponseInterface
+    protected function upload(App $app, string $path, array $files, array $headers = []): ResponseInterface
     {
         $request = (new ServerRequestFactory())->createServerRequest('POST', $path)->withUploadedFiles($files);
+        foreach ($headers as $name => $value) {
+            $request = $request->withHeader((string) $name, (string) $value);
+        }
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }

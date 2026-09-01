@@ -39,6 +39,23 @@ final class SchemaTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testBoardMigrationAddsGuestAuthorIpColumns(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $db->execute('ALTER TABLE ' . $db->table('posts') . ' DROP COLUMN author_ip');
+        $db->execute('ALTER TABLE ' . $db->table('comments') . ' DROP COLUMN author_ip');
+
+        (new Schema($db))->migrateBoards();
+
+        self::assertSame(0, (int) $db->selectOne(
+            'SELECT COUNT(author_ip) AS c FROM ' . $db->table('posts')
+        )['c']);
+        self::assertSame(0, (int) $db->selectOne(
+            'SELECT COUNT(author_ip) AS c FROM ' . $db->table('comments')
+        )['c']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testDropRemovesEverything(array $config): void
     {
         $db = $this->freshDatabase($config);
@@ -213,6 +230,7 @@ final class SchemaTest extends WebTestCase
             'use_secret'   => 0,
             'use_file'     => 0,
             'use_category' => 0,
+            'show_in_header' => 0,
             'per_page'     => 20,
             'sort_order'   => 0,
             'created_at'   => '2026-08-26 01:02:03',

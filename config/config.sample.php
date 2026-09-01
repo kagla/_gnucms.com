@@ -25,6 +25,8 @@ return [
         'dsn'      => 'sqlite:' . __DIR__ . '/../storage/board.sqlite',
         'username' => null,
         'password' => null,
+        // 한 DB 에 여러 사이트를 둘 때만 사용. 예: site1_ (설치 후에는 바꾸지 않는다)
+        'prefix'   => '',
     ],
 
     // 세션·메일 비밀번호 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.

@@ -74,6 +74,7 @@ final class InstallerTest extends TestCase
         self::assertArrayNotHasKey('bootstrap_admin', $config);
         self::assertSame('https://community.example.com', $config['app']['url']);
         self::assertSame('no-reply@example.com', $config['mail']['from']);
+        self::assertSame('', $config['db']['prefix']);
         self::assertSame($this->workDir . '/storage/editor', $config['editor']['dir']);
         self::assertDirectoryExists($config['editor']['dir']);
         self::assertFalse($config['debug']);
@@ -97,6 +98,23 @@ final class InstallerTest extends TestCase
         self::assertSame(1, (int) $db->selectOne('SELECT COUNT(*) AS c FROM boards')['c']);
         self::assertSame((new Schema($db))->stamp(), (new Schema($db))->storedStamp());
         self::assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
+    }
+
+    public function testFinishStoresAndUsesTablePrefix(): void
+    {
+        $dbConfig = $this->dbConfig() + ['prefix' => 'community_'];
+        $this->installer()->finish($dbConfig, $this->site(), $this->admin());
+
+        $config = require $this->configPath();
+        self::assertSame('community_', $config['db']['prefix']);
+        $prefixed = Connection::create($config['db']);
+        self::assertTrue((new Schema($prefixed))->exists());
+        self::assertSame('owner@example.com', $prefixed->selectOne(
+            'SELECT email FROM ' . $prefixed->table('users') . ' WHERE is_admin = 1'
+        )['email']);
+
+        $unprefixed = Connection::create($this->dbConfig());
+        self::assertFalse((new Schema($unprefixed))->exists());
     }
 
     public function testSecondFinishIsRefused(): void

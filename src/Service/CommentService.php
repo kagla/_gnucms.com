@@ -13,6 +13,7 @@ use GnuCms\Error\DomainError;
 use GnuCms\Repository\CommentRepository;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Validation\Validator;
+use GnuCms\Support\IpAddress;
 
 final class CommentService
 {
@@ -139,12 +140,15 @@ final class CommentService
             $rows[$index]['needs_edit_password'] = $row['author_id'] === null
                 && ($row['guest_password'] ?? null) !== null
                 && !$rows[$index]['can_edit'];
+            $rows[$index]['author_ip_masked'] = $row['author_id'] === null
+                ? IpAddress::mask($row['author_ip'] ?? null) : null;
+            unset($rows[$index]['author_ip']);
         }
 
         return TreeBuilder::build($rows);
     }
 
-    public function create(Acl $acl, int $postId, array $input): array
+    public function create(Acl $acl, int $postId, array $input, ?string $clientIp = null): array
     {
         $loaded = $this->postService->loadForRead($acl, $postId, $input['post_password'] ?? null);
         $post = $loaded['post'];
@@ -181,11 +185,13 @@ final class CommentService
         if ($identity->isGuest()) {
             $data['author_id'] = null;
             $data['author_name'] = $v->requiredString('author_name', 20);
+            $data['author_ip'] = IpAddress::normalize($clientIp);
             $password = $v->requiredPassword('password');
             $data['guest_password'] = $password === '' ? null : password_hash($password, PASSWORD_DEFAULT);
         } else {
             $data['author_id'] = $identity->sub();
             $data['author_name'] = (string) $identity->displayName();
+            $data['author_ip'] = null;
             $data['guest_password'] = null;
         }
 
@@ -492,6 +498,7 @@ final class CommentService
             'content'     => $row['content'],
             'author_id'   => $row['author_id'],
             'author_name' => $row['author_name'],
+            'author_ip_masked' => $row['author_id'] === null ? IpAddress::mask($row['author_ip'] ?? null) : null,
             'is_secret'   => (bool) $row['is_secret'],
             'deleted'     => $row['deleted_at'] !== null,
             'created_at'  => $row['created_at'],

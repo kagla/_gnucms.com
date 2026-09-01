@@ -19,7 +19,7 @@ final class CmsRepository
     public function settings(): array
     {
         $settings = [];
-        foreach ($this->db->select('SELECT setting_key, setting_value FROM ' . $this->db->q('site_settings')) as $row) {
+        foreach ($this->db->select('SELECT setting_key, setting_value FROM ' . $this->db->table('site_settings')) as $row) {
             $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
         }
         return $settings;
@@ -34,7 +34,7 @@ final class CmsRepository
                     'updated_at' => Clock::now(),
                 ], 'setting_key = :key', ['key' => $key]);
                 if ($changed === 0 && $this->db->selectOne(
-                    'SELECT setting_key FROM ' . $this->db->q('site_settings') . ' WHERE setting_key = ?',
+                    'SELECT setting_key FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
                     [$key]
                 ) === null) {
                     $this->db->insert('site_settings', [
@@ -50,7 +50,7 @@ final class CmsRepository
     /** @param bool|null $consentOnly null 이면 전부, true 면 약관만, false 면 약관 말고 */
     public function listPages(?bool $consentOnly = null): array
     {
-        $sql = 'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL';
+        $sql = 'SELECT * FROM ' . $this->db->table('contents') . ' WHERE deleted_at IS NULL';
         if ($consentOnly === true) {
             $sql .= ' AND is_consent = 1';
         } elseif ($consentOnly === false) {
@@ -65,14 +65,14 @@ final class CmsRepository
     public function listDeletedPages(): array
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC'
+            'SELECT * FROM ' . $this->db->table('contents') . ' WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC'
         ));
     }
 
     public function publishedMenuPages(): array
     {
         return array_map([$this, 'hydratePage'], $this->db->select(
-            'SELECT * FROM ' . $this->db->q('contents')
+            'SELECT * FROM ' . $this->db->table('contents')
             // 약관에서 show_in_menu 는 '하단에 표시' 라는 뜻이라 상단 메뉴에서는 뺀다.
             . " WHERE status = 'published' AND show_in_menu = 1 AND is_consent = 0 AND deleted_at IS NULL"
             . ' ORDER BY sort_order ASC, id ASC'
@@ -86,7 +86,7 @@ final class CmsRepository
     public function listPublishedConsentPages(): array
     {
         return $this->db->select(
-            'SELECT * FROM ' . $this->db->q('contents')
+            'SELECT * FROM ' . $this->db->table('contents')
             . " WHERE is_consent = 1 AND status = 'published' AND show_in_menu = 1 AND deleted_at IS NULL"
             . ' ORDER BY sort_order ASC, id ASC'
         );
@@ -95,7 +95,7 @@ final class CmsRepository
     public function findPageById(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE id = ? AND deleted_at IS NULL', [$id]
+            'SELECT * FROM ' . $this->db->table('contents') . ' WHERE id = ? AND deleted_at IS NULL', [$id]
         );
         return $row === null ? null : $this->hydratePage($row);
     }
@@ -103,7 +103,7 @@ final class CmsRepository
     public function findDeletedPageById(int $id): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('contents') . ' WHERE id = ? AND deleted_at IS NOT NULL', [$id]
+            'SELECT * FROM ' . $this->db->table('contents') . ' WHERE id = ? AND deleted_at IS NOT NULL', [$id]
         );
         return $row === null ? null : $this->hydratePage($row);
     }
@@ -111,7 +111,7 @@ final class CmsRepository
     public function findPublishedBySlug(string $slug): ?array
     {
         $row = $this->db->selectOne(
-            'SELECT * FROM ' . $this->db->q('contents')
+            'SELECT * FROM ' . $this->db->table('contents')
             . " WHERE slug = ? AND status = 'published' AND deleted_at IS NULL",
             [$slug]
         );
@@ -120,7 +120,7 @@ final class CmsRepository
 
     public function findBySlug(string $slug): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->q('contents') . ' WHERE slug = ?', [$slug]);
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('contents') . ' WHERE slug = ?', [$slug]);
         return $row === null ? null : $this->hydratePage($row);
     }
 
@@ -145,7 +145,7 @@ final class CmsRepository
     public function markConsent(int $id): void
     {
         $this->db->execute(
-            'UPDATE ' . $this->db->q('contents') . ' SET is_consent = 1 WHERE id = ?',
+            'UPDATE ' . $this->db->table('contents') . ' SET is_consent = 1 WHERE id = ?',
             [$id]
         );
     }
@@ -173,7 +173,7 @@ final class CmsRepository
     public function countPages(): int
     {
         $row = $this->db->selectOne(
-            'SELECT COUNT(*) AS c FROM ' . $this->db->q('contents') . ' WHERE deleted_at IS NULL'
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('contents') . ' WHERE deleted_at IS NULL'
         );
         return (int) ($row['c'] ?? 0);
     }

@@ -73,6 +73,8 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(303, $settingsSaved->getStatusCode());
         self::assertSame('default', $app->cms()->settings()['theme']);
         $documents = $this->get($app, '/admin/content');
+        self::assertStringContainsString('<th class="right">정렬</th>', $this->body($documents));
+        self::assertStringContainsString('colspan="6"', $this->body($documents));
         self::assertSame(200, $documents->getStatusCode());
         self::assertStringContainsString('<h1>내용 관리</h1>', $this->body($documents));
         self::assertStringNotContainsString('<h1>페이지 관리</h1>', $this->body($documents));
@@ -281,6 +283,8 @@ final class CmsPageTest extends WebTestCase
         $saved = $app->cms()->findPublishedBySlug('guide');
         self::assertSame('이용안내', $saved['title']);
         self::assertSame($imageKey, $saved['image_key']);
+        $documents = $this->body($this->get($app, '/admin/content'));
+        self::assertStringContainsString('data-label="정렬" class="right">10</td>', $documents);
         $preview = $this->get($app, '/admin/content/' . $saved['id'] . '/preview');
         self::assertSame(200, $preview->getStatusCode());
         self::assertStringContainsString('공개된 내용 미리보기', $this->body($preview));
