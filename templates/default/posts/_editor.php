@@ -51,6 +51,28 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
       el.addClass(isDark()?'<?= $this->e(GNUCMS_ID) ?>-editor-dark':'<?= $this->e(GNUCMS_ID) ?>-editor-light');
     });
   }
+  /* 기존 본문 이미지는 한 번 404로 캐시되었더라도 수정 화면에서 다시 요청한다.
+     저장할 때는 캐시용 쿼리와 편집기 전용 속성을 제거해 원래 주소만 남긴다. */
+  function refreshStoredImages(editor){
+    if(!editor.document){return}
+    var images=editor.document.find('img');
+    for(var i=0;i<images.count();i++){
+      var image=images.getItem(i),src=image.getAttribute('src')||'';
+      if(!/\/media\/editor\//.test(src)){continue}
+      var clean=src.split('?')[0];
+      image.setAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src',clean);image.addClass('<?= $this->e(GNUCMS_ID) ?>-image-loading');
+      image.on('load',function(event){event.listenerData.removeClass('<?= $this->e(GNUCMS_ID) ?>-image-loading')},null,image);
+      image.setAttribute('src',clean+'?editor_preview='+Date.now());
+    }
+  }
+  function restoreImageUrls(editor){
+    if(!editor.document){return}
+    var images=editor.document.find('img[data-<?= $this->e(GNUCMS_ID) ?>-src]');
+    for(var i=0;i<images.count();i++){
+      var image=images.getItem(i);image.setAttribute('src',image.getAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src'));
+      image.removeAttribute('data-<?= $this->e(GNUCMS_ID) ?>-src');image.removeClass('<?= $this->e(GNUCMS_ID) ?>-image-loading');
+    }
+  }
 
   /* 표준 Image 다이얼로그는 URL 을 직접 넣는 자리다. 사진을 고르는 흐름이 아니라
      파일 선택창에서 여러 장을 골라 바로 본문에 넣는 방식을 쓴다.
@@ -131,6 +153,9 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:uploadUrl+'&responseType=json',
     extraPlugins:'uploadimage,notification,<?= $this->e(GNUCMS_ID) ?>postimages',
+    /* 사진 버튼은 자체 명령이라 CKEditor ACF가 기본 Image 기능을 사용 중이라고 알지 못한다.
+       명시하지 않으면 저장된 본문의 img가 수정 화면을 여는 순간 제거된다. */
+    extraAllowedContent:'img[alt,src,title]',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',
     format_tags:'p;h2;h3;h4;pre',
@@ -173,7 +198,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   });
   }
   function wire(e){
-    e.on('instanceReady',function(){syncTheme(e)});
+    e.on('instanceReady',function(){syncTheme(e);refreshStoredImages(e)});
     e.on('fileUploadResponse',function(event){
       try{
         var data=JSON.parse(event.data.fileLoader.xhr.responseText||'{}');
@@ -191,6 +216,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
   window.<?= $this->e(GNUCMS_ID) ?>Editor=window.<?= $this->e(GNUCMS_ID) ?>Editor||{};
   window.<?= $this->e(GNUCMS_ID) ?>Editor[textarea.id]={
     remount:function(move){
+      restoreImageUrls(editor);
       editor.destroy();
       if(typeof move==='function'){move()}
       editor=wire(build());
@@ -208,6 +234,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
 
         return;
       }
+      restoreImageUrls(editor);
       editor.updateElement();
       /* CKEditor 가 textarea 를 숨기므로 브라우저의 "필수" 검사가 동작하지 않는다.
          그래서 required 대신 data-required 를 두고 여기서 직접 확인한다. */

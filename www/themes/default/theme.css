@@ -906,6 +906,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .post-list-author{display:block}
 .post-stats{display:flex;align-items:center;gap:.75rem;color:var(--bc-soft);font-size:12px;font-weight:600}
 .post-stats span{display:inline-flex;align-items:center;gap:.25rem}
+.posts-table .post-notice-row{background:color-mix(in srgb,var(--color-primary) 5%,var(--color-base-100))}
+.posts-table .post-notice-row:hover{background:color-mix(in srgb,var(--color-primary) 9%,var(--color-base-100))}
 
 /* 인기 글 순위: 왼쪽에 큰 숫자를 세운다 */
 .rank-list{counter-reset:rank}

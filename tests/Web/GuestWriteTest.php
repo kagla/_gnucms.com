@@ -107,6 +107,7 @@ final class GuestWriteTest extends WebTestCase
         self::assertStringContainsString('203.0.xxx.77', $show);
         self::assertStringNotContainsString('203.0.113.77', $show);
         self::assertMatchesRegularExpression('/<time[^>]*>[^<]+<\/time>\s*<span class="author-ip">203\.0\.xxx\.77<\/span>/', $show);
+        self::assertStringNotContainsString('203.0.xxx.77', $this->body($this->get($app, '/boards/free')));
         $stored = $app->db()->selectOne('SELECT author_ip FROM ' . $app->db()->table('posts') . ' WHERE title = ?', ['손님의 글']);
         self::assertSame('203.0.113.77', $stored['author_ip']);
     }

@@ -7,7 +7,6 @@ $inline_views = $inline_views ?? false;
     <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $post['author_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $post['author_name'], 0, 1))) ?></span></span>
   </span>
   <span class="post-author" title="<?= $this->e($post['author_name']) ?>"><?= $this->e($this->truncate($post['author_name'], 8)) ?></span>
-  <?php if (!empty($post['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($post['author_ip_masked']) ?></span><?php endif ?>
   <span aria-hidden="true">·</span>
   <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time>
   <?php if ($inline_views): ?><span class="post-meta-views"><?= $this->icon('eye', 14) ?><?= $this->e($post['view_count']) ?></span><?php endif ?>

@@ -121,6 +121,7 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:<?= $this->json($editor_upload_url . '&responseType=json') ?>,
     extraPlugins:'uploadimage,notification,<?= $this->e(GNUCMS_ID) ?>imageupload',
+    extraAllowedContent:'img[alt,src,title]',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',format_tags:'p;h2;h3;h4;pre',
     toolbar:[

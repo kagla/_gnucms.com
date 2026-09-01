@@ -85,6 +85,10 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString("items:['" . ucfirst(GNUCMS_ID) . "Images'", $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('navigator.sendBeacon', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('data-uploaded-images', $this->body($this->get($app, '/admin/content/new')));
+        self::assertStringContainsString(
+            "extraAllowedContent:'img[alt,src,title]'",
+            $this->body($this->get($app, '/admin/content/new'))
+        );
         self::assertStringContainsString('refreshStoredImages', $this->body($this->get($app, '/admin/content/new')));
         self::assertStringContainsString('getDocumentElement', $this->body($this->get($app, '/admin/content/new')));
         $createForm = $this->body($this->get($app, '/admin/content/new'));

@@ -103,7 +103,7 @@ $show_views = isset($view_types) && count($view_types) > 1;
 </div>
 <?php endif ?>
 
-<?php if ($list['notices'] !== []): ?>
+<?php if ($view !== 'list' && $list['notices'] !== []): ?>
   <ul class="list card notice-list" aria-label="공지">
     <?php foreach ($list['notices'] as $post): ?>
       <li class="list-row">
@@ -135,7 +135,7 @@ $show_views = isset($view_types) && count($view_types) > 1;
       </div>
     </div>
   </div>
-<?php elseif ($list['data'] !== []): ?>
+<?php elseif ($list['data'] !== [] || ($view === 'list' && $list['notices'] !== [])): ?>
   <?php
   // 파셜이 배포에서 빠져도 오류 화면 대신 목록형으로 떨어지게 한다.
   $this->insert(in_array($view, ['list', 'gallery', 'magazine', 'news'], true) && $this->exists('posts/_list_' . $view) ? 'posts/_list_' . $view : 'posts/_list_list')
