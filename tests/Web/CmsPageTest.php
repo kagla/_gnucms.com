@@ -39,10 +39,108 @@ final class CmsPageTest extends WebTestCase
     public function testRegistrationCanBeDisabled(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['registration_enabled' => '0']);
+        $id = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '기존회원', false
+        );
+        $app->users()->verifyEmail($id);
+        $app->cms()->saveSettings([
+            'registration_enabled' => '0', 'social_registration_enabled' => '0',
+        ]);
 
         self::assertSame(403, $this->get($app, '/register')->getStatusCode());
         self::assertStringNotContainsString('회원가입</a>', $this->body($this->get($app, '/')));
+        $this->get($app, '/login');
+        self::assertSame(303, $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'password' => 'member-password-123',
+        ])->getStatusCode(), '가입을 모두 막아도 기존 일반 회원은 로그인할 수 있어야 한다');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRegularAndSocialRegistrationCanBeControlledSeparately(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [
+            'oauth' => ['google' => ['client_id' => 'id', 'client_secret' => 'secret']],
+        ]);
+        $save = function (bool $regular, bool $social) use ($app): void {
+            $app->cmsService()->saveGeneralSettings($this->adminAcl(), [
+                'site_name' => GNUCMS,
+                'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
+                'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
+                'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
+                'theme' => 'default',
+                'password_login_enabled' => '1',
+                'social_login_enabled' => '1',
+                'registration_enabled' => $regular ? '1' : '0',
+                'social_registration_enabled' => $social ? '1' : '0',
+            ]);
+        };
+
+        $save(true, true);
+        $both = $this->body($this->get($app, '/register'));
+        self::assertStringContainsString('action="/register"', $both);
+        self::assertStringContainsString('Google로 계속하기', $both);
+        self::assertStringContainsString('또는 이메일로 계속', $both);
+
+        $save(false, true);
+        $socialOnly = $this->body($this->get($app, '/register'));
+        self::assertStringNotContainsString('action="/register"', $socialOnly);
+        self::assertStringContainsString('Google로 계속하기', $socialOnly);
+        self::assertStringNotContainsString('또는 이메일로 계속', $socialOnly);
+
+        $save(true, false);
+        $regularOnly = $this->body($this->get($app, '/register'));
+        self::assertStringContainsString('action="/register"', $regularOnly);
+        self::assertStringNotContainsString('Google로 계속하기', $regularOnly);
+
+        $save(false, false);
+        self::assertSame(403, $this->get($app, '/register')->getStatusCode());
+        self::assertStringNotContainsString('회원가입</a>', $this->body($this->get($app, '/login')));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testDisabledLoginForcesItsSignupOffButAdminPasswordLoginRemains(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [
+            'oauth' => ['google' => ['client_id' => 'id', 'client_secret' => 'secret']],
+        ]);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $app->cmsService()->saveGeneralSettings($this->adminAcl(), [
+            'site_name' => GNUCMS, 'site_tagline' => '소개', 'home_title' => '홈', 'home_intro' => '본문',
+            'theme' => 'default',
+            'password_login_enabled' => '0', 'registration_enabled' => '1',
+            'social_login_enabled' => '0', 'social_registration_enabled' => '1',
+        ]);
+        $stored = $app->cms()->settings();
+        self::assertSame('0', $stored['registration_enabled']);
+        self::assertSame('0', $stored['social_registration_enabled']);
+        self::assertSame(403, $this->get($app, '/register')->getStatusCode());
+
+        $loginPage = $this->body($this->get($app, '/login'));
+        self::assertStringContainsString('일반 회원 로그인이 중지되어 있습니다.', $loginPage);
+        self::assertStringNotContainsString('Google로 계속하기', $loginPage);
+        $memberLogin = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'password' => 'member-password-123',
+        ]);
+        self::assertSame(403, $memberLogin->getStatusCode());
+        self::assertStringContainsString('현재 일반 회원 로그인을 허용하지 않습니다.', $this->body($memberLogin));
+
+        $adminLogin = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+        self::assertSame(303, $adminLogin->getStatusCode(), '관리자 잠금을 막기 위해 비밀번호 로그인은 남긴다');
+        unset($_SESSION['user_id'], $_SESSION['session_epoch']);
+        self::assertSame(403, $this->get($app, '/auth/google')->getStatusCode());
     }
 
     #[DataProvider('connectionProvider')]
@@ -61,6 +159,12 @@ final class CmsPageTest extends WebTestCase
         self::assertSame(200, $settingsPage->getStatusCode());
         self::assertStringContainsString('name="theme"', $this->body($settingsPage));
         self::assertStringContainsString('default (기본)', $this->body($settingsPage));
+        self::assertStringContainsString('신규 일반 회원가입 허용', $this->body($settingsPage));
+        self::assertStringContainsString('신규 소셜 회원가입 허용', $this->body($settingsPage));
+        self::assertStringContainsString('일반 회원 로그인 허용', $this->body($settingsPage));
+        self::assertStringContainsString('소셜 회원 로그인 허용', $this->body($settingsPage));
+        self::assertStringContainsString('data-login-toggle="regular"', $this->body($settingsPage));
+        self::assertStringContainsString('data-signup-toggle="social"', $this->body($settingsPage));
         $settingsSaved = $this->post($app, '/admin/settings', [
             'csrf_token' => $_SESSION['csrf_token'],
             'site_name' => GNUCMS,
@@ -68,10 +172,15 @@ final class CmsPageTest extends WebTestCase
             'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
             'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
             'theme' => 'default',
+            'password_login_enabled' => '1',
+            'social_login_enabled' => '1',
             'registration_enabled' => '1',
+            'social_registration_enabled' => '1',
         ]);
         self::assertSame(303, $settingsSaved->getStatusCode());
         self::assertSame('default', $app->cms()->settings()['theme']);
+        self::assertSame('1', $app->cms()->settings()['registration_enabled']);
+        self::assertSame('1', $app->cms()->settings()['social_registration_enabled']);
         $documents = $this->get($app, '/admin/content');
         self::assertStringContainsString('<th class="right">정렬</th>', $this->body($documents));
         self::assertStringContainsString('colspan="6"', $this->body($documents));

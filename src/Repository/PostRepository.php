@@ -50,7 +50,7 @@ final class PostRepository
             [$id]
         );
 
-        return $row === null ? null : $this->hydrate($row);
+        return $row === null ? null : $this->hydrateMany([$row])[0];
     }
 
     public function findWithSecret(int $id): ?array
@@ -60,7 +60,7 @@ final class PostRepository
             [$id]
         );
 
-        return $row === null ? null : $this->hydrate($row);
+        return $row === null ? null : $this->hydrateMany([$row])[0];
     }
 
     /** @return array{rows: array, total: int} */
@@ -104,7 +104,7 @@ final class PostRepository
             $params
         );
 
-        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+        return ['rows' => $this->hydrateMany($rows), 'total' => $total];
     }
 
     /**
@@ -166,7 +166,7 @@ final class PostRepository
             $params
         );
 
-        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+        return ['rows' => $this->hydrateMany($rows), 'total' => $total];
     }
 
     /**
@@ -197,7 +197,7 @@ final class PostRepository
             $params
         );
 
-        return array_map([$this, 'hydrate'], $rows);
+        return $this->hydrateMany($rows);
     }
 
     /** 메인 화면에 표시할 게시판별 최신 글을 가져온다. */
@@ -210,7 +210,7 @@ final class PostRepository
             [$boardId]
         );
 
-        return array_map([$this, 'hydrate'], $rows);
+        return $this->hydrateMany($rows);
     }
 
     public function create(array $data): int
@@ -301,6 +301,53 @@ final class PostRepository
         );
     }
 
+    /**
+     * 최신순 목록 기준 이전(큰 id, 더 최신)·다음(작은 id, 더 오래됨) 글.
+     * 삭제된 글은 건너뛴다.
+     * $boardIds 가 주어지면 읽을 수 있는 전체 게시판 범위, 아니면 한 게시판 범위다.
+     *
+     * @return array{previous:?array,next:?array}
+     */
+    public function adjacent(int $id, int $boardId, ?array $boardIds = null): array
+    {
+        $params = ['current_id' => $id];
+        if ($boardIds === null) {
+            $scope = 'board_id = :board_id';
+            $params['board_id'] = $boardId;
+        } else {
+            if ($boardIds === []) return ['previous' => null, 'next' => null];
+            $marks = [];
+            foreach (array_values($boardIds) as $index => $readableId) {
+                $key = 'board_' . $index;
+                $marks[] = ':' . $key;
+                $params[$key] = (int) $readableId;
+            }
+            $scope = 'board_id IN (' . implode(', ', $marks) . ')';
+        }
+        $base = ' FROM ' . $this->db->table('posts')
+            . ' WHERE deleted_at IS NULL AND ' . $scope;
+        $columns = 'SELECT id, board_id, title, is_secret';
+
+        return [
+            'previous' => $this->db->selectOne($columns . $base
+                . ' AND id > :current_id ORDER BY id ASC LIMIT 1', $params),
+            'next' => $this->db->selectOne($columns . $base
+                . ' AND id < :current_id ORDER BY id DESC LIMIT 1', $params),
+        ];
+    }
+
+    /** 게시판의 최신순 일반 글 목록에서 해당 글이 속한 페이지를 구한다. */
+    public function pageOf(int $id, int $boardId, int $perPage): int
+    {
+        $newer = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $this->db->table('posts')
+            . ' WHERE board_id = :board_id AND deleted_at IS NULL AND is_notice = 0 AND id > :id',
+            ['board_id' => $boardId, 'id' => $id]
+        )['c'];
+
+        return intdiv($newer, max(1, $perPage)) + 1;
+    }
+
     public function setNotice(int $id, bool $isNotice): void
     {
         $data = ['is_notice' => $isNotice ? 1 : 0];
@@ -345,6 +392,28 @@ final class PostRepository
         $row['notice_scope'] = ($row['notice_scope'] ?? '') === 'global' ? 'global' : 'board';
 
         return $row;
+    }
+
+    /** 회원 작성자의 현재 프로필 이미지를 한 번의 추가 조회로 붙인다. */
+    private function hydrateMany(array $rows): array
+    {
+        $rows = array_map([$this, 'hydrate'], $rows);
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (string) ($row['author_id'] ?? '');
+            if ($id !== '' && ctype_digit($id) && (int) $id > 0) $ids[(int) $id] = (int) $id;
+        }
+        $avatars = [];
+        if ($ids !== []) {
+            $marks = implode(', ', array_fill(0, count($ids), '?'));
+            foreach ($this->db->select('SELECT id, avatar_file FROM ' . $this->db->table('users')
+                . ' WHERE id IN (' . $marks . ')', array_values($ids)) as $user) {
+                $avatars[(string) $user['id']] = $user['avatar_file'];
+            }
+        }
+        foreach ($rows as &$row) $row['author_avatar_file'] = $avatars[(string) ($row['author_id'] ?? '')] ?? null;
+        unset($row);
+        return $rows;
     }
 
     private function dehydrate(array $row): array

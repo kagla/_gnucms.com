@@ -19,7 +19,9 @@ final class CmsRepository
     public function settings(): array
     {
         $settings = [];
-        foreach ($this->db->select('SELECT setting_key, setting_value FROM ' . $this->db->table('site_settings')) as $row) {
+        foreach ($this->db->select('SELECT setting_key, setting_value FROM ' . $this->db->table('site_settings')
+            . " WHERE setting_key NOT LIKE 'mail.%' AND setting_key NOT LIKE 'oauth.%'"
+            . " AND setting_key NOT LIKE 'system.%'") as $row) {
             $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
         }
         return $settings;

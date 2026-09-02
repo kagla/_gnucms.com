@@ -17,7 +17,6 @@ return [
         'google' => ['client_id' => '', 'client_secret' => ''],
         'naver' => ['client_id' => '', 'client_secret' => ''],
         'kakao' => ['client_id' => '', 'client_secret' => ''],
-        'github' => ['client_id' => '', 'client_secret' => ''],
     ],
 
     // DSN 은 sqlite: / mysql: / pgsql: 중 하나로 시작한다.

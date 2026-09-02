@@ -17,7 +17,7 @@
           <div class="dropdown dropdown-end admin-user-dropdown">
             <button class="admin-user" type="button" tabindex="0" aria-haspopup="menu" aria-label="<?= $this->e($current_user['display_name']) ?> 계정 메뉴">
               <span class="avatar avatar-placeholder avatar-sm">
-                <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></span>
+                <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>" aria-hidden="true"><?php if (!empty($current_user['avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $current_user['avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span><?php endif ?></span>
               </span>
               <span class="admin-user-name"><?= $this->e($current_user['display_name']) ?></span>
               <span class="admin-user-chevron" aria-hidden="true"><?= $this->icon('chevron-down', 13) ?></span>

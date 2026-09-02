@@ -29,6 +29,9 @@
 /storage/editor/*
 !/storage/editor/.gitkeep
 
+# 회원 프로필 이미지
+/storage/avatars/*
+
 .DS_Store
 
 # SDD 진행 기록 (스크래치)

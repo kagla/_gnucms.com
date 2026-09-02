@@ -53,12 +53,14 @@ final class SessionGuard implements MiddlewareInterface
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         }
 
+        $sessionUser = $identity->isGuest() ? null : $this->app->users()->findById((int) $identity->sub());
         $this->view->addGlobal('current_user', [
             'is_guest' => $identity->isGuest(),
             // 글·댓글이 내 것인지 화면에서 가리려면 작성자 id 와 견줄 값이 필요하다.
             'id' => $identity->sub(),
             'display_name' => $identity->displayName(),
             'is_admin' => $identity->isAdmin(),
+            'avatar_file' => $sessionUser['avatar_file'] ?? null,
         ]);
         $this->view->addGlobal('csrf_token', $_SESSION['csrf_token']);
         $this->view->addGlobal('unread_notifications', $this->unreadCount());

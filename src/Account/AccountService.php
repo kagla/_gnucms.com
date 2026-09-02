@@ -83,7 +83,8 @@ final class AccountService
         $id = $this->users->createRegistered(
             $email,
             password_hash($password, PASSWORD_DEFAULT),
-            $this->displayNameFromEmail($email)
+            $this->displayNameFromEmail($email),
+            $trace?->ip
         );
 
         $user = $this->users->findById($id);
@@ -239,6 +240,32 @@ final class AccountService
         if ($password !== '') {
             $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
         }
+    }
+
+    public function withdraw(int $userId, array $input, ?string $clientIp, bool $socialReauthenticated): void
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null || $user['status'] !== 'active') {
+            throw DomainError::unauthorized('로그인이 필요합니다.');
+        }
+        $v = new Validator($input);
+        if (!$v->bool('confirm_withdrawal', false)) {
+            $v->fail('confirm_withdrawal', '탈퇴 안내를 확인해 주세요.');
+        }
+        if ((bool) $user['is_admin'] && $this->users->countAdmins() <= 1) {
+            $v->fail('withdrawal', '마지막 관리자는 탈퇴할 수 없습니다. 다른 관리자를 먼저 지정해 주세요.');
+        }
+        if ($user['password_hash'] !== null) {
+            $current = isset($input['withdraw_current_password']) && is_scalar($input['withdraw_current_password'])
+                ? (string) $input['withdraw_current_password'] : '';
+            if ($current === '' || !password_verify($current, (string) $user['password_hash'])) {
+                $v->fail('withdraw_current_password', '현재 비밀번호가 올바르지 않습니다.');
+            }
+        } elseif (!$socialReauthenticated) {
+            $v->fail('withdrawal', '연결된 소셜 계정으로 다시 인증해 주세요.');
+        }
+        $v->check();
+        $this->users->withdraw($userId, $clientIp);
     }
 
     public function changePassword(int $userId, array $input): void

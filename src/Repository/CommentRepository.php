@@ -37,7 +37,7 @@ final class CommentRepository
             [$postId]
         );
 
-        return array_map([$this, 'hydrate'], $rows);
+        return $this->hydrateMany($rows);
     }
 
     /** 비밀 댓글 소유권 판정용. 반환값을 화면에 직접 넘기지 않는다. */
@@ -49,7 +49,7 @@ final class CommentRepository
             [$postId]
         );
 
-        return array_map([$this, 'hydrate'], $rows);
+        return $this->hydrateMany($rows);
     }
 
     public function find(int $id): ?array
@@ -59,7 +59,7 @@ final class CommentRepository
             [$id]
         );
 
-        return $row === null ? null : $this->hydrate($row);
+        return $row === null ? null : $this->hydrateMany([$row])[0];
     }
 
     public function findWithSecret(int $id): ?array
@@ -69,7 +69,7 @@ final class CommentRepository
             [$id]
         );
 
-        return $row === null ? null : $this->hydrate($row);
+        return $row === null ? null : $this->hydrateMany([$row])[0];
     }
 
     public function create(array $data): int
@@ -143,7 +143,7 @@ final class CommentRepository
             $params
         );
 
-        return ['rows' => array_map([$this, 'hydrate'], $rows), 'total' => $total];
+        return ['rows' => $this->hydrateMany($rows), 'total' => $total];
     }
 
     public function hasChildren(int $id): bool
@@ -178,5 +178,27 @@ final class CommentRepository
         $row['parent_id'] = $row['parent_id'] === null ? null : (int) $row['parent_id'];
 
         return $row;
+    }
+
+    /** 회원 작성자의 현재 프로필 이미지를 한 번의 추가 조회로 붙인다. */
+    private function hydrateMany(array $rows): array
+    {
+        $rows = array_map([$this, 'hydrate'], $rows);
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (string) ($row['author_id'] ?? '');
+            if ($id !== '' && ctype_digit($id) && (int) $id > 0) $ids[(int) $id] = (int) $id;
+        }
+        $avatars = [];
+        if ($ids !== []) {
+            $marks = implode(', ', array_fill(0, count($ids), '?'));
+            foreach ($this->db->select('SELECT id, avatar_file FROM ' . $this->db->table('users')
+                . ' WHERE id IN (' . $marks . ')', array_values($ids)) as $user) {
+                $avatars[(string) $user['id']] = $user['avatar_file'];
+            }
+        }
+        foreach ($rows as &$row) $row['author_avatar_file'] = $avatars[(string) ($row['author_id'] ?? '')] ?? null;
+        unset($row);
+        return $rows;
     }
 }

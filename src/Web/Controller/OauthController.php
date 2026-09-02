@@ -15,7 +15,9 @@ use GnuCms\View\View;
 
 final class OauthController
 {
-    private const TTL = 1800;
+    private const TTL = 600;
+    private const MAX_PENDING_STATES = 5;
+    private const EMAIL_RESEND_SECONDS = 60;
 
     private App $app;
 
@@ -28,11 +30,37 @@ final class OauthController
     {
         $key = (string) ($args['provider'] ?? '');
         $provider = $this->app->providerRegistry()->get($key);
+        $purpose = ($request->getQueryParams()['purpose'] ?? '') === 'withdraw' ? 'withdraw' : 'login';
+        if ($purpose === 'login' && !$this->app->cmsService()->settings()['social_login_enabled']) {
+            throw DomainError::forbidden('현재 소셜 회원 로그인을 허용하지 않습니다.');
+        }
+        if ($purpose === 'withdraw') {
+            $identity = $this->app->guestAcl()->identity();
+            if ($identity->isGuest()) {
+                throw DomainError::unauthorized('로그인이 필요합니다.');
+            }
+            $connected = array_filter(
+                $this->app->identities()->listForUser((int) $identity->sub()),
+                static fn(array $row): bool => (string) $row['provider'] === $key
+            );
+            if ($connected === []) {
+                throw DomainError::forbidden('이 회원에게 연결된 소셜 계정이 아닙니다.');
+            }
+        }
         $state = bin2hex(random_bytes(32));
-        $_SESSION['oauth_states'][$key] = [
-            'hash' => hash('sha256', $state),
-            'expires_at' => time() + self::TTL,
-        ];
+        $hash = hash('sha256', $state);
+        $states = isset($_SESSION['oauth_states'][$key]) && is_array($_SESSION['oauth_states'][$key])
+            ? $_SESSION['oauth_states'][$key] : [];
+        $now = time();
+        $states = array_filter($states, static fn($expiresAt): bool => (int) $expiresAt >= $now);
+        $states[$hash] = $now + self::TTL;
+        if (count($states) > self::MAX_PENDING_STATES) {
+            $states = array_slice($states, -self::MAX_PENDING_STATES, null, true);
+        }
+        $_SESSION['oauth_states'][$key] = $states;
+        if ($purpose === 'withdraw') {
+            $_SESSION['oauth_state_purposes'][$key][$hash] = 'withdraw';
+        }
 
         return $response->withHeader('Location', $provider->authorizationUrl($state))->withStatus(302);
     }
@@ -42,19 +70,57 @@ final class OauthController
         $key = (string) ($args['provider'] ?? '');
         $query = $request->getQueryParams();
         $state = isset($query['state']) && is_scalar($query['state']) ? (string) $query['state'] : '';
-        $stored = $_SESSION['oauth_states'][$key] ?? null;
-        unset($_SESSION['oauth_states'][$key]);
-        if (!is_array($stored) || (int) ($stored['expires_at'] ?? 0) < time() || $state === ''
-            || !hash_equals((string) ($stored['hash'] ?? ''), hash('sha256', $state))) {
+        $hash = hash('sha256', $state);
+        $states = isset($_SESSION['oauth_states'][$key]) && is_array($_SESSION['oauth_states'][$key])
+            ? $_SESSION['oauth_states'][$key] : [];
+        $expiresAt = $states[$hash] ?? null;
+        unset($states[$hash]);
+        $_SESSION['oauth_states'][$key] = $states;
+        $purpose = $_SESSION['oauth_state_purposes'][$key][$hash] ?? 'login';
+        unset($_SESSION['oauth_state_purposes'][$key][$hash]);
+        if ($state === '' || $expiresAt === null || (int) $expiresAt < time()) {
+            $this->recordSocialLogin($request, null, null, $key, 'failure');
             throw DomainError::forbidden('소셜 로그인 요청을 확인할 수 없습니다. 다시 시도해 주세요.');
         }
+        if ($purpose === 'login' && !$this->app->cmsService()->settings()['social_login_enabled']) {
+            $this->recordSocialLogin($request, null, null, $key, 'failure');
+            throw DomainError::forbidden('현재 소셜 회원 로그인을 허용하지 않습니다.');
+        }
         if (isset($query['error'])) {
+            $this->recordSocialLogin($request, null, null, $key, 'failure');
             throw DomainError::validation(['oauth' => '소셜 로그인이 취소되었습니다.']);
         }
         $code = isset($query['code']) && is_scalar($query['code']) ? (string) $query['code'] : '';
-        $profile = $this->app->socialAuthService()->profile($key, $code, $state);
-        $user = $this->app->socialAuthService()->resolve($profile, $this->consentTrace($request));
+        try {
+            $profile = $this->app->socialAuthService()->profile($key, $code, $state);
+        } catch (DomainError $e) {
+            $this->recordSocialLogin($request, null, null, $key, 'failure');
+            throw $e;
+        }
+        if ($purpose === 'withdraw') {
+            $identity = $this->app->guestAcl()->identity();
+            $userId = $identity->isGuest() ? 0 : (int) $identity->sub();
+            if ($userId < 1 || !$this->app->identities()->belongsToUser(
+                $userId, $profile->provider, $profile->uid
+            )) {
+                $this->recordSocialLogin($request, $userId > 0 ? $userId : null,
+                    $profile->email, $key, 'failure');
+                throw DomainError::forbidden('현재 회원에게 연결된 소셜 계정으로 인증해 주세요.');
+            }
+            $_SESSION['withdraw_reauth'] = ['user_id' => $userId, 'expires_at' => time() + 300];
+            $this->recordSocialLogin($request, $userId, $profile->email, $key, 'success');
+            $url = RouteContext::fromRequest($request)->getRouteParser()
+                ->urlFor('account.edit', [], ['withdraw' => 'verified']);
+            return $response->withHeader('Location', $url . '#withdrawal')->withStatus(303);
+        }
+        try {
+            $user = $this->app->socialAuthService()->resolve($profile, $this->consentTrace($request));
+        } catch (DomainError $e) {
+            $this->recordSocialLogin($request, null, $profile->email, $key, 'failure');
+            throw $e;
+        }
         if ($user !== null) {
+            $this->recordSocialLogin($request, (int) $user['id'], $profile->email, $key, 'success');
             $this->storeSession($user);
             return $this->homeRedirect($request, $response);
         }
@@ -72,6 +138,7 @@ final class OauthController
 
     public function email(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $this->assertSocialLoginEnabled();
         $input = $request->getParsedBody();
         $input = is_array($input) ? $input : [];
         $this->assertCsrf($input);
@@ -80,6 +147,12 @@ final class OauthController
         $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
         $token = bin2hex(random_bytes(32));
         try {
+            $lastSentAt = (int) ($pending['email_sent_at'] ?? 0);
+            if ($lastSentAt > time() - self::EMAIL_RESEND_SECONDS) {
+                throw DomainError::validation([
+                    'email' => '확인 메일은 1분 뒤 다시 보낼 수 있습니다.',
+                ]);
+            }
             $email = $this->app->socialAuthService()->sendPendingEmail($profile, $email, $token);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
@@ -93,13 +166,16 @@ final class OauthController
         }
         $_SESSION['oauth_pending']['email'] = $email;
         $_SESSION['oauth_pending']['token_hash'] = hash('sha256', $token);
+        $_SESSION['oauth_pending']['email_sent_at'] = time();
 
         return View::fromRequest($request)->render($response, 'auth/social_email_sent');
     }
 
     public function complete(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $this->assertSocialLoginEnabled();
         $pending = $this->pending();
+        $profile = SocialProfile::fromArray((array) $pending['profile']);
         $token = $request->getQueryParams()['token'] ?? '';
         $token = is_scalar($token) ? (string) $token : '';
         if ($token === '' || empty($pending['token_hash'])
@@ -107,10 +183,12 @@ final class OauthController
             throw DomainError::validation(['token' => '확인 링크가 올바르지 않거나 이미 사용되었습니다.']);
         }
         $user = $this->app->socialAuthService()->complete(
-            SocialProfile::fromArray((array) $pending['profile']),
+            $profile,
             (string) ($pending['email'] ?? ''),
             $this->consentTrace($request)
         );
+        $this->recordSocialLogin($request, (int) $user['id'], (string) ($pending['email'] ?? ''),
+            $profile->provider, 'success');
         unset($_SESSION['oauth_pending']);
         $this->storeSession($user);
 
@@ -127,6 +205,13 @@ final class OauthController
         return $pending;
     }
 
+    private function assertSocialLoginEnabled(): void
+    {
+        if (!$this->app->cmsService()->settings()['social_login_enabled']) {
+            throw DomainError::forbidden('현재 소셜 회원 로그인을 허용하지 않습니다.');
+        }
+    }
+
     /** 동의 증적. 프록시를 신뢰하지 않으므로 REMOTE_ADDR 만 쓴다. */
     private function consentTrace(ServerRequestInterface $request): ConsentTrace
     {
@@ -136,6 +221,16 @@ final class OauthController
         $ua = $request->getHeaderLine('User-Agent');
 
         return new ConsentTrace($ip, $ua === '' ? null : $ua);
+    }
+
+    private function recordSocialLogin(ServerRequestInterface $request, ?int $userId,
+        ?string $identifier, string $provider, string $result): void
+    {
+        $ip = \GnuCms\Support\IpAddress::fromServer($request->getServerParams());
+        $ua = $request->getHeaderLine('User-Agent');
+        $this->app->loginEvents()->record(
+            $userId, $identifier, $provider, $result, $ip, $ua === '' ? null : $ua
+        );
     }
 
     private function assertCsrf(array $input): void

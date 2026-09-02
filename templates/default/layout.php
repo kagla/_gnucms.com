@@ -38,12 +38,6 @@
   <div class="drawer-content">
 
     <?php $this->start('site_header') ?>
-    <?php // 검색 폼이 있는 화면에서만 돋보기와 검색창을 낸다.
-          // 검색 칸 여부: 자식이 header_search 블록을 덮어썼으면 그 값을,
-          // 아니면 아래 기본 본문의 결과를 본다. has() 로는 "안 잡힘" 과 "빈 값" 을 못 가르므로
-          // 살피개(sentinel)로 갈라, 안 잡혔을 때는 기본 본문과 같은 조건을 그대로 따진다.
-    $__hs = $this->block('header_search', "\0");
-    $has_search = $__hs === "\0" ? isset($board['board_key']) : trim($__hs) !== ''; ?>
 
     <header class="site-header">
       <div class="navbar wrap">
@@ -57,10 +51,8 @@
 
         <?php // 오른쪽은 아이콘 줄 하나로 모은다. 예전 맨 윗줄에 있던 길도 여기로 들어왔다. ?>
         <div class="navbar-end">
-          <?php if ($has_search): ?>
-            <label for="search-modal" class="btn btn-ghost btn-circle" role="button" tabindex="0"
-                   aria-label="검색 열기" title="검색 (/)"><?= $this->icon('search', 20) ?></label>
-          <?php endif ?>
+          <label for="search-modal" class="btn btn-ghost btn-circle" role="button" tabindex="0"
+                 aria-label="검색 열기" title="검색 (/)"><?= $this->icon('search', 20) ?></label>
 
           <?php if ($current_user['is_guest']): ?>
             <a class="btn btn-ghost btn-sm hide-sm" href="<?= $this->url('auth.login') ?>">로그인</a>
@@ -77,7 +69,7 @@
             <?php endif ?>
             <div class="dropdown dropdown-end hide-sm">
               <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar avatar-placeholder" aria-label="<?= $this->e($current_user['display_name']) ?> 메뉴">
-                <div class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></div>
+                <div class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>"><?php if (!empty($current_user['avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $current_user['avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span><?php endif ?></div>
               </div>
               <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg user-menu">
                 <li class="menu-title"><?= $this->e($current_user['display_name']) ?></li>
@@ -129,33 +121,40 @@
       </div>
     </header>
 
-    <?php if ($has_search): ?>
-      <?php // 검색창은 돋보기를 눌러야 열린다. 서랍과 같은 체크박스 방식이라
-            // JavaScript 가 꺼져 있어도 열리고 닫힌다. ?>
-      <input id="search-modal" type="checkbox" class="search-toggle" aria-label="검색 열기">
-      <div class="search-modal">
-        <label for="search-modal" class="search-modal-overlay" aria-label="검색 닫기"></label>
-        <div class="search-modal-panel" role="dialog" aria-label="검색" aria-modal="true">
-          <div class="search-modal-head">
-            <strong>검색</strong>
-            <label for="search-modal" class="btn btn-ghost btn-square btn-sm" role="button" tabindex="0" aria-label="검색 닫기"><?= $this->icon('close', 18) ?></label>
-          </div>
-          <?php $this->start('header_search') ?>
-            <?php // 게시판 문맥이 있는 화면(글 보기·쓰기·고치기)은 그 게시판을 검색한다.
-                  // home 과 posts/index 는 이 블록을 자기 것으로 덮어쓴다. ?>
-            <?php if (isset($board['board_key'])): ?>
-              <form class="header-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
-                <label class="input input-bordered">
-                  <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
-                  <input type="search" name="q" value="" placeholder="<?= $this->e($board['name']) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
-                </label>
-                <button class="btn btn-primary header-search-btn" type="submit">검색</button>
-              </form>
-            <?php endif ?>
-          <?php $this->stop() ?>
+    <?php // 검색창은 돋보기를 눌러야 열린다. 서랍과 같은 체크박스 방식이라
+          // JavaScript 가 꺼져 있어도 열리고 닫힌다. ?>
+    <input id="search-modal" type="checkbox" class="search-toggle" aria-label="검색 열기">
+    <div class="search-modal">
+      <label for="search-modal" class="search-modal-overlay" aria-label="검색 닫기"></label>
+      <div class="search-modal-panel" role="dialog" aria-label="검색" aria-modal="true">
+        <div class="search-modal-head">
+          <strong>검색</strong>
+          <label for="search-modal" class="btn btn-ghost btn-square btn-sm" role="button" tabindex="0" aria-label="검색 닫기"><?= $this->icon('close', 18) ?></label>
         </div>
+        <?php $this->start('header_search') ?>
+          <?php // 게시판 문맥이 있는 화면(글 보기·쓰기·고치기)은 그 게시판을 검색하고,
+                // 문맥이 없는 화면(알림·계정·인증 등)은 전체 글을 검색한다.
+                // home 과 posts/index 는 이 블록을 자기 것으로 덮어쓴다. ?>
+          <?php if (isset($board['board_key'])): ?>
+            <form class="header-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
+              <label class="input input-bordered">
+                <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
+                <input type="search" name="q" value="" placeholder="<?= $this->e($board['name']) ?>에서 검색해 보세요" aria-label="게시글 검색" data-search-input>
+              </label>
+              <button class="btn btn-primary header-search-btn" type="submit">검색</button>
+            </form>
+          <?php else: ?>
+            <form class="header-search" method="get" action="<?= $this->url('posts.all') ?>" role="search">
+              <label class="input input-bordered">
+                <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 18) ?></span>
+                <input type="search" name="q" value="" placeholder="모든 게시판에서 검색해 보세요" aria-label="전체 글 검색" data-search-input>
+              </label>
+              <button class="btn btn-primary header-search-btn" type="submit">검색</button>
+            </form>
+          <?php endif ?>
+        <?php $this->stop() ?>
       </div>
-    <?php endif ?>
+    </div>
     <?php $this->stop() ?>
 
     <?php $this->start('subnav') ?><?php $this->stop() ?>
@@ -226,7 +225,7 @@
       <?php if (!$current_user['is_guest']): ?>
         <div class="drawer-user">
           <div class="avatar avatar-placeholder">
-            <div class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>"><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span></div>
+            <div class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $current_user['display_name']) % 6) ?>"><?php if (!empty($current_user['avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $current_user['avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e(mb_strtoupper(mb_substr((string) $current_user['display_name'], 0, 1))) ?></span><?php endif ?></div>
           </div>
           <div>
             <strong><?= $this->e($current_user['display_name']) ?></strong>

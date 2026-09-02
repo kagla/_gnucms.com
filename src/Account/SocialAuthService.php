@@ -33,7 +33,11 @@ final class SocialAuthService
         if ($code === '') {
             throw DomainError::validation(['code' => '소셜 로그인이 취소되었거나 인증 코드가 없습니다.']);
         }
-        return $this->providers->get($provider)->fetchProfile($code, $state);
+        $profile = $this->providers->get($provider)->fetchProfile($code, $state);
+        if ($profile->provider !== $provider) {
+            throw DomainError::internal('소셜 로그인 공급자 정보가 일치하지 않습니다.');
+        }
+        return $profile;
     }
 
     public function resolve(SocialProfile $profile, ?ConsentTrace $trace = null): ?array

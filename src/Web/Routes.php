@@ -18,6 +18,7 @@ use GnuCms\Web\Controller\CmsImageController;
 use GnuCms\Web\Controller\CommentController;
 use GnuCms\Web\Controller\EditorImageController;
 use GnuCms\Web\Controller\NotificationController;
+use GnuCms\Web\Controller\AvatarController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -28,6 +29,8 @@ final class Routes
 {
     public static function register(SlimApp $slim, App $app): void
     {
+        $slim->get('/media/avatars/{file:[a-f0-9]{32}\\.(?:jpg|png|webp)}', [new AvatarController($app), 'show'])
+            ->setName('avatar.show');
         $auth = new AuthController($app);
         $slim->get('/login', [$auth, 'loginForm'])->setName('auth.login');
         $slim->post('/login', [$auth, 'login']);
@@ -44,12 +47,14 @@ final class Routes
         $account = new AccountController($app);
         $slim->get('/account', [$account, 'editForm'])->setName('account.edit');
         $slim->post('/account', [$account, 'update']);
+        $slim->post('/account/withdraw', [$account, 'withdraw'])->setName('account.withdraw');
+        $slim->get('/account/withdrawn', [$account, 'withdrawn'])->setName('account.withdrawn');
 
         $oauth = new OauthController($app);
         $slim->post('/auth/email', [$oauth, 'email'])->setName('oauth.email');
         $slim->get('/auth/complete', [$oauth, 'complete'])->setName('oauth.complete');
-        $slim->get('/auth/{provider:[a-z]+}', [$oauth, 'start'])->setName('oauth.start');
-        $slim->get('/auth/{provider:[a-z]+}/callback', [$oauth, 'callback'])->setName('oauth.callback');
+        $slim->get('/auth/{provider:google|naver|kakao}', [$oauth, 'start'])->setName('oauth.start');
+        $slim->get('/auth/{provider:google|naver|kakao}/callback', [$oauth, 'callback'])->setName('oauth.callback');
 
         $admin = new AdminController($app);
         $slim->get('/admin', [$admin, 'index'])->setName('admin.index');
@@ -69,6 +74,11 @@ final class Routes
         $cmsImages = new CmsImageController($app);
         $slim->get('/admin/settings', [$cms, 'settingsForm'])->setName('admin.settings');
         $slim->post('/admin/settings', [$cms, 'settings']);
+        $slim->get('/admin/settings/writing', [$cms, 'writingForm'])->setName('admin.settings.writing');
+        $slim->post('/admin/settings/writing', [$cms, 'writing']);
+        $slim->get('/admin/settings/social', [$cms, 'oauthForm'])->setName('admin.settings.oauth');
+        $slim->post('/admin/settings/social', [$cms, 'oauth']);
+        $slim->get('/admin/settings/maintenance', [$cms, 'maintenance'])->setName('admin.settings.maintenance');
         $slim->post('/admin/uploads/gc', [$cms, 'uploadsGc'])->setName('admin.uploads.gc');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);

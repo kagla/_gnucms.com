@@ -27,8 +27,6 @@ final class AdminCmsController
         return View::fromRequest($request)->render($response, 'admin/settings', [
             'values' => $this->app->cmsService()->settings(), 'errors' => [],
             'query' => $request->getQueryParams(),
-            'schema' => $this->app->schemaUpgrader()->status(),
-            'server_max_mb' => AttachmentService::serverMaxMb(),
         ]);
     }
 
@@ -37,18 +35,87 @@ final class AdminCmsController
         $input = $this->input($request);
         $this->assertCsrf($input);
         try {
-            $this->app->cmsService()->saveSettings($this->app->guestAcl(), $input);
+            $this->app->cmsService()->saveGeneralSettings($this->app->guestAcl(), $input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
             }
             return View::fromRequest($request)->render($response->withStatus(422), 'admin/settings', [
                 'values' => $input, 'errors' => $e->details(), 'query' => [],
-                'schema' => $this->app->schemaUpgrader()->status(),
-                'server_max_mb' => AttachmentService::serverMaxMb(),
             ]);
         }
         return $this->redirect($request, $response, 'admin.settings', ['saved' => '1']);
+    }
+
+    public function writingForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        return View::fromRequest($request)->render($response, 'admin/writing_settings', [
+            'values' => $this->app->cmsService()->settings(), 'errors' => [],
+            'query' => $request->getQueryParams(), 'server_max_mb' => AttachmentService::serverMaxMb(),
+        ]);
+    }
+
+    public function writing(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        try {
+            $this->app->cmsService()->saveWritingSettings($this->app->guestAcl(), $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            return View::fromRequest($request)->render($response->withStatus(422), 'admin/writing_settings', [
+                'values' => $input, 'errors' => $e->details(), 'query' => [],
+                'server_max_mb' => AttachmentService::serverMaxMb(),
+            ]);
+        }
+        return $this->redirect($request, $response, 'admin.settings.writing', ['saved' => '1']);
+    }
+
+    public function oauthForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return $this->renderOauthForm($request, $response,
+            $this->app->oauthSettingsService()->formValues($this->app->guestAcl()), []);
+    }
+
+    public function oauth(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        try {
+            $this->app->oauthSettingsService()->save($this->app->guestAcl(), $input);
+            $this->app->refreshOauthProviders();
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            $values = $this->app->oauthSettingsService()->formValues($this->app->guestAcl());
+            foreach (array_keys($values) as $key) {
+                $values[$key]['enabled'] = !empty($input[$key . '_enabled']);
+                $values[$key]['client_id'] = is_scalar($input[$key . '_client_id'] ?? null)
+                    ? (string) $input[$key . '_client_id'] : '';
+            }
+            return $this->renderOauthForm($request, $response->withStatus(422), $values, $e->details());
+        }
+        return $this->redirect($request, $response, 'admin.settings.oauth', ['saved' => '1']);
+    }
+
+    private function renderOauthForm(ServerRequestInterface $request, ResponseInterface $response,
+        array $values, array $errors): ResponseInterface
+    {
+        return View::fromRequest($request)->render($response, 'admin/oauth_settings', [
+            'values' => $values, 'errors' => $errors, 'query' => $request->getQueryParams(),
+        ]);
+    }
+
+    public function maintenance(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        return View::fromRequest($request)->render($response, 'admin/maintenance', [
+            'query' => $request->getQueryParams(), 'schema' => $this->app->schemaUpgrader()->status(),
+        ]);
     }
 
     public function uploadsGc(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -57,7 +124,7 @@ final class AdminCmsController
         $this->assertCsrf($input);
         $result = $this->app->attachments()->collectGarbage($this->app->guestAcl());
         $url = RouteContext::fromRequest($request)->getRouteParser()
-            ->urlFor('admin.settings', [], ['gc' => (string) $result['deleted']]);
+            ->urlFor('admin.settings.maintenance', [], ['gc' => (string) $result['deleted']]);
 
         return $response->withHeader('Location', $url)->withStatus(303);
     }

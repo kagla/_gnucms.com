@@ -14,19 +14,19 @@ use GnuCms\Support\Clock;
 final class Schema
 {
     public const TABLES = [
-        'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities', 'site_state',
-        'site_settings', 'mail_settings', 'contents', 'user_consents', 'consent_uses',
-        'consents_given', 'notifications', 'password_attempts',
+        'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities',
+        'site_settings', 'contents', 'consent_uses', 'consents_given', 'notifications',
+        'password_attempts', 'login_events',
     ];
 
     private const INDEXES = [
         'ux_boards_key', 'ix_posts_list', 'ix_posts_category', 'ix_comments_post',
         'ux_users_email', 'ux_users_display_name', 'ux_user_tokens_hash', 'ix_user_tokens_user',
-        'ux_user_identities_provider', 'ix_user_identities_user', 'ux_site_state_key',
-        'ux_site_settings_key', 'ux_mail_settings_key', 'ux_contents_slug', 'ix_contents_public',
-        'ux_contents_consent', 'ix_contents_is_consent', 'ix_notifications_user',
-        'ux_password_attempts', 'ux_user_consents_type', 'ix_user_consents_content',
+        'ux_user_identities_provider', 'ix_user_identities_user', 'ux_site_settings_key',
+        'ux_contents_slug', 'ix_contents_public', 'ix_contents_listing', 'ix_notifications_user',
+        'ux_password_attempts', 'ix_comments_parent',
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
+        'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
     ];
 
     /** @var Connection */
@@ -56,7 +56,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '14';
+    public const VERSION = '20';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -78,13 +78,22 @@ final class Schema
         try {
             $row = $this->db->selectOne(
                 'SELECT setting_value FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
-                ['schema_version']
+                ['system.schema_version']
             );
         } catch (DomainError $e) {
             return null;
         }
 
-        return $row === null ? null : (string) $row['setting_value'];
+        if ($row !== null) {
+            return (string) $row['setting_value'];
+        }
+
+        // VERSION 14 이하 설치가 새 이름으로 옮겨지기 전의 도장.
+        $legacy = $this->db->selectOne(
+            'SELECT setting_value FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
+            ['schema_version']
+        );
+        return $legacy === null ? null : (string) $legacy['setting_value'];
     }
 
     /**
@@ -109,18 +118,25 @@ final class Schema
         // 표 이름을 먼저 옮겨야 migrateCms() 가 빈 표를 새로 만들지 않는다.
         $this->migrateContentTableName();
         $this->migrateCms();
+        $this->migrateLoginSettings();
+        $this->migrateRegistrationSettings();
         $this->migrateDefaultTheme();
         $this->migrateBoards();
         $this->migrateEditorImages();
         $this->migrateNotifications();
         $this->migratePasswordThrottle();
+        $this->migrateLoginEvents();
+        $this->migrateProfileImages();
         $stamp = $this->stamp();
-        $this->ensureSiteSetting('schema_version', $stamp);
+        $this->ensureSiteSetting('system.schema_version', $stamp);
         $this->db->execute(
             'UPDATE ' . $this->db->table('site_settings')
             . ' SET setting_value = ? WHERE setting_key = ?',
-            [$stamp, 'schema_version']
+            [$stamp, 'system.schema_version']
         );
+        foreach (['schema_version', 'schema_upgraded_at', 'schema_backup'] as $legacyKey) {
+            $this->db->delete('site_settings', 'setting_key = :key', ['key' => $legacyKey]);
+        }
     }
 
     public function create(): void
@@ -134,7 +150,7 @@ final class Schema
         }
 
         // 새로 만든 스키마는 이미 최신이다. 첫 요청에서 헛돌지 않게 표시해 둔다.
-        $this->ensureSiteSetting('schema_version', $this->stamp());
+        $this->ensureSiteSetting('system.schema_version', $this->stamp());
     }
 
     /** 기존 게시판 설치에 회원 테이블만 안전하게 추가한다. */
@@ -172,8 +188,12 @@ final class Schema
             }
         }
 
+        $this->addColumnIfMissing('users', 'registered_ip', 'VARCHAR(45) NULL');
+        $this->addColumnIfMissing('users', 'withdrawn_ip', 'VARCHAR(45) NULL');
+        $this->addColumnIfMissing('users', 'withdrawn_at',
+            $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
+
         $this->migrateOauth();
-        $this->migrateFirstAdminState();
     }
 
     /**
@@ -185,6 +205,7 @@ final class Schema
         $this->addColumnIfMissing('boards', 'list_type', 'VARCHAR(20) NOT NULL DEFAULT \'list\'');
         $this->addColumnIfMissing('boards', 'home_limit', 'INTEGER NOT NULL DEFAULT 5');
         $this->addColumnIfMissing('boards', 'show_in_header', 'SMALLINT NOT NULL DEFAULT 0');
+        $this->addColumnIfMissing('boards', 'show_list_below_view', 'SMALLINT NOT NULL DEFAULT 0');
 
         // 공지가 이 게시판만인지 전체인지. 옛 공지는 전부 이 게시판 공지로 본다.
         $this->addColumnIfMissing('posts', 'notice_scope', "VARCHAR(10) NOT NULL DEFAULT 'board'");
@@ -198,6 +219,12 @@ final class Schema
         foreach (['posts', 'comments'] as $table) {
             $this->addColumnIfMissing($table, 'image_key', 'VARCHAR(32) NULL');
         }
+    }
+
+    public function migrateProfileImages(): void
+    {
+        $this->addColumnIfMissing('users', 'avatar_file', 'VARCHAR(40) NULL');
+        $this->addColumnIfMissing('users', 'avatar_source', 'VARCHAR(10) NULL');
     }
 
     /** 알림함 표. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
@@ -219,6 +246,18 @@ final class Schema
             $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('password_attempts'));
         } catch (DomainError $e) {
             foreach ($this->passwordThrottleStatements() as $sql) {
+                $this->db->execute($this->expand($sql));
+            }
+        }
+    }
+
+    /** 성공·실패 로그인 이력. 잠금 집계(password_attempts)와 달리 지우지 않고 한 건씩 남긴다. */
+    public function migrateLoginEvents(): void
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('login_events'));
+        } catch (DomainError $e) {
+            foreach ($this->loginEventStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
@@ -246,116 +285,47 @@ final class Schema
 
     public function migrateCms(): void
     {
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('site_settings'));
-        } catch (DomainError $e) {
+        if (!$this->tableExists('site_settings')) {
             foreach ($this->settingsStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
         $this->ensureSiteSetting('theme', 'default');
+        $this->migrateSystemSettings();
+        $this->migrateMailSettings();
 
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('contents'));
-        } catch (DomainError $e) {
+        if (!$this->tableExists('contents')) {
             foreach ($this->contentStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
         }
 
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('mail_settings'));
-        } catch (DomainError $e) {
-            foreach ($this->mailSettingsStatements() as $sql) {
-                $this->db->execute($this->expand($sql));
-            }
-        }
-        try {
-            $this->db->selectOne('SELECT deleted_at FROM ' . $this->db->table('contents') . ' LIMIT 1');
-        } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('contents') . ' ADD COLUMN deleted_at '
-                . $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
-        }
-        try {
-            $this->db->selectOne('SELECT image_key FROM ' . $this->db->table('contents') . ' LIMIT 1');
-        } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
-                . ' ADD COLUMN image_key VARCHAR(32) NULL');
-        }
+        $this->addColumnIfMissing('contents', 'deleted_at',
+            $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
+        $this->addColumnIfMissing('contents', 'image_key', 'VARCHAR(32) NULL');
 
-        // 약관을 내용과 한 표에서 다루기 위한 표시. 값이 있으면 가입 화면의 동의 항목이 된다.
-        try {
-            $this->db->selectOne('SELECT consent_key FROM ' . $this->db->table('contents') . ' LIMIT 1');
-        } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
-                . ' ADD COLUMN consent_key VARCHAR(20) NULL');
-            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
-                . ' ADD COLUMN consent_order INTEGER NOT NULL DEFAULT 0');
-            // 이미 있던 이용약관·개인정보 처리방침을 그대로 동의 항목으로 삼는다.
-            foreach ([['terms', 10], ['privacy', 20]] as [$slug, $order]) {
-                $this->db->execute(
-                    'UPDATE ' . $this->db->table('contents')
-                    . ' SET consent_key = ?, consent_order = ? WHERE slug = ?',
-                    [$slug, $order, $slug]
-                );
-            }
-            try {
-                $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_contents_consent') . ' ON '
-                    . $this->db->table('contents') . ' (consent_key)');
-            } catch (DomainError $e) {
-                // 이미 있으면 그대로 둔다
-            }
-        }
-
-        // 동의를 다 필수로 받던 시절의 표. 마케팅 수신처럼 선택으로 받아야 하는 항목이 있다.
-        try {
-            $this->db->selectOne('SELECT consent_required FROM ' . $this->db->table('contents') . ' LIMIT 1');
-        } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
-                . ' ADD COLUMN consent_required INTEGER NOT NULL DEFAULT 1');
-        }
-
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('user_consents'));
-        } catch (DomainError $e) {
-            foreach ($this->consentStatements() as $sql) {
-                $this->db->execute($this->expand($sql));
-            }
-        }
-
-        // 선택 동의가 생기면서 '동의함' 뿐 아니라 '동의 안 함' 도 남겨야 한다.
-        // 예전 줄은 동의한 것만 있었으니 기본값 1 이 그대로 맞다.
-        try {
-            $this->db->selectOne('SELECT agreed FROM ' . $this->db->table('user_consents') . ' LIMIT 1');
-        } catch (DomainError $e) {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('user_consents')
-                . ' ADD COLUMN agreed SMALLINT NOT NULL DEFAULT 1');
-        }
-
-        // 약관 여부를 토글 한 칸으로 옮긴다. 옛 칸은 되돌릴 길로 한 판 동안 남긴다.
-        try {
-            $this->db->selectOne('SELECT is_consent FROM ' . $this->db->table('contents') . ' LIMIT 1');
-        } catch (DomainError $e) {
+        $hadConsentKey = $this->columnExists('contents', 'consent_key');
+        $hadConsentOrder = $this->columnExists('contents', 'consent_order');
+        $hadConsentRequired = $this->columnExists('contents', 'consent_required');
+        if (!$this->columnExists('contents', 'is_consent')) {
             $this->db->execute('ALTER TABLE ' . $this->db->table('contents')
                 . ' ADD COLUMN is_consent SMALLINT NOT NULL DEFAULT 0');
-            $this->db->execute('UPDATE ' . $this->db->table('contents')
-                . ' SET is_consent = 1 WHERE consent_key IS NOT NULL');
-            try {
-                $this->db->execute('CREATE INDEX ' . $this->db->index('ix_contents_is_consent') . ' ON '
-                    . $this->db->table('contents') . ' (is_consent)');
-            } catch (DomainError $e) {
-                // 이미 있으면 그대로 둔다
+            if ($hadConsentKey) {
+                $this->db->execute('UPDATE ' . $this->db->table('contents')
+                    . ' SET is_consent = 1 WHERE consent_key IS NOT NULL');
+            } else {
+                $this->db->execute('UPDATE ' . $this->db->table('contents')
+                    . " SET is_consent = 1 WHERE slug IN ('terms', 'privacy')");
             }
         }
 
-        // 붙임 표. 옛 필수·차례를 회원가입 자리의 붙임으로 옮긴다.
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('consent_uses'));
-        } catch (DomainError $e) {
+        if (!$this->tableExists('consent_uses')) {
             foreach ($this->consentUseStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
-            $rows = $this->db->select('SELECT id, consent_required, consent_order FROM '
+            $required = $hadConsentRequired ? 'consent_required' : '1 AS consent_required';
+            $order = $hadConsentOrder ? 'consent_order' : '0 AS consent_order';
+            $rows = $this->db->select('SELECT id, ' . $required . ', ' . $order . ' FROM '
                 . $this->db->table('contents') . ' WHERE is_consent = 1');
             foreach ($rows as $row) {
                 $this->db->insert('consent_uses', [
@@ -384,25 +354,26 @@ final class Schema
         // 약관의 show_in_menu 는 이제 '하단에 표시' 라는 뜻이다. 표시를 걸러 내기 시작하면
         // 기존 약관이 하단에서 통째로 사라지므로, 처음 한 번만 전부 켜 준다.
         // 파일이 바뀔 때마다 마이그레이션이 다시 도니, 관리자가 끈 것을 되켜지 않게 잠근다.
-        $footerDone = $this->db->selectOne('SELECT state_value FROM ' . $this->db->table('site_state')
-            . " WHERE state_key = 'consent_footer_defaulted'");
-        if ($footerDone === null) {
+        if ($this->siteSetting('system.consent_footer_defaulted') === null) {
             $this->db->execute('UPDATE ' . $this->db->table('contents')
                 . ' SET show_in_menu = 1 WHERE is_consent = 1');
-            $this->db->insert('site_state', [
-                'state_key' => 'consent_footer_defaulted', 'state_value' => '1',
-            ]);
+            $this->ensureSiteSetting('system.consent_footer_defaulted', '1');
         }
 
-        // 동의 기록을 회원 밖으로 넓힌 표로 옮긴다. 옛 표는 남겨 둔다.
-        try {
-            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('consents_given'));
-        } catch (DomainError $e) {
+        if (!$this->tableExists('consents_given')) {
             foreach ($this->consentsGivenStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
+        }
+        if ($this->tableExists('user_consents')) {
             $rows = $this->db->select('SELECT * FROM ' . $this->db->table('user_consents'));
             foreach ($rows as $row) {
+                $exists = $this->db->selectOne('SELECT id FROM ' . $this->db->table('consents_given')
+                    . " WHERE subject_type = 'user' AND subject_id = ? AND scope = 'signup' AND content_id = ?",
+                    [(int) $row['user_id'], (int) $row['content_id']]);
+                if ($exists !== null) {
+                    continue;
+                }
                 $this->db->insert('consents_given', [
                     'subject_type' => 'user',
                     'subject_id' => (int) $row['user_id'],
@@ -416,12 +387,27 @@ final class Schema
                     'agreed_ua' => null,
                 ]);
             }
+            $this->db->execute('DROP TABLE ' . $this->db->table('user_consents'));
+        }
+
+        $this->dropIndexIfExists('contents', 'ux_contents_consent');
+        $this->dropIndexIfExists('contents', 'ix_contents_is_consent');
+        foreach (['consent_key', 'consent_order', 'consent_required'] as $column) {
+            $this->dropColumnIfExists('contents', $column);
+        }
+        $this->createIndexIfMissing('ix_contents_listing', 'CREATE INDEX ix_contents_listing ON contents'
+            . ' (is_consent, deleted_at, status, show_in_menu, sort_order, id)');
+        $this->createIndexIfMissing('ix_comments_parent', 'CREATE INDEX ix_comments_parent ON comments (parent_id)');
+
+        if ($this->tableExists('site_state')) {
+            $this->db->execute('DROP TABLE ' . $this->db->table('site_state'));
         }
     }
 
     public function drop(): void
     {
-        foreach (array_reverse(self::TABLES) as $table) {
+        $tables = array_merge(self::TABLES, ['user_consents', 'mail_settings', 'site_state']);
+        foreach (array_reverse($tables) as $table) {
             try {
                 $this->db->execute('DROP TABLE IF EXISTS ' . $this->db->table($table));
             } catch (DomainError $e) {
@@ -470,6 +456,7 @@ final class Schema
                 list_type     VARCHAR(20)  NOT NULL DEFAULT \'list\',
                 home_limit    INTEGER      NOT NULL DEFAULT 5,
                 show_in_header SMALLINT    NOT NULL DEFAULT 0,
+                show_list_below_view SMALLINT NOT NULL DEFAULT 0,
                 per_page      INTEGER      NOT NULL DEFAULT 20,
                 sort_order    INTEGER      NOT NULL DEFAULT 0,
                 created_at    {DATETIME}   NOT NULL,
@@ -522,11 +509,11 @@ final class Schema
             ){SUFFIX}',
 
             'CREATE INDEX ix_comments_post ON comments (post_id, id)',
-        ], $this->accountStatements(), $this->settingsStatements(), $this->mailSettingsStatements(),
-            $this->contentStatements(), $this->consentStatements(),
+            'CREATE INDEX ix_comments_parent ON comments (parent_id)',
+        ], $this->accountStatements(), $this->settingsStatements(), $this->contentStatements(),
             $this->consentUseStatements(), $this->consentsGivenStatements(),
             $this->notificationStatements(),
-            $this->passwordThrottleStatements());
+            $this->passwordThrottleStatements(), $this->loginEventStatements());
     }
 
     private function accountStatements(): array
@@ -535,7 +522,7 @@ final class Schema
             $this->usersTableStatement(),
             'CREATE UNIQUE INDEX ux_users_email ON users (email)',
             'CREATE UNIQUE INDEX ux_users_display_name ON users (display_name)',
-        ], $this->tokenStatements(), $this->identityStatements(), $this->stateStatements(false));
+        ], $this->tokenStatements(), $this->identityStatements());
     }
 
     private function usersTableStatement(): string
@@ -549,6 +536,11 @@ final class Schema
                 is_admin       SMALLINT     NOT NULL DEFAULT 0,
                 status         VARCHAR(10)  NOT NULL DEFAULT \'active\',
                 session_epoch  INTEGER      NOT NULL DEFAULT 0,
+                registered_ip  VARCHAR(45)  NULL,
+                withdrawn_ip   VARCHAR(45)  NULL,
+                withdrawn_at   {DATETIME}   NULL,
+                avatar_file    VARCHAR(40)  NULL,
+                avatar_source  VARCHAR(10)  NULL,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL
             ){SUFFIX}';
@@ -586,19 +578,6 @@ final class Schema
         ];
     }
 
-    private function stateStatements(bool $claimed): array
-    {
-        return [
-            'CREATE TABLE site_state (
-                state_key   VARCHAR(50)  NOT NULL,
-                state_value VARCHAR(191) NOT NULL
-            ){SUFFIX}',
-            'CREATE UNIQUE INDEX ux_site_state_key ON site_state (state_key)',
-            "INSERT INTO site_state (state_key, state_value) VALUES ('first_admin_claimed', '"
-                . ($claimed ? '1' : '0') . "')",
-        ];
-    }
-
     private function settingsStatements(): array
     {
         return [
@@ -608,12 +587,16 @@ final class Schema
                 updated_at    {DATETIME}   NOT NULL
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_site_settings_key ON site_settings (setting_key)',
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('password_login_enabled', '1', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('social_login_enabled', '1', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('site_name', '" . GNUCMS . "', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('site_tagline', '가볍게 시작하는 기초 커뮤니티', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_title', '가볍게 시작하고, 오래 이어지는 공간', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('home_intro', '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('registration_enabled', '1', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('social_registration_enabled', '1', '2026-01-01 00:00:00')",
             "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('theme', 'default', '2026-01-01 00:00:00')",
+            "INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES ('system.first_admin_claimed', '0', '2026-01-01 00:00:00')",
         ];
     }
 
@@ -678,6 +661,20 @@ final class Schema
         );
     }
 
+    /** 하나였던 가입 스위치를 일반·소셜로 나누되 기존 운영자의 켜짐/꺼짐 선택은 보존한다. */
+    private function migrateRegistrationSettings(): void
+    {
+        $legacy = $this->siteSetting('registration_enabled') ?? '1';
+        $this->ensureSiteSetting('social_registration_enabled', $legacy === '1' ? '1' : '0');
+    }
+
+    /** 로그인 허용 스위치가 없던 설치는 기존처럼 두 로그인 방식을 모두 허용한다. */
+    private function migrateLoginSettings(): void
+    {
+        $this->ensureSiteSetting('password_login_enabled', '1');
+        $this->ensureSiteSetting('social_login_enabled', '1');
+    }
+
     private function ensureSiteSetting(string $key, string $value): void
     {
         $existing = $this->db->selectOne(
@@ -690,6 +687,123 @@ final class Schema
                 . ' (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
                 [$key, $value, '2026-08-28 00:00:00']
             );
+        }
+    }
+
+    private function siteSetting(string $key): ?string
+    {
+        $row = $this->db->selectOne(
+            'SELECT setting_value FROM ' . $this->db->table('site_settings') . ' WHERE setting_key = ?',
+            [$key]
+        );
+        return $row === null ? null : (string) $row['setting_value'];
+    }
+
+    /** 같은 key/value 모양의 옛 메일 설정을 mail.* 이름 공간으로 옮긴다. */
+    private function migrateMailSettings(): void
+    {
+        if (!$this->tableExists('mail_settings')) {
+            return;
+        }
+        foreach ($this->db->select('SELECT setting_key, setting_value FROM '
+            . $this->db->table('mail_settings')) as $row) {
+            $key = 'mail.' . (string) $row['setting_key'];
+            $value = (string) $row['setting_value'];
+            $this->ensureSiteSetting($key, $value);
+            // 부분 이전 뒤 재시도할 때는 아직 운영 중이던 옛 표의 값을 최종값으로 본다.
+            $this->db->execute('UPDATE ' . $this->db->table('site_settings')
+                . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                [$value, Clock::now(), $key]);
+        }
+        $this->db->execute('DROP TABLE ' . $this->db->table('mail_settings'));
+    }
+
+    /** 첫 관리자 선점과 일회성 마이그레이션 표식을 system.* 설정으로 옮긴다. */
+    private function migrateSystemSettings(): void
+    {
+        $legacy = [];
+        if ($this->tableExists('site_state')) {
+            foreach ($this->db->select('SELECT state_key, state_value FROM '
+                . $this->db->table('site_state')) as $row) {
+                $legacy[(string) $row['state_key']] = (string) $row['state_value'];
+            }
+        }
+
+        if (isset($legacy['first_admin_claimed'])) {
+            $this->ensureSiteSetting('system.first_admin_claimed', $legacy['first_admin_claimed']);
+            $this->db->execute('UPDATE ' . $this->db->table('site_settings')
+                . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                [$legacy['first_admin_claimed'], Clock::now(), 'system.first_admin_claimed']);
+        } else {
+            $users = $this->tableExists('users')
+                ? $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users')) : ['c' => 0];
+            $claimed = (int) ($users['c'] ?? 0) > 0 ? '1' : '0';
+            $this->ensureSiteSetting('system.first_admin_claimed', $claimed);
+            if ($claimed === '1') {
+                $this->db->execute('UPDATE ' . $this->db->table('site_settings')
+                    . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                    ['1', Clock::now(), 'system.first_admin_claimed']);
+            }
+        }
+
+        if (isset($legacy['consent_footer_defaulted'])) {
+            $this->ensureSiteSetting('system.consent_footer_defaulted', $legacy['consent_footer_defaulted']);
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table($table));
+            return true;
+        } catch (DomainError $e) {
+            return false;
+        }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        if (!$this->tableExists($table)) {
+            return false;
+        }
+        try {
+            // SQLite는 존재하지 않는 "column"을 문자열 리터럴로 받아들이는 호환 모드가
+            // 있어 여기서는 내부 상수로만 들어오는 인용 없는 이름을 쓴다.
+            $this->db->selectOne('SELECT ' . $column . ' FROM '
+                . $this->db->table($table) . ' LIMIT 1');
+            return true;
+        } catch (DomainError $e) {
+            return false;
+        }
+    }
+
+    private function dropColumnIfExists(string $table, string $column): void
+    {
+        if ($this->columnExists($table, $column)) {
+            $this->db->execute('ALTER TABLE ' . $this->db->table($table)
+                . ' DROP COLUMN ' . $this->db->q($column));
+        }
+    }
+
+    private function dropIndexIfExists(string $table, string $index): void
+    {
+        try {
+            $sql = 'DROP INDEX ' . $this->db->index($index);
+            if ($this->db->dialect()->name() === 'mysql') {
+                $sql .= ' ON ' . $this->db->table($table);
+            }
+            $this->db->execute($sql);
+        } catch (DomainError $e) {
+            // 옛 판에 없거나 이미 정리됐으면 그대로 둔다.
+        }
+    }
+
+    private function createIndexIfMissing(string $index, string $sql): void
+    {
+        try {
+            $this->db->execute($this->expand($sql));
+        } catch (DomainError $e) {
+            // 이미 있으면 그대로 둔다.
         }
     }
 
@@ -710,27 +824,12 @@ final class Schema
                 published_at    {DATETIME}   NULL,
                 deleted_at      {DATETIME}   NULL,
                 image_key       VARCHAR(32)  NULL,
-                consent_key      VARCHAR(20)  NULL,
-                consent_order    INTEGER      NOT NULL DEFAULT 0,
-                consent_required INTEGER      NOT NULL DEFAULT 1,
                 is_consent       SMALLINT     NOT NULL DEFAULT 0
             ){SUFFIX}',
             'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)',
             'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)',
-            'CREATE UNIQUE INDEX ux_contents_consent ON contents (consent_key)',
-            'CREATE INDEX ix_contents_is_consent ON contents (is_consent)',
-        ];
-    }
-
-    private function mailSettingsStatements(): array
-    {
-        return [
-            'CREATE TABLE mail_settings (
-                setting_key   VARCHAR(50) NOT NULL,
-                setting_value {TEXT}      NOT NULL,
-                updated_at    {DATETIME}  NOT NULL
-            ){SUFFIX}',
-            'CREATE UNIQUE INDEX ux_mail_settings_key ON mail_settings (setting_key)',
+            'CREATE INDEX ix_contents_listing ON contents'
+                . ' (is_consent, deleted_at, status, show_in_menu, sort_order, id)',
         ];
     }
 
@@ -777,20 +876,22 @@ final class Schema
         ];
     }
 
-    private function consentStatements(): array
+    private function loginEventStatements(): array
     {
         return [
-            'CREATE TABLE user_consents (
-                id                  {AUTO_PK},
-                user_id             BIGINT       NOT NULL,
-                consent_type        VARCHAR(20)  NOT NULL,
-                content_id          BIGINT       NOT NULL,
-                content_updated_at  {DATETIME}   NOT NULL,
-                agreed              SMALLINT     NOT NULL DEFAULT 1,
-                agreed_at           {DATETIME}   NOT NULL
+            'CREATE TABLE login_events (
+                id               {AUTO_PK},
+                user_id          BIGINT       NULL,
+                login_identifier VARCHAR(191) NULL,
+                auth_method      VARCHAR(20)  NOT NULL,
+                result           VARCHAR(20)  NOT NULL,
+                client_ip        VARCHAR(45)  NULL,
+                user_agent       VARCHAR(255) NULL,
+                created_at       {DATETIME}   NOT NULL
             ){SUFFIX}',
-            'CREATE UNIQUE INDEX ux_user_consents_type ON user_consents (user_id, consent_type)',
-            'CREATE INDEX ix_user_consents_content ON user_consents (content_id)',
+            'CREATE INDEX ix_login_events_user ON login_events (user_id, id)',
+            'CREATE INDEX ix_login_events_ip ON login_events (client_ip, id)',
+            'CREATE INDEX ix_login_events_time ON login_events (created_at, id)',
         ];
     }
 
@@ -874,28 +975,6 @@ final class Schema
         } catch (DomainError $e) {
             // 이미 있으면 그대로 둔다
         }
-    }
-
-    private function migrateFirstAdminState(): void
-    {
-        try {
-            $state = $this->db->selectOne('SELECT state_value FROM ' . $this->db->table('site_state')
-                . " WHERE state_key = 'first_admin_claimed'");
-            if ($state !== null) {
-                return;
-            }
-        } catch (DomainError $e) {
-            $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
-            foreach ($this->stateStatements((int) ($row['c'] ?? 0) > 0) as $sql) {
-                $this->db->execute($this->expand($sql));
-            }
-            return;
-        }
-        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $this->db->table('users'));
-        $this->db->execute(
-            'INSERT INTO ' . $this->db->table('site_state') . ' (state_key, state_value) VALUES (?, ?)',
-            ['first_admin_claimed', (int) ($row['c'] ?? 0) > 0 ? '1' : '0']
-        );
     }
 
     private function migrateOauth(): void

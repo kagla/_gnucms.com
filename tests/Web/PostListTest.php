@@ -37,6 +37,26 @@ final class PostListTest extends WebTestCase
     }
 
     /** @dataProvider connectionProvider */
+    public function testAuthorAvatarAppearsBeforeNicknameInTableView(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $userId = $app->users()->create(
+            'avatar@example.com', password_hash('avatar-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $file = '0123456789abcdef0123456789abcdef.png';
+        $app->users()->updateAvatar($userId, $file, 'upload');
+        $this->seed($app, 1);
+
+        $body = $this->body($this->get($app, '/boards/free'));
+        $imageAt = strpos($body, '/media/avatars/' . $file);
+        $nameAt = strpos($body, 'post-list-author-name');
+
+        self::assertNotFalse($imageAt);
+        self::assertNotFalse($nameAt);
+        self::assertLessThan($nameAt, $imageAt);
+    }
+
+    /** @dataProvider connectionProvider */
     public function testLegacyBoardUrlRedirectsToClearCanonicalUrl(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

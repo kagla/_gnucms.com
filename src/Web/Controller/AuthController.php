@@ -11,6 +11,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
 use GnuCms\View\View;
+use Psr\Http\Message\UploadedFileInterface;
 
 final class AuthController
 {
@@ -32,9 +33,13 @@ final class AuthController
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
+        $identifier = isset($input['email']) && is_scalar($input['email'])
+            ? strtolower(trim((string) $input['email'])) : null;
         try {
             $user = $this->app->accountService()->authenticate($input);
         } catch (DomainError $e) {
+            $known = $identifier === null ? null : $this->app->users()->findByEmail($identifier);
+            $this->recordLogin($request, $known === null ? null : (int) $known['id'], $identifier, 'failure');
             if ($e->status() !== 422) {
                 throw $e;
             }
@@ -51,6 +56,11 @@ final class AuthController
                 ]
             );
         }
+        if (!$this->app->cmsService()->settings()['password_login_enabled'] && !$user['is_admin']) {
+            $this->recordLogin($request, (int) $user['id'], $identifier, 'failure');
+            throw DomainError::forbidden('현재 일반 회원 로그인을 허용하지 않습니다.');
+        }
+        $this->recordLogin($request, (int) $user['id'], $identifier, 'success');
         $this->storeSession($user);
 
         return $this->homeRedirect($request, $response);
@@ -58,7 +68,7 @@ final class AuthController
 
     public function registerForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $this->assertRegistrationEnabled();
+        $this->assertAnyRegistrationEnabled();
         return View::fromRequest($request)->render($response, 'auth/register', [
             'errors' => [], 'values' => [], 'legal' => $this->registrationLegal(),
         ]);
@@ -66,12 +76,18 @@ final class AuthController
 
     public function register(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $this->assertRegistrationEnabled();
+        $this->assertRegularRegistrationEnabled();
         $input = $this->input($request);
         $this->assertCsrf($input);
+        $avatarFile = null;
         try {
+            $upload = $request->getUploadedFiles()['profile_image'] ?? null;
+            if ($upload instanceof UploadedFileInterface && $upload->getError() !== UPLOAD_ERR_NO_FILE) {
+                $avatarFile = $this->app->avatars()->storeUpload($upload);
+            }
             $user = $this->app->accountService()->register($input, $this->consentTrace($request));
         } catch (DomainError $e) {
+            $this->app->avatars()->delete($avatarFile);
             if ($e->status() !== 422) {
                 throw $e;
             }
@@ -84,18 +100,40 @@ final class AuthController
                 'auth/register',
                 ['errors' => $e->details(), 'values' => $values, 'legal' => $this->registrationLegal()]
             );
+        } catch (\Throwable $e) {
+            $this->app->avatars()->delete($avatarFile);
+            throw $e;
+        }
+        if ($avatarFile !== null && $user['newly_created']) {
+            try {
+                $this->app->users()->updateAvatar((int) $user['id'], $avatarFile, 'upload');
+            } catch (\Throwable $e) {
+                $this->app->avatars()->delete($avatarFile);
+                throw $e;
+            }
+        } elseif ($avatarFile !== null) {
+            $this->app->avatars()->delete($avatarFile);
         }
         if ($user['newly_created'] && $user['is_admin'] && $user['email_verified']) {
+            $this->recordLogin($request, (int) $user['id'], (string) $user['email'], 'success');
             $this->storeSession($user);
             return $this->redirectTo($request, $response, 'admin.index');
         }
         return View::fromRequest($request)->render($response, 'auth/check_email');
     }
 
-    private function assertRegistrationEnabled(): void
+    private function assertAnyRegistrationEnabled(): void
+    {
+        $settings = $this->app->cmsService()->settings();
+        if (!$settings['registration_enabled'] && !$settings['social_registration_enabled']) {
+            throw DomainError::forbidden('현재 새 회원가입을 받지 않습니다.');
+        }
+    }
+
+    private function assertRegularRegistrationEnabled(): void
     {
         if (!$this->app->cmsService()->settings()['registration_enabled']) {
-            throw DomainError::forbidden('현재 새 회원가입을 받지 않습니다.');
+            throw DomainError::forbidden('현재 일반 회원가입을 받지 않습니다.');
         }
     }
 
@@ -196,6 +234,17 @@ final class AuthController
         $ua = $request->getHeaderLine('User-Agent');
 
         return new ConsentTrace($ip, $ua === '' ? null : $ua);
+    }
+
+    private function recordLogin(ServerRequestInterface $request, ?int $userId,
+        ?string $identifier, string $result): void
+    {
+        $server = $request->getServerParams();
+        $ip = \GnuCms\Support\IpAddress::fromServer($server);
+        $ua = $request->getHeaderLine('User-Agent');
+        $this->app->loginEvents()->record(
+            $userId, $identifier, 'password', $result, $ip, $ua === '' ? null : $ua
+        );
     }
 
     private function assertCsrf(array $input): void

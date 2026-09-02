@@ -130,8 +130,9 @@ final class Installer
                 );
                 $users->verifyEmail($id);
                 $db->execute(
-                    'UPDATE ' . $db->table('site_state') . ' SET state_value = ? WHERE state_key = ?',
-                    ['1', 'first_admin_claimed']
+                    'UPDATE ' . $db->table('site_settings')
+                    . ' SET setting_value = ?, updated_at = ? WHERE setting_key = ?',
+                    ['1', Clock::now(), 'system.first_admin_claimed']
                 );
                 $adminEmail = $admin['email'];
             }
@@ -171,7 +172,6 @@ final class Installer
                 'google' => ['client_id' => '', 'client_secret' => ''],
                 'naver'  => ['client_id' => '', 'client_secret' => ''],
                 'kakao'  => ['client_id' => '', 'client_secret' => ''],
-                'github' => ['client_id' => '', 'client_secret' => ''],
             ],
             'db' => [
                 'dsn'      => $dbConfig['dsn'],

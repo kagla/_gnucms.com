@@ -19,6 +19,5 @@
     <li><a href="<?= $this->url('admin.terms') ?>"<?php if ($section === 'legal'): ?> class="menu-active" aria-current="page"<?php endif ?> title="약관 관리"><?= $this->icon('scale', 18) ?><span class="menu-text">약관 관리</span></a></li>
     <li class="menu-title">설정</li>
     <li><a href="<?= $this->url('admin.settings') ?>"<?php if ($section === 'site'): ?> class="menu-active" aria-current="page"<?php endif ?> title="사이트 설정"><?= $this->icon('cog', 18) ?><span class="menu-text">사이트 설정</span></a></li>
-    <li><a href="<?= $this->url('admin.mail') ?>"<?php if ($section === 'mail'): ?> class="menu-active" aria-current="page"<?php endif ?> title="메일 설정"><?= $this->icon('mail', 18) ?><span class="menu-text">메일 설정</span></a></li>
   </ul>
 </aside>

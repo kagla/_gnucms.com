@@ -50,12 +50,14 @@ final class Kernel
 
         $view->addGlobal('current_user', [
             'is_guest' => true, 'id' => null, 'display_name' => null, 'is_admin' => false,
+            'avatar_file' => null,
         ]);
         $view->addGlobal('csrf_token', '');
         $view->addGlobal('unread_notifications', 0);
         $view->addGlobal('password_min', Validator::passwordMin());
         $view->addGlobal('oauth_providers', $app->providerRegistry()->options());
-        $registrationAvailable = (bool) $site['registration_enabled'];
+        $registrationAvailable = (bool) $site['registration_enabled']
+            || (bool) $site['social_registration_enabled'];
         $legalDocuments = [];
         // 가입 화면에 붙는 동의 항목 전부. 개수 제한이 없고, 없으면 빈 배열이다.
         $consentDocuments = [];

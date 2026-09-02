@@ -8,6 +8,8 @@ use GnuCms\Error\DomainError;
 
 final class ProviderRegistry
 {
+    private const ALLOWED = ['google', 'naver', 'kakao'];
+
     /** @var array<string, ProviderInterface> */
     private array $providers = [];
 
@@ -15,7 +17,7 @@ final class ProviderRegistry
     {
         if ($providers !== null) {
             foreach ($providers as $provider) {
-                if ($provider instanceof ProviderInterface) {
+                if ($provider instanceof ProviderInterface && in_array($provider->key(), self::ALLOWED, true)) {
                     $this->providers[$provider->key()] = $provider;
                 }
             }
@@ -26,11 +28,12 @@ final class ProviderRegistry
             'google' => GoogleProvider::class,
             'naver' => NaverProvider::class,
             'kakao' => KakaoProvider::class,
-            'github' => GithubProvider::class,
         ];
         foreach ($classes as $key => $class) {
             $item = isset($config[$key]) && is_array($config[$key]) ? $config[$key] : [];
-            if (($item['client_id'] ?? '') !== '' && ($item['client_secret'] ?? '') !== '' && ($item['redirect_uri'] ?? '') !== '') {
+            $hasCredentials = ($item['client_id'] ?? '') !== ''
+                && ($key === 'kakao' || ($item['client_secret'] ?? '') !== '');
+            if ($hasCredentials && ($item['redirect_uri'] ?? '') !== '') {
                 $this->providers[$key] = new $class($item);
             }
         }
@@ -46,8 +49,12 @@ final class ProviderRegistry
 
     public function options(): array
     {
-        return array_map(static fn(ProviderInterface $provider): array => [
-            'key' => $provider->key(), 'label' => $provider->label(),
-        ], array_values($this->providers));
+        $options = [];
+        foreach (self::ALLOWED as $key) {
+            if (isset($this->providers[$key])) {
+                $options[] = ['key' => $key, 'label' => $this->providers[$key]->label()];
+            }
+        }
+        return $options;
     }
 }

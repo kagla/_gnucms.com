@@ -202,7 +202,7 @@ final class BoardListViewTest extends WebTestCase
         }
         $app->db()->execute(
             'UPDATE ' . $app->db()->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?',
-            ['0', 'schema_version']
+            ['0', 'system.schema_version']
         );
 
         foreach (['/', '/boards/free'] as $path) {
@@ -226,6 +226,20 @@ final class BoardListViewTest extends WebTestCase
         $board = $app->boardService()->get($app->guestAcl(), 'free');
 
         self::assertSame('list', $board['list_type']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMigrateBoardsAddsBelowViewListSetting(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $schema = new Schema($app->db());
+        $app->db()->execute('ALTER TABLE ' . $app->db()->q('boards')
+            . ' DROP COLUMN show_list_below_view');
+
+        $schema->migrateBoards();
+        $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
+
+        self::assertFalse($app->boardService()->get($app->guestAcl(), 'free')['show_list_below_view']);
     }
 
     /** 관리 콘솔의 게시판 목록에서 각 게시판이 어떤 형태로 보이는지 한눈에 확인할 수 있어야 한다. */
@@ -414,7 +428,7 @@ final class BoardListViewTest extends WebTestCase
         $app->db()->execute('ALTER TABLE ' . $app->db()->q('boards') . ' DROP COLUMN home_limit');
         $app->db()->execute(
             'UPDATE ' . $app->db()->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?',
-            ['3', 'schema_version']
+            ['3', 'system.schema_version']
         );
 
         self::assertStringContainsString('예전 글', $this->body($this->get($app, '/')));
