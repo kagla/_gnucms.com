@@ -148,7 +148,7 @@ $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr
     height:mini?160:280,
     versionCheck:false,
     resize_minWidth:0,
-    contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css') ?>],
+    contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css?v=20260902-1') ?>],
     bodyClass:'<?= $this->e(GNUCMS_ID) ?>-editor-content',
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:uploadUrl+'&responseType=json',

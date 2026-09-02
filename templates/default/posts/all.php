@@ -8,6 +8,13 @@ $allUrl = function ($q, $page) use ($list): string {
     return $this->url('posts.all') . ($params !== [] ? '?' . implode('&', $params) : '');
 }; ?>
 <?php $this->start('title') ?>전체 글 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $canonical = $site_url . '/posts' . (($list['page'] ?? 1) > 1 ? '?page=' . (int) $list['page'] : ''); ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($canonical) ?>">
+<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>"><meta property="og:title" content="전체 글 · <?= $this->e($site['site_name']) ?>">
+<meta property="og:description" content="<?= $this->e($site['site_tagline']) ?>"><meta property="og:url" content="<?= $this->e($canonical) ?>"><meta name="twitter:card" content="summary">
+<?php $this->stop() ?>
 <?php $this->start('nav_section') ?>all<?php $this->stop() ?>
 <?php $this->start('header_search') ?>
 <form class="header-search" method="get" action="<?= $this->url('posts.all') ?>" role="search">

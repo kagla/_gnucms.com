@@ -377,7 +377,9 @@ final class PostController
     private function renderSecretPassword(ServerRequestInterface $request, ResponseInterface $response,
         array $challenge, array $errors): ResponseInterface
     {
-        return View::fromRequest($request)->render($response, 'posts/password', [
+        return View::fromRequest($request)->render(
+            $response->withHeader('X-Robots-Tag', 'noindex, nofollow'),
+            'posts/password', [
             'post_id' => $challenge['post_id'], 'board' => $challenge['board'], 'errors' => $errors,
         ]);
     }

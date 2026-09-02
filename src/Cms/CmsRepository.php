@@ -81,6 +81,16 @@ final class CmsRepository
         ));
     }
 
+    /** 사이트맵과 공개 내용 RSS에 쓰는 모든 공개 내용·약관. 메뉴 표시 여부와는 무관하다. */
+    public function listPublishedPages(): array
+    {
+        return array_map([$this, 'hydratePage'], $this->db->select(
+            'SELECT * FROM ' . $this->db->table('contents')
+            . " WHERE status = 'published' AND deleted_at IS NULL"
+            . ' ORDER BY updated_at DESC, id DESC'
+        ));
+    }
+
     /**
      * 사이트 하단에 늘어놓을 공개 약관. 로그인 없이도 보이므로 ACL 을 타지 않는다.
      * 약관에서 show_in_menu 는 '하단에 표시' 토글이다. 끄면 주소로만 열 수 있다.

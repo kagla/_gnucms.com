@@ -1,6 +1,26 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?><?= $this->e($site['site_name']) ?> · <?= $this->e($site['site_tagline']) ?><?php $this->stop() ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($site_url) ?>/">
+<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>">
+<meta property="og:title" content="<?= $this->e($site['site_name']) ?>"><meta property="og:description" content="<?= $this->e($site['site_tagline']) ?>">
+<meta property="og:url" content="<?= $this->e($site_url) ?>/">
+<?php if (strtoupper(trim((string) $site['site_name'])) === 'GNUCMS'): ?>
+<meta property="og:image" content="<?= $this->e($site_url) ?>/og.png">
+<meta property="og:image:width" content="1731"><meta property="og:image:height" content="909">
+<meta property="og:image:alt" content="GNUCMS · 가볍고 유연한 PHP CMS">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="<?= $this->e($site_url) ?>/og.png">
+<?php else: ?>
+<meta name="twitter:card" content="summary">
+<?php endif ?>
+<script type="application/ld+json"><?= json_encode([
+  '@context' => 'https://schema.org', '@type' => 'WebSite',
+  'name' => $site['site_name'], 'url' => $site_url . '/', 'description' => $site['site_tagline'],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<?php $this->stop() ?>
 <?php $this->start('nav_section') ?>home<?php $this->stop() ?>
+<?php $this->start('body_class') ?>home-page<?php $this->stop() ?>
 
 <?php // 검색을 머리글 한가운데 크게 둔다.
       // 검색은 게시판 단위라서 첫 게시판을 기본 대상으로 삼는다. ?>
@@ -35,7 +55,7 @@ $hot = array_slice($pool, 0, 6);
 <section class="hero rounded-box">
   <div class="hero-content">
     <div class="hero-copy">
-      <span class="badge badge-primary badge-soft"><?= $this->icon('sparkle', 13) ?> <?= $this->e($site['site_tagline']) ?></span>
+      <span class="hero-kicker"><?= $this->icon('sparkle', 14) ?> Curated community</span>
       <h1><?= $this->e($site['home_title']) ?></h1>
       <p><?= $this->e($site['home_intro']) ?></p>
       <div class="hero-actions">
@@ -51,11 +71,14 @@ $hot = array_slice($pool, 0, 6);
     </div>
     <?php // 게시판 몇 개·글 몇 개 같은 숫자는 사이트가 작을 때 오히려 초라하다.
           // 대신 이 CMS 가 무엇인지 말해 주는 사실 네 줄을 둔다. ?>
-    <ul class="hero-facts" aria-label="GNUCMS 특징">
-      <li><?= $this->icon('board', 16) ?><div><strong>게시판 · 내용 · 약관 · 회원</strong><span>CMS의 뼈대가 처음부터 들어 있습니다</span></div></li>
-      <li><?= $this->icon('grid', 16) ?><div><strong>SQLite · MySQL · PostgreSQL</strong><span>어디서든 같은 코드로 돕니다</span></div></li>
-      <li><?= $this->icon('sparkle', 16) ?><div><strong>AI 와도 잘 맞습니다</strong><span>의존성 없는 단순한 PHP 라 함께 고치기 쉽습니다</span></div></li>
-    </ul>
+    <div class="hero-panel">
+      <div class="hero-panel-head"><span>GNUCMS</span><span class="hero-panel-status">Live</span></div>
+      <ul class="hero-facts" aria-label="GNUCMS 특징">
+        <li><?= $this->icon('board', 17) ?><div><strong>콘텐츠를 한곳에서</strong><span>게시판, 페이지, 회원 관리를 매끄럽게</span></div></li>
+        <li><?= $this->icon('grid', 17) ?><div><strong>환경에 구애받지 않게</strong><span>SQLite · MySQL · PostgreSQL 지원</span></div></li>
+        <li><?= $this->icon('sparkle', 17) ?><div><strong>가볍고 유연하게</strong><span>필요한 기능만 담은 단순한 PHP 구조</span></div></li>
+      </ul>
+    </div>
   </div>
 </section>
 

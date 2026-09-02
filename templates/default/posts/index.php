@@ -13,6 +13,16 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 ?>
 
 <?php $this->start('title') ?><?= $this->e($board['name']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $canonical = $site_url . '/boards/' . rawurlencode((string) $board['board_key'])
+  . (($list['page'] ?? 1) > 1 ? '?page=' . (int) $list['page'] : ''); ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($canonical) ?>">
+<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>">
+<meta property="og:title" content="<?= $this->e($board['name']) ?>"><meta property="og:description" content="<?= $this->e($board['description'] ?: $site['site_tagline']) ?>">
+<meta property="og:url" content="<?= $this->e($canonical) ?>"><meta name="twitter:card" content="summary">
+<?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($board['name']) ?> RSS" href="<?= $this->e($site_url) ?>/boards/<?= rawurlencode((string) $board['board_key']) ?>/rss.xml"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
 <?php $this->start('extra_tabs') ?><a class="tab tab-active" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" aria-current="page"><?= $this->e($board['name']) ?></a><?php $this->stop() ?>
 

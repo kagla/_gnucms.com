@@ -6,6 +6,22 @@ $below_view_list = $below_view_list ?? null;
 ?>
 <?php $this->start('title') ?><?= $this->e($post['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e(mb_substr(strip_tags((string) $post['content']), 0, 150)) ?>"><?php $this->stop() ?>
+<?php $canonical = $site_url . '/posts/' . (int) $post['id']; $seoDescription = mb_substr(trim((string) preg_replace('/\s+/u', ' ', strip_tags((string) $post['content']))), 0, 160); ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($canonical) ?>">
+<meta property="og:type" content="article"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>">
+<meta property="og:title" content="<?= $this->e($post['title']) ?>"><meta property="og:description" content="<?= $this->e($seoDescription) ?>">
+<meta property="og:url" content="<?= $this->e($canonical) ?>"><meta name="twitter:card" content="summary">
+<script type="application/ld+json"><?= json_encode([
+  '@context' => 'https://schema.org', '@type' => 'Article', 'mainEntityOfPage' => $canonical,
+  'headline' => $post['title'], 'description' => $seoDescription,
+  'datePublished' => str_replace(' ', 'T', (string) $post['created_at']) . 'Z',
+  'dateModified' => str_replace(' ', 'T', (string) $post['updated_at']) . 'Z',
+  'author' => ['@type' => 'Person', 'name' => $post['author_name']],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($board['name']) ?> RSS" href="<?= $this->e($site_url) ?>/boards/<?= rawurlencode((string) $board['board_key']) ?>/rss.xml"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
 <?php $this->start('extra_tabs') ?><a class="tab tab-active" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" aria-current="page"><?= $this->e($board['name']) ?></a><?php $this->stop() ?>
 <?php $this->start('body') ?>

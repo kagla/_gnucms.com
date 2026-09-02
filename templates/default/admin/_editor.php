@@ -116,7 +116,7 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
     language:'ko',height:360,versionCheck:false,resize_minWidth:0,
     /* 글·댓글 편집기와 같게, 엔터는 줄바꿈 하나다. 문단 사이를 벌리려면 엔터를 두 번 친다. */
     enterMode:CKEDITOR.ENTER_BR,shiftEnterMode:CKEDITOR.ENTER_BR,autoParagraph:false,
-    contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css?v=20260827-2') ?>],
+    contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css?v=20260902-1') ?>],
     bodyClass:'<?= $this->e(GNUCMS_ID) ?>-editor-content',
     uploadUrl:uploadUrl,
     filebrowserImageUploadUrl:<?= $this->json($editor_upload_url . '&responseType=json') ?>,

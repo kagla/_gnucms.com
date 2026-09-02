@@ -8,6 +8,7 @@ use GnuCms\App;
 use GnuCms\Web\Middleware\ErrorPageMiddleware;
 use GnuCms\Web\Middleware\HtmlContentTypeMiddleware;
 use GnuCms\Web\Middleware\SessionGuard;
+use GnuCms\Web\Middleware\SeoHeadersMiddleware;
 use GnuCms\Error\DomainError;
 use GnuCms\Theme\ThemeManager;
 use GnuCms\Validation\Validator;
@@ -92,6 +93,7 @@ final class Kernel
         }
         $view->addGlobal('header_boards', $headerBoards);
         $view->addGlobal('base_path', $basePath);
+        $view->addGlobal('site_url', rtrim((string) $app->config('app.url', GNUCMS_URL), '/'));
         $view->addGlobal('active_theme', $themes->name());
         $view->addGlobal('available_themes', $themes->availableThemes());
         // 사람이 보는 이름은 site.site_name 이 앞서고, GNUCMS 는 그 기본값이다.
@@ -107,6 +109,7 @@ final class Kernel
         ));
         $slim->add(new HtmlContentTypeMiddleware());
         $slim->add(new SessionGuard($app, $view));
+        $slim->add(new SeoHeadersMiddleware());
         $slim->addBodyParsingMiddleware();
 
         Routes::register($slim, $app);
