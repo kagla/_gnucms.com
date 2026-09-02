@@ -105,4 +105,25 @@ final class BoardListTest extends WebTestCase
         self::assertStringNotContainsString('홈 최신글 1', $body);
         self::assertStringContainsString('GNUCMS · 가벼운 PHP CMS', $body);
     }
+
+    /** @dataProvider connectionProvider */
+    public function testProductHomeShowsRecentActivityBeforeProductGuide(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $app->boardService()->create($acl, ['board_key' => 'questions', 'name' => '질문답변']);
+
+        $app->postService()->create($acl, 'free', ['title' => '활동 소식 하나', 'content' => '내용']);
+        $app->postService()->create($acl, 'questions', ['title' => '활동 소식 둘', 'content' => '내용']);
+        $app->postService()->create($acl, 'free', ['title' => '활동 소식 셋', 'content' => '내용']);
+
+        $body = $this->body($this->get($app, '/'));
+        self::assertStringContainsString('지금 GNUCMS에서', $body);
+        self::assertSame(3, substr_count($body, 'class="product-activity-item is-fresh"'));
+        self::assertStringContainsString('활동 소식 하나', $body);
+        self::assertStringContainsString('활동 소식 둘', $body);
+        self::assertStringContainsString('활동 소식 셋', $body);
+        self::assertLessThan(strpos($body, 'id="about"'), strpos($body, 'class="product-activity"'));
+    }
 }

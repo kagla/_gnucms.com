@@ -24,6 +24,19 @@
 $galleryBoards = array_values(array_filter($boards, static fn (array $item): bool => ($item['list_type'] ?? 'list') === 'gallery'));
 $communityBoards = array_values(array_filter($boards, static fn (array $item): bool => ($item['list_type'] ?? 'list') !== 'gallery'));
 $searchBoard = $communityBoards[0] ?? $galleryBoards[0] ?? null;
+$activity = [];
+foreach ($boards as $activityBoard) {
+    foreach ($activityBoard['latest_posts'] as $activityPost) {
+        $activity[] = ['board' => $activityBoard, 'post' => $activityPost];
+    }
+}
+usort($activity, static function (array $left, array $right): int {
+    $leftTime = strtotime((string) $left['post']['created_at']) ?: 0;
+    $rightTime = strtotime((string) $right['post']['created_at']) ?: 0;
+    return $rightTime <=> $leftTime;
+});
+$activity = array_slice($activity, 0, 3);
+$freshAfter = time() - 86400;
 ?>
 
 <?php $this->start('header_search') ?>
@@ -42,47 +55,44 @@ $searchBoard = $communityBoards[0] ?? $galleryBoards[0] ?? null;
   <section class="product-hero">
     <div class="product-shell product-hero-inner">
       <p class="product-label">OPEN SOURCE · PHP 7.4+</p>
-      <h1>필요한 것만 담은<br>가벼운 PHP CMS</h1>
-      <p class="product-lead">GNUCMS는 게시판 중심의 웹사이트를 빠르게 만들고 운영하는 오픈소스 PHP CMS입니다. 복잡한 빌드 과정 없이 일반 웹호스팅에 올리고 브라우저에서 설치할 수 있습니다.</p>
-      <div class="product-actions">
-        <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms/archive/refs/heads/main.zip">내려받기</a>
-        <a class="product-button" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub에서 보기</a>
-      </div>
-      <ul class="product-spec" aria-label="지원 환경">
-        <li>PHP 7.4+</li>
-        <li>SQLite · MySQL · PostgreSQL</li>
-        <li>MIT License</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="product-section product-about" id="about">
-    <div class="product-shell product-section-split">
-      <div>
-        <p class="product-label">ABOUT GNUCMS</p>
-        <h2>작은 사이트부터 커뮤니티까지</h2>
-      </div>
-      <div class="product-rich-copy">
-        <p>GNUCMS는 공지사항, 자료실, 고객지원, 동호회 같은 게시판 기반 사이트에 맞춰 설계되었습니다. 회원과 비회원 글쓰기, 계층형 댓글, 첨부파일, 알림, 콘텐츠 페이지를 한 시스템에서 관리합니다.</p>
-        <p>SQLite로 간단하게 시작한 뒤 운영 환경에 맞춰 MySQL 또는 PostgreSQL을 선택할 수 있습니다. 테마는 PHP 템플릿과 CSS로 구성되어 별도의 프런트엔드 빌드 도구 없이 수정할 수 있습니다.</p>
+      <h1>필요한 것만 담은 가벼운 PHP CMS</h1>
+      <div class="product-hero-summary">
+        <p class="product-lead">일반 웹호스팅에 바로 올려 쓰는 게시판 중심 오픈소스 CMS입니다.</p>
+        <div class="product-actions">
+          <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms/archive/refs/heads/main.zip">내려받기</a>
+          <a class="product-button" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub</a>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="product-section" id="features">
+  <section class="product-activity" aria-labelledby="activity-title">
     <div class="product-shell">
-      <div class="product-section-heading">
-        <div><p class="product-label">CORE FEATURES</p><h2>운영에 필요한 핵심 기능</h2></div>
-        <p>설치 직후 바로 사용할 수 있고, 관리 콘솔에서 사이트 성격에 맞게 조정할 수 있습니다.</p>
+      <div class="product-activity-head">
+        <h2 id="activity-title"><span class="product-live-dot" aria-hidden="true"></span>지금 GNUCMS에서</h2>
+        <a href="<?= $this->url('posts.all') ?>">전체 글 보기</a>
       </div>
-      <div class="product-feature-list">
-        <article><span>01</span><h3>유연한 게시판</h3><p>목록, 갤러리, 뉴스, 매거진 형태와 분류, 공지, 비밀글, 게시판별 읽기·쓰기 권한을 설정합니다.</p></article>
-        <article><span>02</span><h3>회원과 소셜 로그인</h3><p>이메일 가입과 인증, 비밀번호 재설정, Google·GitHub·Kakao·Naver 로그인을 지원합니다.</p></article>
-        <article><span>03</span><h3>댓글과 알림</h3><p>깊이 제한 없는 답글, 비회원 댓글, 이미지 첨부와 내 글·댓글에 대한 알림을 제공합니다.</p></article>
-        <article><span>04</span><h3>콘텐츠 관리</h3><p>일반 페이지, 이용약관, 개인정보 문서, 이미지와 공개 상태를 관리 콘솔에서 다룹니다.</p></article>
-        <article><span>05</span><h3>파일과 이미지</h3><p>다중 첨부, 드래그 정렬, 본문 이미지 업로드와 화면에 맞춘 이미지 변형을 지원합니다.</p></article>
-        <article><span>06</span><h3>운영과 유지보수</h3><p>메일 설정, 회원·게시글 관리, 데이터베이스 자동 마이그레이션과 상태 확인 기능을 갖췄습니다.</p></article>
-      </div>
+      <?php if ($activity === []): ?>
+        <div class="product-activity-empty">
+          <p>새로운 이야기를 기다리고 있습니다.</p>
+          <?php if ($searchBoard !== null): ?><a href="<?= $this->url('posts.create', ['key' => $searchBoard['board_key']]) ?>">첫 글 남기기</a><?php endif ?>
+        </div>
+      <?php else: ?>
+        <div class="product-activity-grid">
+          <?php foreach ($activity as $item): ?>
+            <?php $isFresh = (strtotime((string) $item['post']['created_at']) ?: 0) >= $freshAfter; ?>
+            <article class="product-activity-item<?= $isFresh ? ' is-fresh' : '' ?>">
+              <div class="product-activity-meta">
+                <?php if ($isFresh): ?><span class="product-new-badge">NEW</span><?php endif ?>
+                <span><?= $this->e($item['board']['name']) ?></span>
+                <time datetime="<?= $this->e($item['post']['created_at']) ?>"><?= $this->compactDate($item['post']['created_at']) ?></time>
+              </div>
+              <a href="<?= $this->url('posts.show', ['id' => $item['post']['id']]) ?>"><?= $this->e($item['post']['title']) ?></a>
+              <?php if ($item['post']['comment_count'] > 0): ?><span class="product-activity-comments"><?= $this->icon('comment', 12) ?> <?= $this->e($item['post']['comment_count']) ?></span><?php endif ?>
+            </article>
+          <?php endforeach ?>
+        </div>
+      <?php endif ?>
     </div>
   </section>
 
@@ -156,6 +166,32 @@ $searchBoard = $communityBoards[0] ?? $galleryBoards[0] ?? null;
               <?php endforeach ?>
             </div>
           <?php endif ?>
+      </div>
+    </div>
+  </section>
+
+  <section class="product-section product-about" id="about">
+    <div class="product-shell product-section-split">
+      <div>
+        <p class="product-label">ABOUT GNUCMS</p>
+        <h2>작은 사이트부터 커뮤니티까지</h2>
+      </div>
+      <div class="product-rich-copy">
+        <p>게시판, 회원, 댓글, 첨부파일과 콘텐츠 관리를 한 시스템에서 운영합니다. SQLite로 시작해 MySQL 또는 PostgreSQL로 확장할 수 있고, 별도의 프런트엔드 빌드 과정이 필요하지 않습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="product-section" id="features">
+    <div class="product-shell">
+      <div class="product-section-heading">
+        <div><p class="product-label">CORE FEATURES</p><h2>운영에 필요한 핵심 기능</h2></div>
+        <p>설치 직후 시작하고 관리 콘솔에서 사이트에 맞게 조정합니다.</p>
+      </div>
+      <div class="product-feature-list product-feature-list-compact">
+        <article><span>01</span><h3>유연한 게시판</h3><p>네 가지 목록 형태와 분류, 공지, 비밀글, 게시판별 권한을 설정합니다.</p></article>
+        <article><span>02</span><h3>회원과 소셜 로그인</h3><p>이메일 인증과 Google·Kakao·Naver 로그인을 지원합니다.</p></article>
+        <article><span>03</span><h3>댓글과 운영 도구</h3><p>계층형 댓글, 알림, 첨부파일과 관리 기능을 제공합니다.</p></article>
       </div>
     </div>
   </section>

@@ -2836,3 +2836,55 @@ body:not(.admin-page) .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent
   .brand-symbol{width:34px;height:34px}
   .site-brand .brand-name{font-size:18px}
 }
+
+/* 메인 첫 화면: 제품 소개를 압축하고 실제 커뮤니티 활동을 먼저 보여 준다. */
+.product-home .product-hero{padding:56px 0 44px}
+.product-home .product-hero .product-label{margin-bottom:1rem}
+.product-home .product-hero h1{max-width:820px;font-size:clamp(38px,5.3vw,58px);line-height:1.06}
+.product-hero-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:1.5rem;margin-top:1.25rem}
+.product-home .product-lead{max-width:590px;margin:0;font-size:15px;line-height:1.65}
+.product-home .product-actions{flex:none;margin:0}
+
+.product-activity{padding:25px 0 28px;border-bottom:1px solid var(--premium-line);background:linear-gradient(135deg,var(--premium-accent-soft),var(--premium-page) 72%);color:var(--premium-text)}
+.product-activity-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:13px}
+.product-activity-head h2{display:flex;align-items:center;gap:.65rem;margin:0;font-size:15px;font-weight:850;letter-spacing:-.025em}
+.product-activity-head>a{color:var(--premium-accent);font-size:12px;font-weight:750}
+.product-activity-head>a:hover{color:var(--premium-accent-strong)}
+.product-live-dot{width:8px;height:8px;border-radius:50%;background:#22a65a;box-shadow:0 0 0 5px color-mix(in srgb,#22a65a 13%,transparent)}
+.product-activity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.product-activity-item{position:relative;min-width:0;padding:14px 42px 14px 15px;border:1px solid var(--premium-line);border-radius:12px;background:color-mix(in srgb,var(--premium-surface) 96%,transparent);box-shadow:0 1px 2px rgba(0,0,0,.025);transition:transform .18s var(--ease),border-color .18s ease,box-shadow .18s ease}
+.product-activity-item.is-fresh{border-color:color-mix(in srgb,var(--premium-accent) 28%,var(--premium-line));box-shadow:0 8px 24px color-mix(in srgb,var(--premium-accent) 7%,transparent)}
+.product-activity-meta{display:flex;align-items:center;gap:.45rem;min-width:0;margin-bottom:.45rem;color:var(--premium-muted);font-size:10.5px}
+.product-activity-meta time{margin-left:auto;white-space:nowrap}
+.product-new-badge{color:#168348;font-size:9px;font-weight:900;letter-spacing:.06em}
+.product-activity-item>a{display:block;overflow:hidden;color:var(--premium-text);font-size:13.5px;font-weight:780;text-overflow:ellipsis;white-space:nowrap}
+.product-activity-item>a:hover{color:var(--premium-accent)}
+.product-activity-comments{position:absolute;right:14px;bottom:14px;display:inline-flex;align-items:center;gap:.2rem;color:var(--premium-muted);font-size:10px}
+.product-activity-empty{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:15px;border:1px dashed var(--premium-line-strong);border-radius:12px;background:var(--premium-surface);color:var(--premium-muted);font-size:13px}
+.product-activity-empty p{margin:0}
+.product-activity-empty a{color:var(--premium-accent);font-weight:750}
+
+.product-home .product-gallery-section,.product-home .product-community-section{padding-block:56px}
+.product-home .product-hub .product-section-heading{margin-bottom:1.4rem}
+.product-home .product-hub .product-section-heading h2{font-size:clamp(25px,3.5vw,34px)}
+.product-feature-list-compact article{min-height:170px}
+.product-feature-list-compact article>span{margin-bottom:1.45rem}
+
+@media (hover:hover){
+  .product-activity-item:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--premium-accent) 34%,var(--premium-line));box-shadow:var(--premium-shadow)}
+}
+
+@media (max-width:760px){
+  .product-home .product-hero{padding:40px 0 32px}
+  .product-home .product-hero h1{font-size:clamp(34px,10.5vw,46px)}
+  .product-hero-summary{align-items:flex-start;flex-direction:column;gap:1rem;margin-top:1rem}
+  .product-home .product-lead{font-size:14px}
+  .product-home .product-actions{gap:.5rem}
+  .product-home .product-button{min-height:42px}
+  .product-activity{padding:20px 0 22px}
+  .product-activity-grid{grid-template-columns:1fr;gap:.55rem}
+  .product-activity-item{padding-block:11px}
+  .product-activity-item:nth-child(n+3){display:none}
+  .product-home .product-gallery-section,.product-home .product-community-section{padding-block:44px}
+  .product-feature-list-compact article{min-height:0}
+}
