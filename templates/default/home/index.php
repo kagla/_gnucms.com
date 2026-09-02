@@ -1,5 +1,17 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?><?= $this->e($site['site_name']) ?> · <?= $this->e($site['site_tagline']) ?><?php $this->stop() ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($site_url) ?>/">
+<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>">
+<meta property="og:title" content="<?= $this->e($site['site_name']) ?>"><meta property="og:description" content="<?= $this->e($site['site_tagline']) ?>">
+<meta property="og:url" content="<?= $this->e($site_url) ?>/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json"><?= json_encode([
+  '@context' => 'https://schema.org', '@type' => 'WebSite',
+  'name' => $site['site_name'], 'url' => $site_url . '/', 'description' => $site['site_tagline'],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<?php $this->stop() ?>
 <?php $this->start('nav_section') ?>home<?php $this->stop() ?>
 
 <?php // 검색을 머리글 한가운데 크게 둔다.

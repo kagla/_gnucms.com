@@ -8,6 +8,8 @@
 <meta name="theme-color" content="#101720" media="(prefers-color-scheme: dark)">
 <title><?php $this->start('title') ?><?= $this->e($site['site_name']) ?><?php $this->stop() ?></title>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
+<?php $this->start('seo_meta') ?><?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> RSS" href="<?= $this->e($site_url) ?>/rss.xml"><?php $this->stop() ?>
 <script>
 (function(){
   var d=document.documentElement,t=null;
@@ -173,6 +175,7 @@
         </aside>
         <nav class="footer-nav" aria-label="사이트 메뉴">
           <a class="link link-hover" href="<?= $this->url('boards.index') ?>">홈</a>
+          <a class="link link-hover" href="<?= $this->url('seo.rss') ?>">RSS</a>
           <?php // '상단 메뉴에 표시' 는 말 그대로 상단 메뉴다. 하단에는 약관만 모아 둔다. ?>
           <?php // 약관은 으레 하단에 모아 둔다. 공개된 약관은 사용처와 무관하게 전부 나온다. ?>
           <?php foreach ($legal_pages as $doc): ?>

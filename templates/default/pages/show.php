@@ -1,6 +1,15 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?><?= $this->e($page['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($page['seo_description'] ?: $site['site_tagline']) ?>"><?php $this->stop() ?>
+<?php $pagePath = (!empty($page['is_consent']) ? '/terms/' : '/content/') . rawurlencode((string) $page['slug']); $canonical = $site_url . $pagePath; ?>
+<?php $this->start('seo_meta') ?>
+<link rel="canonical" href="<?= $this->e($canonical) ?>">
+<meta property="og:type" content="article"><meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="<?= $this->e($site['site_name']) ?>">
+<meta property="og:title" content="<?= $this->e($page['title']) ?>"><meta property="og:description" content="<?= $this->e($page['seo_description'] ?: $site['site_tagline']) ?>">
+<meta property="og:url" content="<?= $this->e($canonical) ?>"><meta name="twitter:card" content="summary">
+<?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> 공개 내용 RSS" href="<?= $this->e($site_url) ?>/content/rss.xml"><?php $this->stop() ?>
 <?php $this->start('body') ?>
 <div class="read-progress" aria-hidden="true"></div>
 <article class="card article article-page">

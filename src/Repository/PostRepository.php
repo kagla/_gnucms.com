@@ -336,6 +336,38 @@ final class PostRepository
         ];
     }
 
+    /**
+     * 사이트맵과 RSS에 내보낼 공개 글. 읽기 가능한 게시판 번호는 호출자가 ACL로 고른다.
+     * 비밀글은 제목조차 검색 피드로 흘리지 않는다.
+     *
+     * @param int[] $boardIds
+     */
+    public function publicFeedRows(array $boardIds, int $limit = 100, ?int $boardId = null): array
+    {
+        $boardIds = array_values(array_unique(array_map('intval', $boardIds)));
+        if ($boardIds === []) return [];
+
+        $params = [];
+        $marks = [];
+        foreach ($boardIds as $index => $readableId) {
+            $key = 'board_' . $index;
+            $marks[] = ':' . $key;
+            $params[$key] = $readableId;
+        }
+        $where = 'deleted_at IS NULL AND is_secret = 0 AND board_id IN (' . implode(', ', $marks) . ')';
+        if ($boardId !== null) {
+            $where .= ' AND board_id = :selected_board';
+            $params['selected_board'] = $boardId;
+        }
+        $limit = max(1, min(49900, $limit));
+
+        return $this->db->select(
+            'SELECT id, board_id, title, content, created_at, updated_at FROM ' . $this->db->table('posts')
+            . ' WHERE ' . $where . ' ORDER BY updated_at DESC, id DESC LIMIT ' . $limit,
+            $params
+        );
+    }
+
     /** 게시판의 최신순 일반 글 목록에서 해당 글이 속한 페이지를 구한다. */
     public function pageOf(int $id, int $boardId, int $perPage): int
     {

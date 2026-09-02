@@ -229,6 +229,7 @@ final class BoardService
             'per_page'     => (int) $board['per_page'],
             'sort_order'   => (int) $board['sort_order'],
             'created_at'   => $board['created_at'],
+            'updated_at'   => $board['updated_at'],
         ];
 
         // 관리자 목록은 운영 정보다. 관리 권한이 있는 사람에게만 보인다.

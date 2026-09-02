@@ -19,6 +19,7 @@ use GnuCms\Web\Controller\CommentController;
 use GnuCms\Web\Controller\EditorImageController;
 use GnuCms\Web\Controller\NotificationController;
 use GnuCms\Web\Controller\AvatarController;
+use GnuCms\Web\Controller\SeoController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -29,6 +30,13 @@ final class Routes
 {
     public static function register(SlimApp $slim, App $app): void
     {
+        $seo = new SeoController($app);
+        $slim->get('/sitemap.xml', [$seo, 'sitemap'])->setName('seo.sitemap');
+        $slim->get('/robots.txt', [$seo, 'robots'])->setName('seo.robots');
+        $slim->get('/rss.xml', [$seo, 'siteRss'])->setName('seo.rss');
+        $slim->get('/content/rss.xml', [$seo, 'contentRss'])->setName('seo.content_rss');
+        $slim->get('/boards/{key}/rss.xml', [$seo, 'boardRss'])->setName('seo.board_rss');
+
         $slim->get('/media/avatars/{file:[a-f0-9]{32}\\.(?:jpg|png|webp)}', [new AvatarController($app), 'show'])
             ->setName('avatar.show');
         $auth = new AuthController($app);
