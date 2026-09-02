@@ -12,7 +12,11 @@
         <h1 class="card-title"><?= $this->e($site['site_name']) ?> 시작하기</h1>
         <p class="card-sub">GNUCMS 사이트와 이야기를 함께 나눠보세요.</p>
       </div>
-      <form method="post" action="<?= $this->url('auth.register') ?>">
+      <?php if ($site['social_registration_enabled']): ?>
+        <?php $this->insert('auth/_social', ['show_email_divider' => (bool) $site['registration_enabled']]) ?>
+      <?php endif ?>
+      <?php if ($site['registration_enabled']): ?>
+      <form method="post" action="<?= $this->url('auth.register') ?>" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">이메일</legend>
@@ -40,10 +44,15 @@
           </label>
           <?php if (array_key_exists('password_confirmation', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password_confirmation']) ?></p><?php endif ?>
         </fieldset>
+        <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
+          <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">선택 · JPG, PNG, WebP · 2MB 이하</span></legend>
+          <input class="file-input file-input-bordered input-block" type="file" name="profile_image" accept="image/jpeg,image/png,image/webp">
+          <?php if (array_key_exists('profile_image', $errors)): ?><p class="validator-hint"><?= $this->e($errors['profile_image']) ?></p><?php endif ?>
+        </fieldset>
         <?php $this->insert('auth/_consents') ?>
         <button class="btn btn-primary btn-block btn-lg" type="submit">가입하기</button>
       </form>
-      <?php $this->insert('auth/_social') ?>
+      <?php endif ?>
       <p class="auth-switch">이미 계정이 있으신가요? <a class="link" href="<?= $this->url('auth.login') ?>">로그인</a></p>
     </div>
   </section>

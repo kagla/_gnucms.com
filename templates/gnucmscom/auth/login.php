@@ -26,6 +26,8 @@
           </div>
         </div>
       <?php endif ?>
+      <?php if ($site['social_login_enabled']): ?><?php $this->insert('auth/_social') ?><?php endif ?>
+      <?php if (!$site['password_login_enabled']): ?><div class="alert alert-info alert-soft auth-notice"><span><?= $this->icon('info', 18) ?></span><span>일반 회원 로그인이 중지되어 있습니다. 관리자는 이메일로 계속 로그인할 수 있습니다.</span></div><?php endif ?>
       <form method="post" action="<?= $this->url('auth.login') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">
@@ -48,10 +50,9 @@
         </fieldset>
         <button class="btn btn-primary btn-block btn-lg" type="submit">로그인</button>
       </form>
-      <?php $this->insert('auth/_social') ?>
       <p class="auth-switch">
-        <span>아직 회원이 아니신가요? <a class="link" href="<?= $this->url('auth.register') ?>">회원가입</a></span>
-        <span class="auth-switch-sep" aria-hidden="true"></span>
+        <?php if ($registration_available): ?><span>아직 회원이 아니신가요? <a class="link" href="<?= $this->url('auth.register') ?>">회원가입</a></span>
+        <span class="auth-switch-sep" aria-hidden="true"></span><?php endif ?>
         <a class="link link-hover" href="<?= $this->url('auth.forgot') ?>">비밀번호 찾기</a>
       </p>
     </div>

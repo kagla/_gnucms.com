@@ -9,7 +9,8 @@
       if(!field){return}
       btn.hidden=false;
       btn.addEventListener('click',function(){
-        var show=field.type==='password',label=show?'비밀번호 숨기기':'비밀번호 표시';
+        var show=field.type==='password',name=btn.dataset.pwLabel||'비밀번호';
+        var label=name+(show?' 숨기기':' 표시');
         field.type=show?'text':'password';
         btn.setAttribute('aria-pressed',show?'true':'false');
         btn.setAttribute('aria-label',label);

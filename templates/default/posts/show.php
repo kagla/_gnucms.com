@@ -1,4 +1,9 @@
 <?php $this->layout('layout') ?>
+<?php
+$navigation_scope = $navigation_scope ?? 'board';
+$adjacent_posts = is_array($adjacent_posts ?? null) ? $adjacent_posts : [];
+$below_view_list = $below_view_list ?? null;
+?>
 <?php $this->start('title') ?><?= $this->e($post['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e(mb_substr(strip_tags((string) $post['content']), 0, 150)) ?>"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>

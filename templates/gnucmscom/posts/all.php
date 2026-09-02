@@ -36,6 +36,7 @@ $allUrl = function ($q, $page) use ($list): string {
 <?php $this->insert('posts/_table', [
   'list' => $list,
   'show_board' => true,
+  'navigation_scope' => 'all',
   'empty_text' => ($query['q'] !== null && $query['q'] !== '') ? '조건에 맞는 글이 없습니다.' : '아직 글이 없습니다.',
 ]) ?>
 

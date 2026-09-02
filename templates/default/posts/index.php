@@ -32,6 +32,7 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 // 목록 형태는 게시판 설정이 기본, ?view= 로 잠시 바꾼다.
 // view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다.
 $view = $this->def($view ?? null, 'list');
+$view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view : null;
 ?>
 
 <div class="breadcrumbs">

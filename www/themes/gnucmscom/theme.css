@@ -627,9 +627,14 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 .avatar{flex:none}
 .avatar-inner{
   display:grid;place-items:center;width:2rem;height:2rem;
+  overflow:hidden;
   border-radius:9999px;background:var(--tone,var(--tone-0));color:#fff;
   font-size:13px;font-weight:800;line-height:1;text-transform:uppercase;
 }
+.avatar-inner img{display:block;width:100%;height:100%;object-fit:cover}
+.profile-image-preview{display:flex;align-items:center;gap:.75rem;margin-bottom:.65rem;color:var(--color-muted);font-size:13px}
+.profile-image-preview img{width:4.5rem;height:4.5rem;border-radius:9999px;object-fit:cover;border:var(--border) solid var(--bc-10)}
+.auth-profile-image{display:block;width:4.5rem;height:4.5rem;margin:0 auto .75rem;border-radius:9999px;object-fit:cover;border:var(--border) solid var(--bc-10)}
 .avatar-sm .avatar-inner{width:1.75rem;height:1.75rem;font-size:11.5px}
 .avatar-xs .avatar-inner{width:1.25rem;height:1.25rem;font-size:10px}
 [data-theme="dark"] .avatar-inner{color:#0d1620}
@@ -767,6 +772,10 @@ select.select:-webkit-autofill:focus{
 .toggle-row:hover{border-color:var(--bc-20);background:var(--color-base-200)}
 .toggle-row span strong{display:flex;align-items:center;gap:.375rem;font-size:13.5px;font-weight:700}
 .toggle-row span small{display:block;margin-top:.1875rem;color:var(--bc-mid);font-size:12px}
+.membership-policy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.membership-policy-grid .toggle-list{min-width:0}
+.membership-policy-grid .toggle-row{height:100%}
+.membership-policy-grid .toggle:disabled{opacity:.45}
 
 /* 토글·체크박스는 daisyUI 것을 쓴다.
    다만 --radius-selector 가 9999px 이라 체크박스까지 동그래지므로 각을 돌려준다. */
@@ -774,6 +783,9 @@ select.select:-webkit-autofill:focus{
 .check-row{align-items:flex-start;font-size:13.5px}
 .check-row.is-invalid .checkbox{border-color:var(--color-error)}
 .consent{gap:.5rem;padding:1rem;border-radius:var(--radius-box);background:var(--color-base-200)}
+.consent-all-row{margin-bottom:.125rem;padding-bottom:.75rem;border-bottom:var(--border) solid var(--bc-10)}
+.consent-all-row strong{font-weight:800}
+.consent-all-row small{display:block;margin-top:.1875rem;color:var(--bc-mid);font-size:12px;line-height:1.45}
 
 .form-section{display:flex;flex-direction:column;margin-top:1.5rem;padding-top:1.25rem;border-top:var(--border) solid var(--bc-10)}
 .form-section:first-of-type{margin-top:.5rem;padding-top:0;border-top:0}
@@ -1029,7 +1041,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 }
 .post-meta{display:flex;align-items:center;gap:.375rem;color:var(--bc-mid);font-size:12px}
 .post-author,.post-list-author{max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--bc-strong)}
-.post-list-author{display:block}
+.author-ip{color:var(--bc-soft);font-size:11.5px;font-weight:500;white-space:nowrap}
+.post-list-author{display:inline-flex}
 .post-stats{display:flex;align-items:center;gap:.75rem;color:var(--bc-soft);font-size:12px;font-weight:600}
 .post-stats span{display:inline-flex;align-items:center;gap:.25rem}
 
@@ -1184,8 +1197,30 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .article-footer{display:flex;align-items:center;justify-content:flex-end;gap:1rem;padding:0 2.25rem 1.75rem}
 .article-byline{display:grid;gap:.1875rem;min-width:0;margin-top:.875rem;text-align:left}
 .article-byline strong{font-size:13.5px;font-weight:800}
+.article-author-row{display:flex;align-items:center;gap:.5rem;min-width:0}
 .article-actions-inline{display:flex;align-items:center;gap:.375rem;margin-left:auto;flex:none}
 .article-actions-inline .btn{background:var(--color-base-100)}
+.post-adjacent{margin-top:1rem}
+.post-adjacent-grid{display:grid;grid-template-columns:1fr 1fr}
+.post-adjacent-link{display:flex;align-items:center;gap:.375rem;min-width:0;padding:.5rem;color:var(--bc-mid)}
+.post-adjacent-link:not(.post-adjacent-empty):hover{color:var(--color-primary)}
+.post-adjacent-icon{display:inline-grid;place-items:center;flex:none}
+.post-adjacent-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bc-strong);font-size:13.5px;font-weight:750}
+.post-adjacent-mobile-label{display:none;font-size:13px;font-weight:750}
+.post-adjacent-next{justify-content:flex-end;text-align:right}
+.post-adjacent-next .post-adjacent-icon{order:2}
+.post-adjacent-empty{visibility:hidden}
+.comments{margin-top:1rem}
+.below-view-list{margin-top:1.5rem}
+.below-view-list-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.625rem;padding-inline:.25rem}
+.below-view-list-head .section-title{margin:0}
+.below-view-list .is-current-post{background:var(--brand-wash);box-shadow:inset 3px 0 0 var(--color-primary)}
+.below-view-list .post-card.is-current-post{border-radius:var(--radius-box);box-shadow:0 0 0 2px var(--p-line)}
+@media (max-width:640px){
+  .post-adjacent-link{padding:.625rem .25rem}
+  .post-adjacent-title{display:none}
+  .post-adjacent-mobile-label{display:inline}
+}
 /* 삭제는 저장 옆에 두되, 실수로 누르지 않게 사이를 벌린다 */
 .btn-delete{margin-left:.75rem}
 .article-body{padding:1rem 2.25rem 2.25rem;font-size:16px;line-height:1.88}
@@ -1673,6 +1708,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .hero-content{padding:2.25rem 1.5rem}
   .hero .stats{width:100%}
   .grid-2,.grid-3{grid-template-columns:1fr}
+  .membership-policy-grid{grid-template-columns:1fr}
   .card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem .875rem}
   .carousel-item{width:min(13rem,58vw)}
   .post-rows .list-row{padding:1.125rem 1.25rem;gap:.875rem}
@@ -1838,8 +1874,29 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .show-sm{display:flex}
 }
 
-/* 관리 콘솔 > 사이트 설정 > 데이터 구조 */
-.schema-card { margin-top: 1.25rem; }
+/* 관리 콘솔 > 사이트 설정 */
+.settings-tabs { margin-bottom: 1rem; overflow-x: auto; flex-wrap: nowrap; }
+.settings-tabs .tab { white-space: nowrap; }
+.settings-card { min-width: 0; }
+.oauth-provider + .oauth-provider { border-top: 1px solid color-mix(in oklch, currentColor 12%, transparent); padding-top: 1.25rem; }
+.oauth-provider-tools { display: flex; justify-content: flex-end; margin: .5rem 0; }
+.oauth-setup-guide { margin-top: .75rem; border: 1px solid var(--bc-10); border-radius: var(--radius-box); background: var(--color-base-200); }
+.oauth-setup-guide summary { cursor: pointer; padding: .9rem 1rem; font-size: 14px; font-weight: 800; }
+.oauth-setup-guide[open] summary { border-bottom: 1px solid var(--bc-10); }
+.oauth-setup-guide-body { padding: 1rem; color: var(--bc-mid); font-size: 13.5px; line-height: 1.65; }
+.oauth-setup-guide-body ol,.oauth-setup-guide-body ul { display: grid; gap: .45rem; margin: 0; padding-left: 1.35rem; }
+.oauth-setup-guide-body h3 { margin: 1rem 0 .35rem; color: var(--bc); font-size: 13.5px; font-weight: 800; }
+.oauth-setup-guide-body p { margin: .35rem 0; }
+.oauth-setup-guide-body code { overflow-wrap: anywhere; color: var(--bc); }
+.oauth-guide-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding-top: .4rem; }
+.oauth-callback { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+.member-login-methods { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:.35rem; }
+.member-login-events-card { margin-top:1.25rem; }
+.login-event-ua { max-width:22rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-withdrawal { margin-top:1.5rem; }
+.account-withdrawal .alert p { margin:.2rem 0 0; }
+.withdrawal-form { margin-top:1rem; }
+.withdrawal-social-list { margin-top:.75rem; }
 .schema-facts { display: grid; gap: .5rem 1.5rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: .75rem 0 1rem; }
 .schema-facts dt { font-size: .8rem; color: color-mix(in oklch, currentColor 60%, transparent); }
 .schema-facts dd { margin: 0; font-weight: 600; }
@@ -2085,7 +2142,10 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .post-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
 
 /* 목록의 글쓴이 단추와 모달 */
-.link-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.link-author,.post-list-author{align-items:center;gap:.375rem;max-width:100%;vertical-align:middle}
+.link-author{overflow:hidden;white-space:nowrap;display:inline-flex;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.post-list-author-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-author .post-list-author-name{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
 .link-author:hover{color:var(--color-primary)}
 .author-modal .modal-box{max-width:22rem}
 .author-modal-title{margin:0 0 .25rem;font-size:1.05rem;font-weight:800}

@@ -8,7 +8,7 @@ $nested = $nested ?? false;
 <?php foreach ($nodes as $comment): ?>
   <div class="chat chat-start<?php if ($comment['deleted']): ?> chat-removed<?php endif ?>" id="comment-<?= $this->e($comment['id']) ?>">
     <div class="chat-image avatar avatar-placeholder avatar-sm">
-      <span class="avatar-inner" data-tone="<?= $this->e($comment['deleted'] ? 0 : mb_strlen((string) $comment['author_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e($comment['deleted'] ? '·' : mb_strtoupper(mb_substr((string) $comment['author_name'], 0, 1))) ?></span></span>
+      <span class="avatar-inner" data-tone="<?= $this->e($comment['deleted'] ? 0 : mb_strlen((string) $comment['author_name']) % 6) ?>" aria-hidden="true"><?php if (!$comment['deleted'] && !empty($comment['author_avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $comment['author_avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e($comment['deleted'] ? '·' : mb_strtoupper(mb_substr((string) $comment['author_name'], 0, 1))) ?></span><?php endif ?></span>
     </div>
     <div class="chat-header">
       <?php if ($comment['deleted']): ?>삭제된 댓글<?php else: ?><?= $this->e($comment['author_name']) ?><?php endif ?>
