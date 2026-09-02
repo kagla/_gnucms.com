@@ -668,7 +668,7 @@ final class AdminPageTest extends WebTestCase
         $stored = $app->oauthSettings()->all();
         self::assertSame('1', $stored['google.enabled']);
         self::assertSame('google-client-id', $stored['google.client_id']);
-        self::assertStringStartsWith('v1:', $stored['google.client_secret']);
+        self::assertStringStartsWith('v2:', $stored['google.client_secret']);
         self::assertStringNotContainsString('google-client-secret', $stored['google.client_secret']);
         self::assertSame([['key' => 'google', 'label' => 'Google']], $app->providerRegistry()->options());
 

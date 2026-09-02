@@ -25,7 +25,6 @@ PHP 8.4 사용을 권장합니다.
 
 - `PDO`
 - 사용할 데이터베이스에 맞는 `pdo_sqlite`, `pdo_mysql`, `pdo_pgsql` 중 하나
-- `sodium`
 - `mbstring`
 - `fileinfo`
 - `openssl`

@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ServerCheckTest extends TestCase
 {
-    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'sodium', 'mbstring', 'fileinfo', 'openssl', 'gd'];
+    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'mbstring', 'fileinfo', 'openssl', 'gd'];
 
     private string $dir;
 
@@ -38,14 +38,14 @@ final class ServerCheckTest extends TestCase
         }
     }
 
-    public function testMissingRequiredExtensionFails(): void
+    public function testMissingOpenSslExtensionFails(): void
     {
-        $result = $this->check(array_diff(self::ALL, ['sodium']))->run();
+        $result = $this->check(array_diff(self::ALL, ['openssl']))->run();
 
         self::assertFalse($result['ok']);
-        $sodium = $this->item($result, 'sodium 확장');
-        self::assertFalse($sodium['ok']);
-        self::assertTrue($sodium['required']);
+        $openssl = $this->item($result, 'openssl 확장');
+        self::assertFalse($openssl['ok']);
+        self::assertTrue($openssl['required']);
     }
 
     public function testNoPdoDriverFails(): void

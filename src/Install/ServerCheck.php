@@ -55,10 +55,9 @@ final class ServerCheck
         );
 
         foreach ([
-            'sodium'   => '메일 비밀번호 암호화',
             'mbstring' => '한글 처리',
             'fileinfo' => '첨부 파일 종류 판별',
-            'openssl'  => '메일 TLS 와 난수',
+            'openssl'  => '메일 TLS 와 비밀값 암호화',
         ] as $ext => $why) {
             $items[] = $this->item($ext . ' 확장', $this->has($ext), true, $why);
         }

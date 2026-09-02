@@ -33,7 +33,7 @@ final class MailSettingsServiceTest extends DatabaseTestCase
         self::assertSame('587', $stored['port']);
         self::assertSame('tls', $stored['encryption']);
         self::assertNotSame('app-password-value', $stored['password']);
-        self::assertStringStartsWith('v1:', $stored['password']);
+        self::assertStringStartsWith('v2:', $stored['password']);
         self::assertSame('app-password-value', $service->runtime()['password']);
         self::assertSame('app-password-value', $service->password($acl));
         self::assertSame('', $service->formValues($acl)['password']);
