@@ -2597,6 +2597,7 @@ body:not(.admin-page) :focus-visible{outline:2px solid var(--premium-text);outli
 body[data-section="board"],body[data-section="all"]{background:var(--premium-page)}
 body[data-section="board"] .main-area,body[data-section="all"] .main-area{padding-top:4.25rem}
 body[data-section="board"] .page-head,body[data-section="all"] .page-head{margin-bottom:2.25rem;padding-bottom:1.75rem;border-color:var(--premium-line)}
+body[data-section="all"] .page-head{padding-bottom:0;border-bottom:0}
 body[data-section="board"] .card,body[data-section="all"] .card{
   border-color:var(--premium-line);border-radius:var(--premium-radius);background:var(--premium-surface);box-shadow:0 1px 2px rgba(0,0,0,.025);
 }
