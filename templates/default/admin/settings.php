@@ -27,6 +27,26 @@
         <fieldset class="fieldset toggle-list"><label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="social_registration_enabled" value="1" data-signup-toggle="social"<?= ($values['social_registration_enabled'] ?? false) ? ' checked' : '' ?>><span><strong>신규 소셜 회원가입 허용</strong><small>활성화된 소셜 제공자로 새 계정을 만들 수 있습니다.</small></span></label></fieldset>
       </div>
     </div>
+    <div class="form-section"><h2 class="form-section-title">외부 서비스 코드</h2>
+      <p class="card-sub">서비스에서 안내한 전체 태그를 그대로 붙여넣으세요. 저장한 코드는 공개 사이트의 <code>&lt;head&gt;</code>에만 적용됩니다. 신뢰할 수 있는 서비스의 코드만 사용하세요.</p>
+      <fieldset class="fieldset<?= array_key_exists('site_verification_html', $errors) ? ' is-invalid' : '' ?>">
+        <legend class="fieldset-legend">사이트 소유 확인 태그</legend>
+        <textarea class="textarea textarea-bordered textarea-block code-textarea" name="site_verification_html" rows="3" maxlength="20000" spellcheck="false" placeholder="&lt;meta name=&quot;naver-site-verification&quot; content=&quot;...&quot;&gt;"><?= $this->e($values['site_verification_html'] ?? '') ?></textarea>
+        <p class="fieldset-label">네이버 서치어드바이저, Google Search Console 등의 HTML 메타 태그를 넣습니다.</p>
+        <?php if (array_key_exists('site_verification_html', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['site_verification_html']) ?></p><?php endif ?>
+      </fieldset>
+      <fieldset class="fieldset<?= array_key_exists('analytics_html', $errors) ? ' is-invalid' : '' ?>">
+        <legend class="fieldset-legend">애널리틱스 코드</legend>
+        <textarea class="textarea textarea-bordered textarea-block code-textarea" name="analytics_html" rows="7" maxlength="20000" spellcheck="false" placeholder="Google Analytics 또는 네이버 애널리틱스에서 받은 코드를 붙여넣으세요."><?= $this->e($values['analytics_html'] ?? '') ?></textarea>
+        <?php if (array_key_exists('analytics_html', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['analytics_html']) ?></p><?php endif ?>
+      </fieldset>
+      <fieldset class="fieldset<?= array_key_exists('adsense_html', $errors) ? ' is-invalid' : '' ?>">
+        <legend class="fieldset-legend">애드센스 코드</legend>
+        <textarea class="textarea textarea-bordered textarea-block code-textarea" name="adsense_html" rows="5" maxlength="20000" spellcheck="false" placeholder="Google AdSense에서 받은 사이트 연결 코드를 붙여넣으세요."><?= $this->e($values['adsense_html'] ?? '') ?></textarea>
+        <p class="fieldset-label">자동 광고 또는 사이트 연결용 head 코드를 넣습니다. 개별 광고 단위 코드는 게시물이나 템플릿의 표시 위치에 따로 배치해야 합니다.</p>
+        <?php if (array_key_exists('adsense_html', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['adsense_html']) ?></p><?php endif ?>
+      </fieldset>
+    </div>
     <div class="card-actions form-actions"><a class="btn btn-ghost" href="<?= $this->url('admin.index') ?>">취소</a><button class="btn btn-primary" type="submit">설정 저장</button></div>
   </form>
 </div></section>

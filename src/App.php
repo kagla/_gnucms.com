@@ -30,6 +30,7 @@ use GnuCms\Service\BoardService;
 use GnuCms\Service\CommentService;
 use GnuCms\Service\NotificationService;
 use GnuCms\Service\PostService;
+use GnuCms\Spam\WriteRateLimiter;
 use GnuCms\Mail\NativeMailer;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Mail\MailSettingsRepository;
@@ -75,6 +76,8 @@ final class App
 
     /** @var CommentService|null */
     private $commentService = null;
+
+    private ?WriteRateLimiter $writeRateLimiter = null;
 
     /** @var NotificationRepository|null */
     private $notifications = null;
@@ -243,6 +246,7 @@ final class App
                 $this->htmlSanitizer(),
                 $this->contentImages()
             );
+            $this->postService->setWriteRateLimiter($this->writeRateLimiter());
             // 쓰기 규칙은 사이트 설정이 정한다. settings() 는 요청당 한 번만 DB 를 읽는다.
             $this->postService->setContentMinChars((int) $this->cmsService()->settings()['post_min_chars']);
             // attachments() 가 다시 postService() 를 부르므로 여기서 곧장 호출하면 무한
@@ -287,12 +291,34 @@ final class App
                 $this->contentImages(),
                 $this->notificationService()
             );
+            $this->commentService->setWriteRateLimiter($this->writeRateLimiter());
             $this->commentService->setContentMinChars((int) $this->cmsService()->settings()['comment_min_chars']);
             $this->commentService->setUserRepository($this->users());
             $this->commentService->setBoardService($this->boardService());
         }
 
         return $this->commentService;
+    }
+
+    public function writeRateLimiter(): WriteRateLimiter
+    {
+        if ($this->writeRateLimiter === null) {
+            $settings = $this->cmsService()->settings();
+            $this->writeRateLimiter = new WriteRateLimiter($this->db(), [
+                'post' => [
+                    [(int) $settings['post_rate_interval'], 1],
+                    [600, (int) $settings['post_rate_10m']],
+                    [86400, (int) $settings['post_rate_day']],
+                ],
+                'comment' => [
+                    [(int) $settings['comment_rate_interval'], 1],
+                    [600, (int) $settings['comment_rate_10m']],
+                    [86400, (int) $settings['comment_rate_day']],
+                ],
+            ]);
+        }
+
+        return $this->writeRateLimiter;
     }
 
     public function users(): UserRepository

@@ -19,7 +19,7 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
-        self::assertCount(13, Schema::TABLES);
+        self::assertCount(14, Schema::TABLES);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
@@ -99,6 +99,19 @@ final class SchemaTest extends WebTestCase
         )['c']);
         self::assertSame(0, (int) $db->selectOne(
             'SELECT COUNT(author_ip) AS c FROM ' . $db->table('comments')
+        )['c']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testWriteRateLimitMigrationCreatesCounterTable(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $db->execute('DROP TABLE ' . $db->table('write_rate_limits'));
+
+        (new Schema($db))->migrateWriteRateLimits();
+
+        self::assertSame(0, (int) $db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $db->table('write_rate_limits')
         )['c']);
     }
 

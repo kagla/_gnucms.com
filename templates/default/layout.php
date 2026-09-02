@@ -10,6 +10,12 @@
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
 <?php $this->start('seo_meta') ?><?php $this->stop() ?>
 <?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> RSS" href="<?= $this->e($site_url) ?>/rss.xml"><?php $this->stop() ?>
+<?php $this->start('external_service_head') ?>
+<?php foreach (['site_verification_html', 'analytics_html', 'adsense_html'] as $headSetting): ?>
+<?php if (($site[$headSetting] ?? '') !== ''): ?><?= (string) $site[$headSetting] ?>
+<?php endif ?>
+<?php endforeach ?>
+<?php $this->stop() ?>
 <script>
 (function(){
   var d=document.documentElement,t=null;
@@ -78,6 +84,7 @@
                 <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 17) ?> 알림</a></li>
                 <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 17) ?> 관리 콘솔</a></li><?php endif ?>
                 <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 17) ?> 회원정보 수정</a></li>
+                <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.login_history') ?>"><?= $this->icon('history', 17) ?> 로그인 기록</a></li><?php endif ?>
                 <li>
                   <form method="post" action="<?= $this->url('auth.logout') ?>">
                     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
@@ -249,6 +256,7 @@
           <li class="menu-title">내 활동</li>
           <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 18) ?> 알림<?php if ($unread_notifications > 0): ?> <span class="badge badge-primary badge-sm"><?= $this->e($unread_notifications) ?></span><?php endif ?></a></li>
           <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 18) ?> 회원정보 수정</a></li>
+          <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.login_history') ?>"><?= $this->icon('history', 18) ?> 로그인 기록</a></li><?php endif ?>
           <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 18) ?> 관리 콘솔</a></li><?php endif ?>
         <?php endif ?>
       </ul>

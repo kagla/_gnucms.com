@@ -16,6 +16,9 @@ final class CmsService
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
+        'site_verification_html' => '',
+        'analytics_html' => '',
+        'adsense_html' => '',
         'password_login_enabled' => '1',
         'social_login_enabled' => '1',
         'registration_enabled' => '1',
@@ -24,6 +27,12 @@ final class CmsService
         'theme' => 'default',
         'post_min_chars' => '0',
         'comment_min_chars' => '0',
+        'post_rate_interval' => '30',
+        'post_rate_10m' => '5',
+        'post_rate_day' => '20',
+        'comment_rate_interval' => '5',
+        'comment_rate_10m' => '20',
+        'comment_rate_day' => '100',
         'attach_max_mb' => '5',
         'attach_limit' => '5',
     ];
@@ -85,6 +94,12 @@ final class CmsService
         $settings['guest_write_enabled'] = $settings['guest_write_enabled'] === '1';
         $settings['post_min_chars'] = max(0, (int) $settings['post_min_chars']);
         $settings['comment_min_chars'] = max(0, (int) $settings['comment_min_chars']);
+        $settings['post_rate_interval'] = max(0, (int) $settings['post_rate_interval']);
+        $settings['post_rate_10m'] = max(0, (int) $settings['post_rate_10m']);
+        $settings['post_rate_day'] = max(0, (int) $settings['post_rate_day']);
+        $settings['comment_rate_interval'] = max(0, (int) $settings['comment_rate_interval']);
+        $settings['comment_rate_10m'] = max(0, (int) $settings['comment_rate_10m']);
+        $settings['comment_rate_day'] = max(0, (int) $settings['comment_rate_day']);
         $settings['attach_max_mb'] = max(1, (int) $settings['attach_max_mb']);
         $settings['attach_limit'] = max(0, (int) $settings['attach_limit']);
 
@@ -247,6 +262,12 @@ final class CmsService
             'theme' => $theme,
             'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
             'comment_min_chars' => (string) $v->int('comment_min_chars', 0, 0, 1000),
+            'post_rate_interval' => (string) $v->int('post_rate_interval', 30, 0, 3600),
+            'post_rate_10m' => (string) $v->int('post_rate_10m', 5, 0, 1000),
+            'post_rate_day' => (string) $v->int('post_rate_day', 20, 0, 10000),
+            'comment_rate_interval' => (string) $v->int('comment_rate_interval', 5, 0, 3600),
+            'comment_rate_10m' => (string) $v->int('comment_rate_10m', 20, 0, 1000),
+            'comment_rate_day' => (string) $v->int('comment_rate_day', 100, 0, 10000),
             'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),
             'attach_limit' => (string) $v->int('attach_limit', 5, 0, 999),
         ];
@@ -265,6 +286,12 @@ final class CmsService
         }
         $passwordLogin = $v->bool('password_login_enabled', false);
         $socialLogin = $v->bool('social_login_enabled', false);
+        $current = $this->settings();
+        $siteVerificationHtml = $this->headHtml(
+            $v, $input, 'site_verification_html', (string) $current['site_verification_html']
+        );
+        $analyticsHtml = $this->headHtml($v, $input, 'analytics_html', (string) $current['analytics_html']);
+        $adsenseHtml = $this->headHtml($v, $input, 'adsense_html', (string) $current['adsense_html']);
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
@@ -276,10 +303,35 @@ final class CmsService
             'social_registration_enabled' => $socialLogin
                 && $v->bool('social_registration_enabled', false) ? '1' : '0',
             'theme' => $theme,
+            'site_verification_html' => $siteVerificationHtml,
+            'analytics_html' => $analyticsHtml,
+            'adsense_html' => $adsenseHtml,
         ];
         $v->check();
         $this->cms->saveSettings($settings);
         $this->settingsCache = null;
+    }
+
+    /** 관리자 입력을 head 안에 안전하게 둘 수 있는 크기와 구조로 제한한다. */
+    private function headHtml(Validator $v, array $input, string $field, string $default): string
+    {
+        if (!array_key_exists($field, $input)) {
+            return $default;
+        }
+        if (!is_scalar($input[$field])) {
+            $v->fail($field, '문자열이어야 합니다.');
+
+            return $default;
+        }
+        $html = trim((string) $input[$field]);
+        if (mb_strlen($html) > 20000) {
+            $v->fail($field, '20000자를 넘을 수 없습니다.');
+        }
+        if ($html !== '' && preg_match('/<\s*\/?\s*(?:html|head|body)\b/i', $html) === 1) {
+            $v->fail($field, 'html, head, body 태그는 입력할 수 없습니다. 서비스에서 받은 코드만 넣어 주세요.');
+        }
+
+        return $html;
     }
 
     public function saveWritingSettings(Acl $acl, array $input): void
@@ -290,6 +342,12 @@ final class CmsService
             'guest_write_enabled' => $v->bool('guest_write_enabled', false) ? '1' : '0',
             'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
             'comment_min_chars' => (string) $v->int('comment_min_chars', 0, 0, 1000),
+            'post_rate_interval' => (string) $v->int('post_rate_interval', 30, 0, 3600),
+            'post_rate_10m' => (string) $v->int('post_rate_10m', 5, 0, 1000),
+            'post_rate_day' => (string) $v->int('post_rate_day', 20, 0, 10000),
+            'comment_rate_interval' => (string) $v->int('comment_rate_interval', 5, 0, 3600),
+            'comment_rate_10m' => (string) $v->int('comment_rate_10m', 20, 0, 1000),
+            'comment_rate_day' => (string) $v->int('comment_rate_day', 100, 0, 10000),
             'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),
             'attach_limit' => (string) $v->int('attach_limit', 5, 0, 999),
         ];

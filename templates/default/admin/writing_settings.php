@@ -13,7 +13,21 @@
       <div class="settings-write-rules-row">
         <fieldset class="fieldset"><legend class="fieldset-legend">본문 최소 글자수</legend><input class="input input-bordered input-block" type="number" name="post_min_chars" min="0" max="10000" value="<?= $this->e((string) ($values['post_min_chars'] ?? 0)) ?>" required><p class="fieldset-label">0 = 제한 없음. 태그와 공백을 뺀 글자 수입니다.</p></fieldset>
         <fieldset class="fieldset"><legend class="fieldset-legend">댓글 최소 글자수</legend><input class="input input-bordered input-block" type="number" name="comment_min_chars" min="0" max="1000" value="<?= $this->e((string) ($values['comment_min_chars'] ?? 0)) ?>" required><p class="fieldset-label">0 = 제한 없음.</p></fieldset>
+      </div>
+    </div>
+    <div class="form-section settings-write-rules"><h2 class="form-section-title">도배 방지</h2><p class="fieldset-label">회원은 계정별, 비회원은 IP별로 제한합니다. 각 항목에서 0은 해당 제한을 사용하지 않는다는 뜻입니다.</p>
+      <div class="settings-write-rules-row">
+        <fieldset class="fieldset"><legend class="fieldset-legend">글 등록 간격 (초)</legend><input class="input input-bordered input-block" type="number" name="post_rate_interval" min="0" max="3600" value="<?= $this->e((string) ($values['post_rate_interval'] ?? 30)) ?>" required><p class="fieldset-label">기본 30초. 이 시간이 지나야 다음 글을 등록할 수 있습니다.</p></fieldset>
+        <fieldset class="fieldset"><legend class="fieldset-legend">댓글 등록 간격 (초)</legend><input class="input input-bordered input-block" type="number" name="comment_rate_interval" min="0" max="3600" value="<?= $this->e((string) ($values['comment_rate_interval'] ?? 5)) ?>" required><p class="fieldset-label">기본 5초. 이 시간이 지나야 다음 댓글을 등록할 수 있습니다.</p></fieldset>
       </div><div class="settings-write-rules-row">
+        <fieldset class="fieldset"><legend class="fieldset-legend">10분당 글 수</legend><input class="input input-bordered input-block" type="number" name="post_rate_10m" min="0" max="1000" value="<?= $this->e((string) ($values['post_rate_10m'] ?? 5)) ?>" required></fieldset>
+        <fieldset class="fieldset"><legend class="fieldset-legend">10분당 댓글 수</legend><input class="input input-bordered input-block" type="number" name="comment_rate_10m" min="0" max="1000" value="<?= $this->e((string) ($values['comment_rate_10m'] ?? 20)) ?>" required></fieldset>
+      </div><div class="settings-write-rules-row">
+        <fieldset class="fieldset"><legend class="fieldset-legend">하루당 글 수</legend><input class="input input-bordered input-block" type="number" name="post_rate_day" min="0" max="10000" value="<?= $this->e((string) ($values['post_rate_day'] ?? 20)) ?>" required></fieldset>
+        <fieldset class="fieldset"><legend class="fieldset-legend">하루당 댓글 수</legend><input class="input input-bordered input-block" type="number" name="comment_rate_day" min="0" max="10000" value="<?= $this->e((string) ($values['comment_rate_day'] ?? 100)) ?>" required></fieldset>
+      </div>
+    </div>
+    <div class="form-section settings-write-rules"><h2 class="form-section-title">첨부 파일</h2><div class="settings-write-rules-row">
         <fieldset class="fieldset"><legend class="fieldset-legend">글당 첨부 개수</legend><input class="input input-bordered input-block" type="number" name="attach_limit" min="0" max="999" value="<?= $this->e((string) ($values['attach_limit'] ?? 5)) ?>" required><p class="fieldset-label">0 = 무제한. 게시판별 파일 사용 설정도 켜야 합니다.</p></fieldset>
         <fieldset class="fieldset"><legend class="fieldset-legend">파일당 최대 용량 (MB)</legend><input class="input input-bordered input-block" type="number" name="attach_max_mb" min="1" max="1024" value="<?= $this->e((string) ($values['attach_max_mb'] ?? 5)) ?>" required><p class="fieldset-label"><?= (int) $server_max_mb === 0 ? '서버 PHP 한계가 없습니다.' : '서버 PHP 한계는 ' . $this->e((string) $server_max_mb) . ' MB입니다.' ?></p></fieldset>
       </div>

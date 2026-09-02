@@ -599,6 +599,7 @@ input[type="password"]::-ms-clear{display:none}
 .pw-toggle[aria-pressed="true"] .pw-ico-show{display:none}
 .pw-toggle[aria-pressed="true"] .pw-ico-hide{display:block}
 .textarea{height:auto;min-height:7rem;padding:.625rem;line-height:1.7;resize:vertical;display:block}
+.code-textarea{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:12.5px}
 .select{
   appearance:none;padding-right:2.25rem;cursor:pointer;display:block;line-height:2.5rem;
   background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
@@ -1596,6 +1597,9 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .comments .card-body{padding:1.375rem 1.25rem}
   .list-row{padding:1rem 1.25rem}
   .danger-zone{margin:0 1.25rem 1.25rem}
+  .history-maintenance .card-body{align-items:stretch;flex-direction:column}
+  .history-delete-form{align-items:stretch;flex-direction:column}
+  .history-delete-form .fieldset{width:100%}
   .auth-card .card-body{padding:1.75rem 1.375rem}
   .status-card .card-body{padding:2.25rem 1.375rem}
   .form-actions{flex-direction:column-reverse;align-items:stretch}
@@ -1759,7 +1763,29 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .oauth-callback { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
 .member-login-methods { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:.35rem; }
 .member-login-events-card { margin-top:1.25rem; }
-.login-event-ua { max-width:22rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.login-event-ua { white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
+.login-event-result { white-space:nowrap; }
+.login-event-result .badge { flex-wrap:nowrap; min-width:max-content; }
+.login-history-body { max-width:96rem; }
+.login-events-table { width:100%; }
+.login-history-body .login-event-ua { min-width:28rem; white-space:nowrap; overflow-wrap:normal; word-break:normal; }
+.history-maintenance { margin-bottom:1rem; }
+.history-maintenance-summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.25rem; cursor:pointer; font-size:14px; font-weight:800; list-style:none; }
+.history-maintenance-summary::-webkit-details-marker { display:none; }
+.history-maintenance-summary > span { display:flex; align-items:center; gap:.5rem; }
+.history-maintenance-hint { color:var(--bc-soft); font-size:12px; font-weight:600; }
+.history-maintenance-hint .icon { transition:transform var(--dur) var(--ease); }
+.history-maintenance[open] .history-maintenance-summary { border-bottom:var(--border) solid var(--bc-10); }
+.history-maintenance[open] .history-maintenance-hint .icon { transform:rotate(180deg); }
+.history-maintenance .card-body { display:flex; align-items:flex-end; justify-content:space-between; gap:1.5rem; padding-block:1.25rem; }
+.history-delete-form { display:flex; align-items:flex-end; gap:.625rem; flex:none; }
+.history-delete-form .fieldset { width:10.5rem; margin:0; }
+.history-filter-note { margin-top:.25rem; }
+.login-history-search { max-width:34rem; }
+@media (max-width:640px) {
+  .history-maintenance-hint { display:none!important; }
+  .login-history-body .login-event-ua { min-width:0; white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
+}
 .account-withdrawal { margin-top:1.5rem; }
 .account-withdrawal .alert p { margin:.2rem 0 0; }
 .withdrawal-form { margin-top:1rem; }

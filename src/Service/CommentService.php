@@ -14,6 +14,7 @@ use GnuCms\Repository\CommentRepository;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Validation\Validator;
 use GnuCms\Support\IpAddress;
+use GnuCms\Spam\WriteRateLimiter;
 
 final class CommentService
 {
@@ -40,6 +41,8 @@ final class CommentService
     private ?UserRepository $users = null;
 
     private ?BoardService $boards = null;
+
+    private ?WriteRateLimiter $writeRateLimiter = null;
 
     public function __construct(
         PostService $postService,
@@ -79,6 +82,11 @@ final class CommentService
     public function setBoardService(BoardService $boards): void
     {
         $this->boards = $boards;
+    }
+
+    public function setWriteRateLimiter(WriteRateLimiter $limiter): void
+    {
+        $this->writeRateLimiter = $limiter;
     }
 
     /** 편집기가 감싼 태그와 공백으로 길이를 속일 수 없게 글자만 센다. */
@@ -202,6 +210,10 @@ final class CommentService
         $data['is_secret'] = $secret ? 1 : 0;
 
         $v->check();
+
+        if ($this->writeRateLimiter !== null) {
+            $this->writeRateLimiter->consume('comment', $acl, $clientIp);
+        }
 
         $id = $this->comments->create($data);
         $this->postRepo->adjustCommentCount($postId, 1);

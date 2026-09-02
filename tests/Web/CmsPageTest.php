@@ -36,6 +36,63 @@ final class CmsPageTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testAdminCanAddVerificationAnalyticsAndAdsenseHeadCode(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create(
+            'owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '소유자', true
+        );
+        $app->users()->verifyEmail($id);
+        unset($_SESSION['user_id'], $_SESSION['session_epoch']);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com',
+            'password' => 'owner-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringContainsString('name="site_verification_html"', $form);
+        self::assertStringContainsString('name="analytics_html"', $form);
+        self::assertStringContainsString('name="adsense_html"', $form);
+
+        $verification = '<meta name="naver-site-verification" content="naver-token">';
+        $analytics = '<script data-analytics-code>window.analyticsLoaded=true;</script>';
+        $adsense = '<script async data-ad-client="ca-pub-test"></script>';
+        $general = [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'site_name' => GNUCMS,
+            'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
+            'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
+            'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
+            'theme' => 'default',
+            'password_login_enabled' => '1',
+            'social_login_enabled' => '1',
+            'registration_enabled' => '1',
+            'social_registration_enabled' => '1',
+            'site_verification_html' => $verification,
+            'analytics_html' => $analytics,
+            'adsense_html' => $adsense,
+        ];
+        $saved = $this->post($app, '/admin/settings', $general);
+        self::assertSame(303, $saved->getStatusCode());
+
+        $home = $this->body($this->get($app, '/'));
+        self::assertStringContainsString($verification, $home);
+        self::assertStringContainsString($analytics, $home);
+        self::assertStringContainsString($adsense, $home);
+
+        $admin = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringNotContainsString($analytics, $admin, '관리 화면에서는 외부 스크립트를 실행하지 않는다.');
+        self::assertStringContainsString('&lt;script data-analytics-code&gt;', $admin);
+
+        $invalid = $this->post($app, '/admin/settings', array_replace($general, [
+            'site_verification_html' => '</head><body>잘못된 코드</body>',
+        ]));
+        self::assertSame(422, $invalid->getStatusCode());
+        self::assertStringContainsString('html, head, body 태그는 입력할 수 없습니다.', $this->body($invalid));
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testRegistrationCanBeDisabled(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

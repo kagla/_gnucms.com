@@ -16,6 +16,145 @@ final class AdminPageTest extends WebTestCase
 
         self::assertSame(401, $this->get($app, '/admin')->getStatusCode());
         self::assertSame(401, $this->get($app, '/admin/boards')->getStatusCode());
+        self::assertSame(401, $this->get($app, '/admin/login-history')->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOnlyAdminCanReviewAndManageAllLoginHistory(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원'
+        );
+        $otherId = $app->users()->create(
+            'other@example.com', password_hash('other-password-123', PASSWORD_DEFAULT), '다른회원'
+        );
+        $app->loginEvents()->record(
+            $memberId, 'member@example.com', 'password', 'failure', '198.51.100.9', 'Test Browser'
+        );
+        $app->loginEvents()->record(
+            $memberId, 'member@example.com', 'google', 'success', '203.0.113.8', 'Mobile Test'
+        );
+        $app->loginEvents()->record(
+            $otherId, 'other@example.com', 'password', 'success', '192.0.2.4', 'Other Browser'
+        );
+
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $memberId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+        self::assertSame(403, $this->get($app, '/admin/login-history')->getStatusCode());
+        self::assertStringNotContainsString('/admin/login-history', $this->body($this->get($app, '/')));
+
+        session_start();
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+        $response = $this->get($app, '/admin/login-history');
+        $body = $this->body($response);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('<h1>로그인 기록</h1>', $body);
+        self::assertStringContainsString('class="admin-body login-history-body"', $body);
+        self::assertStringContainsString('<details class="card history-maintenance">', $body);
+        self::assertStringContainsString('href="/admin/login-history" class="menu-active"', $body);
+        self::assertStringContainsString('일반회원', $body);
+        self::assertStringContainsString('Google', $body);
+        self::assertStringContainsString('>성공</span>', $body);
+        self::assertStringContainsString('>실패</span>', $body);
+        self::assertStringContainsString('203.0.113.8', $body);
+        self::assertStringContainsString('Mobile Test', $body);
+        self::assertLessThan(strpos($body, '198.51.100.9'), strpos($body, '203.0.113.8'));
+        self::assertStringContainsString('href="/admin/login-history?member=' . $memberId . '&amp;q=', $body);
+        self::assertStringContainsString(
+            'href="/admin/login-history?ip=203.0.113.8&amp;q=203.0.113.8"', $body
+        );
+
+        $memberFiltered = $this->body($this->get($app, '/admin/login-history', [
+            'member' => $memberId, 'q' => '일반회원',
+        ]));
+        self::assertStringContainsString('선택한 회원', $memberFiltered);
+        self::assertStringContainsString('name="q" value="일반회원"', $memberFiltered);
+        self::assertStringContainsString('Mobile Test', $memberFiltered);
+        self::assertStringNotContainsString('Other Browser', $memberFiltered);
+        $ipFiltered = $this->body($this->get($app, '/admin/login-history', [
+            'ip' => '203.0.113.8', 'q' => '203.0.113.8',
+        ]));
+        self::assertStringContainsString('IP <code>203.0.113.8</code>', $ipFiltered);
+        self::assertStringContainsString('name="q" value="203.0.113.8"', $ipFiltered);
+        self::assertStringContainsString('Mobile Test', $ipFiltered);
+        self::assertStringNotContainsString('Test Browser', $ipFiltered);
+        $searched = $this->body($this->get($app, '/admin/login-history', ['q' => 'other@example.com']));
+        self::assertStringContainsString('“other@example.com” 검색 결과', $searched);
+        self::assertStringContainsString('Other Browser', $searched);
+        self::assertStringNotContainsString('Mobile Test', $searched);
+        self::assertStringContainsString('Mobile Test', $this->body(
+            $this->get($app, '/admin/login-history', ['q' => 'mobile test'])
+        ));
+
+        for ($i = 0; $i < 51; $i++) {
+            $app->loginEvents()->record(
+                $adminId, 'admin@example.com', 'password', 'success', '203.0.113.10', 'Page Test ' . $i
+            );
+        }
+        $firstPage = $this->body($this->get($app, '/admin/login-history'));
+        self::assertStringContainsString('총 54건', $firstPage);
+        self::assertStringContainsString('href="/admin/login-history?page=2"', $firstPage);
+        self::assertStringContainsString('Other Browser', $this->body(
+            $this->get($app, '/admin/login-history', ['page' => 2])
+        ));
+        self::assertStringContainsString(
+            'href="/admin/login-history?ip=203.0.113.10&amp;page=2"',
+            $this->body($this->get($app, '/admin/login-history', ['ip' => '203.0.113.10']))
+        );
+        self::assertStringContainsString(
+            'href="/admin/login-history?q=Page%20Test&amp;page=2"',
+            $this->body($this->get($app, '/admin/login-history', ['q' => 'Page Test']))
+        );
+
+        foreach ([
+            ['198.51.100.20', 'Old Event', '2024-12-31 23:59:59'],
+            ['198.51.100.21', 'Boundary Event', '2025-01-01 00:00:00'],
+        ] as $event) {
+            $app->db()->insert('login_events', [
+                'user_id' => $memberId, 'login_identifier' => 'member@example.com',
+                'auth_method' => 'password', 'result' => 'success', 'client_ip' => $event[0],
+                'user_agent' => $event[1], 'created_at' => $event[2],
+            ]);
+        }
+        $deleted = $this->post($app, '/admin/login-history/delete', [
+            'csrf_token' => $_SESSION['csrf_token'], 'before' => '2025-01-01',
+        ]);
+        self::assertSame(303, $deleted->getStatusCode());
+        self::assertSame('/admin/login-history?deleted=1', $deleted->getHeaderLine('Location'));
+        self::assertSame(0, (int) $app->db()->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $app->db()->table('login_events') . ' WHERE user_agent = ?', ['Old Event']
+        )['c']);
+        self::assertSame(1, (int) $app->db()->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $app->db()->table('login_events') . ' WHERE user_agent = ?', ['Boundary Event']
+        )['c']);
+        self::assertStringContainsString('1건을 삭제했습니다', $this->body(
+            $this->get($app, '/admin/login-history', ['deleted' => 1])
+        ));
+
+        $invalidDelete = $this->post($app, '/admin/login-history/delete', [
+            'csrf_token' => $_SESSION['csrf_token'], 'before' => '2999-01-01',
+        ]);
+        self::assertSame(422, $invalidDelete->getStatusCode());
+        $invalidBody = $this->body($invalidDelete);
+        self::assertStringContainsString('오늘 또는 그 이전 날짜', $invalidBody);
+        self::assertStringContainsString('<details class="card history-maintenance" open>', $invalidBody);
+
+        $site = $this->body($this->get($app, '/'));
+        self::assertMatchesRegularExpression(
+            '#href="/admin/login-history"[^>]*>.*?로그인 기록</a>\s*</li>\s*<li>\s*<form[^>]+action="/logout"#s',
+            $site,
+            '관리자 프로필 메뉴에서 로그인 기록이 로그아웃 바로 위에 있어야 한다'
+        );
     }
 
     #[DataProvider('connectionProvider')]
@@ -409,18 +548,24 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('name="post_min_chars"', $page);
         self::assertStringContainsString('name="attach_max_mb"', $page);
         self::assertStringContainsString('name="attach_limit"', $page);
+        self::assertStringContainsString('name="post_rate_interval"', $page);
+        self::assertStringContainsString('name="comment_rate_day"', $page);
         self::assertStringContainsString('0 = 무제한', $page);
 
         $base = ['csrf_token' => $_SESSION['csrf_token']];
         $saved = $this->post($app, '/admin/settings/writing', $base + [
             'guest_write_enabled' => '1', 'attach_max_mb' => '20', 'attach_limit' => '0',
             'post_min_chars' => '10', 'comment_min_chars' => '0',
+            'post_rate_interval' => '12', 'post_rate_10m' => '4', 'post_rate_day' => '15',
+            'comment_rate_interval' => '3', 'comment_rate_10m' => '12', 'comment_rate_day' => '60',
         ]);
         self::assertSame(303, $saved->getStatusCode());
         $settings = $app->cmsService()->settings();
         self::assertSame(20, $settings['attach_max_mb']);
         self::assertSame(0, $settings['attach_limit']);
         self::assertSame(10, $settings['post_min_chars']);
+        self::assertSame(12, $settings['post_rate_interval']);
+        self::assertSame(60, $settings['comment_rate_day']);
         self::assertTrue($settings['guest_write_enabled']);
 
         // Validator::int 는 범위를 벗어나면 실패가 아니라 잘라낸다(clamp)이므로
