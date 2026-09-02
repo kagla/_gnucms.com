@@ -35,8 +35,6 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 // view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다.
 $view = $this->def($view ?? null, 'list');
 $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view : null;
-$view_labels = ['list' => '목록', 'gallery' => '갤러리', 'magazine' => '매거진', 'news' => '뉴스형'];
-$view_icons = ['list' => 'board', 'gallery' => 'grid', 'magazine' => 'document', 'news' => 'megaphone'];
 ?>
 
 <div class="breadcrumbs">
@@ -72,25 +70,12 @@ $view_icons = ['list' => 'board', 'gallery' => 'grid', 'magazine' => 'document',
     <?php if ($can_write): ?>
       <a class="btn btn-primary hide-sm" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>"><?= $this->icon('pencil', 15) ?> 글쓰기</a>
     <?php endif ?>
-    <?php if (isset($view_types) && count($view_types) > 1): ?>
-      <div class="dropdown dropdown-end view-select">
-        <div tabindex="0" role="button" class="btn btn-sm view-select-btn" aria-label="목록 형태 선택">
-          <?= $this->icon($view_icons[$view] ?? 'board', 14) ?> <?= $this->e($this->def($view_labels[$view] ?? null, $view)) ?> <?= $this->icon('chevron-down', 12) ?>
-        </div>
-        <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg view-menu">
-          <?php foreach ($view_types as $name): ?>
-            <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $this->e($listUrl($board, $query['q'], $query['category'], 1, $name)) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
-          <?php endforeach ?>
-        </ul>
-      </div>
-    <?php endif ?>
   </div>
 </div>
 
 <?php $this->insert('posts/_board_listing', [
   'board' => $board, 'list' => $list, 'query' => $query, 'view' => $view,
   'view_types' => $view_types, 'can_write' => $can_write,
-  'show_view_selector' => false,
   'list_url' => fn ($q, $category, $page, $selectedView = null): string =>
       $listUrl($board, $q, $category, $page, $selectedView),
 ]) ?>

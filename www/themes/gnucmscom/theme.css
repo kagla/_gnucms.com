@@ -2136,6 +2136,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .view-select{margin-left:auto;flex:none}
 .view-select-btn{gap:.375rem;border-radius:9999px;background:var(--color-base-100)}
 .view-menu{width:9.5rem}
+.list-view-tools{display:flex;justify-content:flex-start;margin-top:1rem}
+.list-view-tools .view-select{margin-left:0}
 
 /* 글쓴이 칸은 옛 데이터에 긴 이름이 남아 있어도 줄임표로 접는다 */
 .cell-author{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2599,8 +2601,6 @@ body[data-section="board"] .main-area,body[data-section="all"] .main-area{paddin
 body[data-section="board"] .page-head,body[data-section="all"] .page-head{margin-bottom:2.25rem;padding-bottom:1.75rem;border-color:var(--premium-line)}
 body[data-section="all"] .page-head{padding-bottom:0;border-bottom:0}
 body[data-section="board"] .page-head{margin-bottom:1.25rem;padding-bottom:0;border-bottom:0}
-body[data-section="board"] .page-head .view-select{margin-left:0}
-body[data-section="board"] .page-head .view-select-btn{min-height:2.25rem}
 body[data-section="board"] .card,body[data-section="all"] .card{
   border-color:var(--premium-line);border-radius:var(--premium-radius);background:var(--premium-surface);box-shadow:0 1px 2px rgba(0,0,0,.025);
 }

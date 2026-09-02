@@ -15,28 +15,14 @@ $show_chips = $board['use_category'] && $board['categories'] !== [];
 $show_views = count($view_types) > 1 && ($show_view_selector ?? true);
 ?>
 
-<?php if ($show_chips || $show_views): ?>
+<?php if ($show_chips): ?>
 <div class="list-tools">
-  <?php if ($show_chips): ?>
   <div class="chip-bar" role="group" aria-label="분류 선택">
     <a class="btn btn-sm chip<?php if ($query['category'] === null || $query['category'] === ''): ?> btn-active<?php endif ?>" href="<?= $this->e($list_url($query['q'], null, 1)) ?>">전체</a>
     <?php foreach ($board['categories'] as $name): ?>
       <a class="btn btn-sm chip<?php if (($query['category'] ?? null) === $name): ?> btn-active<?php endif ?>" href="<?= $this->e($list_url($query['q'], $name, 1)) ?>"><?= $this->e($name) ?></a>
     <?php endforeach ?>
   </div>
-  <?php endif ?>
-  <?php if ($show_views): ?>
-  <div class="dropdown dropdown-end view-select">
-    <div tabindex="0" role="button" class="btn btn-sm view-select-btn" aria-label="목록 형태 선택">
-      <?= $this->icon($view_icons[$view] ?? 'board', 14) ?> <?= $this->e($this->def($view_labels[$view] ?? null, $view)) ?> <?= $this->icon('chevron-down', 12) ?>
-    </div>
-    <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg view-menu">
-      <?php foreach ($view_types as $name): ?>
-        <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $this->e($list_url($query['q'], $query['category'], 1, $name)) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
-      <?php endforeach ?>
-    </ul>
-  </div>
-  <?php endif ?>
 </div>
 <?php endif ?>
 
@@ -86,3 +72,18 @@ $show_views = count($view_types) > 1 && ($show_view_selector ?? true);
   'list' => $list,
   'page_url' => fn (int $page): string => $list_url($query['q'], $query['category'], $page, $view_param),
 ]) ?>
+
+<?php if ($show_views): ?>
+<div class="list-view-tools">
+  <div class="dropdown dropdown-top view-select">
+    <div tabindex="0" role="button" class="btn btn-sm view-select-btn" aria-label="목록 형태 선택">
+      <?= $this->icon($view_icons[$view] ?? 'board', 14) ?> <?= $this->e($this->def($view_labels[$view] ?? null, $view)) ?> <?= $this->icon('chevron-down', 12) ?>
+    </div>
+    <ul tabindex="0" class="dropdown-content menu rounded-box shadow-lg view-menu">
+      <?php foreach ($view_types as $name): ?>
+        <li><a<?php if ($name === $view): ?> class="menu-active" aria-current="true"<?php endif ?> href="<?= $this->e($list_url($query['q'], $query['category'], 1, $name)) ?>"><?= $this->icon($view_icons[$name] ?? 'board', 15) ?> <?= $this->e($this->def($view_labels[$name] ?? null, $name)) ?></a></li>
+      <?php endforeach ?>
+    </ul>
+  </div>
+</div>
+<?php endif ?>

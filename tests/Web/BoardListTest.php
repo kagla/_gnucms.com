@@ -47,7 +47,8 @@ final class BoardListTest extends WebTestCase
             $nav[1] ?? ''
         );
         self::assertSame(1, substr_count($body, 'aria-label="목록 형태 선택"'));
-        self::assertGreaterThan(strpos($body, 'class="page-head-actions"'), strpos($body, 'aria-label="목록 형태 선택"'));
+        self::assertGreaterThan(strpos($body, 'class="empty-card"'), strpos($body, 'aria-label="목록 형태 선택"'));
+        self::assertStringContainsString('class="list-view-tools"', $body);
         self::assertStringNotContainsString('class="list-tools"', $body);
     }
 
