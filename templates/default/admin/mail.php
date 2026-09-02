@@ -1,9 +1,10 @@
 <?php $this->layout('admin/layout') ?>
 <?php $this->start('title') ?>메일 설정 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
-<?php $this->start('admin_section') ?>mail<?php $this->stop() ?>
+<?php $this->start('admin_section') ?>site<?php $this->stop() ?>
 <?php $this->start('body') ?>
-<div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li aria-current="page">메일 설정</li></ul></div>
-<section class="card">
+<div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li><a href="<?= $this->url('admin.settings') ?>">설정</a></li><li aria-current="page">메일</li></ul></div>
+<?php $this->insert('admin/_settings_tabs', ['active' => 'mail']) ?>
+<section class="card settings-card">
   <div class="card-body">
     <h1 class="card-title"><?= $this->icon('mail', 19) ?> 메일 설정</h1>
     <p class="card-sub">회원 인증과 비밀번호 재설정 메일을 보낼 계정을 연결합니다.</p>

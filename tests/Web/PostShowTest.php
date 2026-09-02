@@ -9,6 +9,29 @@ use GnuCms\Tests\Support\WebTestCase;
 final class PostShowTest extends WebTestCase
 {
     /** @dataProvider connectionProvider */
+    public function testMemberAvatarAppearsOnPostAndComment(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $userId = $app->users()->create(
+            'avatar@example.com', password_hash('avatar-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        self::assertSame(1, $userId);
+        $file = '0123456789abcdef0123456789abcdef.png';
+        $app->users()->updateAvatar($userId, $file, 'upload');
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'free', 'name' => '자유게시판', 'perm_comment' => 'member',
+        ]);
+        $post = $app->postService()->create($acl, 'free', ['title' => '사진 글', 'content' => '본문']);
+        $app->commentService()->create($acl, $post['id'], ['content' => '사진 댓글']);
+
+        $body = $this->body($this->get($app, '/posts/' . $post['id']));
+
+        self::assertSame(2, substr_count($body, '/media/avatars/' . $file),
+            '글 작성자와 댓글 작성자 프로필에 각각 이미지가 나와야 한다');
+    }
+
+    /** @dataProvider connectionProvider */
     public function testPostAndCommentTreeAreRendered(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
@@ -36,13 +59,119 @@ final class PostShowTest extends WebTestCase
     }
 
     /** @dataProvider connectionProvider */
-    public function testViewCountIncreases(array $dbConfig): void
+    public function testBoardCanShowItsListBelowTheView(array $dbConfig): void
     {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'with-list', 'name' => '목록 있는 게시판',
+            'show_list_below_view' => true, 'list_type' => 'news',
+        ]);
+        $app->boardService()->create($acl, ['board_key' => 'without-list', 'name' => '목록 없는 게시판']);
+        $shown = $app->postService()->create($acl, 'with-list', ['title' => '현재 글', 'content' => '본문']);
+        $app->postService()->create($acl, 'with-list', ['title' => '함께 보일 글', 'content' => '본문']);
+        $hidden = $app->postService()->create($acl, 'without-list', ['title' => '기본 글', 'content' => '본문']);
+
+        $shownBody = $this->body($this->get($app, '/posts/' . $shown['id']));
+        self::assertStringContainsString('class="below-view-list" id="below-view-list"', $shownBody);
+        self::assertStringContainsString('id="below-view-list-title">목록</h2>', $shownBody);
+        self::assertStringContainsString('함께 보일 글', $shownBody);
+        self::assertStringContainsString('list-row is-current-post', $shownBody);
+
+        $hiddenBody = $this->body($this->get($app, '/posts/' . $hidden['id']));
+        self::assertStringNotContainsString('class="below-view-list"', $hiddenBody);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('connectionProvider')]
+    public function testListBelowViewUsesTheSamePaginationAsBoardList(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'paged', 'name' => '페이지 게시판',
+            'show_list_below_view' => true, 'per_page' => 10,
+        ]);
+        $current = $app->postService()->create($acl, 'paged', ['title' => '첫 글', 'content' => '본문']);
+        for ($i = 1; $i <= 10; $i++) {
+            $app->postService()->create($acl, 'paged', ['title' => '추가 글 ' . $i, 'content' => '본문']);
+        }
+
+        $firstPage = $this->body($this->get($app, '/posts/' . $current['id']));
+        self::assertStringContainsString(
+            'href="/posts/' . $current['id'] . '?page=2#below-view-list"', $firstPage
+        );
+
+        $secondPage = $this->body($this->get($app, '/posts/' . $current['id'], ['page' => '2']));
+        self::assertStringContainsString('class="is-current-post"', $secondPage);
+        self::assertStringContainsString('첫 글', $secondPage);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('connectionProvider')]
+    public function testNextPostCrossesToTheNextEmbeddedListPage(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'boundary', 'name' => '경계 게시판',
+            'show_list_below_view' => true, 'per_page' => 10,
+        ]);
+        $posts = [];
+        for ($i = 1; $i <= 11; $i++) {
+            $posts[] = $app->postService()->create($acl, 'boundary', [
+                'title' => '글 ' . $i, 'content' => '본문',
+            ]);
+        }
+
+        // 최신순 1페이지의 마지막 글은 id=2, 그 다음(더 오래된) 글 id=1은 2페이지다.
+        $body = $this->body($this->get($app, '/posts/' . $posts[1]['id']));
+        self::assertStringContainsString(
+            'post-adjacent-next" rel="next" href="/posts/' . $posts[0]['id']
+                . '?page=2"',
+            $body
+        );
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testAdjacentNavigationFollowsBoardOrAllPostsContext(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
+        $app->boardService()->create($acl, ['board_key' => 'gallery', 'name' => '갤러리']);
+        $freeOld = $app->postService()->create($acl, 'free', ['title' => '자유 이전', 'content' => '본문']);
+        $gallery = $app->postService()->create($acl, 'gallery', ['title' => '갤러리 사이 글', 'content' => '본문']);
+        $freeNew = $app->postService()->create($acl, 'free', ['title' => '자유 다음', 'content' => '본문']);
+
+        $boardBody = $this->body($this->get($app, '/posts/' . $freeOld['id']));
+        self::assertStringNotContainsString('게시판 기준', $boardBody);
+        self::assertStringContainsString('href="/posts/' . $freeNew['id'] . '"', $boardBody);
+        self::assertStringNotContainsString('갤러리 사이 글', $boardBody);
+
+        $allBody = $this->body($this->get($app, '/posts/' . $freeOld['id'], ['scope' => 'all']));
+        self::assertStringNotContainsString('전체 글 기준', $allBody);
+        self::assertStringContainsString('갤러리 사이 글', $allBody);
+        self::assertStringContainsString('post-adjacent-previous" rel="prev" href="/posts/'
+            . $gallery['id'] . '?scope=all"', $allBody);
+        self::assertStringContainsString('href="/posts"', $allBody);
+
+        $allList = $this->body($this->get($app, '/posts'));
+        self::assertStringContainsString('/posts/' . $freeOld['id'] . '?scope=all', $allList);
+    }
+
+    /** @dataProvider connectionProvider */
+    public function testViewCountIncreasesOnlyOncePerSession(array $dbConfig): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        unset($_SESSION['viewed_posts']);
+        session_write_close();
         $app = $this->makeApp($dbConfig);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유게시판']);
         $post = $app->postService()->create($acl, 'free', ['title' => '제목', 'content' => '본문']);
 
+        $this->get($app, '/posts/' . $post['id']);
         $this->get($app, '/posts/' . $post['id']);
 
         self::assertSame(1, (int) $app->posts()->find((int) $post['id'])['view_count']);

@@ -16,7 +16,10 @@ final class CmsService
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
+        'password_login_enabled' => '1',
+        'social_login_enabled' => '1',
         'registration_enabled' => '1',
+        'social_registration_enabled' => '1',
         'guest_write_enabled' => '0',
         'theme' => 'default',
         'post_min_chars' => '0',
@@ -64,8 +67,21 @@ final class CmsService
             $stored = [];
             $migrated = false;
         }
+        // 분리 전에는 registration_enabled 하나가 일반·소셜 가입을 함께 막았다.
+        // 새 키가 없는 기존 설치는 그 값을 이어받아 업그레이드가 가입을 뜻밖에 열지 않게 한다.
+        if (!array_key_exists('social_registration_enabled', $stored)
+            && array_key_exists('registration_enabled', $stored)) {
+            $stored['social_registration_enabled'] = $stored['registration_enabled'];
+        }
         $settings = array_merge(self::DEFAULT_SETTINGS, $stored);
+        $settings['password_login_enabled'] = $settings['password_login_enabled'] === '1';
+        $settings['social_login_enabled'] = $settings['social_login_enabled'] === '1';
         $settings['registration_enabled'] = $settings['registration_enabled'] === '1';
+        $settings['social_registration_enabled'] = $settings['social_registration_enabled'] === '1';
+        $settings['registration_enabled'] = $settings['password_login_enabled']
+            && $settings['registration_enabled'];
+        $settings['social_registration_enabled'] = $settings['social_login_enabled']
+            && $settings['social_registration_enabled'];
         $settings['guest_write_enabled'] = $settings['guest_write_enabled'] === '1';
         $settings['post_min_chars'] = max(0, (int) $settings['post_min_chars']);
         $settings['comment_min_chars'] = max(0, (int) $settings['comment_min_chars']);
@@ -215,14 +231,63 @@ final class CmsService
         if ($theme !== '' && preg_match('/^[a-z0-9][a-z0-9_-]*$/D', $theme) !== 1) {
             $v->fail('theme', '템플릿 이름이 올바르지 않습니다.');
         }
+        $passwordLogin = $v->bool('password_login_enabled', false);
+        $socialLogin = $v->bool('social_login_enabled', false);
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
             'home_title' => $v->requiredString('home_title', 120),
             'home_intro' => $v->requiredString('home_intro', 500),
-            'registration_enabled' => $v->bool('registration_enabled', false) ? '1' : '0',
+            'password_login_enabled' => $passwordLogin ? '1' : '0',
+            'social_login_enabled' => $socialLogin ? '1' : '0',
+            'registration_enabled' => $passwordLogin && $v->bool('registration_enabled', false) ? '1' : '0',
+            'social_registration_enabled' => $socialLogin
+                && $v->bool('social_registration_enabled', false) ? '1' : '0',
             'guest_write_enabled' => $v->bool('guest_write_enabled', false) ? '1' : '0',
             'theme' => $theme,
+            'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
+            'comment_min_chars' => (string) $v->int('comment_min_chars', 0, 0, 1000),
+            'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),
+            'attach_limit' => (string) $v->int('attach_limit', 5, 0, 999),
+        ];
+        $v->check();
+        $this->cms->saveSettings($settings);
+        $this->settingsCache = null;
+    }
+
+    public function saveGeneralSettings(Acl $acl, array $input): void
+    {
+        $acl->assertGlobalAdmin();
+        $v = new Validator($input);
+        $theme = strtolower($v->requiredString('theme', 50));
+        if ($theme !== '' && preg_match('/^[a-z0-9][a-z0-9_-]*$/D', $theme) !== 1) {
+            $v->fail('theme', '템플릿 이름이 올바르지 않습니다.');
+        }
+        $passwordLogin = $v->bool('password_login_enabled', false);
+        $socialLogin = $v->bool('social_login_enabled', false);
+        $settings = [
+            'site_name' => $v->requiredString('site_name', 50),
+            'site_tagline' => $v->requiredString('site_tagline', 120),
+            'home_title' => $v->requiredString('home_title', 120),
+            'home_intro' => $v->requiredString('home_intro', 500),
+            'password_login_enabled' => $passwordLogin ? '1' : '0',
+            'social_login_enabled' => $socialLogin ? '1' : '0',
+            'registration_enabled' => $passwordLogin && $v->bool('registration_enabled', false) ? '1' : '0',
+            'social_registration_enabled' => $socialLogin
+                && $v->bool('social_registration_enabled', false) ? '1' : '0',
+            'theme' => $theme,
+        ];
+        $v->check();
+        $this->cms->saveSettings($settings);
+        $this->settingsCache = null;
+    }
+
+    public function saveWritingSettings(Acl $acl, array $input): void
+    {
+        $acl->assertGlobalAdmin();
+        $v = new Validator($input);
+        $settings = [
+            'guest_write_enabled' => $v->bool('guest_write_enabled', false) ? '1' : '0',
             'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
             'comment_min_chars' => (string) $v->int('comment_min_chars', 0, 0, 1000),
             'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),

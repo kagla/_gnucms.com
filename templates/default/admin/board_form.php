@@ -103,6 +103,7 @@
         </fieldset>
         <fieldset class="fieldset toggle-list">
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="show_in_header" value="1"<?= ($values['show_in_header'] ?? false) ? ' checked' : '' ?>><span><strong>상단 메뉴에 표시</strong><small>읽기 권한이 있는 방문자의 상단 메뉴에 게시판을 표시합니다.</small></span></label>
+          <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="show_list_below_view" value="1"<?= ($values['show_list_below_view'] ?? false) ? ' checked' : '' ?>><span><strong>게시글 보기 아래에 목록 표시</strong><small>본문과 댓글이 끝난 뒤 이 게시판의 목록을 표시합니다.</small></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_category" value="1"<?= ($values['use_category'] ?? false) ? ' checked' : '' ?>><span><strong>분류 사용</strong></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_secret" value="1"<?= ($values['use_secret'] ?? false) ? ' checked' : '' ?>><span><strong>비밀글 사용</strong></span></label>
           <label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="use_file" value="1"<?= ($values['use_file'] ?? false) ? ' checked' : '' ?>><span><strong>첨부파일 사용</strong></span></label>

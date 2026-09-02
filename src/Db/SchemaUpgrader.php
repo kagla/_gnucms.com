@@ -101,8 +101,8 @@ final class SchemaUpgrader
                     $backup = $this->backup($stored);
                 }
                 ($this->migrate)();
-                $this->upsertSetting('schema_upgraded_at', Clock::now());
-                $this->upsertSetting('schema_backup', $backup ?? '');
+                $this->upsertSetting('system.schema_upgraded_at', Clock::now());
+                $this->upsertSetting('system.schema_backup', $backup ?? '');
                 @unlink($this->failurePath());
             } catch (Throwable $e) {
                 ($this->log)('[schema-upgrade] ' . get_class($e) . ': ' . $e->getMessage());
@@ -126,12 +126,12 @@ final class SchemaUpgrader
         foreach ($this->backupFiles() as $file) {
             $backups[] = ['name' => basename($file), 'size' => (int) filesize($file), 'mtime' => (int) filemtime($file)];
         }
-        $backup = $this->setting('schema_backup');
+        $backup = $this->setting('system.schema_backup');
 
         return [
             'version'     => Schema::VERSION,
             'stamp'       => (new Schema($this->db))->stamp(),
-            'upgraded_at' => $this->setting('schema_upgraded_at'),
+            'upgraded_at' => $this->setting('system.schema_upgraded_at'),
             'backup'      => $backup === null || $backup === '' ? null : $backup,
             'can_backup'  => $this->db->dialect()->name() === 'sqlite',
             'keep'        => self::KEEP_BACKUPS,

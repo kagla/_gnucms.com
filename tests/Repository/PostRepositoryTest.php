@@ -7,6 +7,8 @@ namespace GnuCms\Tests\Repository;
 use GnuCms\Db\Connection;
 use GnuCms\Repository\BoardRepository;
 use GnuCms\Repository\PostRepository;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Account\UserRepository;
 use GnuCms\Support\Clock;
 use PHPUnit\Framework\Attributes\DataProvider;
 use GnuCms\Tests\Support\DatabaseTestCase;
@@ -108,6 +110,30 @@ final class PostRepositoryTest extends DatabaseTestCase
 
         $this->assertSame(5, $page['total']);
         $this->assertSame(['3', '2'], array_column($page['rows'], 'title'));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdjacentPostsCanUseBoardOrAllBoardScope(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $boards = new BoardRepository($db);
+        $free = $boards->create(['board_key' => 'free', 'name' => '자유']);
+        $gallery = $boards->create(['board_key' => 'gallery', 'name' => '갤러리']);
+        $repo = new PostRepository($db);
+        $freeOld = $repo->create($this->post($free, '자유 이전'));
+        $galleryPost = $repo->create($this->post($gallery, '갤러리 글'));
+        $freeNew = $repo->create($this->post($free, '자유 다음'));
+
+        $boardScope = $repo->adjacent($freeOld, $free);
+        self::assertSame($freeNew, (int) $boardScope['previous']['id']);
+        self::assertNull($boardScope['next']);
+
+        $allScope = $repo->adjacent($freeOld, $free, [$free, $gallery]);
+        self::assertSame($galleryPost, (int) $allScope['previous']['id']);
+
+        $repo->softDelete($galleryPost);
+        $afterDelete = $repo->adjacent($freeOld, $free, [$free, $gallery]);
+        self::assertSame($freeNew, (int) $afterDelete['previous']['id']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -229,6 +255,30 @@ final class PostRepositoryTest extends DatabaseTestCase
         $id = $repo->create($this->post($boardId, '글') + ['attachments' => $files]);
 
         $this->assertSame($files, $repo->find($id)['attachments']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMemberAvatarIsAttachedToPostsAndComments(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $boardId = (new BoardRepository($db))->create(['board_key' => 'free', 'name' => '자유']);
+        $users = new UserRepository($db);
+        $userId = $users->createSocial('avatar@example.com', '사진회원');
+        $file = '0123456789abcdef0123456789abcdef.png';
+        $users->updateAvatar($userId, $file, 'upload');
+        $posts = new PostRepository($db);
+        $postId = $posts->create([
+            'board_id' => $boardId, 'title' => '사진 글', 'content' => '본문',
+            'author_id' => (string) $userId, 'author_name' => '사진회원',
+        ]);
+        $comments = new CommentRepository($db);
+        $commentId = $comments->create([
+            'board_id' => $boardId, 'post_id' => $postId, 'content' => '사진 댓글',
+            'author_id' => (string) $userId, 'author_name' => '사진회원',
+        ]);
+
+        self::assertSame($file, $posts->find($postId)['author_avatar_file']);
+        self::assertSame($file, $comments->find($commentId)['author_avatar_file']);
     }
 
     /** @return array{0: PostRepository, 1: int} */

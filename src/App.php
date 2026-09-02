@@ -11,6 +11,8 @@ use GnuCms\Account\TokenService;
 use GnuCms\Account\IdentityRepository;
 use GnuCms\Account\LinkingService;
 use GnuCms\Account\SocialAuthService;
+use GnuCms\Account\LoginEventRepository;
+use GnuCms\Account\AvatarService;
 use GnuCms\Account\AdminService;
 use GnuCms\Account\ConsentRepository;
 use GnuCms\Auth\Acl;
@@ -35,6 +37,8 @@ use GnuCms\Mail\MailSettingsService;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Mail\SmtpMailer;
 use GnuCms\Oauth\ProviderRegistry;
+use GnuCms\Oauth\OauthSettingsRepository;
+use GnuCms\Oauth\OauthSettingsService;
 use GnuCms\Cms\CmsRepository;
 use GnuCms\Cms\CmsService;
 use GnuCms\Cms\ConsentUseRepository;
@@ -96,7 +100,14 @@ final class App
 
     private ?SocialAuthService $socialAuthService = null;
 
+    private ?LoginEventRepository $loginEvents = null;
+    private ?AvatarService $avatars = null;
+
     private ?ProviderRegistry $providerRegistry = null;
+
+    private ?OauthSettingsRepository $oauthSettings = null;
+
+    private ?OauthSettingsService $oauthSettingsService = null;
 
     private ?MailerInterface $mailer = null;
 
@@ -293,6 +304,12 @@ final class App
         return $this->users;
     }
 
+    public function avatars(): AvatarService
+    {
+        if ($this->avatars === null) $this->avatars = new AvatarService($this->storageDir() . '/avatars');
+        return $this->avatars;
+    }
+
     public function accountService(): AccountService
     {
         if ($this->accountService === null) {
@@ -316,14 +333,7 @@ final class App
     public function providerRegistry(): ProviderRegistry
     {
         if ($this->providerRegistry === null) {
-            $config = (array) $this->config('oauth', []);
-            $appUrl = rtrim((string) $this->config('app.url', GNUCMS_URL), '/');
-            foreach (['google', 'naver', 'kakao', 'github'] as $key) {
-                if (isset($config[$key]) && is_array($config[$key]) && empty($config[$key]['redirect_uri'])) {
-                    $config[$key]['redirect_uri'] = $appUrl . '/auth/' . $key . '/callback';
-                }
-            }
-            $this->providerRegistry = new ProviderRegistry($config);
+            $this->providerRegistry = new ProviderRegistry($this->oauthSettingsService()->runtime());
         }
         return $this->providerRegistry;
     }
@@ -334,16 +344,48 @@ final class App
         $this->socialAuthService = null;
     }
 
+    public function oauthSettings(): OauthSettingsRepository
+    {
+        if ($this->oauthSettings === null) {
+            $this->oauthSettings = new OauthSettingsRepository($this->db());
+        }
+        return $this->oauthSettings;
+    }
+
+    public function oauthSettingsService(): OauthSettingsService
+    {
+        if ($this->oauthSettingsService === null) {
+            $this->oauthSettingsService = new OauthSettingsService(
+                $this->oauthSettings(),
+                new SecretCipher((string) $this->config('auth.secret', '')),
+                (array) $this->config('oauth', []),
+                (string) $this->config('app.url', GNUCMS_URL)
+            );
+        }
+        return $this->oauthSettingsService;
+    }
+
+    public function refreshOauthProviders(): void
+    {
+        $this->providerRegistry = null;
+        $this->socialAuthService = null;
+    }
+
+    /** 테스트·특수 실행에서 메일 전송기를 바꾼다. 이미 조립된 인증 서비스도 함께 새로 만든다. */
+    public function setMailer(MailerInterface $mailer): void
+    {
+        $this->mailer = $mailer;
+        $this->accountService = null;
+        $this->socialAuthService = null;
+    }
+
     public function socialAuthService(): SocialAuthService
     {
         if ($this->socialAuthService === null) {
-            if ($this->identities === null) {
-                $this->identities = new IdentityRepository($this->db());
-            }
             if ($this->linkingService === null) {
                 $this->linkingService = new LinkingService(
-                    $this->db(), $this->users(), $this->identities,
-                    $this->cmsService(), $this->consents()
+                    $this->db(), $this->users(), $this->identities(),
+                    $this->cmsService(), $this->consents(), $this->avatars()
                 );
             }
             $this->socialAuthService = new SocialAuthService(
@@ -353,6 +395,22 @@ final class App
             );
         }
         return $this->socialAuthService;
+    }
+
+    public function identities(): IdentityRepository
+    {
+        if ($this->identities === null) {
+            $this->identities = new IdentityRepository($this->db());
+        }
+        return $this->identities;
+    }
+
+    public function loginEvents(): LoginEventRepository
+    {
+        if ($this->loginEvents === null) {
+            $this->loginEvents = new LoginEventRepository($this->db());
+        }
+        return $this->loginEvents;
     }
 
     private function mailer(): MailerInterface

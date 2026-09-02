@@ -248,7 +248,7 @@ final class CommentController
 
         return View::fromRequest($request)->render($response, 'posts/comment_edit', [
             'comment' => $comment,
-            'post' => $this->app->postService()->get($acl, (int) $comment['post_id'], null),
+            'post' => $this->app->postService()->get($acl, (int) $comment['post_id'], null, false),
             'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'values' => $values,
             'errors' => $errors,
@@ -315,7 +315,7 @@ final class CommentController
         $loaded = $this->app->postService()->loadForRead($acl, $postId, null);
 
         return View::fromRequest($request)->render($response, 'posts/show', [
-            'post' => $this->app->postService()->get($acl, $postId, null),
+            'post' => $this->app->postService()->get($acl, $postId, null, false),
             'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
             'comments' => $this->app->commentService()->listComments($acl, $postId, null),
             'can_comment' => $acl->canCommentOnPost($loaded['board'], $loaded['post']),

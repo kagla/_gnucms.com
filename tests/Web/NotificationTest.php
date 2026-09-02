@@ -131,7 +131,7 @@ final class NotificationTest extends WebTestCase
         $app->db()->execute('DROP TABLE ' . $app->db()->q('notifications'));
         $app->db()->execute(
             'UPDATE ' . $app->db()->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?',
-            ['2', 'schema_version']
+            ['2', 'system.schema_version']
         );
 
         // 부팅할 때 스스로 표를 다시 만든다.

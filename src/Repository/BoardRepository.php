@@ -24,6 +24,7 @@ final class BoardRepository
         'list_type'    => 'list',
         'home_limit'   => 5,
         'show_in_header' => 0,
+        'show_list_below_view' => 0,
         'per_page'     => 20,
         'sort_order'   => 0,
     ];
@@ -89,7 +90,8 @@ final class BoardRepository
             $row[$column] = ($raw === null || $raw === '') ? [] : Json::decode((string) $raw);
         }
 
-        foreach (['id', 'use_secret', 'use_file', 'use_category', 'show_in_header', 'per_page', 'sort_order'] as $column) {
+        foreach (['id', 'use_secret', 'use_file', 'use_category', 'show_in_header',
+            'show_list_below_view', 'per_page', 'sort_order'] as $column) {
             $row[$column] = (int) ($row[$column] ?? 0);
         }
 

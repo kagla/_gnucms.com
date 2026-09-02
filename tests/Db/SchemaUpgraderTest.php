@@ -60,8 +60,8 @@ final class SchemaUpgraderTest extends TestCase
         $backups = glob($this->storage . '/backups/*.sqlite') ?: [];
         self::assertCount(1, $backups);
         self::assertMatchesRegularExpression('~/board-v9-\d{8}-\d{6}\.sqlite$~', $backups[0]);
-        self::assertSame($backups[0], $this->setting('schema_backup'));
-        self::assertNotNull($this->setting('schema_upgraded_at'));
+        self::assertSame($backups[0], $this->setting('system.schema_backup'));
+        self::assertNotNull($this->setting('system.schema_upgraded_at'));
         // 백업은 열 수 있는 SQLite 파일이고 표가 들어 있다.
         $copy = Connection::create(['dsn' => 'sqlite:' . $backups[0]]);
         self::assertTrue((new Schema($copy))->exists());
@@ -266,7 +266,7 @@ final class SchemaUpgraderTest extends TestCase
 
     private function setStoredStamp(string $stamp): void
     {
-        $this->db->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', [$stamp, 'schema_version']);
+        $this->db->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', [$stamp, 'system.schema_version']);
     }
 
     private function setting(string $key): ?string

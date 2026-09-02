@@ -48,11 +48,12 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('class="admin-user"', $this->body($dashboard));
         self::assertStringContainsString('href="/admin" class="menu-active"', $this->body($dashboard));
         self::assertStringContainsString('회원 관리', $this->body($dashboard));
-        self::assertStringContainsString('메일 설정', $this->body($dashboard));
+        self::assertStringNotContainsString('title="메일 설정"', $this->body($dashboard));
 
         $mail = $this->get($app, '/admin/mail');
         self::assertSame(200, $mail->getStatusCode());
-        self::assertStringContainsString('href="/admin/mail" class="menu-active"', $this->body($mail));
+        self::assertStringContainsString('href="/admin/settings" class="menu-active"', $this->body($mail));
+        self::assertStringContainsString('class="tab tab-active" aria-current="page" href="/admin/mail"', $this->body($mail));
         self::assertStringContainsString('smtp.gmail.com', $this->body($mail));
         $saved = $this->post($app, '/admin/mail', [
             'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1', 'provider' => 'gmail',
@@ -161,6 +162,7 @@ final class AdminPageTest extends WebTestCase
         $form = $this->get($app, '/admin/members/' . $memberId . '/edit');
         self::assertSame(200, $form->getStatusCode());
         self::assertStringContainsString('>회원 수정</h1>', $this->body($form));
+        self::assertStringContainsString('이메일·비밀번호', $this->body($form));
 
         $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
             'csrf_token' => $_SESSION['csrf_token'],
@@ -184,6 +186,37 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(422, $blockedOwner->getStatusCode());
         self::assertStringContainsString('현재 로그인한 관리자 계정은 차단할 수 없습니다.', $this->body($blockedOwner));
         self::assertSame('active', $app->users()->findById($adminId)['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMemberFormShowsLinkedSocialLoginProvider(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->createSocial('social@example.com', '소셜회원');
+        $app->identities()->attach($memberId, 'google', 'google-user-8');
+        $app->loginEvents()->record(
+            $memberId, 'social@example.com', 'google', 'success', '203.0.113.81', 'Login History Test'
+        );
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $body = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('로그인 방식', $body);
+        self::assertStringContainsString('Google 소셜 로그인', $body);
+        self::assertStringContainsString('social-provider-badge social-google', $body);
+        self::assertStringNotContainsString('>이메일·비밀번호</span>', $body);
+        self::assertStringContainsString('최근 로그인 이력', $body);
+        self::assertStringContainsString('203.0.113.81', $body);
+        self::assertStringContainsString('Login History Test', $body);
+        self::assertStringContainsString('>성공</span>', $body);
     }
 
     /** 회원 수정 화면에 가입 동의 내역이 붙는다. 동의하지 않은 항목도 함께 나온다. */
@@ -291,9 +324,11 @@ final class AdminPageTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
         ]);
 
-        $body = $this->body($this->get($app, '/admin/settings'));
+        $settings = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringNotContainsString('판 번호', $settings);
+        $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
-        self::assertStringContainsString('데이터 구조', $body);
+        self::assertStringContainsString('데이터베이스 상태', $body);
         self::assertStringContainsString('<dt>판 번호</dt><dd>' . \GnuCms\Db\Schema::VERSION . ' ', $body);
         self::assertStringContainsString('설치 이후 없음', $body);
     }
@@ -315,11 +350,11 @@ final class AdminPageTest extends WebTestCase
             $app = $this->makeApp($dbConfig, ['storage' => ['dir' => $tmp]]);
             $app->db()->execute(
                 'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
-                ['schema_upgraded_at', '2026-08-30 01:02:03', '2026-08-30 01:02:03']
+                ['system.schema_upgraded_at', '2026-08-30 01:02:03', '2026-08-30 01:02:03']
             );
             $app->db()->execute(
                 'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
-                ['schema_backup', '/x/storage/backups/board-v9-20260201-000000.sqlite', '2026-08-30 01:02:03']
+                ['system.schema_backup', '/x/storage/backups/board-v9-20260201-000000.sqlite', '2026-08-30 01:02:03']
             );
             $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
             $app->users()->verifyEmail($id);
@@ -328,7 +363,7 @@ final class AdminPageTest extends WebTestCase
                 'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
             ]);
 
-            $body = $this->body($this->get($app, '/admin/settings'));
+            $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
             self::assertStringContainsString('2026-08-30 01:02:03 UTC', $body);
             self::assertStringContainsString('<dt>마지막 백업</dt><dd>board-v9-20260201-000000.sqlite</dd>', $body);
@@ -364,8 +399,10 @@ final class AdminPageTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
         ]);
 
-        $page = $this->body($this->get($app, '/admin/settings'));
-        self::assertStringContainsString('쓰기 규칙', $page);
+        $general = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringNotContainsString('name="guest_write_enabled"', $general);
+        $page = $this->body($this->get($app, '/admin/settings/writing'));
+        self::assertStringContainsString('회원·글쓰기 설정', $page);
         self::assertStringContainsString('name="guest_write_enabled"', $page);
         // 스위치 설명은 게시판 설정과의 우선순위까지 말해 준다.
         self::assertStringContainsString('이 스위치가 꺼져 있으면 회원만 글을 쓸 수 있습니다', $page);
@@ -374,12 +411,11 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('name="attach_limit"', $page);
         self::assertStringContainsString('0 = 무제한', $page);
 
-        $base = [
-            'csrf_token' => $_SESSION['csrf_token'],
-            'site_name' => '사이트', 'site_tagline' => '소개', 'home_title' => '홈', 'home_intro' => '소개',
-            'registration_enabled' => '1', 'theme' => 'default',
-        ];
-        $saved = $this->post($app, '/admin/settings', $base + ['guest_write_enabled' => '1', 'attach_max_mb' => '20', 'attach_limit' => '0', 'post_min_chars' => '10']);
+        $base = ['csrf_token' => $_SESSION['csrf_token']];
+        $saved = $this->post($app, '/admin/settings/writing', $base + [
+            'guest_write_enabled' => '1', 'attach_max_mb' => '20', 'attach_limit' => '0',
+            'post_min_chars' => '10', 'comment_min_chars' => '0',
+        ]);
         self::assertSame(303, $saved->getStatusCode());
         $settings = $app->cmsService()->settings();
         self::assertSame(20, $settings['attach_max_mb']);
@@ -389,7 +425,10 @@ final class AdminPageTest extends WebTestCase
 
         // Validator::int 는 범위를 벗어나면 실패가 아니라 잘라낸다(clamp)이므로
         // 여기서는 422 가 아니라 1024 로 잘린 값을 확인한다.
-        $clamped = $this->post($app, '/admin/settings', $base + ['attach_max_mb' => '2000', 'attach_limit' => '5']);
+        $clamped = $this->post($app, '/admin/settings/writing', $base + [
+            'attach_max_mb' => '2000', 'attach_limit' => '5',
+            'post_min_chars' => '0', 'comment_min_chars' => '0',
+        ]);
         self::assertSame(303, $clamped->getStatusCode());
         self::assertSame(1024, $app->cmsService()->settings()['attach_max_mb']);
     }
@@ -409,7 +448,7 @@ final class AdminPageTest extends WebTestCase
         $abandoned = $app->attachments()->upload($this->adminAcl(), 'free', $this->fakeUpload('버려짐.txt', 'x'));
         touch($abandoned['path'], time() - 90000);
 
-        $page = $this->body($this->get($app, '/admin/settings'));
+        $page = $this->body($this->get($app, '/admin/settings/maintenance'));
         self::assertStringContainsString('버려진 파일 정리', $page);
 
         $cleaned = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
@@ -417,15 +456,106 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('gc=1', $cleaned->getHeaderLine('Location'));
         self::assertFileDoesNotExist($abandoned['path']);
 
-        $after = $this->body($this->get($app, '/admin/settings', ['gc' => '1']));
+        $after = $this->body($this->get($app, '/admin/settings/maintenance', ['gc' => '1']));
         self::assertStringContainsString('버려진 파일 1개를 정리했습니다', $after);
 
         // 정리할 게 없을 때(gc=0)는 성공 알림이 아니라 안내 문구를 보여야 한다.
         $cleanedAgain = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
         self::assertStringContainsString('gc=0', $cleanedAgain->getHeaderLine('Location'));
-        $emptyGc = $this->body($this->get($app, '/admin/settings', ['gc' => '0']));
+        $emptyGc = $this->body($this->get($app, '/admin/settings/maintenance', ['gc' => '0']));
         self::assertStringContainsString('정리할 파일이 없습니다', $emptyGc);
         self::assertStringNotContainsString('버려진 파일 0개를 정리했습니다', $emptyGc);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanConfigureSocialLoginFromSettings(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => 'https://community.example']]);
+        $id = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $page = $this->body($this->get($app, '/admin/settings/social'));
+        self::assertStringContainsString('소셜 로그인', $page);
+        self::assertStringContainsString('https://community.example/auth/google/callback', $page);
+        self::assertStringContainsString('Google 로그인 사용', $page);
+        self::assertStringContainsString('네이버 로그인 사용', $page);
+        self::assertStringContainsString('카카오 로그인 사용', $page);
+        self::assertStringContainsString('https://console.cloud.google.com/auth/clients', $page);
+        self::assertStringContainsString('https://developers.naver.com/apps/#/list', $page);
+        self::assertStringContainsString('https://developers.kakao.com/console/app', $page);
+        self::assertSame(3, substr_count($page, '키 발급·관리'));
+        self::assertSame(6, substr_count($page, 'rel="noopener noreferrer"'));
+        self::assertStringContainsString('네이버 개발자센터 애플리케이션의 Client ID', $page);
+        self::assertStringContainsString('JavaScript 키가 아닌 REST API 키', $page);
+        self::assertStringContainsString('Client Secret (선택)', $page);
+        self::assertStringContainsString('이메일 주소를 필수로 설정', $page);
+        self::assertStringContainsString('카카오계정(이메일)을 필수로 설정', $page);
+        self::assertStringContainsString('카카오 이메일 제공 동의 설정 방법', $page);
+        self::assertStringContainsString('카카오 로그인 → 동의항목 → 개인정보', $page);
+        self::assertStringContainsString('추가 기능 신청 → 개인정보 동의항목', $page);
+        self::assertStringContainsString('https://developers.kakao.com/docs/ko/kakaologin/prerequisite', $page);
+        self::assertStringContainsString('https://community.example/auth/kakao/callback', $page);
+        self::assertSame(3, substr_count($page, 'data-pw-label="Client Secret"'));
+        self::assertStringContainsString('Client Secret 표시', $page);
+
+        $incomplete = $this->post($app, '/admin/settings/social', [
+            'csrf_token' => $_SESSION['csrf_token'], 'google_enabled' => '1',
+            'google_client_id' => 'google-client-id', 'naver_client_id' => '', 'kakao_client_id' => '',
+        ]);
+        self::assertSame(422, $incomplete->getStatusCode());
+        self::assertStringContainsString('Google Client Secret을 입력해 주세요', $this->body($incomplete));
+
+        $saved = $this->post($app, '/admin/settings/social', [
+            'csrf_token' => $_SESSION['csrf_token'], 'google_enabled' => '1',
+            'google_client_id' => 'google-client-id', 'google_client_secret' => 'google-client-secret',
+            'naver_client_id' => '', 'kakao_client_id' => '',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('/admin/settings/social?saved=1', $saved->getHeaderLine('Location'));
+
+        $stored = $app->oauthSettings()->all();
+        self::assertSame('1', $stored['google.enabled']);
+        self::assertSame('google-client-id', $stored['google.client_id']);
+        self::assertStringStartsWith('v1:', $stored['google.client_secret']);
+        self::assertStringNotContainsString('google-client-secret', $stored['google.client_secret']);
+        self::assertSame([['key' => 'google', 'label' => 'Google']], $app->providerRegistry()->options());
+
+        $savedPage = $this->body($this->get($app, '/admin/settings/social'));
+        self::assertStringNotContainsString('google-client-secret', $savedPage);
+        self::assertStringContainsString('placeholder="••••••••••••••••"', $savedPage);
+        self::assertStringContainsString('Google로 계속', $this->body($this->get($app, '/login')));
+
+        $preserved = $this->post($app, '/admin/settings/social', [
+            'csrf_token' => $_SESSION['csrf_token'], 'google_enabled' => '1',
+            'google_client_id' => 'changed-client-id', 'google_client_secret' => '',
+            'naver_client_id' => '', 'kakao_client_id' => '',
+        ]);
+        self::assertSame(303, $preserved->getStatusCode());
+        self::assertSame('google-client-secret', $app->oauthSettingsService()->runtime()['google']['client_secret']);
+
+        $kakaoWithSecret = $this->post($app, '/admin/settings/social', [
+            'csrf_token' => $_SESSION['csrf_token'], 'kakao_enabled' => '1',
+            'google_client_id' => '', 'naver_client_id' => '',
+            'kakao_client_id' => 'kakao-rest-api-key', 'kakao_client_secret' => 'wrong-secret',
+        ]);
+        self::assertSame(303, $kakaoWithSecret->getStatusCode());
+        self::assertSame('wrong-secret', $app->oauthSettingsService()->runtime()['kakao']['client_secret']);
+
+        $clearedKakaoSecret = $this->post($app, '/admin/settings/social', [
+            'csrf_token' => $_SESSION['csrf_token'], 'kakao_enabled' => '1',
+            'google_client_id' => '', 'naver_client_id' => '',
+            'kakao_client_id' => 'kakao-rest-api-key', 'kakao_client_secret_clear' => '1',
+        ]);
+        self::assertSame(303, $clearedKakaoSecret->getStatusCode());
+        self::assertSame('', $app->oauthSettingsService()->runtime()['kakao']['client_secret']);
+        self::assertSame([['key' => 'kakao', 'label' => '카카오']], $app->providerRegistry()->options());
     }
 
 }

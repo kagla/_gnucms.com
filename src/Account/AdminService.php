@@ -81,6 +81,9 @@ final class AdminService
     {
         $acl->assertGlobalAdmin();
         $user = $this->requiredUser($id);
+        if ($user['status'] === 'withdrawn') {
+            throw DomainError::validation(['member' => '탈퇴한 회원은 다시 활성화하거나 수정할 수 없습니다.']);
+        }
         $v = new Validator($input);
         $email = strtolower($v->requiredString('email', 191));
         $displayName = $v->requiredString('display_name', 100);
@@ -130,6 +133,9 @@ final class AdminService
     {
         $acl->assertGlobalAdmin();
         $user = $this->requiredUser($id);
+        if ($user['status'] === 'withdrawn') {
+            throw DomainError::validation(['member' => '탈퇴한 회원의 상태는 변경할 수 없습니다.']);
+        }
         if ((string) $acl->identity()->sub() === (string) $id) {
             throw DomainError::validation(['member' => '현재 로그인한 관리자 계정은 차단할 수 없습니다.']);
         }

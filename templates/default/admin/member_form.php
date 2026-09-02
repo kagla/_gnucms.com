@@ -7,6 +7,15 @@
   <div class="card-body">
     <h1 class="card-title">회원 수정</h1>
     <p class="card-sub">로그인 이메일과 표시 이름, 비밀번호, 이용 상태를 관리합니다. 관리자 자신의 비밀번호도 여기서 바꿉니다.</p>
+    <?php if (!empty($values['avatar_file'])): ?><div class="profile-image-preview"><img src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="<?= $this->e($values['display_name']) ?> 프로필 이미지"><span>회원이 등록한 프로필 이미지</span></div><?php endif ?>
+    <?php if (($values['status'] ?? '') === 'withdrawn'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 18) ?></span><span>탈퇴 처리된 회원입니다. 익명화된 정보와 보안 이력만 조회할 수 있습니다.</span></div><?php endif ?>
+    <?php if (array_key_exists('member', $errors)): ?><div class="alert alert-error"><span><?= $this->icon('warning', 18) ?></span><span><?= $this->e($errors['member']) ?></span></div><?php endif ?>
+    <?php if ($member_identities !== []): ?>
+      <div class="alert alert-info alert-soft member-social-summary">
+        <span aria-hidden="true"><?= $this->icon('users', 18) ?></span>
+        <div><strong>소셜 로그인 회원</strong><p><?php foreach ($member_identities as $i => $identity): ?><?= $i > 0 ? ', ' : '' ?><?= $this->e($identity['label']) ?> 계정<?php endforeach ?>이 연결되어 있습니다.</p></div>
+      </div>
+    <?php endif ?>
     <form method="post" action="<?= $this->url('admin.members.edit', ['id' => $values['id']]) ?>">
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
       <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">
@@ -36,20 +45,27 @@
         <select class="select select-bordered select-block" name="status">
           <option value="active"<?= $this->def($values['status'] ?? null, 'active') === 'active' ? ' selected' : '' ?>>활성</option>
           <option value="blocked"<?= $this->def($values['status'] ?? null, 'active') === 'blocked' ? ' selected' : '' ?>>차단</option>
+          <?php if (($values['status'] ?? '') === 'withdrawn'): ?><option value="withdrawn" selected>탈퇴</option><?php endif ?>
         </select>
         <?php if (array_key_exists('status', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['status']) ?></p><?php endif ?>
       </fieldset>
       <ul class="list fact-list">
+        <li class="list-row"><span>로그인 방식</span><strong class="member-login-methods">
+          <?php if (($values['password_hash'] ?? null) !== null): ?><span class="badge badge-outline">이메일·비밀번호</span><?php endif ?>
+          <?php foreach ($member_identities as $identity): ?><span class="badge badge-outline social-provider-badge social-<?= $this->e($identity['provider']) ?>"><?= $this->e($identity['label']) ?> 소셜 로그인</span><?php endforeach ?>
+          <?php if (($values['password_hash'] ?? null) === null && $member_identities === []): ?><span class="badge badge-warning">로그인 수단 없음</span><?php endif ?>
+        </strong></li>
         <li class="list-row"><span>권한</span><strong><?= $values['is_admin'] ? '소유자' : '일반 회원' ?></strong></li>
         <li class="list-row"><span>이메일 인증</span><strong><?= $values['email_verified'] ? '완료' : '대기' ?></strong></li>
         <li class="list-row"><span>가입일</span><strong><?= $this->date($values['created_at'], 'Y.m.d H:i') ?></strong></li>
       </ul>
       <div class="card-actions form-actions">
         <a class="btn btn-ghost" href="<?= $this->url('admin.members') ?>">취소</a>
-        <button class="btn btn-primary" type="submit">변경사항 저장</button>
+        <?php if (($values['status'] ?? '') !== 'withdrawn'): ?><button class="btn btn-primary" type="submit">변경사항 저장</button><?php endif ?>
       </div>
     </form>
   </div>
 </section>
 <?php $this->insert('admin/_member_consents') ?>
+<?php $this->insert('admin/_member_login_events') ?>
 <?php $this->stop() ?>

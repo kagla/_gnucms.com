@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
+use GnuCms\Cms\CmsRepository;
+use GnuCms\Mail\MailSettingsRepository;
 use GnuCms\Tests\Support\WebTestCase;
 
 final class SchemaTest extends WebTestCase
@@ -17,13 +19,58 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
+        self::assertCount(13, Schema::TABLES);
+
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
-                $table === 'site_state' ? 1 : ($table === 'site_settings' ? 7 : 0),
+                $table === 'site_settings' ? 11 : 0,
                 (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table))['c'],
                 $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );
         }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMigrationMovesMailSettingsIntoNamespacedSiteSettings(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->execute('CREATE TABLE ' . $db->q('mail_settings') . ' (
+            setting_key VARCHAR(50) NOT NULL, setting_value TEXT NOT NULL, updated_at VARCHAR(30) NOT NULL)');
+        $db->insert('mail_settings', [
+            'setting_key' => 'host', 'setting_value' => 'smtp.example.com',
+            'updated_at' => '2026-01-01 00:00:00',
+        ]);
+        $db->execute('UPDATE ' . $db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'system.schema_version']);
+
+        (new Schema($db))->ensureCurrent();
+
+        self::assertSame('smtp.example.com', (new MailSettingsRepository($db))->all()['host']);
+        self::assertArrayNotHasKey('mail.host', (new CmsRepository($db))->settings());
+        $this->assertTableMissing($db, 'mail_settings');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMigrationMovesSiteStateIntoSystemSettings(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->execute('CREATE TABLE ' . $db->q('site_state')
+            . ' (state_key VARCHAR(50) NOT NULL, state_value VARCHAR(191) NOT NULL)');
+        $db->insert('site_state', ['state_key' => 'first_admin_claimed', 'state_value' => '1']);
+        $db->insert('site_state', ['state_key' => 'consent_footer_defaulted', 'state_value' => '1']);
+        $db->execute('UPDATE ' . $db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'system.first_admin_claimed']);
+        $db->execute('UPDATE ' . $db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'system.schema_version']);
+
+        (new Schema($db))->ensureCurrent();
+
+        self::assertSame('1', $db->selectOne('SELECT setting_value FROM ' . $db->q('site_settings')
+            . " WHERE setting_key = 'system.first_admin_claimed'")['setting_value']);
+        self::assertSame('1', $db->selectOne('SELECT setting_value FROM ' . $db->q('site_settings')
+            . " WHERE setting_key = 'system.consent_footer_defaulted'")['setting_value']);
+        self::assertArrayNotHasKey('system.first_admin_claimed', (new CmsRepository($db))->settings());
+        $this->assertTableMissing($db, 'site_state');
     }
 
     #[DataProvider('connectionProvider')]
@@ -53,6 +100,26 @@ final class SchemaTest extends WebTestCase
         self::assertSame(0, (int) $db->selectOne(
             'SELECT COUNT(author_ip) AS c FROM ' . $db->table('comments')
         )['c']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testProfileImageMigrationAddsUserColumns(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $db->execute('ALTER TABLE ' . $db->q('users') . ' DROP COLUMN avatar_file');
+        $db->execute('ALTER TABLE ' . $db->q('users') . ' DROP COLUMN avatar_source');
+
+        (new Schema($db))->migrateProfileImages();
+
+        $id = $db->insert('users', [
+            'email' => 'avatar@example.com', 'email_verified' => 1, 'password_hash' => null,
+            'display_name' => '사진회원', 'is_admin' => 0, 'status' => 'active', 'session_epoch' => 0,
+            'avatar_file' => '0123456789abcdef0123456789abcdef.png', 'avatar_source' => 'upload',
+            'created_at' => '2026-09-02 00:00:00', 'updated_at' => '2026-09-02 00:00:00',
+        ]);
+        $row = $db->selectOne('SELECT avatar_file, avatar_source FROM users WHERE id = ?', [$id]);
+        self::assertSame('0123456789abcdef0123456789abcdef.png', $row['avatar_file']);
+        self::assertSame('upload', $row['avatar_source']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -141,6 +208,32 @@ final class SchemaTest extends WebTestCase
         self::assertSame('default', $setting['setting_value']);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testMigrationCopiesLegacyRegistrationChoiceToSocialSignup(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->delete('site_settings', 'setting_key = :key', ['key' => 'social_registration_enabled']);
+        $db->delete('site_settings', 'setting_key = :key', ['key' => 'password_login_enabled']);
+        $db->delete('site_settings', 'setting_key = :key', ['key' => 'social_login_enabled']);
+        $db->execute('UPDATE ' . $db->q('site_settings')
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'registration_enabled']);
+
+        (new Schema($db))->migrateAll();
+
+        self::assertSame('0', $db->selectOne(
+            'SELECT setting_value FROM ' . $db->q('site_settings') . ' WHERE setting_key = ?',
+            ['social_registration_enabled']
+        )['setting_value']);
+        self::assertSame('1', $db->selectOne(
+            'SELECT setting_value FROM ' . $db->q('site_settings') . ' WHERE setting_key = ?',
+            ['password_login_enabled']
+        )['setting_value']);
+        self::assertSame('1', $db->selectOne(
+            'SELECT setting_value FROM ' . $db->q('site_settings') . ' WHERE setting_key = ?',
+            ['social_login_enabled']
+        )['setting_value']);
+    }
+
     /** 옛 판에서 올라와도 새 칸과 새 표가 빠짐없이 생기고, 기존 동의가 그대로 옮겨진다. */
     #[DataProvider('connectionProvider')]
     public function testMigrationAddsConsentUsesAndMovesRecords(array $dbConfig): void
@@ -148,7 +241,18 @@ final class SchemaTest extends WebTestCase
         $app = $this->makeApp($dbConfig);
         $db = $app->db();
 
-        // 옛 칸이 없던 시절부터 있던 약관 글을 미리 만들어 둔다.
+        // VERSION 14의 옛 컬럼과 동의 표를 되살린다.
+        $db->execute('ALTER TABLE ' . $db->q('contents') . ' ADD COLUMN consent_key VARCHAR(20) NULL');
+        $db->execute('ALTER TABLE ' . $db->q('contents')
+            . ' ADD COLUMN consent_order INTEGER NOT NULL DEFAULT 0');
+        $db->execute('ALTER TABLE ' . $db->q('contents')
+            . ' ADD COLUMN consent_required INTEGER NOT NULL DEFAULT 1');
+        $db->execute('CREATE TABLE ' . $db->q('user_consents') . ' (
+            id BIGINT NULL, user_id BIGINT NOT NULL, consent_type VARCHAR(20) NOT NULL,
+            content_id BIGINT NOT NULL, content_updated_at TEXT NOT NULL, agreed SMALLINT NOT NULL DEFAULT 1,
+            agreed_at TEXT NOT NULL)');
+
+        // 옛 칸이 있던 시절부터 있던 약관 글을 미리 만들어 둔다.
         $id = $app->cms()->createPage([
             'slug' => 'terms', 'title' => '이용약관', 'content' => '본문',
             'seo_description' => null, 'status' => 'published', 'show_in_menu' => 0, 'sort_order' => 0,
@@ -172,7 +276,7 @@ final class SchemaTest extends WebTestCase
         $db->execute('DROP TABLE IF EXISTS ' . $db->q('consent_uses'));
         $db->execute('DROP TABLE IF EXISTS ' . $db->q('consents_given'));
         $db->execute('UPDATE ' . $db->q('site_settings')
-            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'schema_version']);
+            . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'system.schema_version']);
 
         $userId = $app->users()->create('a@example.com', password_hash('x', PASSWORD_DEFAULT), 'A', false);
         $db->insert('user_consents', [
@@ -214,6 +318,8 @@ final class SchemaTest extends WebTestCase
         self::assertSame('signup', $other['scope']);
         self::assertSame(0, (int) $other['agreed'], '동의 안 함은 안 함 그대로 남는다');
         self::assertSame(2, (int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q('consents_given'))['c']);
+        $this->assertTableMissing($db, 'user_consents');
+        self::assertFalse($this->columnExists($db, 'contents', 'consent_key'));
     }
 
     private function boardRow(string $key): array
@@ -251,13 +357,33 @@ final class SchemaTest extends WebTestCase
                 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
             ]);
         }
-        $db->execute('UPDATE ' . $db->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'schema_version']);
+        $db->execute('UPDATE ' . $db->q('site_settings') . ' SET setting_value = ? WHERE setting_key = ?', ['0', 'system.schema_version']);
 
         (new Schema($db))->ensureCurrent();
 
         $names = array_column($db->select('SELECT display_name FROM ' . $db->q('users') . ' ORDER BY id ASC'), 'display_name');
         self::assertSame(['홍길동', '홍길동2', '홍길동3'], $names);
         self::assertNotNull($app->users()->findByDisplayName('홍길동2'));
+    }
+
+    private function assertTableMissing(Connection $db, string $table): void
+    {
+        try {
+            $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->q($table));
+            self::fail($table . ' 테이블이 없어야 한다');
+        } catch (DomainError $e) {
+            self::assertTrue(true);
+        }
+    }
+
+    private function columnExists(Connection $db, string $table, string $column): bool
+    {
+        try {
+            $db->selectOne('SELECT ' . $column . ' FROM ' . $db->q($table) . ' LIMIT 1');
+            return true;
+        } catch (DomainError $e) {
+            return false;
+        }
     }
 
     #[DataProvider('connectionProvider')]

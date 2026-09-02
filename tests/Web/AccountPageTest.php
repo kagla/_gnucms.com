@@ -33,6 +33,8 @@ final class AccountPageTest extends WebTestCase
         $form = $this->body($this->get($app, '/account'));
         self::assertStringContainsString('회원정보 수정', $form);
         self::assertStringContainsString('me@example.com', $form);
+        self::assertStringContainsString('name="current_password"', $form);
+        self::assertStringContainsString('name="profile_image"', $form);
 
         // 이름만 바꾼다. 비밀번호 칸은 비워 둔다.
         $renamed = $this->post($app, '/account', [
@@ -59,6 +61,115 @@ final class AccountPageTest extends WebTestCase
         self::assertSame(303, $changed->getStatusCode(), $this->body($changed));
         self::assertTrue(password_verify('new-password-456', (string) $app->users()->findById($id)['password_hash']));
         self::assertSame(200, $this->get($app, '/account')->getStatusCode(), '비밀번호를 바꿔도 지금 세션은 살아 있어야 한다');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSocialOnlyAccountDoesNotShowPasswordChangeFields(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->createSocial('social@example.com', '소셜회원');
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $id;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+
+        $form = $this->body($this->get($app, '/account'));
+        self::assertStringContainsString('표시 이름을 바꿉니다.', $form);
+        self::assertStringNotContainsString('비밀번호 바꾸기', $form);
+        self::assertStringNotContainsString('name="current_password"', $form);
+        self::assertStringNotContainsString('name="password"', $form);
+        self::assertStringNotContainsString('name="password_confirmation"', $form);
+
+        $renamed = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '새소셜회원',
+        ]);
+        self::assertSame(303, $renamed->getStatusCode(), $this->body($renamed));
+        self::assertSame('새소셜회원', $app->users()->findById($id)['display_name']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPasswordMemberWithdrawsAndEmailCanBeReused(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->users()->create('owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $id = $app->users()->create('leave@example.com', password_hash('leave-password-123', PASSWORD_DEFAULT), '떠날회원');
+        $app->users()->verifyEmail($id);
+        $app->identities()->attach($id, 'google', 'old-google-uid');
+        $postId = $app->posts()->create([
+            'board_id' => 1, 'title' => '남길 글', 'content' => '본문', 'author_id' => (string) $id,
+            'author_name' => '떠날회원', 'author_ip' => '198.51.100.20',
+        ]);
+        $commentId = $app->comments()->create([
+            'board_id' => 1, 'post_id' => $postId, 'content' => '남길 댓글',
+            'author_id' => (string) $id, 'author_name' => '떠날회원', 'author_ip' => '198.51.100.21',
+        ]);
+        $app->loginEvents()->record($id, 'leave@example.com', 'password', 'success', '198.51.100.22', 'Test');
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'leave@example.com',
+            'password' => 'leave-password-123',
+        ]);
+        $page = $this->body($this->get($app, '/account'));
+        self::assertStringContainsString('회원 탈퇴', $page);
+        self::assertStringContainsString('작성한 글과 댓글은 삭제되지 않고', $page);
+
+        $wrong = $this->post($app, '/account/withdraw', [
+            'csrf_token' => $_SESSION['csrf_token'], 'withdraw_current_password' => 'wrong',
+            'confirm_withdrawal' => '1',
+        ]);
+        self::assertSame(422, $wrong->getStatusCode());
+
+        $withdrawn = $this->post($app, '/account/withdraw', [
+            'csrf_token' => $_SESSION['csrf_token'], 'withdraw_current_password' => 'leave-password-123',
+            'confirm_withdrawal' => '1',
+        ], ['REMOTE_ADDR' => '203.0.113.30']);
+        self::assertSame(303, $withdrawn->getStatusCode(), $this->body($withdrawn));
+        self::assertSame('/account/withdrawn', $withdrawn->getHeaderLine('Location'));
+
+        $old = $app->users()->findById($id);
+        self::assertSame('withdrawn', $old['status']);
+        self::assertSame('203.0.113.30', $old['withdrawn_ip']);
+        self::assertNotNull($old['withdrawn_at']);
+        self::assertNull($old['password_hash']);
+        self::assertNotSame('leave@example.com', $old['email']);
+        self::assertSame(0, $app->identities()->countForUser($id));
+        self::assertSame('탈퇴한 회원', $app->posts()->find($postId)['author_name']);
+        self::assertNull($app->posts()->find($postId)['author_ip']);
+        self::assertSame('탈퇴한 회원', $app->comments()->find($commentId)['author_name']);
+        self::assertNull($app->comments()->find($commentId)['author_ip']);
+        $event = $app->db()->selectOne(
+            'SELECT login_identifier, client_ip FROM login_events WHERE user_id = ? ORDER BY id ASC LIMIT 1', [$id]
+        );
+        self::assertNull($event['login_identifier']);
+        self::assertSame('198.51.100.22', $event['client_ip']);
+        self::assertSame(401, $this->get($app, '/account')->getStatusCode());
+
+        $newId = $app->users()->create('leave@example.com', password_hash('new-password-123', PASSWORD_DEFAULT), '새회원');
+        $app->identities()->attach($newId, 'google', 'old-google-uid');
+        self::assertNotSame($id, $newId);
+        self::assertSame(1, $app->identities()->countForUser($newId));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testLastAdminCannotWithdraw(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $id = $app->users()->create('owner@example.com', password_hash('owner-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com',
+            'password' => 'owner-password-123',
+        ]);
+        $response = $this->post($app, '/account/withdraw', [
+            'csrf_token' => $_SESSION['csrf_token'], 'withdraw_current_password' => 'owner-password-123',
+            'confirm_withdrawal' => '1',
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('마지막 관리자는 탈퇴할 수 없습니다', $this->body($response));
+        self::assertSame('active', $app->users()->findById($id)['status']);
     }
 
     #[DataProvider('connectionProvider')]

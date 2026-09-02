@@ -27,7 +27,7 @@
           <td data-label="회원">
             <div class="cell-user">
               <span class="avatar avatar-placeholder avatar-sm">
-                <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $member['display_name']) % 6) ?>" aria-hidden="true"><span><?= $this->e(mb_strtoupper(mb_substr((string) $member['display_name'], 0, 1))) ?></span></span>
+                <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $member['display_name']) % 6) ?>" aria-hidden="true"><?php if (!empty($member['avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $member['avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e(mb_strtoupper(mb_substr((string) $member['display_name'], 0, 1))) ?></span><?php endif ?></span>
               </span>
               <div>
                 <div class="cell-title"><?= $this->e($member['display_name']) ?><?php if ($member['is_admin']): ?> <span class="badge badge-primary badge-soft badge-xs">소유자</span><?php endif ?></div>
@@ -36,14 +36,17 @@
             </div>
           </td>
           <td data-label="가입일"><?= $this->date($member['created_at'], 'Y.m.d') ?></td>
-          <td data-label="상태"><span class="badge badge-sm <?= $member['status'] === 'active' ? 'badge-success' : 'badge-error' ?> badge-soft"><?= $member['status'] === 'active' ? '활성' : '차단' ?></span></td>
+          <?php $status_label = $member['status'] === 'active' ? '활성' : ($member['status'] === 'withdrawn' ? '탈퇴' : '차단'); ?>
+          <td data-label="상태"><span class="badge badge-sm <?= $member['status'] === 'active' ? 'badge-success' : ($member['status'] === 'withdrawn' ? 'badge-ghost' : 'badge-error') ?> badge-soft"><?= $status_label ?></span></td>
           <td data-label="관리" class="right">
             <div class="row-actions">
-              <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.members.edit', ['id' => $member['id']]) ?>">수정</a>
+              <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.members.edit', ['id' => $member['id']]) ?>"><?= $member['status'] === 'withdrawn' ? '보기' : '수정' ?></a>
+              <?php if ($member['status'] !== 'withdrawn'): ?>
               <form method="post" action="<?= $this->url('admin.members.status', ['id' => $member['id']]) ?>">
                 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
                 <button class="btn btn-outline btn-sm" type="submit"><?= $member['status'] === 'active' ? '차단' : '해제' ?></button>
               </form>
+              <?php endif ?>
             </div>
           </td>
         </tr>

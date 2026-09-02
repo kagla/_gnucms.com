@@ -6,6 +6,7 @@ namespace GnuCms\Account;
 
 use GnuCms\Db\Connection;
 use GnuCms\Support\Clock;
+use GnuCms\Support\IpAddress;
 
 final class UserRepository
 {
@@ -40,6 +41,13 @@ final class UserRepository
         return '한글 ' . intdiv(self::DISPLAY_NAME_MIN_WIDTH, 2) . '자 또는 영문 ' . self::DISPLAY_NAME_MIN_WIDTH . '자 이상 적어 주세요.';
     }
 
+    public static function isSocialPlaceholderEmail(string $email): bool
+    {
+        $email = strtolower(trim($email));
+        return str_ends_with($email, '@oauth.local')
+            || str_ends_with($email, '@users.gnucms.charmgen.com');
+    }
+
     private Connection $db;
 
     public function __construct(Connection $db)
@@ -50,7 +58,8 @@ final class UserRepository
     public function findById(int $id): ?array
     {
         return $this->db->selectOne(
-            'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at'
+            'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE id = ?',
             [$id]
         );
@@ -59,7 +68,8 @@ final class UserRepository
     public function findByEmail(string $email): ?array
     {
         return $this->db->selectOne(
-            'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at'
+            'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
@@ -117,16 +127,18 @@ final class UserRepository
         return mb_substr($base, 0, 100 - 13) . bin2hex(random_bytes(6));
     }
 
-    public function createRegistered(string $email, string $passwordHash, string $displayName): int
+    public function createRegistered(string $email, string $passwordHash, string $displayName, ?string $registeredIp = null): int
     {
-        return $this->db->transaction(function () use ($email, $passwordHash, $displayName): int {
+        return $this->db->transaction(function () use ($email, $passwordHash, $displayName, $registeredIp): int {
             $isFirst = $this->db->execute(
-                'UPDATE ' . $this->db->table('site_state') . ' SET state_value = ?'
-                . ' WHERE state_key = ? AND state_value = ?',
-                ['1', 'first_admin_claimed', '0']
+                'UPDATE ' . $this->db->table('site_settings') . ' SET setting_value = ?, updated_at = ?'
+                . ' WHERE setting_key = ? AND setting_value = ?',
+                ['1', Clock::now(), 'system.first_admin_claimed', '0']
             ) === 1;
 
             $id = $this->create($email, $passwordHash, $this->uniqueDisplayName($displayName), $isFirst);
+            $this->db->update('users', ['registered_ip' => IpAddress::normalize($registeredIp)],
+                'id = :id', ['id' => $id]);
             if ($isFirst) {
                 $this->verifyEmail($id);
             }
@@ -134,24 +146,23 @@ final class UserRepository
         });
     }
 
-    public function createSocial(string $email, string $displayName): int
+    public function createSocial(string $email, string $displayName, ?string $registeredIp = null, bool $emailVerified = true): int
     {
-        return $this->db->transaction(function () use ($email, $displayName): int {
-            $isFirst = $this->db->execute(
-                'UPDATE ' . $this->db->table('site_state') . ' SET state_value = ?'
-                . ' WHERE state_key = ? AND state_value = ?',
-                ['1', 'first_admin_claimed', '0']
-            ) === 1;
+        return $this->db->transaction(function () use ($email, $displayName, $registeredIp, $emailVerified): int {
             $now = Clock::now();
 
             return (int) $this->db->insert('users', [
                 'email' => $email,
-                'email_verified' => 1,
+                'email_verified' => $emailVerified ? 1 : 0,
                 'password_hash' => null,
                 'display_name' => $this->uniqueDisplayName($displayName),
-                'is_admin' => $isFirst ? 1 : 0,
+                // 외부 공급자 로그인만으로 첫 관리자 자리를 선점할 수 없어야 한다.
+                'is_admin' => 0,
                 'status' => 'active',
                 'session_epoch' => 0,
+                'registered_ip' => IpAddress::normalize($registeredIp),
+                'withdrawn_ip' => null,
+                'withdrawn_at' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -161,6 +172,24 @@ final class UserRepository
     public function verifyEmail(int $id): void
     {
         $this->db->update('users', ['email_verified' => 1, 'updated_at' => Clock::now()], 'id = :id', ['id' => $id]);
+    }
+
+    public function replaceSocialPlaceholderEmail(int $id, string $email): void
+    {
+        $this->db->update('users', [
+            'email' => strtolower(trim($email)),
+            'email_verified' => 1,
+            'updated_at' => Clock::now(),
+        ], 'id = :id', ['id' => $id]);
+    }
+
+    public function updateAvatar(int $id, ?string $file, ?string $source): void
+    {
+        $this->db->update('users', [
+            'avatar_file' => $file,
+            'avatar_source' => $source,
+            'updated_at' => Clock::now(),
+        ], 'id = :id', ['id' => $id]);
     }
 
     public function updatePassword(int $id, string $passwordHash): void
@@ -176,10 +205,60 @@ final class UserRepository
         ], 'id = :id', ['id' => $id]);
     }
 
+    /** 개인정보를 익명화하되 글·댓글의 작성 관계와 보안 로그인 이력은 남긴다. */
+    public function withdraw(int $id, ?string $clientIp): void
+    {
+        $user = $this->findById($id);
+        if ($user === null) {
+            return;
+        }
+        $now = Clock::now();
+        $anonymousEmail = 'withdrawn-' . $id . '-' . bin2hex(random_bytes(6)) . '@invalid.local';
+        $anonymousName = '탈퇴회원' . $id . 'x' . bin2hex(random_bytes(4));
+        $oldName = (string) $user['display_name'];
+
+        $this->db->transaction(function () use (
+            $id, $clientIp, $now, $anonymousEmail, $anonymousName, $oldName, $user
+        ): void {
+            foreach (['posts', 'comments'] as $table) {
+                $this->db->update($table, [
+                    'author_name' => '탈퇴한 회원',
+                    'author_ip' => null,
+                ], 'author_id = :author_id', ['author_id' => (string) $id]);
+            }
+            $this->db->execute(
+                'UPDATE ' . $this->db->table('notifications') . ' SET actor_name = ? WHERE actor_name = ?',
+                ['탈퇴한 회원', $oldName]
+            );
+            $this->db->delete('notifications', 'user_id = :user_id', ['user_id' => (string) $id]);
+            $this->db->delete('user_tokens', 'user_id = :user_id', ['user_id' => $id]);
+            $this->db->delete('user_identities', 'user_id = :user_id', ['user_id' => $id]);
+            $this->db->delete('consents_given',
+                'subject_type = :subject_type AND subject_id = :subject_id',
+                ['subject_type' => 'user', 'subject_id' => $id]);
+            $this->db->update('login_events', ['login_identifier' => null],
+                'user_id = :user_id', ['user_id' => $id]);
+            $this->db->update('users', [
+                'email' => $anonymousEmail,
+                'email_verified' => 0,
+                'password_hash' => null,
+                'display_name' => $anonymousName,
+                'is_admin' => 0,
+                'status' => 'withdrawn',
+                'session_epoch' => (int) $user['session_epoch'] + 1,
+                'avatar_file' => null,
+                'avatar_source' => null,
+                'withdrawn_ip' => IpAddress::normalize($clientIp),
+                'withdrawn_at' => $now,
+                'updated_at' => $now,
+            ], 'id = :id', ['id' => $id]);
+        });
+    }
+
     public function listForAdmin(string $query = '', int $limit = 100): array
     {
         $limit = max(1, min(200, $limit));
-        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, created_at'
+        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, avatar_file, created_at'
             . ' FROM ' . $this->db->table('users');
         $params = [];
         if ($query !== '') {

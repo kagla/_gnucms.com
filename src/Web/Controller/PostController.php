@@ -294,13 +294,32 @@ final class PostController
         $loaded = $this->app->postService()->loadForRead($acl, $id, null);
         $board = $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']);
 
-        $post = $this->app->postService()->get($acl, $id, null);
+        $alreadyViewed = $this->hasViewedPost($id);
+        $post = $this->app->postService()->get($acl, $id, null, !$alreadyViewed);
+        if (!$alreadyViewed) {
+            $this->rememberViewedPost($id);
+        }
         $comments = $this->app->commentService()->listComments($acl, $id, null);
+        $query = $request->getQueryParams();
+        $navigationScope = ($query['scope'] ?? '') === 'all' ? 'all' : 'board';
+        $belowViewList = $board['show_list_below_view']
+            ? $this->app->postService()->listPosts($acl, (string) $board['board_key'], $query) : null;
 
         return View::fromRequest($request)->render($response, 'posts/show', [
             'post'     => $post,
             'board'    => $board,
             'comments' => $comments,
+            'adjacent_posts' => $this->app->postService()->adjacentPosts($acl, $id, $navigationScope === 'all'),
+            'navigation_scope' => $navigationScope,
+            'below_view_list' => $belowViewList,
+            'below_view' => $this->resolveView($query, $board),
+            'below_view_query' => [
+                'q' => isset($query['q']) && is_scalar($query['q']) ? (string) $query['q'] : null,
+                'category' => isset($query['category']) && is_scalar($query['category'])
+                    ? (string) $query['category'] : null,
+            ],
+            'view_types' => BoardService::LIST_TYPES,
+            'can_write' => $acl->canWrite($loaded['board']),
             'can_comment' => $acl->canCommentOnPost($loaded['board'], $loaded['post']),
             'comment_errors' => [],
             'comment_values' => ['image_key' => bin2hex(random_bytes(16))],
@@ -339,6 +358,20 @@ final class PostController
         $_SESSION['secret_posts'][(string) $id] = \GnuCms\Auth\Acl::secretGrantFor($loaded['post']);
 
         return $this->redirectToPost($request, $response, $id);
+    }
+
+    private function hasViewedPost(int $id): bool
+    {
+        $viewed = $_SESSION['viewed_posts'] ?? null;
+        return is_array($viewed) && array_key_exists((string) $id, $viewed);
+    }
+
+    private function rememberViewedPost(int $id): void
+    {
+        $viewed = isset($_SESSION['viewed_posts']) && is_array($_SESSION['viewed_posts'])
+            ? $_SESSION['viewed_posts'] : [];
+        $viewed[(string) $id] = time();
+        $_SESSION['viewed_posts'] = $viewed;
     }
 
     private function renderSecretPassword(ServerRequestInterface $request, ResponseInterface $response,

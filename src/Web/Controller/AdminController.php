@@ -163,9 +163,19 @@ final class AdminController
     private function renderMemberForm(ServerRequestInterface $request, ResponseInterface $response, array $values,
         array $errors): ResponseInterface
     {
+        $providerLabels = ['google' => 'Google', 'naver' => '네이버', 'kakao' => '카카오'];
+        $identities = $this->app->identities()->listForUser((int) $values['id']);
+        foreach ($identities as &$identity) {
+            $key = (string) $identity['provider'];
+            $identity['label'] = $providerLabels[$key] ?? ucfirst($key);
+        }
+        unset($identity);
+
         return View::fromRequest($request)->render($response, 'admin/member_form', [
             'values' => $values,
             'errors' => $errors,
+            'member_identities' => $identities,
+            'member_login_events' => $this->app->loginEvents()->recentForUser((int) $values['id']),
             // 가입 동의 내역은 고칠 수 없는 기록이라 폼 밖에 따로 보여 준다.
             'member_consents' => $this->app->consents()
                 ->forSubjectWithDocument('user', (int) $values['id']),
@@ -203,6 +213,7 @@ final class AdminController
             'use_file' => isset($input['use_file']) ? '1' : '0',
             'use_category' => isset($input['use_category']) ? '1' : '0',
             'show_in_header' => isset($input['show_in_header']) ? '1' : '0',
+            'show_list_below_view' => isset($input['show_list_below_view']) ? '1' : '0',
             'list_type' => (string) ($input['list_type'] ?? 'list'),
             'home_limit' => (string) ($input['home_limit'] ?? '5'),
             'per_page' => (string) ($input['per_page'] ?? '20'),
@@ -234,7 +245,7 @@ final class AdminController
         return ['board_key' => '', 'name' => '', 'description' => '', 'categories_text' => '', 'managers_text' => '',
             'perm_read' => 'guest', 'perm_write' => 'member', 'perm_comment' => 'member', 'use_secret' => false,
             'use_file' => false, 'use_category' => false, 'list_type' => 'list',
-            'show_in_header' => false,
+            'show_in_header' => false, 'show_list_below_view' => false,
             'home_limit' => 5, 'per_page' => 20, 'sort_order' => 0];
     }
 

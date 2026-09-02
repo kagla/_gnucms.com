@@ -23,7 +23,12 @@
     </span>
     <h1 class="card-title article-title"><?= $this->e($post['title']) ?></h1>
     <div class="article-byline">
-      <strong><?= $this->e($post['author_name']) ?></strong>
+      <div class="article-author-row">
+        <span class="avatar avatar-placeholder avatar-sm">
+          <span class="avatar-inner" data-tone="<?= $this->e(mb_strlen((string) $post['author_name']) % 6) ?>" aria-hidden="true"><?php if (!empty($post['author_avatar_file'])): ?><img src="<?= $this->url('avatar.show', ['file' => $post['author_avatar_file']]) ?>" alt=""><?php else: ?><span><?= $this->e(mb_strtoupper(mb_substr((string) $post['author_name'], 0, 1))) ?></span><?php endif ?></span>
+        </span>
+        <strong><?= $this->e($post['author_name']) ?></strong>
+      </div>
       <span class="article-writer-meta">
         <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'y-m-d H:i:s') ?></time>
         <?php if (!empty($post['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($post['author_ip_masked']) ?></span><?php endif ?>
@@ -68,10 +73,15 @@
       <?php if ($mine): ?>
         <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.edit', ['id' => $post['id']]) ?>"><?= $this->icon('pencil', 14) ?> 수정</a>
       <?php endif ?>
-      <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('arrow-left', 15) ?> 목록</a>
+      <a class="btn btn-outline btn-sm" href="<?= $navigation_scope === 'all' ? $this->url('posts.all') : $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('arrow-left', 15) ?> <?= $navigation_scope === 'all' ? '전체 글' : '목록' ?></a>
     </span>
   </footer>
 </article>
+
+<?php $this->insert('posts/_adjacent', [
+  'adjacent' => $adjacent_posts, 'scope' => $navigation_scope,
+  'paginate' => (bool) $board['show_list_below_view'],
+]) ?>
 
 <section class="card comments" id="comments" aria-labelledby="comments-title">
   <div class="card-body">
@@ -145,6 +155,14 @@
   <div class="article-actions">
     <a class="btn btn-primary btn-lg" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>"><?= $this->icon('pencil', 16) ?> 나도 글쓰기</a>
   </div>
+<?php endif ?>
+
+<?php if ($below_view_list !== null): ?>
+  <?php $this->insert('posts/_below_view_list', [
+    'list' => $below_view_list, 'board' => $board, 'current_post_id' => $post['id'],
+    'query' => $below_view_query, 'view' => $below_view, 'view_types' => $view_types,
+    'can_write' => $can_write, 'navigation_scope' => $navigation_scope,
+  ]) ?>
 <?php endif ?>
 
 <dialog class="comment-owner-modal" data-comment-owner-modal aria-labelledby="comment-owner-title">

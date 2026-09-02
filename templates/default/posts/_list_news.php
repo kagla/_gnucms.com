@@ -1,7 +1,7 @@
 <?php // 뉴스형: 사진 없이 제목과 발췌문 위주. 공지·소식 게시판에 맞는다. ?>
 <ul class="list card post-rows post-rows-text">
   <?php foreach ($list['data'] as $post): ?>
-    <li class="list-row">
+    <li class="list-row<?= isset($current_post_id) && (int) $current_post_id === (int) $post['id'] ? ' is-current-post' : '' ?>">
       <div class="post-row-body">
         <p class="post-row-head">
           <?php if ($board['use_category'] && $post['category']): ?><span class="badge badge-ghost badge-sm"><?= $this->e($post['category']) ?></span><?php endif ?>

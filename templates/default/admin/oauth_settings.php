@@ -1,0 +1,26 @@
+<?php $this->layout('admin/layout') ?>
+<?php $this->start('title') ?>소셜 로그인 설정 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
+<?php $this->start('admin_section') ?>site<?php $this->stop() ?>
+<?php $this->start('body') ?>
+<div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li><a href="<?= $this->url('admin.settings') ?>">설정</a></li><li aria-current="page">소셜 로그인</li></ul></div>
+<?php $this->insert('admin/_settings_tabs', ['active' => 'oauth']) ?>
+<section class="card settings-card"><div class="card-body">
+  <h1 class="card-title"><?= $this->icon('users', 19) ?> 소셜 로그인</h1><p class="card-sub">사용할 제공자를 켜고 개발자 콘솔에서 발급받은 인증 정보를 입력합니다.</p>
+  <?php if (($query['saved'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>소셜 로그인 설정을 저장했습니다.</span></div><?php endif ?>
+  <form method="post" action="<?= $this->url('admin.settings.oauth') ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+    <?php foreach ($values as $key => $provider): ?><div class="form-section oauth-provider">
+      <fieldset class="fieldset toggle-list"><label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="<?= $this->e($key) ?>_enabled" value="1"<?= $provider['enabled'] ? ' checked' : '' ?>><span><strong><?= $this->e($provider['label']) ?> 로그인 사용</strong><small>필수 인증 정보가 있어야 로그인 화면에 표시됩니다.</small></span></label></fieldset>
+      <div class="oauth-provider-tools"><a class="btn btn-outline btn-sm" href="<?= $this->e($provider['console_url']) ?>" target="_blank" rel="noopener noreferrer"><?= $this->e($provider['label']) ?> 키 발급·관리 <span aria-hidden="true">↗</span></a></div>
+      <div class="grid-2">
+        <fieldset class="fieldset<?= array_key_exists($key . '_client_id', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><?= $this->e($provider['client_id_label']) ?></legend><input class="input input-bordered input-block" type="text" name="<?= $this->e($key) ?>_client_id" value="<?= $this->e($provider['client_id']) ?>" maxlength="500" autocomplete="off"><?php if (array_key_exists($key . '_client_id', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$key . '_client_id']) ?></p><?php endif ?><?php if ($key === 'kakao'): ?><p class="fieldset-label">카카오디벨로퍼스의 JavaScript 키가 아닌 REST API 키를 입력하세요.</p><?php elseif ($key === 'naver'): ?><p class="fieldset-label">네이버 개발자센터 애플리케이션의 Client ID를 입력하세요.</p><?php endif ?></fieldset>
+        <fieldset class="fieldset<?= array_key_exists($key . '_client_secret', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">Client Secret<?= $provider['client_secret_optional'] ? ' (선택)' : '' ?></legend><label class="input input-bordered input-block"><input type="password" name="<?= $this->e($key) ?>_client_secret" value="" maxlength="1000" autocomplete="new-password" placeholder="<?= $provider['client_secret_set'] ? '••••••••••••••••' : 'Client Secret 입력' ?>"><?php $this->insert('auth/_pw_toggle', ['toggle_label' => 'Client Secret']) ?></label><?php if (array_key_exists($key . '_client_secret', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$key . '_client_secret']) ?></p><?php endif ?><p class="fieldset-label"><?php if ($provider['client_secret_optional']): ?>카카오디벨로퍼스에서 Client Secret 기능이 ON일 때만 입력하세요.<?php elseif ($provider['client_secret_set']): ?>비밀키가 저장되어 있습니다. 변경할 때만 새 값을 입력하세요.<?php else: ?>비밀키는 암호화해 저장합니다.<?php endif ?></p><?php if ($provider['client_secret_set']): ?><label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="<?= $this->e($key) ?>_client_secret_clear" value="1"> 저장된 Client Secret 삭제</label><?php endif ?></fieldset>
+      </div>
+      <fieldset class="fieldset"><legend class="fieldset-legend">Callback URL</legend><input class="input input-bordered input-block oauth-callback" type="text" value="<?= $this->e($provider['redirect_uri']) ?>" readonly><p class="fieldset-label">이 주소를 <?= $this->e($provider['label']) ?> 개발자 콘솔의 Redirect URI에 등록하세요.</p></fieldset>
+      <?php if ($key === 'naver'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 16) ?></span><span>네이버 로그인 API의 제공 정보에서 이메일 주소를 필수로 설정하세요. 프로필 사진을 선택 항목으로 활성화하면 최초 가입·로그인 때 가져옵니다. 이메일이 응답에 없으면 가입과 로그인이 차단되며, 별명과 프로필 사진은 선택입니다.</span></div><?php elseif ($key === 'kakao'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 16) ?></span><span>카카오 로그인 동의항목에서 카카오계정(이메일)을 필수로 설정하세요. 프로필 사진이 제공되면 최초 가입·로그인 때 가져옵니다. 이메일이 응답에 없으면 가입과 로그인이 차단되며, 닉네임과 프로필 사진은 선택입니다.</span></div><?php endif ?>
+      <?php if ($key === 'kakao'): ?><?php $this->insert('admin/_kakao_email_guide', ['callback_url' => $provider['redirect_uri'], 'console_url' => $provider['console_url']]) ?><?php endif ?>
+    </div><?php endforeach ?>
+    <div class="card-actions form-actions"><a class="btn btn-ghost" href="<?= $this->url('admin.index') ?>">취소</a><button class="btn btn-primary" type="submit">설정 저장</button></div>
+  </form>
+</div></section>
+<?php $this->stop() ?>
+<?php $this->start('scripts') ?><?php $this->insert('auth/_pw_toggle_script') ?><?php $this->stop() ?>

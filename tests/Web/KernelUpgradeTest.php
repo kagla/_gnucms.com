@@ -35,7 +35,7 @@ final class KernelUpgradeTest extends WebTestCase
     public function testOldStampIsUpgradedOnFirstRequest(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig, ['storage' => ['dir' => $this->storage]]);
-        $app->db()->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', ['9.oldhash', 'schema_version']);
+        $app->db()->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', ['9.oldhash', 'system.schema_version']);
 
         $response = $this->get($app, '/');
 
@@ -51,7 +51,7 @@ final class KernelUpgradeTest extends WebTestCase
     public function testLockedUpgradeRaisesMaintenance(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig, ['storage' => ['dir' => $this->storage]]);
-        $app->db()->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', ['9.oldhash', 'schema_version']);
+        $app->db()->execute('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?', ['9.oldhash', 'system.schema_version']);
         $held = fopen($this->storage . '/upgrade.lock', 'c');
         flock($held, LOCK_EX);
 

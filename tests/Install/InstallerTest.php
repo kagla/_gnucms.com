@@ -59,7 +59,9 @@ final class InstallerTest extends TestCase
         self::assertSame(1, (int) $user['email_verified']);
         self::assertSame('사이트지기', $user['display_name']);
         self::assertTrue(password_verify('secret-pass-123', (string) $user['password_hash']));
-        self::assertSame('1', $db->selectOne("SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'")['state_value']);
+        self::assertSame('1', $db->selectOne(
+            "SELECT setting_value FROM site_settings WHERE setting_key = 'system.first_admin_claimed'"
+        )['setting_value']);
     }
 
     public function testGeneratedConfigHasOnlyLiveKeys(): void
@@ -85,7 +87,7 @@ final class InstallerTest extends TestCase
     {
         $db = Connection::create($this->dbConfig());
         (new Schema($db))->create();
-        $db->execute("UPDATE site_settings SET setting_value = '9.old' WHERE setting_key = 'schema_version'");
+        $db->execute("UPDATE site_settings SET setting_value = '9.old' WHERE setting_key = 'system.schema_version'");
         $db->insert('boards', [
             'board_key' => 'free', 'name' => '자유', 'description' => '', 'list_type' => 'list', 'perm_read' => 'all',
             'perm_write' => 'member', 'perm_comment' => 'member', 'managers' => '[]', 'sort_order' => 1,
@@ -159,7 +161,9 @@ final class InstallerTest extends TestCase
         self::assertFileDoesNotExist($this->configPath());
         $db = Connection::create($this->dbConfig());
         self::assertSame(0, (int) $db->selectOne('SELECT COUNT(*) AS c FROM users')['c']);
-        self::assertSame('0', $db->selectOne("SELECT state_value FROM site_state WHERE state_key = 'first_admin_claimed'")['state_value']);
+        self::assertSame('0', $db->selectOne(
+            "SELECT setting_value FROM site_settings WHERE setting_key = 'system.first_admin_claimed'"
+        )['setting_value']);
 
         chmod($this->workDir . '/config', 0775);
         $result = $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());

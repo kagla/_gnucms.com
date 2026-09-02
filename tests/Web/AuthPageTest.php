@@ -23,6 +23,8 @@ final class AuthPageTest extends WebTestCase
         self::assertStringContainsString('name="csrf_token"', $login);
         self::assertStringContainsString('<title>회원가입', $register);
         self::assertStringContainsString('password_confirmation', $register);
+        self::assertStringContainsString('enctype="multipart/form-data"', $register);
+        self::assertStringContainsString('name="profile_image"', $register);
         self::assertStringNotContainsString('name="name"', $register);
 
         $forgot = $this->body($this->get($app, '/forgot-password'));
@@ -30,6 +32,42 @@ final class AuthPageTest extends WebTestCase
         self::assertStringContainsString('<title>비밀번호 찾기', $forgot);
         self::assertStringContainsString('<title>새 비밀번호 설정', $reset);
         self::assertStringContainsString('value="example-token"', $reset);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRegistrationAndPasswordLoginsRecordIpHistory(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->get($app, '/register');
+        $registered = $this->post($app, '/register', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com',
+            'password' => 'owner-password-123', 'password_confirmation' => 'owner-password-123',
+        ], ['REMOTE_ADDR' => '203.0.113.10', 'HTTP_USER_AGENT' => 'Register/Test']);
+        self::assertSame(303, $registered->getStatusCode());
+        $owner = $app->users()->findByEmail('owner@example.com');
+        self::assertSame('203.0.113.10', $owner['registered_ip']);
+
+        $this->post($app, '/logout', ['csrf_token' => $_SESSION['csrf_token']]);
+        $this->get($app, '/login');
+        $failed = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com', 'password' => 'wrong',
+        ], ['REMOTE_ADDR' => '203.0.113.11', 'HTTP_USER_AGENT' => 'Login/Failure']);
+        self::assertSame(422, $failed->getStatusCode());
+        $success = $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'owner@example.com',
+            'password' => 'owner-password-123',
+        ], ['REMOTE_ADDR' => '203.0.113.12', 'HTTP_USER_AGENT' => 'Login/Success']);
+        self::assertSame(303, $success->getStatusCode());
+
+        $events = $app->db()->select(
+            'SELECT auth_method, result, client_ip FROM login_events WHERE user_id = ? ORDER BY id ASC',
+            [(int) $owner['id']]
+        );
+        self::assertSame([
+            ['auth_method' => 'password', 'result' => 'success', 'client_ip' => '203.0.113.10'],
+            ['auth_method' => 'password', 'result' => 'failure', 'client_ip' => '203.0.113.11'],
+            ['auth_method' => 'password', 'result' => 'success', 'client_ip' => '203.0.113.12'],
+        ], $events);
     }
 
     #[DataProvider('connectionProvider')]
@@ -45,12 +83,19 @@ final class AuthPageTest extends WebTestCase
         ]);
 
         $login = $this->body($this->get($app, '/login'));
+        $register = $this->body($this->get($app, '/register'));
 
         self::assertStringContainsString('Google로 계속하기', $login);
         self::assertStringContainsString('네이버로 계속하기', $login);
         self::assertStringContainsString('카카오로 계속하기', $login);
-        self::assertStringContainsString('GitHub로 계속하기', $login);
+        self::assertStringNotContainsString('GitHub로 계속하기', $login);
         self::assertStringContainsString('/auth/google', $login);
+        self::assertLessThan(strpos($login, '네이버로 계속하기'), strpos($login, 'Google로 계속하기'));
+        self::assertLessThan(strpos($login, '카카오로 계속하기'), strpos($login, '네이버로 계속하기'));
+        self::assertLessThan(strpos($login, 'name="email"'), strpos($login, 'Google로 계속하기'));
+        self::assertLessThan(strpos($register, 'name="email"'), strpos($register, 'Google로 계속하기'));
+        self::assertStringContainsString('또는 이메일로 계속', $login);
+        self::assertStringContainsString('또는 이메일로 계속', $register);
     }
 
     #[DataProvider('connectionProvider')]
@@ -94,6 +139,10 @@ final class AuthPageTest extends WebTestCase
         $form = $this->body($this->get($app, '/register'));
         self::assertStringContainsString('name="agree_' . $ids['service'] . '"', $form);
         self::assertStringContainsString('name="agree_' . $ids['privacy'] . '"', $form);
+        self::assertStringContainsString('data-consent-all', $form);
+        self::assertStringContainsString('약관 모두 동의', $form);
+        self::assertStringContainsString('필수·선택 약관에 모두 동의한 것으로 봅니다.', $form);
+        self::assertSame(2, substr_count($form, 'value="1" data-consent-item'));
         self::assertStringContainsString('href="/terms/service"', $form);
         self::assertStringContainsString('href="/terms/privacy"', $form);
         self::assertSame(200, $this->get($app, '/terms/service')->getStatusCode());

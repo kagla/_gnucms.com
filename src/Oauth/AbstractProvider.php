@@ -32,7 +32,18 @@ abstract class AbstractProvider implements ProviderInterface
 
     public function authorizationUrl(string $state): string
     {
-        return $this->client->getAuthorizationUrl(['state' => $state, 'scope' => $this->scopes]);
+        $options = ['state' => $state];
+        if ($this->scopes !== []) {
+            $options['scope'] = $this->scopes;
+        }
+        $url = $this->client->getAuthorizationUrl($options);
+
+        // GenericProvider가 호환용 approval_prompt=auto를 자동으로 붙이지만 네이버·카카오
+        // 인가 명세에는 없는 값이다. 범위가 없는 네이버에는 빈 scope도 보내지 않는다.
+        return $this->withoutAuthorizationParameters(
+            $url,
+            $this->scopes === [] ? ['approval_prompt', 'scope'] : ['approval_prompt']
+        );
     }
 
     public function fetchProfile(string $code, string $state = ''): SocialProfile
@@ -68,5 +79,25 @@ abstract class AbstractProvider implements ProviderInterface
         $data = $this->client->getParsedResponse($request);
 
         return is_array($data) ? $data : [];
+    }
+
+    /** @param string[] $names */
+    private function withoutAuthorizationParameters(string $url, array $names): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return $url;
+        }
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        foreach ($names as $name) {
+            unset($query[$name]);
+        }
+        $authority = (isset($parts['user']) ? $parts['user']
+            . (isset($parts['pass']) ? ':' . $parts['pass'] : '') . '@' : '')
+            . ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        return ($parts['scheme'] ?? 'https') . '://' . $authority . ($parts['path'] ?? '')
+            . ($query === [] ? '' : '?' . http_build_query($query))
+            . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
     }
 }

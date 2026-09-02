@@ -498,6 +498,7 @@ final class CommentService
             'content'     => $row['content'],
             'author_id'   => $row['author_id'],
             'author_name' => $row['author_name'],
+            'author_avatar_file' => $row['author_avatar_file'] ?? null,
             'author_ip_masked' => $row['author_id'] === null ? IpAddress::mask($row['author_ip'] ?? null) : null,
             'is_secret'   => (bool) $row['is_secret'],
             'deleted'     => $row['deleted_at'] !== null,

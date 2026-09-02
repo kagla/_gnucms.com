@@ -373,19 +373,54 @@ final class PostService
         return ['post_id' => $id, 'board' => $board];
     }
 
-    public function get(Acl $acl, int $id, ?string $password): array
+    public function get(Acl $acl, int $id, ?string $password, bool $incrementView = true): array
     {
         $loaded = $this->loadForRead($acl, $id, $password);
         $post = $loaded['post'];
 
         $sub = $acl->identity()->sub();
         $isAuthor = $sub !== null && $post['author_id'] !== null && (string) $post['author_id'] === $sub;
-        if (!$isAuthor) {
+        if ($incrementView && !$isAuthor) {
             $this->posts->incrementViews($id);
             $post = $this->posts->findWithSecret($id);
         }
 
         return $this->detail($post);
+    }
+
+    /** 읽고 있는 글을 기준으로 게시판 또는 읽을 수 있는 전체 게시판의 이전·다음 글을 찾는다. */
+    public function adjacentPosts(Acl $acl, int $id, bool $all): array
+    {
+        $loaded = $this->loadForRead($acl, $id, null);
+        $boards = [];
+        if ($all) {
+            foreach ($this->boards->listBoards($acl) as $board) {
+                $boards[(int) $board['id']] = $board;
+            }
+            $rows = $this->posts->adjacent($id, (int) $loaded['post']['board_id'], array_keys($boards));
+        } else {
+            $board = $this->boards->findBoardById((int) $loaded['post']['board_id']);
+            if ($board !== null) $boards[(int) $board['id']] = $board;
+            $rows = $this->posts->adjacent($id, (int) $loaded['post']['board_id']);
+        }
+
+        foreach (['previous', 'next'] as $direction) {
+            $row = $rows[$direction];
+            if ($row === null) continue;
+            $board = $boards[(int) $row['board_id']] ?? null;
+            $rows[$direction] = [
+                'id' => (int) $row['id'],
+                'title' => (string) $row['title'],
+                'is_secret' => (bool) $row['is_secret'],
+                'board_name' => $board['name'] ?? '',
+                // 전체 글 탐색은 게시판별 목록 페이지와 대응하지 않는다. 게시판 안에서
+                // 이동할 때만 대상 글이 놓인 목록 페이지를 함께 내려준다.
+                'page' => $all ? 1 : $this->posts->pageOf(
+                    (int) $row['id'], (int) $row['board_id'], (int) $loaded['board']['per_page']
+                ),
+            ];
+        }
+        return $rows;
     }
 
     public function create(Acl $acl, string $boardKey, array $input, ?string $clientIp = null): array
@@ -656,6 +691,7 @@ final class PostService
             'title'         => $row['title'],
             'author_id'     => $row['author_id'],
             'author_name'   => $row['author_name'],
+            'author_avatar_file' => $row['author_avatar_file'] ?? null,
             'author_ip_masked' => $row['author_id'] === null ? IpAddress::mask($row['author_ip'] ?? null) : null,
             'is_notice'     => (bool) $row['is_notice'],
             'notice_scope'  => ($row['notice_scope'] ?? 'board') === 'global' ? 'global' : 'board',

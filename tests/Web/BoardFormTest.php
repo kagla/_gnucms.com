@@ -38,6 +38,29 @@ final class BoardFormTest extends WebTestCase
         );
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanEnableListBelowPostView(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
+        $this->loginAsAdmin($app);
+
+        $form = $this->body($this->get($app, '/admin/boards/free/edit'));
+        self::assertStringContainsString('name="show_list_below_view"', $form);
+        self::assertStringContainsString('게시글 보기 아래에 목록 표시', $form);
+
+        $response = $this->post($app, '/admin/boards/free/edit', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '', 'name' => '자유게시판', 'description' => '',
+            'perm_read' => 'guest', 'perm_write' => 'member', 'perm_comment' => 'member',
+            'categories_text' => '', 'managers_text' => '', 'list_type' => 'list',
+            'home_limit' => '5', 'per_page' => '20', 'sort_order' => '0',
+            'show_list_below_view' => '1',
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertTrue($app->boardService()->get($app->guestAcl(), 'free')['show_list_below_view']);
+    }
+
     /** 칩 UI 는 덧붙인 것이고, JS 가 꺼지면 textarea 가 그대로 쓰인다. */
     #[DataProvider('connectionProvider')]
     public function testCategoryChipUiKeepsTextareaFallback(array $dbConfig): void

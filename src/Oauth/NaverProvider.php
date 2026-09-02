@@ -28,9 +28,16 @@ final class NaverProvider extends AbstractProvider
 
     protected function mapProfile(array $data, string $accessToken): SocialProfile
     {
+        if ((isset($data['resultcode']) && (string) $data['resultcode'] !== '00')
+            || !isset($data['response']) || !is_array($data['response'])
+            || trim((string) ($data['response']['id'] ?? '')) === '') {
+            throw new \UnexpectedValueException('Invalid Naver profile response');
+        }
         $profile = isset($data['response']) && is_array($data['response']) ? $data['response'] : [];
+        $email = isset($profile['email']) ? trim((string) $profile['email']) : '';
+        $email = $email === '' ? null : $email;
         return new SocialProfile($this->key(), (string) ($profile['id'] ?? ''),
-            isset($profile['email']) ? (string) $profile['email'] : null,
-            false, (string) ($profile['nickname'] ?? $profile['name'] ?? '네이버 회원'));
+            $email, $email !== null, (string) ($profile['nickname'] ?? $profile['name'] ?? '네이버 회원'),
+            isset($profile['profile_image']) ? (string) $profile['profile_image'] : null);
     }
 }
