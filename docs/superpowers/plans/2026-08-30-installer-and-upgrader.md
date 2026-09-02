@@ -1084,7 +1084,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ServerCheckTest extends TestCase
 {
-    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'sodium', 'mbstring', 'fileinfo', 'openssl', 'gd'];
+    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'mbstring', 'fileinfo', 'openssl', 'gd'];
 
     private string $dir;
 
@@ -1115,12 +1115,12 @@ final class ServerCheckTest extends TestCase
 
     public function testMissingRequiredExtensionFails(): void
     {
-        $result = $this->check(array_diff(self::ALL, ['sodium']))->run();
+        $result = $this->check(array_diff(self::ALL, ['openssl']))->run();
 
         self::assertFalse($result['ok']);
-        $sodium = $this->item($result, 'sodium 확장');
-        self::assertFalse($sodium['ok']);
-        self::assertTrue($sodium['required']);
+        $openssl = $this->item($result, 'openssl 확장');
+        self::assertFalse($openssl['ok']);
+        self::assertTrue($openssl['required']);
     }
 
     public function testNoPdoDriverFails(): void
@@ -1263,10 +1263,9 @@ final class ServerCheck
         );
 
         foreach ([
-            'sodium'   => '메일 비밀번호 암호화',
             'mbstring' => '한글 처리',
             'fileinfo' => '첨부 파일 종류 판별',
-            'openssl'  => '메일 TLS 와 난수',
+            'openssl'  => '메일 TLS 와 비밀값 암호화',
         ] as $ext => $why) {
             $items[] = $this->item($ext . ' 확장', $this->has($ext), true, $why);
         }

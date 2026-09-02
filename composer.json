@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": ">=8.1",
-        "ext-sodium": "*",
+        "ext-openssl": "*",
         "ezyang/htmlpurifier": "^4.19",
         "league/oauth2-client": "^2.8",
         "phpmailer/phpmailer": "^7.1",
