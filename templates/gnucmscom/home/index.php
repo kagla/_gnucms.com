@@ -98,18 +98,9 @@ $freshAfter = time() - 86400;
 
   <section class="product-section product-hub product-gallery-section" id="gallery">
     <div class="product-shell">
-      <div class="product-section-heading">
-        <div><p class="product-label">MADE WITH GNUCMS</p><h2>GNUCMS 사이트 갤러리</h2></div>
-        <p>GNUCMS로 제작하고 운영 중인 사이트를 한곳에서 둘러보고, 내 사이트도 소개할 수 있습니다.</p>
-      </div>
-
       <div class="product-hub-panel product-gallery-panel" aria-labelledby="gallery-title">
           <div class="product-hub-head">
-            <div>
-              <span class="product-hub-index">SHOWCASE</span>
-              <h3 id="gallery-title">GNUCMS로 만든 사이트</h3>
-              <p>다양한 운영 사례에서 디자인과 활용 아이디어를 발견해 보세요.</p>
-            </div>
+            <h3 id="gallery-title">GNUCMS 사이트 갤러리</h3>
             <?php if ($galleryBoards !== []): ?><a href="<?= $this->url('posts.index', ['key' => $galleryBoards[0]['board_key']]) ?>">갤러리 전체보기</a><?php endif ?>
           </div>
 

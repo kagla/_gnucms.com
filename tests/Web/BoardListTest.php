@@ -125,5 +125,7 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('활동 소식 둘', $body);
         self::assertStringContainsString('활동 소식 셋', $body);
         self::assertLessThan(strpos($body, 'id="about"'), strpos($body, 'class="product-activity"'));
+        self::assertSame(1, substr_count($body, 'GNUCMS 사이트 갤러리'));
+        self::assertStringNotContainsString('제작하고 운영 중인 사이트를 한곳에서', $body);
     }
 }
