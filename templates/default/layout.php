@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101720" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
 <title><?php $this->start('title') ?><?= $this->e($site['site_name']) ?><?php $this->stop() ?></title>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
 <?php $this->start('seo_meta') ?><?php $this->stop() ?>
