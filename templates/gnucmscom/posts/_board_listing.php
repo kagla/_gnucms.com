@@ -12,7 +12,7 @@ $view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view 
 $view_labels = ['list' => '목록', 'gallery' => '갤러리', 'magazine' => '매거진', 'news' => '뉴스형'];
 $view_icons = ['list' => 'board', 'gallery' => 'grid', 'magazine' => 'document', 'news' => 'megaphone'];
 $show_chips = $board['use_category'] && $board['categories'] !== [];
-$show_views = count($view_types) > 1;
+$show_views = count($view_types) > 1 && ($show_view_selector ?? true);
 ?>
 
 <?php if ($show_chips || $show_views): ?>

@@ -46,6 +46,9 @@ final class BoardListTest extends WebTestCase
             '#href="/boards/free" class="is-active" aria-current="page">자유게시판</a>#',
             $nav[1] ?? ''
         );
+        self::assertSame(1, substr_count($body, 'aria-label="목록 형태 선택"'));
+        self::assertGreaterThan(strpos($body, 'class="page-head-actions"'), strpos($body, 'aria-label="목록 형태 선택"'));
+        self::assertStringNotContainsString('class="list-tools"', $body);
     }
 
     /** @dataProvider connectionProvider */
