@@ -25,12 +25,16 @@ final class DomainError extends RuntimeException
     /** @var array */
     private $details;
 
-    public function __construct(string $code, string $message, int $status, array $details = [])
+    /** @var int|null */
+    private $retryAfter;
+
+    public function __construct(string $code, string $message, int $status, array $details = [], ?int $retryAfter = null)
     {
         parent::__construct($message);
         $this->errorCode = $code;
         $this->status = $status;
         $this->details = $details;
+        $this->retryAfter = $retryAfter;
     }
 
     public function code(): string
@@ -46,6 +50,11 @@ final class DomainError extends RuntimeException
     public function details(): array
     {
         return $this->details;
+    }
+
+    public function retryAfter(): ?int
+    {
+        return $this->retryAfter;
     }
 
     public static function unauthorized(string $message): self
@@ -71,6 +80,11 @@ final class DomainError extends RuntimeException
     public static function tooLarge(string $message): self
     {
         return new self('PAYLOAD_TOO_LARGE', $message, 413);
+    }
+
+    public static function tooManyRequests(string $message, int $retryAfter): self
+    {
+        return new self('TOO_MANY_REQUESTS', $message, 429, [], max(1, $retryAfter));
     }
 
     public static function internal(string $message): self

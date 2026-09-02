@@ -352,6 +352,10 @@ final class CommentWriteTest extends WebTestCase
     public function testMemberCanWriteSecretCommentsAndReplies(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
+        // 이 테스트는 연속 작성 제한이 아니라 비밀 댓글의 부모·답글 관계를 검증한다.
+        $app->cms()->saveSettings([
+            'comment_rate_interval' => '0', 'comment_rate_10m' => '0', 'comment_rate_day' => '0',
+        ]);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'members-secret', 'name' => '회원 비밀댓글',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',

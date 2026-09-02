@@ -74,6 +74,9 @@ final class Routes
         $slim->post('/admin/boards/{key}/edit', [$admin, 'update']);
         $slim->post('/admin/boards/{key}/delete', [$admin, 'delete'])->setName('admin.boards.delete');
         $slim->get('/admin/members', [$admin, 'members'])->setName('admin.members');
+        $slim->get('/admin/login-history', [$admin, 'loginHistory'])->setName('admin.login_history');
+        $slim->post('/admin/login-history/delete', [$admin, 'deleteLoginHistory'])
+            ->setName('admin.login_history.delete');
         $slim->get('/admin/members/{id:[0-9]+}/edit', [$admin, 'memberEditForm'])->setName('admin.members.edit');
         $slim->post('/admin/members/{id:[0-9]+}/edit', [$admin, 'memberUpdate']);
         $slim->post('/admin/members/{id:[0-9]+}/status', [$admin, 'toggleStatus'])->setName('admin.members.status');

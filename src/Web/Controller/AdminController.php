@@ -10,6 +10,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
 use GnuCms\View\View;
+use GnuCms\Support\IpAddress;
 
 final class AdminController
 {
@@ -103,6 +104,31 @@ final class AdminController
         ]);
     }
 
+    public function loginHistory(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        return $this->renderLoginHistory($request, $response);
+    }
+
+    public function deleteLoginHistory(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $before = isset($input['before']) && is_scalar($input['before']) ? trim((string) $input['before']) : '';
+        if (!$this->validDate($before) || $before > date('Y-m-d')) {
+            return $this->renderLoginHistory(
+                $request,
+                $response->withStatus(422),
+                ['before' => '오늘 또는 그 이전 날짜를 선택해 주세요.'],
+                $before
+            );
+        }
+
+        $deleted = $this->app->loginEvents()->deleteBefore($before . ' 00:00:00');
+        return $this->redirect($request, $response, 'admin.login_history', ['deleted' => $deleted]);
+    }
+
 
     public function memberEditForm(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
@@ -180,6 +206,39 @@ final class AdminController
             'member_consents' => $this->app->consents()
                 ->forSubjectWithDocument('user', (int) $values['id']),
         ]);
+    }
+
+    private function renderLoginHistory(ServerRequestInterface $request, ResponseInterface $response,
+        array $errors = [], string $before = ''): ResponseInterface
+    {
+        $query = $request->getQueryParams();
+        $pageValue = $query['page'] ?? 1;
+        $page = is_scalar($pageValue) ? max(1, (int) $pageValue) : 1;
+        $memberValue = $query['member'] ?? null;
+        $memberId = is_scalar($memberValue) && ctype_digit((string) $memberValue)
+            && (int) $memberValue > 0 ? (int) $memberValue : null;
+        $ipValue = $query['ip'] ?? null;
+        $ip = is_scalar($ipValue) ? IpAddress::normalize((string) $ipValue) : null;
+        $searchValue = $query['q'] ?? '';
+        $search = is_scalar($searchValue) ? trim(mb_substr((string) $searchValue, 0, 100)) : '';
+        $list = $this->app->loginEvents()->paginateForAdmin($page, 50, $memberId, $ip, $search);
+
+        return View::fromRequest($request)->render($response, 'admin/login_history', [
+            'list' => $list,
+            'filter' => ['member' => $memberId, 'ip' => $ip, 'q' => $search],
+            'errors' => $errors,
+            'before' => $before,
+            'deleted' => isset($query['deleted']) && is_scalar($query['deleted'])
+                ? max(0, (int) $query['deleted']) : null,
+        ]);
+    }
+
+    private function validDate(string $date): bool
+    {
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $date, $matches) !== 1) {
+            return false;
+        }
+        return checkdate((int) $matches[2], (int) $matches[3], (int) $matches[1]);
     }
 
     /** 게시판을 가로지르는 전체 글 목록. 대시보드의 게시글 카드에서 들어온다. */

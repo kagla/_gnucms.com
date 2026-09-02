@@ -68,7 +68,13 @@ final class ErrorPageMiddleware implements MiddlewareInterface
                 return $this->respond($request, 500, '오류가 발생했습니다.', $this->safeMessage($e));
             }
 
-            return $this->respond($request, $e->status(), $this->titleFor($e->status()), $e->getMessage(), $e->details());
+            $response = $this->respond(
+                $request, $e->status(), $this->titleFor($e->status()), $e->getMessage(), $e->details()
+            );
+
+            return $e->retryAfter() === null
+                ? $response
+                : $response->withHeader('Retry-After', (string) $e->retryAfter());
         } catch (Throwable $e) {
             $this->log($e);
 
@@ -111,6 +117,8 @@ final class ErrorPageMiddleware implements MiddlewareInterface
                 return '허용되지 않은 방식입니다.';
             case 422:
                 return '입력값을 확인해 주세요.';
+            case 429:
+                return '잠시 쉬어 주세요.';
             default:
                 return '요청을 처리할 수 없습니다.';
         }

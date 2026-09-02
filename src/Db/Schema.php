@@ -16,7 +16,7 @@ final class Schema
     public const TABLES = [
         'boards', 'posts', 'comments', 'users', 'user_tokens', 'user_identities',
         'site_settings', 'contents', 'consent_uses', 'consents_given', 'notifications',
-        'password_attempts', 'login_events',
+        'password_attempts', 'login_events', 'write_rate_limits',
     ];
 
     private const INDEXES = [
@@ -27,6 +27,7 @@ final class Schema
         'ux_password_attempts', 'ix_comments_parent',
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
+        'ux_write_rate_limits',
     ];
 
     /** @var Connection */
@@ -56,7 +57,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '20';
+    public const VERSION = '21';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -126,6 +127,7 @@ final class Schema
         $this->migrateNotifications();
         $this->migratePasswordThrottle();
         $this->migrateLoginEvents();
+        $this->migrateWriteRateLimits();
         $this->migrateProfileImages();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('system.schema_version', $stamp);
@@ -260,6 +262,17 @@ final class Schema
             foreach ($this->loginEventStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
+        }
+    }
+
+    /** 글·댓글 도배 방지 카운터. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migrateWriteRateLimits(): void
+    {
+        if ($this->tableExists('write_rate_limits')) {
+            return;
+        }
+        foreach ($this->writeRateLimitStatements() as $sql) {
+            $this->db->execute($this->expand($sql));
         }
     }
 
@@ -513,7 +526,8 @@ final class Schema
         ], $this->accountStatements(), $this->settingsStatements(), $this->contentStatements(),
             $this->consentUseStatements(), $this->consentsGivenStatements(),
             $this->notificationStatements(),
-            $this->passwordThrottleStatements(), $this->loginEventStatements());
+            $this->passwordThrottleStatements(), $this->loginEventStatements(),
+            $this->writeRateLimitStatements());
     }
 
     private function accountStatements(): array
@@ -892,6 +906,21 @@ final class Schema
             'CREATE INDEX ix_login_events_user ON login_events (user_id, id)',
             'CREATE INDEX ix_login_events_ip ON login_events (client_ip, id)',
             'CREATE INDEX ix_login_events_time ON login_events (created_at, id)',
+        ];
+    }
+
+    private function writeRateLimitStatements(): array
+    {
+        return [
+            'CREATE TABLE write_rate_limits (
+                action            VARCHAR(20) NOT NULL,
+                actor_key         VARCHAR(80) NOT NULL,
+                window_seconds    INTEGER     NOT NULL,
+                window_started_at BIGINT      NOT NULL,
+                hit_count         INTEGER     NOT NULL DEFAULT 0
+            ){SUFFIX}',
+            'CREATE UNIQUE INDEX ux_write_rate_limits
+                ON write_rate_limits (action, actor_key, window_seconds)',
         ];
     }
 

@@ -13,6 +13,7 @@ use GnuCms\Error\DomainError;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Validation\Validator;
 use GnuCms\Support\IpAddress;
+use GnuCms\Spam\WriteRateLimiter;
 
 final class PostService
 {
@@ -64,6 +65,13 @@ final class PostService
 
     /** 글당 첨부 개수 한도. 0 = 무제한. App 이 사이트 설정에서 넣는다. */
     private int $attachmentLimit = 0;
+
+    private ?WriteRateLimiter $writeRateLimiter = null;
+
+    public function setWriteRateLimiter(WriteRateLimiter $limiter): void
+    {
+        $this->writeRateLimiter = $limiter;
+    }
 
     public function __construct(
         BoardService $boards,
@@ -473,6 +481,10 @@ final class PostService
         }
 
         $v->check();
+
+        if ($this->writeRateLimiter !== null) {
+            $this->writeRateLimiter->consume('post', $acl, $clientIp);
+        }
 
         $id = $this->posts->create($data);
         // 본문에 남지 않은 이미지는 지운다. 편집 중 올렸다가 지운 것들이다.

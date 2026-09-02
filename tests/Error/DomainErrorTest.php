@@ -16,6 +16,10 @@ final class DomainErrorTest extends TestCase
         self::assertSame(403, DomainError::forbidden('x')->status());
         self::assertSame(404, DomainError::notFound('x')->status());
         self::assertSame(413, DomainError::tooLarge('x')->status());
+        $limited = DomainError::tooManyRequests('천천히', 12);
+        self::assertSame(429, $limited->status());
+        self::assertSame('TOO_MANY_REQUESTS', $limited->code());
+        self::assertSame(12, $limited->retryAfter());
         self::assertSame(500, DomainError::internal('x')->status());
     }
 
