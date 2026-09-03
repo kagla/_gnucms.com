@@ -9,6 +9,35 @@ use GnuCms\Tests\Support\WebTestCase;
 final class BoardListTest extends WebTestCase
 {
     /** @dataProvider connectionProvider */
+    public function testAdminSeesRestrictedBoardsInHeaderImmediatelyAfterLogin(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, [
+            'board_key' => 'members', 'name' => '회원메뉴', 'perm_read' => 'member', 'show_in_header' => 1,
+        ]);
+        $app->boardService()->create($acl, [
+            'board_key' => 'admins', 'name' => '관리자메뉴', 'perm_read' => 'admin', 'show_in_header' => 1,
+        ]);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $body = $this->body($this->get($app, '/'));
+        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $body, $headerTabs);
+        self::assertStringContainsString('href="/boards/members">회원메뉴</a>', $headerTabs[1] ?? '');
+        self::assertStringContainsString('href="/boards/admins">관리자메뉴</a>', $headerTabs[1] ?? '');
+    }
+
+    /** @dataProvider connectionProvider */
     public function testReadableBoardsAreListed(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

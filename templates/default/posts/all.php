@@ -32,9 +32,12 @@ $allUrl = function ($q, $page) use ($list): string {
     <h1><?php if (($list['author_name'] ?? null) !== null): ?><?= $this->e($list['author_name']) ?> 님의 글<?php else: ?>전체 글<?php endif ?></h1>
     <p class="page-sub"><?php if (($list['author_name'] ?? null) !== null): ?>이 회원이 쓴 글을 최신순으로 모았습니다. 글 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php else: ?>읽을 수 있는 모든 게시판의 글을 최신순으로 모았습니다.<?php if ($query['q'] !== null && $query['q'] !== ''): ?> “<?= $this->e($query['q']) ?>” 검색 결과 <?= $this->e((string) $list['total']) ?>건<?php endif ?><?php endif ?></p>
   </div>
-  <?php if (($list['author_name'] ?? null) !== null || ($query['q'] !== null && $query['q'] !== '')): ?>
-  <div class="page-head-actions"><a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>">전체 글 보기</a></div>
-  <?php endif ?>
+  <div class="page-head-actions">
+    <a class="btn btn-outline btn-sm" href="<?= $this->url('comments.byAuthor') ?>"><?= $this->icon('comment', 14) ?> 전체 댓글</a>
+    <?php if (($list['author_name'] ?? null) !== null || ($query['q'] !== null && $query['q'] !== '')): ?>
+    <a class="btn btn-outline btn-sm" href="<?= $this->url('posts.all') ?>">전체 글 보기</a>
+    <?php endif ?>
+  </div>
 </div>
 
 <?php $this->insert('posts/_table', [

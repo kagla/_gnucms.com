@@ -112,11 +112,28 @@ final class CommentRepository
      */
     public function paginateByAuthor(int $authorId, array $boardIds, int $page, int $perPage): array
     {
+        return $this->paginateForList($boardIds, $page, $perPage, $authorId);
+    }
+
+    /**
+     * 읽을 수 있는 모든 게시판의 댓글을 최신순으로 모은다.
+     *
+     * @param int[] $boardIds
+     * @return array{rows: array, total: int}
+     */
+    public function paginateAll(array $boardIds, int $page, int $perPage): array
+    {
+        return $this->paginateForList($boardIds, $page, $perPage, null);
+    }
+
+    /** @param int[] $boardIds @return array{rows: array, total: int} */
+    private function paginateForList(array $boardIds, int $page, int $perPage, ?int $authorId): array
+    {
         if ($boardIds === []) {
             return ['rows' => [], 'total' => 0];
         }
 
-        $params = ['author_id' => (string) $authorId];
+        $params = [];
         $marks = [];
         foreach (array_values($boardIds) as $i => $id) {
             $marks[] = ':b' . $i;
@@ -127,7 +144,12 @@ final class CommentRepository
         // 주지 않기 위해서다.
         // 이 필터는 권한과 무관하게 걸리므로 글쓴이 본인과 관리자에게도 그 줄이 보이지
         // 않는다 (의도된 선택).
-        $where = 'deleted_at IS NULL AND author_id = :author_id AND board_id IN (' . implode(', ', $marks) . ')'
+        $where = 'deleted_at IS NULL';
+        if ($authorId !== null) {
+            $where .= ' AND author_id = :author_id';
+            $params['author_id'] = $authorId;
+        }
+        $where .= ' AND board_id IN (' . implode(', ', $marks) . ')'
             . ' AND post_id IN (SELECT id FROM ' . $this->db->table('posts')
             . ' WHERE deleted_at IS NULL AND is_secret = 0)';
 

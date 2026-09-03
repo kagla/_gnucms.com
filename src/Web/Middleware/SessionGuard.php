@@ -64,6 +64,7 @@ final class SessionGuard implements MiddlewareInterface
         ]);
         $this->view->addGlobal('csrf_token', $_SESSION['csrf_token']);
         $this->view->addGlobal('unread_notifications', $this->unreadCount());
+        $this->view->addGlobal('header_boards', $this->headerBoards());
 
         try {
             return $handler->handle($request);
@@ -81,6 +82,20 @@ final class SessionGuard implements MiddlewareInterface
             return $this->app->notificationService()->unreadCount($this->app->guestAcl());
         } catch (\Throwable $e) {
             return 0;
+        }
+    }
+
+    /** 로그인 신원을 반영해 읽을 수 있는 상단 게시판만 고른다. */
+    private function headerBoards(): array
+    {
+        try {
+            return array_values(array_filter(
+                $this->app->boardService()->listBoards($this->app->guestAcl()),
+                static fn (array $board): bool => !empty($board['show_in_header'])
+            ));
+        } catch (\Throwable $e) {
+            // 설치·업그레이드 도중 표가 불완전해도 오류 화면까지 정상적으로 그린다.
+            return [];
         }
     }
 }
