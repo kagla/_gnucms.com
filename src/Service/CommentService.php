@@ -354,7 +354,7 @@ final class CommentService
         $this->postRepo->adjustCommentCount((int) $comment['post_id'], -1);
     }
 
-    /** 한 회원이 남긴 댓글 목록. 글 제목을 함께 붙인다. */
+    /** 전체 댓글 또는 한 회원이 남긴 댓글 목록. 글 제목을 함께 붙인다. */
     public function listByAuthor(Acl $acl, array $query): array
     {
         $v = new Validator($query);
@@ -362,17 +362,18 @@ final class CommentService
         $author = $v->int('author', 0, 0, PHP_INT_MAX);
         $v->check();
         $perPage = 20;
+        $all = !array_key_exists('author', $query);
 
-        $user = $author > 0 && $this->users !== null ? $this->users->findById($author) : null;
+        $user = !$all && $author > 0 && $this->users !== null ? $this->users->findById($author) : null;
         // 차단된 회원은 없는 회원과 같게 다룬다. 다른 곳도 모두 status === 'active' 를 요구한다.
         if ($user !== null && $user['status'] !== 'active') {
             $user = null;
         }
         $empty = [
             'data' => [], 'page' => $page, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 0,
-            'author' => null, 'author_name' => null,
+            'author' => null, 'author_name' => null, 'is_all' => $all,
         ];
-        if ($user === null) {
+        if (!$all && $user === null) {
             return $empty;
         }
 
@@ -387,7 +388,9 @@ final class CommentService
             $boardIds[] = (int) $board['id'];
         }
 
-        $result = $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage);
+        $result = $all
+            ? $this->comments->paginateAll($boardIds, $page, $perPage)
+            : $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage);
 
         // 페이지당 최대 20건이라 한 건씩 낱개로 읽는다.
         $titles = [];
@@ -406,6 +409,7 @@ final class CommentService
                 'id'         => (int) $row['id'],
                 'post_id'    => (int) $row['post_id'],
                 'post_title' => $titles[(int) $row['post_id']] ?? '(지워진 글)',
+                'author_name' => (string) $row['author_name'],
                 // 비밀 댓글의 본문은 목록에 흘리지 않는다.
                 'excerpt'    => $secret ? '비밀 댓글' : $this->plainExcerpt((string) $row['content'], 80),
                 'is_secret'  => $secret,
@@ -419,8 +423,9 @@ final class CommentService
             'per_page' => $perPage,
             'total' => $result['total'],
             'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
-            'author' => $author,
-            'author_name' => (string) $user['display_name'],
+            'author' => $all ? null : $author,
+            'author_name' => $all ? null : (string) $user['display_name'],
+            'is_all' => $all,
         ];
     }
 

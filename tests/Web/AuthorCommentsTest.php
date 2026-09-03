@@ -10,6 +10,57 @@ use PHPUnit\Framework\Attributes\DataProvider;
 final class AuthorCommentsTest extends WebTestCase
 {
     #[DataProvider('connectionProvider')]
+    public function testAllCommentsAreListedAndLinkedFromAllPosts(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유']);
+        $post = $app->postService()->create($acl, 'free', ['title' => '전체 댓글 대상 글', 'content' => '본문입니다']);
+        $app->commentService()->create($acl, (int) $post['id'], ['content' => '전체 목록에 보이는 댓글']);
+
+        $posts = $this->body($this->get($app, '/posts'));
+        self::assertStringContainsString('href="/comments"', $posts);
+        self::assertStringContainsString('전체 댓글', $posts);
+
+        $comments = $this->body($this->get($app, '/comments'));
+        self::assertStringContainsString('<h1>전체 댓글</h1>', $comments);
+        self::assertStringContainsString('href="/posts"', $comments);
+        self::assertStringContainsString('전체 글', $comments);
+        self::assertStringContainsString('전체 목록에 보이는 댓글', $comments);
+        self::assertStringContainsString('전체 댓글 대상 글', $comments);
+        self::assertStringContainsString('관리자', $comments);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAllCommentsHideSecretPostsAndMemberOnlyBoardsFromGuests(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_secret' => true]);
+        $app->boardService()->create($acl, ['board_key' => 'members', 'name' => '회원전용', 'perm_read' => 'member']);
+
+        $publicPost = $app->postService()->create($acl, 'free', [
+            'title' => '공개 글', 'content' => '본문입니다',
+        ]);
+        $secretPost = $app->postService()->create($acl, 'free', [
+            'title' => '감춰야 할 비밀글', 'content' => '본문입니다', 'is_secret' => '1',
+        ]);
+        $memberPost = $app->postService()->create($acl, 'members', [
+            'title' => '감춰야 할 회원글', 'content' => '본문입니다',
+        ]);
+        $app->commentService()->create($acl, (int) $publicPost['id'], ['content' => '보여야 할 공개 댓글']);
+        $app->commentService()->create($acl, (int) $secretPost['id'], ['content' => '감춰야 할 비밀글 댓글']);
+        $app->commentService()->create($acl, (int) $memberPost['id'], ['content' => '감춰야 할 회원글 댓글']);
+
+        // 로그인하지 않은 요청이므로 공개 글의 댓글만 볼 수 있어야 한다.
+        $comments = $this->body($this->get($app, '/comments'));
+
+        self::assertStringContainsString('보여야 할 공개 댓글', $comments);
+        self::assertStringNotContainsString('감춰야 할 비밀글', $comments);
+        self::assertStringNotContainsString('감춰야 할 회원글', $comments);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testMembersCommentsAreListedWithTheirPostTitles(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
@@ -268,4 +319,3 @@ final class AuthorCommentsTest extends WebTestCase
         self::assertStringNotContainsString('<span class="author-comment-text"></span>', $body);
     }
 }
-
