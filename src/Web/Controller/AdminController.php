@@ -8,6 +8,7 @@ use GnuCms\App;
 use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use Slim\Routing\RouteContext;
 use GnuCms\View\View;
 use GnuCms\Support\IpAddress;
@@ -142,7 +143,12 @@ final class AdminController
         $this->assertCsrf($input);
         $id = (int) $args['id'];
         $member = $this->app->adminService()->member($this->app->guestAcl(), $id);
+        $newAvatar = null;
         try {
+            $upload = $request->getUploadedFiles()['profile_image'] ?? null;
+            if ($upload instanceof UploadedFileInterface && $upload->getError() !== UPLOAD_ERR_NO_FILE) {
+                $newAvatar = $this->app->avatars()->storeUpload($upload);
+            }
             $this->app->adminService()->updateMember($this->app->guestAcl(), $id, $input);
             // 내 비밀번호를 바꾸면 session_epoch 가 올라가 지금 세션도 끊긴다. 방금 바꾼 사람은
             // 그대로 두고, 다른 기기만 끊기게 세션의 epoch 를 새 값으로 맞춘다.
@@ -156,6 +162,7 @@ final class AdminController
             }
             $mailFailed = $changedPassword && !$this->app->accountService()->notifyPasswordChanged($id);
         } catch (DomainError $e) {
+            $this->app->avatars()->delete($newAvatar);
             if ($e->status() !== 422) {
                 throw $e;
             }
@@ -165,6 +172,19 @@ final class AdminController
                 array_merge($member, $input),
                 $e->details()
             );
+        } catch (\Throwable $e) {
+            $this->app->avatars()->delete($newAvatar);
+            throw $e;
+        }
+        $removeAvatar = !empty($input['remove_profile_image']);
+        if ($newAvatar !== null || $removeAvatar) {
+            try {
+                $this->app->users()->updateAvatar($id, $newAvatar, $newAvatar === null ? null : 'upload');
+            } catch (\Throwable $e) {
+                $this->app->avatars()->delete($newAvatar);
+                throw $e;
+            }
+            $this->app->avatars()->delete(isset($member['avatar_file']) ? (string) $member['avatar_file'] : null);
         }
         return $this->redirect($request, $response, 'admin.members',
             ['saved' => '1'] + ($mailFailed ? ['mail' => 'failed'] : []));

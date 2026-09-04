@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Slim\Psr7\UploadedFile;
 
 final class AdminPageTest extends WebTestCase
 {
@@ -325,6 +326,56 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(422, $blockedOwner->getStatusCode());
         self::assertStringContainsString('현재 로그인한 관리자 계정은 차단할 수 없습니다.', $this->body($blockedOwner));
         self::assertSame('active', $app->users()->findById($adminId)['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanUploadAndRemoveMemberProfileImage(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원'
+        );
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('enctype="multipart/form-data"', $form);
+        self::assertStringContainsString('name="profile_image"', $form);
+
+        $temporary = tempnam(sys_get_temp_dir(), GNUCMS_ID . '-admin-avatar-');
+        file_put_contents($temporary, base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        ));
+        $size = filesize($temporary);
+        $saved = $this->postWithFiles($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '일반회원', 'status' => 'active',
+        ], ['profile_image' => new UploadedFile($temporary, 'profile.png', 'image/png', $size ?: null)]);
+
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        $member = $app->users()->findById($memberId);
+        $avatar = $member['avatar_file'];
+        self::assertNotEmpty($avatar);
+        self::assertSame('upload', $member['avatar_source']);
+        self::assertFileExists($app->avatars()->image((string) $avatar)['path']);
+        $savedForm = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('name="remove_profile_image"', $savedForm);
+        self::assertStringContainsString('/media/avatars/' . $avatar, $savedForm);
+
+        $removed = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '일반회원', 'status' => 'active', 'remove_profile_image' => '1',
+        ]);
+        self::assertSame(303, $removed->getStatusCode(), $this->body($removed));
+        $member = $app->users()->findById($memberId);
+        self::assertNull($member['avatar_file']);
+        self::assertNull($member['avatar_source']);
     }
 
     #[DataProvider('connectionProvider')]
