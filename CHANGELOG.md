@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/kagla/gnucms/compare/v0.2.0...v0.3.0) (2026-09-04)
+
+
+### Features
+
+* 전체 백업 관리 기능 추가 ([9d75843](https://github.com/kagla/gnucms/commit/9d75843ed858886ca2022e308fa951ed58779f98))
+* 전체 백업 관리 기능 추가 ([741a17f](https://github.com/kagla/gnucms/commit/741a17fcb149869f5951c30345b56cd4b1baf1da))
+
 ## [0.2.0](https://github.com/kagla/gnucms/compare/v0.1.0...v0.2.0) (2026-09-04)
 
 
