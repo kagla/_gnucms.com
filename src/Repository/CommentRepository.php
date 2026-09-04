@@ -21,6 +21,9 @@ final class CommentRepository
         'image_key'      => null,
     ];
 
+    /** LIKE 검색의 이스케이프 문자. DB 방언마다 다르게 다루는 백슬래시는 피한다. */
+    private const LIKE_ESCAPE = '!';
+
     /** @var Connection */
     private $db;
 
@@ -110,9 +113,15 @@ final class CommentRepository
      * @param int[] $boardIds 읽을 수 있는 게시판 번호. 빈 배열이면 아무것도 없다
      * @return array{rows: array, total: int}
      */
-    public function paginateByAuthor(int $authorId, array $boardIds, int $page, int $perPage): array
+    public function paginateByAuthor(
+        int $authorId,
+        array $boardIds,
+        int $page,
+        int $perPage,
+        ?string $q = null
+    ): array
     {
-        return $this->paginateForList($boardIds, $page, $perPage, $authorId);
+        return $this->paginateForList($boardIds, $page, $perPage, $authorId, $q);
     }
 
     /**
@@ -121,13 +130,71 @@ final class CommentRepository
      * @param int[] $boardIds
      * @return array{rows: array, total: int}
      */
-    public function paginateAll(array $boardIds, int $page, int $perPage): array
+    public function paginateAll(array $boardIds, int $page, int $perPage, ?string $q = null): array
     {
-        return $this->paginateForList($boardIds, $page, $perPage, null);
+        return $this->paginateForList($boardIds, $page, $perPage, null, $q);
+    }
+
+    /**
+     * 한 게시판의 공개 댓글을 검색한다. 글 제목을 같은 조회에서 붙여 검색 결과가
+     * 어느 글에 달린 댓글인지 추가 조회 없이 보여 줄 수 있게 한다.
+     *
+     * 비밀글과 비밀댓글은 검색어 일치 여부 자체가 내용을 짐작하게 할 수 있으므로
+     * 권한과 관계없이 검색 결과에서 제외한다.
+     *
+     * @return array{rows: array, total: int}
+     */
+    public function searchByBoard(
+        int $boardId,
+        string $q,
+        int $page,
+        int $perPage,
+        ?string $category = null
+    ): array {
+        $comments = $this->db->table('comments');
+        $posts = $this->db->table('posts');
+        $terms = $this->searchTerms($q);
+        if ($terms === []) {
+            return ['rows' => [], 'total' => 0];
+        }
+        $where = 'c.board_id = :board_id AND c.deleted_at IS NULL AND c.is_secret = 0'
+            . ' AND p.deleted_at IS NULL AND p.is_secret = 0';
+        $params = ['board_id' => $boardId];
+        foreach ($terms as $index => $term) {
+            $key = 'q' . $index;
+            $where .= ' AND c.content LIKE :' . $key . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'';
+            $params[$key] = '%' . $this->escapeLike($term) . '%';
+        }
+        if ($category !== null && $category !== '') {
+            $where .= ' AND p.category = :category';
+            $params['category'] = $category;
+        }
+
+        $from = $comments . ' c INNER JOIN ' . $posts . ' p ON p.id = c.post_id AND p.board_id = c.board_id';
+        $total = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $from . ' WHERE ' . $where,
+            $params
+        )['c'];
+
+        $offset = max(0, ($page - 1) * $perPage);
+        $columns = 'c.' . str_replace(', ', ', c.', self::COLUMNS);
+        $rows = $this->db->select(
+            'SELECT ' . $columns . ', p.title AS post_title FROM ' . $from
+            . ' WHERE ' . $where . ' ORDER BY c.id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        );
+
+        return ['rows' => $this->hydrateMany($rows), 'total' => $total];
     }
 
     /** @param int[] $boardIds @return array{rows: array, total: int} */
-    private function paginateForList(array $boardIds, int $page, int $perPage, ?int $authorId): array
+    private function paginateForList(
+        array $boardIds,
+        int $page,
+        int $perPage,
+        ?int $authorId,
+        ?string $q
+    ): array
     {
         if ($boardIds === []) {
             return ['rows' => [], 'total' => 0];
@@ -148,6 +215,12 @@ final class CommentRepository
         if ($authorId !== null) {
             $where .= ' AND author_id = :author_id';
             $params['author_id'] = $authorId;
+        }
+        foreach ($this->searchTerms($q ?? '') as $index => $term) {
+            // 검색어 일치 여부로 비밀 댓글 내용을 짐작하지 못하게 검색 중에는 제외한다.
+            $where .= ' AND is_secret = 0 AND content LIKE :q' . $index
+                . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'';
+            $params['q' . $index] = '%' . $this->escapeLike($term) . '%';
         }
         $where .= ' AND board_id IN (' . implode(', ', $marks) . ')'
             . ' AND post_id IN (SELECT id FROM ' . $this->db->table('posts')
@@ -200,6 +273,25 @@ final class CommentRepository
         $row['parent_id'] = $row['parent_id'] === null ? null : (int) $row['parent_id'];
 
         return $row;
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(
+            [self::LIKE_ESCAPE, '%', '_'],
+            [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
+            $value
+        );
+    }
+
+    /** 공백으로 나눈 모든 단어가 댓글 본문에 있어야 한다. */
+    private function searchTerms(string $query): array
+    {
+        if (trim($query) === '') {
+            return [];
+        }
+
+        return array_values(array_unique(preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) ?: []));
     }
 
     /** 회원 작성자의 현재 프로필 이미지를 한 번의 추가 조회로 붙인다. */

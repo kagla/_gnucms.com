@@ -29,6 +29,38 @@ final class AuthorCommentsTest extends WebTestCase
         self::assertStringContainsString('전체 목록에 보이는 댓글', $comments);
         self::assertStringContainsString('전체 댓글 대상 글', $comments);
         self::assertStringContainsString('관리자', $comments);
+        self::assertStringContainsString('class="inline-search board-search all-posts-search all-comments-search"', $comments);
+        self::assertStringContainsString('placeholder="전체 댓글에서 검색"', $comments);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAllCommentsSearchesPublicContentWithWhitespaceAndTerms(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $acl = $this->adminAcl();
+        $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_secret' => true]);
+        $post = $app->postService()->create($acl, 'free', ['title' => '검색 대상 글', 'content' => '본문입니다']);
+        $boardId = (int) $app->boardService()->getEntity($acl, 'free')['id'];
+        $comments = $app->comments();
+        $comments->create([
+            'board_id' => $boardId, 'post_id' => (int) $post['id'], 'content' => '잡담입니다 그리고 하하',
+            'author_id' => '1', 'author_name' => '관리자',
+        ]);
+        $comments->create([
+            'board_id' => $boardId, 'post_id' => (int) $post['id'], 'content' => '잡담만 있는 댓글',
+            'author_id' => '1', 'author_name' => '관리자',
+        ]);
+        $comments->create([
+            'board_id' => $boardId, 'post_id' => (int) $post['id'], 'content' => '잡담 하하 비밀 댓글',
+            'author_id' => '1', 'author_name' => '관리자', 'is_secret' => true,
+        ]);
+
+        $body = $this->body($this->get($app, '/comments', ['q' => '잡담 하하']));
+
+        self::assertStringContainsString('검색 결과 <strong>1</strong>건', $body);
+        self::assertStringContainsString('잡담입니다 그리고 하하', $body);
+        self::assertStringNotContainsString('잡담만 있는 댓글', $body);
+        self::assertStringNotContainsString('잡담 하하 비밀 댓글', $body);
     }
 
     #[DataProvider('connectionProvider')]

@@ -1869,6 +1869,23 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
+.board-search-area{display:flex;justify-content:flex-end;margin-top:1rem}
+.board-search.inline-search{width:100%;max-width:26rem;margin-bottom:0;gap:.375rem}
+.all-posts-search.inline-search{max-width:20rem}
+.board-search-select{position:relative;display:flex;flex:none;width:6.5rem;height:2.375rem;border:var(--border) solid var(--bc-20);border-radius:.5rem;background:var(--color-base-100)}
+.board-search-select:focus-within{outline:2px solid color-mix(in srgb,var(--color-primary) 55%,transparent);outline-offset:1px;border-color:var(--color-primary)}
+.board-search-select select{width:100%;padding:0 1.75rem 0 .75rem;appearance:none;border:0;border-radius:inherit;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.board-search-select-icon{position:absolute;right:.625rem;top:50%;display:grid;transform:translateY(-50%);pointer-events:none;color:var(--bc-soft)}
+.board-search .input{border-radius:.5rem}
+.board-search .board-search-submit{height:2.375rem;min-height:2.375rem;padding-inline:.875rem;border-radius:.5rem;font-size:13px}
+.comment-search-results{margin-bottom:1rem}
+
+@media (max-width:640px){
+  .board-search-area{justify-content:stretch}
+  .board-search.inline-search{max-width:none}
+  .all-posts-search.inline-search{max-width:none}
+  .board-search-select{width:5.75rem}
+}
 
 /* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
 .notice-list .notice-scope{white-space:nowrap}

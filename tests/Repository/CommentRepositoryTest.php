@@ -95,6 +95,50 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertSame('2026-08-27 09:00:00', substr((string) $row['updated_at'], 0, 19));
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testSearchByBoardJoinsPostAndProtectsPrivateContent(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $boards = new BoardRepository($db);
+        $posts = new PostRepository($db);
+        $comments = new CommentRepository($db);
+        $free = $boards->create(['board_key' => 'free', 'name' => '자유']);
+        $other = $boards->create(['board_key' => 'other', 'name' => '다른 게시판']);
+        $post = $posts->create($this->post($free, '찾은 글'));
+        $secretPost = $posts->create($this->post($free, '비밀 글') + ['is_secret' => true]);
+        $otherPost = $posts->create($this->post($other, '다른 글'));
+
+        $found = $comments->create($this->comment($free, $post, null, '할인 50%_행사 공개 댓글'));
+        $deleted = $comments->create($this->comment($free, $post, null, '할인 50%_행사 삭제 댓글'));
+        $comments->softDelete($deleted);
+        $comments->create($this->comment($free, $post, null, '할인 50%_행사 비밀 댓글') + ['is_secret' => true]);
+        $comments->create($this->comment($free, $secretPost, null, '할인 50%_행사 비밀글 댓글'));
+        $comments->create($this->comment($other, $otherPost, null, '할인 50%_행사 다른 게시판 댓글'));
+
+        $result = $comments->searchByBoard($free, '50%_', 1, 20);
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame($found, $result['rows'][0]['id']);
+        $this->assertSame('찾은 글', $result['rows'][0]['post_title']);
+
+        $words = $comments->searchByBoard($free, "할인  \t 공개", 1, 20);
+        $this->assertSame(1, $words['total'], '공백으로 나눈 모든 단어가 있으면 찾는다');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAllCommentsSearchUsesAndTermsAndHidesSecretComments(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $found = $repo->create($this->comment($boardId, $postId, null, '잡담입니다 그리고 하하'));
+        $repo->create($this->comment($boardId, $postId, null, '잡담만 있는 댓글'));
+        $repo->create($this->comment($boardId, $postId, null, '잡담 하하 비밀') + ['is_secret' => true]);
+
+        $result = $repo->paginateAll([$boardId], 1, 20, '잡담 하하');
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame($found, $result['rows'][0]['id']);
+    }
+
     /** @return array{0: CommentRepository, 1: int, 2: int} */
     private function setUpPost(array $config): array
     {
@@ -119,6 +163,17 @@ final class CommentRepositoryTest extends DatabaseTestCase
             'parent_id'   => $parentId,
             'content'     => $content,
             'author_id'   => 'user-1',
+            'author_name' => '홍길동',
+        ];
+    }
+
+    private function post(int $boardId, string $title): array
+    {
+        return [
+            'board_id' => $boardId,
+            'title' => $title,
+            'content' => '본문',
+            'author_id' => 'user-1',
             'author_name' => '홍길동',
         ];
     }

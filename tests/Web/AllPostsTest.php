@@ -29,6 +29,8 @@ final class AllPostsTest extends WebTestCase
         self::assertStringContainsString('자유게시판', $body, '게시판 이름 배지가 붙는다');
         self::assertStringContainsString('aria-current="page"', $body);
         self::assertMatchesRegularExpression('#href="/posts"[^>]*>전체 글#', $body, '상단 탭에 전체 글이 있다');
+        self::assertStringContainsString('class="inline-search board-search all-posts-search"', $body);
+        self::assertStringContainsString('placeholder="전체 글에서 검색"', $body);
 
         $found = $this->body($this->get($app, '/posts', ['q' => '사과']));
         self::assertStringContainsString('공개 글 둘', $found);
@@ -83,6 +85,10 @@ final class AllPostsTest extends WebTestCase
         // 검색창에서 다시 찾아도 글쓴이 거르기가 풀리면 안 된다 — 검색 폼이 author 를 함께 실어 날라야 한다.
         self::assertMatchesRegularExpression(
             '#<form class="header-search"[^>]*>.*?<input type="hidden" name="author" value="' . $memberId . '">#s',
+            $body
+        );
+        self::assertMatchesRegularExpression(
+            '#<form class="inline-search board-search all-posts-search"[^>]*>.*?<input type="hidden" name="author" value="' . $memberId . '">#s',
             $body
         );
     }

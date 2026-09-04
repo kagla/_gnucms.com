@@ -74,17 +74,24 @@ final class PostRepository
     ): array {
         // 삭제 글 포함은 관리자 화면의 복구 목록을 위한 것이다.
         // 서비스 계층에서 관리 권한을 확인한 뒤에만 true 로 넘어온다.
+        $terms = $this->searchTerms($q);
         $where = $includeDeleted
-            ? 'board_id = :board_id AND is_notice = 0'
-            : 'board_id = :board_id AND deleted_at IS NULL AND is_notice = 0';
+            ? 'board_id = :board_id'
+            : 'board_id = :board_id AND deleted_at IS NULL';
+        // 평소 목록에서는 공지를 고정 영역에 따로 내지만 검색 결과에는 함께 넣는다.
+        if ($terms === []) {
+            $where .= ' AND is_notice = 0';
+        }
         $params = ['board_id' => $boardId];
 
-        if ($q !== null && $q !== '') {
-            $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
-                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
-            $pattern = '%' . $this->escapeLike($q) . '%';
-            $params['q'] = $pattern;
-            $params['q2'] = $pattern;
+        foreach ($terms as $index => $term) {
+            $titleKey = 'q' . $index . '_title';
+            $bodyKey = 'q' . $index . '_body';
+            $where .= ' AND (title LIKE :' . $titleKey . ' ESCAPE \'' . self::LIKE_ESCAPE . '\''
+                . ' OR (is_secret = 0 AND content LIKE :' . $bodyKey . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'))';
+            $pattern = '%' . $this->escapeLike($term) . '%';
+            $params[$titleKey] = $pattern;
+            $params[$bodyKey] = $pattern;
         }
 
         if ($category !== null && $category !== '') {
@@ -136,12 +143,14 @@ final class PostRepository
             $where .= ' AND board_id IN (' . implode(', ', $marks) . ')';
         }
 
-        if ($q !== null && $q !== '') {
-            $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
-                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
-            $pattern = '%' . $this->escapeLike($q) . '%';
-            $params['q'] = $pattern;
-            $params['q2'] = $pattern;
+        foreach ($this->searchTerms($q) as $index => $term) {
+            $titleKey = 'q' . $index . '_title';
+            $bodyKey = 'q' . $index . '_body';
+            $where .= ' AND (title LIKE :' . $titleKey . ' ESCAPE \'' . self::LIKE_ESCAPE . '\''
+                . ' OR (is_secret = 0 AND content LIKE :' . $bodyKey . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'))';
+            $pattern = '%' . $this->escapeLike($term) . '%';
+            $params[$titleKey] = $pattern;
+            $params[$bodyKey] = $pattern;
         }
 
         if ($boardId !== null) {
@@ -410,6 +419,16 @@ final class PostRepository
             [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
             $value
         );
+    }
+
+    /** 공백은 AND 검색어 구분자다. 같은 단어는 조건을 불필요하게 늘리지 않는다. */
+    private function searchTerms(?string $query): array
+    {
+        if ($query === null || trim($query) === '') {
+            return [];
+        }
+
+        return array_values(array_unique(preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) ?: []));
     }
 
     private function hydrate(array $row): array
