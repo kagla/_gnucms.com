@@ -182,9 +182,13 @@ final class AdminCmsController
 
     public function maintenance(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $this->app->guestAcl()->assertGlobalAdmin();
+        $acl = $this->app->guestAcl();
+        $acl->assertGlobalAdmin();
         return View::fromRequest($request)->render($response, 'admin/maintenance', [
             'query' => $request->getQueryParams(), 'schema' => $this->app->schemaUpgrader()->status(),
+            'backup' => $this->app->backups()->status(),
+            'garbage' => $this->app->attachments()->garbageCandidates($acl),
+            'backup_upload_max_mb' => AttachmentService::serverMaxMb(), 'backup_error' => null,
         ]);
     }
 

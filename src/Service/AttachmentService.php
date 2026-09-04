@@ -265,18 +265,10 @@ final class AttachmentService
         return $this->resizer->ensure($original, $target, $width) ? $target : $original;
     }
 
-    /**
-     * 어떤 글에도 연결되지 않은 파일을 지운다. cron 이 보장되지 않는
-     * 저가 호스팅을 가정하므로 관리자가 화면에서 직접 돌린다.
-     *
-     * MySQL 5.7 에 JSON 함수가 없으므로 SQL 로 참조를 훑을 수 없다.
-     * 모든 글의 attachments 를 PHP 로 모은다. 글 수가 아주 많은 게시판에서는
-     * 시간이 걸릴 수 있고, 그때는 배치로 나누는 것이 다음 단계다.
-     */
-    public function collectGarbage(Acl $acl): array
+    /** @return array{items:list<array{path:string,relative_path:string,size:int,original_size:int,mtime:int,file_count:int,thumbnails:list<string>}>,files:int,bytes:int} */
+    public function garbageCandidates(Acl $acl): array
     {
         $acl->assertGlobalAdmin();
-
         $referenced = [];
         foreach ($this->postRepo->allAttachmentPaths() as $path) {
             $referenced[$path] = true;
@@ -284,10 +276,11 @@ final class AttachmentService
 
         $root = rtrim((string) $this->config['dir'], '/');
         if (!is_dir($root)) {
-            return ['deleted' => 0, 'bytes' => 0];
+            return ['items' => [], 'files' => 0, 'bytes' => 0];
         }
 
-        $deleted = 0;
+        $items = [];
+        $files = 0;
         $bytes = 0;
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
@@ -309,18 +302,60 @@ final class AttachmentService
             if ($item->getMTime() > time() - self::GC_MIN_AGE_SECONDS) {
                 continue;
             }
-            $size = (int) $item->getSize();
-            if (@unlink($path)) {
-                $deleted++;
-                $bytes += $size;
-                // 원본이 사라졌으니 그 축소본도 쓸모가 없다.
-                foreach (glob(dirname($path) . '/.*-' . basename($path)) ?: [] as $thumb) {
-                    if (is_file($thumb)) {
-                        $bytes += (int) filesize($thumb);
-                        if (@unlink($thumb)) {
-                            $deleted++;
-                        }
-                    }
+
+            $originalSize = (int) $item->getSize();
+            $size = $originalSize;
+            $thumbnails = [];
+            foreach (glob(dirname($path) . '/.*-' . basename($path)) ?: [] as $thumbnail) {
+                if (is_file($thumbnail)) {
+                    $thumbnails[] = $thumbnail;
+                    $size += (int) filesize($thumbnail);
+                }
+            }
+            $fileCount = 1 + count($thumbnails);
+            $items[] = [
+                'path' => $path,
+                'relative_path' => str_replace('\\', '/', substr($path, strlen($root) + 1)),
+                'size' => $size,
+                'original_size' => $originalSize,
+                'mtime' => (int) $item->getMTime(),
+                'file_count' => $fileCount,
+                'thumbnails' => $thumbnails,
+            ];
+            $files += $fileCount;
+            $bytes += $size;
+        }
+
+        usort($items, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']
+            ?: strcmp($a['relative_path'], $b['relative_path']));
+
+        return ['items' => $items, 'files' => $files, 'bytes' => $bytes];
+    }
+
+    /**
+     * 어떤 글에도 연결되지 않은 파일을 지운다. cron 이 보장되지 않는
+     * 저가 호스팅을 가정하므로 관리자가 화면에서 직접 돌린다.
+     *
+     * MySQL 5.7 에 JSON 함수가 없으므로 SQL 로 참조를 훑을 수 없다.
+     * 모든 글의 attachments 를 PHP 로 모은다. 글 수가 아주 많은 게시판에서는
+     * 시간이 걸릴 수 있고, 그때는 배치로 나누는 것이 다음 단계다.
+     */
+    public function collectGarbage(Acl $acl): array
+    {
+        $candidates = $this->garbageCandidates($acl);
+        $deleted = 0;
+        $bytes = 0;
+        foreach ($candidates['items'] as $item) {
+            if (!@unlink($item['path'])) {
+                continue;
+            }
+            $deleted++;
+            $bytes += (int) $item['original_size'];
+            foreach ($item['thumbnails'] as $thumbnail) {
+                $thumbnailSize = is_file($thumbnail) ? (int) filesize($thumbnail) : 0;
+                if (@unlink($thumbnail)) {
+                    $deleted++;
+                    $bytes += $thumbnailSize;
                 }
             }
         }

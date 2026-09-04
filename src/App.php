@@ -49,6 +49,7 @@ use GnuCms\Cms\ConsentUseRepository;
 use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\ContentRenderer;
 use GnuCms\Cms\HtmlSanitizer;
+use GnuCms\Maintenance\BackupManager;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -143,12 +144,17 @@ final class App
 
     private ?ContentImageService $contentImages = null;
 
+    private ?BackupManager $backupManager = null;
+
+    private ?string $configFile;
+
     /** @var Identity */
     private $identity;
 
-    public function __construct(array $config)
+    public function __construct(array $config, ?string $configFile = null)
     {
         $this->config = $config;
+        $this->configFile = $configFile;
         $this->identity = Identity::guest();
         // 검사 기준이 곳곳에 흩어지지 않도록 비밀번호 최소 길이는 여기서 한 번만 정한다.
         Validator::setPasswordMin((int) $this->config('auth.password_min', 8));
@@ -186,6 +192,22 @@ final class App
     public function schemaUpgrader(): SchemaUpgrader
     {
         return new SchemaUpgrader($this->db(), $this->storageDir());
+    }
+
+    public function backups(): BackupManager
+    {
+        if ($this->backupManager === null) {
+            $site = $this->cmsService()->settings();
+            $this->backupManager = new BackupManager(
+                $this->db(),
+                $this->config,
+                $this->storageDir(),
+                $this->configFile,
+                is_string($site['timezone'] ?? null) ? $site['timezone'] : 'Asia/Seoul'
+            );
+        }
+
+        return $this->backupManager;
     }
 
     public function boards(): BoardRepository

@@ -70,12 +70,24 @@ final class AttachmentServiceTest extends WebTestCase
         $fresh = $app->attachments()->upload($acl, 'free', $this->fakeUpload('방금.txt', '1'));
         $old = $app->attachments()->upload($acl, 'free', $this->fakeUpload('어제.txt', '2'));
         touch($old['path'], time() - 90000);
+        $thumbnail = dirname($old['path']) . '/.320-' . basename($old['path']);
+        file_put_contents($thumbnail, 'thumb');
+
+        $candidates = $app->attachments()->garbageCandidates($acl);
+
+        self::assertCount(1, $candidates['items']);
+        self::assertSame(2, $candidates['files']);
+        self::assertSame(6, $candidates['bytes']);
+        self::assertSame(2, $candidates['items'][0]['file_count']);
+        self::assertStringEndsWith(basename($old['path']), $candidates['items'][0]['relative_path']);
 
         $result = $app->attachments()->collectGarbage($acl);
 
         self::assertFileExists($fresh['path'], '24시간이 안 된 파일은 작성 중일 수 있으니 남긴다');
         self::assertFileDoesNotExist($old['path']);
-        self::assertSame(1, $result['deleted']);
+        self::assertFileDoesNotExist($thumbnail);
+        self::assertSame(2, $result['deleted']);
+        self::assertSame(6, $result['bytes']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -93,6 +105,7 @@ final class AttachmentServiceTest extends WebTestCase
 
         self::assertFileExists($kept['path']);
         self::assertSame(0, $result['deleted']);
+        self::assertSame([], $app->attachments()->garbageCandidates($acl)['items']);
     }
 
     #[DataProvider('connectionProvider')]

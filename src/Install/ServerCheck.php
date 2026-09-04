@@ -58,6 +58,7 @@ final class ServerCheck
             'mbstring' => '한글 처리',
             'fileinfo' => '첨부 파일 종류 판별',
             'openssl'  => '메일 TLS 와 비밀값 암호화',
+            'phar'     => 'zip 미지원 서버의 전체 백업 TAR 대체 생성과 검증',
         ] as $ext => $why) {
             $items[] = $this->item($ext . ' 확장', $this->has($ext), true, $why);
         }
@@ -66,6 +67,7 @@ final class ServerCheck
         $items[] = $this->item('storage/ 쓰기 가능', is_dir($this->storageDir) && is_writable($this->storageDir), true, $this->storageDir);
 
         $items[] = $this->item('gd 확장', $this->has('gd'), false, '없으면 사진 축소본을 만들지 못합니다');
+        $items[] = $this->item('zip 확장', $this->has('zip'), false, '있으면 PC에서 풀기 쉬운 ZIP 전체 백업을 생성합니다');
 
         $rewrite = $this->apacheModules === null ? null : in_array('mod_rewrite', $this->apacheModules, true);
         $items[] = $this->item(

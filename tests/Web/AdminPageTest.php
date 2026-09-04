@@ -547,7 +547,7 @@ final class AdminPageTest extends WebTestCase
         try {
             mkdir($backupsDir, 0775, true);
             file_put_contents($older, 'x');
-            touch($newer);
+            touch($newer, (int) strtotime('2026-02-01 00:00:05 UTC'));
 
             $app = $this->makeApp($dbConfig, ['storage' => ['dir' => $tmp]]);
             $app->db()->execute(
@@ -567,11 +567,12 @@ final class AdminPageTest extends WebTestCase
 
             $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
-            self::assertStringContainsString('2026-08-30 01:02:03 UTC', $body);
+            self::assertStringContainsString('2026-08-30 10:02:03 Asia/Seoul', $body);
+            self::assertStringContainsString('2026-02-01 09:00:05', $body);
             self::assertStringContainsString('<dt>마지막 백업</dt><dd>board-v9-20260201-000000.sqlite</dd>', $body);
 
             if ($app->db()->dialect()->name() !== 'sqlite') {
-                self::assertStringContainsString('앱이 백업하지 못합니다', $body);
+                self::assertStringContainsString('스키마 갱신 직전 자동 DB 백업은 SQLite에서만', $body);
                 return;
             }
 
@@ -582,6 +583,17 @@ final class AdminPageTest extends WebTestCase
             self::assertIsInt($newerPos);
             self::assertIsInt($olderPos);
             self::assertLessThan($olderPos, $newerPos, '최신 백업이 먼저 나와야 한다');
+
+            $deleted = $this->post($app, '/admin/schema-backups/' . basename($older) . '/delete', [
+                'csrf_token' => $_SESSION['csrf_token'],
+            ]);
+            self::assertSame(303, $deleted->getStatusCode(), $this->body($deleted));
+            self::assertStringContainsString('schema_backup_deleted=', $deleted->getHeaderLine('Location'));
+            self::assertFileDoesNotExist($older);
+            $afterDelete = $this->body($this->get($app, '/admin/settings/maintenance', [
+                'schema_backup_deleted' => basename($older),
+            ]));
+            self::assertStringContainsString('자동 DB 백업을 삭제했습니다', $afterDelete);
         } finally {
             @unlink($older);
             @unlink($newer);
@@ -657,7 +669,10 @@ final class AdminPageTest extends WebTestCase
         touch($abandoned['path'], time() - 90000);
 
         $page = $this->body($this->get($app, '/admin/settings/maintenance'));
-        self::assertStringContainsString('버려진 파일 정리', $page);
+        self::assertStringContainsString('업로드 파일 정리', $page);
+        self::assertStringContainsString('삭제 예정 <strong>1개</strong>', $page);
+        self::assertStringContainsString(basename($abandoned['path']), $page);
+        self::assertStringContainsString('정리 대상 1개 삭제', $page);
 
         $cleaned = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
         self::assertSame(303, $cleaned->getStatusCode());
@@ -673,6 +688,8 @@ final class AdminPageTest extends WebTestCase
         $emptyGc = $this->body($this->get($app, '/admin/settings/maintenance', ['gc' => '0']));
         self::assertStringContainsString('정리할 파일이 없습니다', $emptyGc);
         self::assertStringNotContainsString('버려진 파일 0개를 정리했습니다', $emptyGc);
+        self::assertStringContainsString('현재 정리할 업로드 파일이 없습니다', $emptyGc);
+        self::assertStringNotContainsString('정리 대상 0개 삭제', $emptyGc);
     }
 
     #[DataProvider('connectionProvider')]

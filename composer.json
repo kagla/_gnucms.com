@@ -6,6 +6,7 @@
     "require": {
         "php": ">=8.2",
         "ext-openssl": "*",
+        "ext-phar": "*",
         "ezyang/htmlpurifier": "^4.19",
         "league/oauth2-client": "^2.8",
         "phpmailer/phpmailer": "^7.1",
@@ -14,6 +15,9 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
+    },
+    "suggest": {
+        "ext-zip": "PC에서 편리하게 풀 수 있는 ZIP 전체 백업을 생성합니다"
     },
     "autoload": {
         "psr-4": {

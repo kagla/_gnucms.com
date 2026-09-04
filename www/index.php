@@ -48,7 +48,7 @@ if ($redirectTarget !== null) {
 
 // 템플릿 변경이 즉시 반영되도록 운영 환경에서도 파일 캐시를 사용하지 않는다.
 try {
-    Kernel::create(new App($config), __DIR__ . '/../templates', $basePath)->run();
+    Kernel::create(new App($config, $configFile), __DIR__ . '/../templates', $basePath)->run();
 } catch (MaintenanceRequired $e) {
     // 스키마를 옮기는 중이거나 옮기지 못했다. Slim 바깥에서 나므로 여기서 화면을 낸다.
     MaintenancePage::send($e);
