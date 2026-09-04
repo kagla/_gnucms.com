@@ -20,6 +20,7 @@ use GnuCms\Web\Controller\EditorImageController;
 use GnuCms\Web\Controller\NotificationController;
 use GnuCms\Web\Controller\AvatarController;
 use GnuCms\Web\Controller\SeoController;
+use GnuCms\Web\Controller\BackupController;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App as SlimApp;
@@ -97,6 +98,19 @@ final class Routes
             ->setName('admin.settings.oauth.secret');
         $slim->get('/admin/settings/maintenance', [$cms, 'maintenance'])->setName('admin.settings.maintenance');
         $slim->post('/admin/uploads/gc', [$cms, 'uploadsGc'])->setName('admin.uploads.gc');
+        $backups = new BackupController($app);
+        $slim->post('/admin/backups', [$backups, 'create'])->setName('admin.backups.create');
+        $slim->post('/admin/backups/upload', [$backups, 'upload'])->setName('admin.backups.upload');
+        $slim->get('/admin/backups/{name:gnucms-(?:sqlite|mysql|pgsql)-[0-9-]+\\.(?:zip|tar)}', [$backups, 'download'])
+            ->setName('admin.backups.download');
+        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql|pgsql)-[0-9-]+\\.(?:zip|tar)}/verify', [$backups, 'verify'])
+            ->setName('admin.backups.verify');
+        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql|pgsql)-[0-9-]+\\.(?:zip|tar)}/restore', [$backups, 'restore'])
+            ->setName('admin.backups.restore');
+        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql|pgsql)-[0-9-]+\\.(?:zip|tar)}/delete', [$backups, 'delete'])
+            ->setName('admin.backups.delete');
+        $slim->post('/admin/schema-backups/{name:board-v[0-9A-Za-z]+-[0-9-]+\\.sqlite}/delete', [$backups, 'deleteAutomatic'])
+            ->setName('admin.schema-backups.delete');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
         $slim->post('/admin/mail/password', [$cms, 'mailPassword'])->setName('admin.mail.password');

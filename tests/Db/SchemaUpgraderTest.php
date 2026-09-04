@@ -259,6 +259,31 @@ final class SchemaUpgraderTest extends TestCase
         );
     }
 
+    public function testDeletesAutomaticBackupAndClearsLastBackupReference(): void
+    {
+        mkdir($this->storage . '/backups', 0775, true);
+        $name = 'board-v9-20260201-000000.sqlite';
+        $path = $this->storage . '/backups/' . $name;
+        file_put_contents($path, 'sqlite backup');
+        $this->db->execute(
+            'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
+            ['system.schema_backup', $path, '2026-09-04 00:00:00']
+        );
+
+        $deleted = $this->upgrader()->deleteBackup($name);
+
+        self::assertSame($name, $deleted['deleted']);
+        self::assertFileDoesNotExist($path);
+        self::assertNull($this->upgrader()->status()['backup']);
+    }
+
+    public function testAutomaticBackupDeleteRejectsPaths(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('자동 DB 백업 파일 이름이 올바르지 않습니다');
+        $this->upgrader()->deleteBackup('../board-v9-20260201-000000.sqlite');
+    }
+
     private function upgrader(?callable $migrate = null, ?callable $log = null): SchemaUpgrader
     {
         return new SchemaUpgrader($this->db, $this->storage, $migrate, $log ?? static function (string $line): void {});
