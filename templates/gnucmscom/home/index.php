@@ -60,8 +60,8 @@ $freshAfter = time() - 86400;
         <p class="product-lead">일반 웹호스팅에 바로 올려 쓰는 게시판 중심 오픈소스 CMS입니다.</p>
         <div class="product-actions">
           <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms#readme" target="_blank" rel="noopener">README 보기</a>
-          <a class="product-button" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub 저장소</a>
-          <a class="product-button" href="https://kagla10.mycafe24.com" target="_blank" rel="noopener">카페24 절약형 호스팅 데모</a>
+          <a class="product-button product-button-secondary" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub 저장소</a>
+          <a class="product-button product-button-tertiary" href="https://kagla10.mycafe24.com" target="_blank" rel="noopener">카페24 절약형 호스팅 데모</a>
         </div>
       </div>
     </div>
