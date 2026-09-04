@@ -116,6 +116,9 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('PHP 8.2+', $body);
         self::assertStringContainsString('SQLite', $body);
         self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
+        self::assertStringContainsString('href="https://github.com/kagla/gnucms/releases/latest"', $body);
+        self::assertStringContainsString('data-github-release-version>확인 중</strong>', $body);
+        self::assertStringContainsString('https://api.github.com/repos/kagla/gnucms/releases/latest', $body);
         self::assertStringContainsString('https://kagla10.mycafe24.com', $body);
         self::assertStringContainsString('카페24 절약형 호스팅 데모', $body);
         self::assertStringNotContainsString('class="btn btn-ghost btn-circle theme-toggle"', $body);

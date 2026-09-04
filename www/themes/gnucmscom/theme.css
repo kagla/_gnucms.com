@@ -3004,3 +3004,13 @@ body:not(.admin-page) .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent
   .product-home .product-gallery-section{padding-block:28px}
   .product-feature-list-compact article{min-height:0}
 }
+
+/* GitHub의 최신 정식 릴리스를 메인 첫 화면에서 바로 확인한다. */
+.product-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:.55rem;margin-bottom:1rem}
+.product-home .product-hero .product-hero-meta .product-label{margin:0}
+.product-release-badge{display:inline-flex;align-items:center;gap:.4rem;min-height:28px;padding:0 .65rem;border:1px solid color-mix(in srgb,var(--premium-violet) 28%,transparent);border-radius:999px;background:var(--premium-violet-soft);color:var(--premium-violet);font-size:12px;font-weight:750;line-height:1.35;white-space:nowrap}
+.product-release-badge:hover{border-color:color-mix(in srgb,var(--premium-violet) 50%,transparent);color:var(--premium-violet);transform:translateY(-1px)}
+.product-release-badge strong{font-family:var(--mono);font-size:11.5px;letter-spacing:.01em}
+.product-release-badge .icon{opacity:.7}
+.product-release-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.4;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 10%,transparent)}
+.product-release-badge.is-loaded .product-release-dot{opacity:1}

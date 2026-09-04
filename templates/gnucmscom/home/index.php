@@ -54,7 +54,12 @@ $freshAfter = time() - 86400;
 <?php $this->start('body') ?>
   <section class="product-hero">
     <div class="product-shell product-hero-inner">
-      <p class="product-label">OPEN SOURCE · PHP 8.2+</p>
+      <div class="product-hero-meta">
+        <p class="product-label">OPEN SOURCE · PHP 8.2+</p>
+        <a class="product-release-badge" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기">
+          <span class="product-release-dot" aria-hidden="true"></span><span>GitHub 최신</span><strong data-github-release-version>확인 중</strong><?= $this->icon('external', 13) ?>
+        </a>
+      </div>
       <h1>필요한 것만 담은 가벼운 PHP CMS</h1>
       <div class="product-hero-summary">
         <p class="product-lead">일반 웹호스팅에 바로 올려 쓰는 게시판 중심 오픈소스 CMS입니다.</p>
@@ -240,5 +245,48 @@ $freshAfter = time() - 86400;
       </div>
     </div>
   </section>
+
+<script>
+(function () {
+  var badge = document.querySelector('[data-github-release]');
+  if (!badge) { return; }
+  var version = badge.querySelector('[data-github-release-version]');
+  var cacheKey = 'gnucms-github-latest-release';
+  var cacheMaxAge = 21600000;
+  var hasVersion = false;
+
+  function show(tag) {
+    if (typeof tag !== 'string' || !/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) { return false; }
+    version.textContent = tag;
+    hasVersion = true;
+    badge.classList.add('is-loaded');
+    badge.setAttribute('aria-label', 'GitHub 최신 릴리스 ' + tag + ' 보기');
+    return true;
+  }
+
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && show(cached.tag) && Date.now() - cached.checkedAt < cacheMaxAge) { return; }
+  } catch (e) {}
+
+  if (typeof window.fetch !== 'function') {
+    if (!hasVersion) { version.textContent = '릴리스 보기'; }
+    return;
+  }
+  fetch('https://api.github.com/repos/kagla/gnucms/releases/latest', {
+    headers: {'Accept': 'application/vnd.github+json'}
+  }).then(function (response) {
+    if (!response.ok) { throw new Error('GitHub release request failed'); }
+    return response.json();
+  }).then(function (release) {
+    if (!show(release.tag_name)) { throw new Error('Invalid GitHub release tag'); }
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({tag: release.tag_name, checkedAt: Date.now()}));
+    } catch (e) {}
+  }).catch(function () {
+    if (!hasVersion) { version.textContent = '릴리스 보기'; }
+  });
+})();
+</script>
 
 <?php $this->stop() ?>
