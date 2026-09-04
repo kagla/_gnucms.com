@@ -21,3 +21,11 @@ const GNUCMS_URL = 'https://gnucms.gnuboard.net';
  * 같은 접두사가 글자 그대로 박혀 있으니, 이 값을 바꾸면 그 파일들도 같이 고쳐야 한다.
  */
 const GNUCMS_ID = 'gnucms';
+
+/** GitHub Release와 관리자 화면에 표시하는 제품 버전. DB 스키마 판과는 별개다. */
+$gnucmsVersionFile = dirname(__DIR__) . '/version.txt';
+$gnucmsVersion = is_file($gnucmsVersionFile) ? trim((string) file_get_contents($gnucmsVersionFile)) : '';
+define('GNUCMS_VERSION', preg_match('/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/D', $gnucmsVersion) === 1
+    ? $gnucmsVersion : 'dev');
+define('GNUCMS_REPOSITORY_URL', 'https://github.com/kagla/gnucms');
+unset($gnucmsVersionFile, $gnucmsVersion);

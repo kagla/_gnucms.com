@@ -41,6 +41,9 @@ abstract class WebTestCase extends DatabaseTestCase
         ], $configOverrides);
 
         $app = new App($config);
+        // CI·개발 머신에 sendmail 이 없어도 웹 테스트가 외부 메일 환경에 기대지 않게 한다.
+        // 메일 내용을 확인하는 테스트는 필요할 때 자체 CollectingMailer 로 다시 바꾼다.
+        $app->setMailer(new CollectingMailer());
 
         $schema = new Schema($app->db());
         $schema->drop();
@@ -81,6 +84,16 @@ abstract class WebTestCase extends DatabaseTestCase
     protected function post(App $app, string $path, array $body, array $server = []): ResponseInterface
     {
         $request = (new ServerRequestFactory())->createServerRequest('POST', $path, $server)->withParsedBody($body);
+
+        return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    /** @param array<string, UploadedFileInterface> $files */
+    protected function postWithFiles(App $app, string $path, array $body, array $files): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', $path)
+            ->withParsedBody($body)
+            ->withUploadedFiles($files);
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }

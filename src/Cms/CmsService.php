@@ -14,6 +14,7 @@ final class CmsService
     public const DEFAULT_SETTINGS = [
         'site_name' => GNUCMS,
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
+        'timezone' => 'Asia/Seoul',
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
         'site_verification_html' => '',
@@ -248,9 +249,11 @@ final class CmsService
         }
         $passwordLogin = $v->bool('password_login_enabled', false);
         $socialLogin = $v->bool('social_login_enabled', false);
+        $timezone = $this->timezone($v, $input, (string) $this->settings()['timezone']);
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
+            'timezone' => $timezone,
             'home_title' => $v->requiredString('home_title', 120),
             'home_intro' => $v->requiredString('home_intro', 500),
             'password_login_enabled' => $passwordLogin ? '1' : '0',
@@ -287,6 +290,7 @@ final class CmsService
         $passwordLogin = $v->bool('password_login_enabled', false);
         $socialLogin = $v->bool('social_login_enabled', false);
         $current = $this->settings();
+        $timezone = $this->timezone($v, $input, (string) $current['timezone']);
         $siteVerificationHtml = $this->headHtml(
             $v, $input, 'site_verification_html', (string) $current['site_verification_html']
         );
@@ -295,6 +299,7 @@ final class CmsService
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
+            'timezone' => $timezone,
             'home_title' => $v->requiredString('home_title', 120),
             'home_intro' => $v->requiredString('home_intro', 500),
             'password_login_enabled' => $passwordLogin ? '1' : '0',
@@ -310,6 +315,18 @@ final class CmsService
         $v->check();
         $this->cms->saveSettings($settings);
         $this->settingsCache = null;
+    }
+
+    private function timezone(Validator $v, array $input, string $default): string
+    {
+        $timezone = $v->optionalString('timezone', 100, $default) ?? $default;
+        if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            $v->fail('timezone', '올바른 시간대를 선택해 주세요.');
+
+            return $default;
+        }
+
+        return $timezone;
     }
 
     /** 관리자 입력을 head 안에 안전하게 둘 수 있는 크기와 구조로 제한한다. */

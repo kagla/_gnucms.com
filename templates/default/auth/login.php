@@ -16,6 +16,7 @@
             <form method="post" action="<?= $this->url('auth.verify.resend') ?>">
               <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
               <input type="hidden" name="email" value="<?= $this->e($unverified_email) ?>">
+              <?php $this->insert('_turnstile', ['action' => 'verification_resend', 'errors' => $errors]) ?>
               <button class="btn btn-warning btn-sm" type="submit"><?= $this->icon('mail', 15) ?> 인증 메일 다시 보내기</button>
             </form>
           </div>
@@ -43,6 +44,7 @@
             <?php $this->insert('auth/_pw_toggle') ?>
           </label>
         </fieldset>
+        <?php if ($turnstile_required): ?><?php $this->insert('_turnstile', ['action' => 'login', 'errors' => $errors]) ?><?php endif ?>
         <button class="btn btn-primary btn-block btn-lg" type="submit">로그인</button>
       </form>
       <p class="auth-switch">
@@ -56,4 +58,5 @@
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
 <?php $this->insert('auth/_pw_toggle_script') ?>
+<?php if ($turnstile_enabled && ($turnstile_required || $unverified_email !== null)): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <?php $this->stop() ?>

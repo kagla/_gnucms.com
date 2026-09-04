@@ -183,6 +183,12 @@ final class Installer
                 'secret'       => Base64Url::encode(random_bytes(32)),
                 'password_min' => 8,
             ],
+            'turnstile' => [
+                'enabled'    => false,
+                'site_key'   => '',
+                'secret_key' => '',
+                'hostname'   => (string) (parse_url($site['app_url'], PHP_URL_HOST) ?? ''),
+            ],
             'uploads' => [
                 'dir'         => $this->storageDir . '/uploads',
                 'max_bytes'   => 5 * 1024 * 1024,

@@ -87,6 +87,7 @@ daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 compo
 | `consent_documents` | 회원가입 화면에 붙는 동의 항목 (`id`, `title`, `slug`, `required`) |
 | `legal_documents`, `registration_available` | 가입 가능 여부 |
 | `oauth_providers` | 설정된 소셜 로그인 (`key`, `label`) |
+| `turnstile_enabled`, `turnstile_configured`, `turnstile_site_key` | Cloudflare Turnstile 표시 상태와 공개 사이트 키 |
 | `active_theme`, `available_themes` | 사이트 설정의 테마 선택 |
 | `base_path`, `GNUCMS`, `GNUCMS_ID` | 기준 경로와 이름 상수 |
 

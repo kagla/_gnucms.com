@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Slim\Psr7\UploadedFile;
 
 final class AdminPageTest extends WebTestCase
 {
@@ -185,6 +186,18 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('admin-fold', $this->body($dashboard));
         self::assertStringContainsString('for="admin-drawer"', $this->body($dashboard));
         self::assertStringContainsString('class="admin-user"', $this->body($dashboard));
+        self::assertStringContainsString('class="admin-version"', $this->body($dashboard));
+        $released = preg_match('/^\d+\.\d+\.\d+$/D', GNUCMS_VERSION) === 1;
+        $versionUrl = GNUCMS_REPOSITORY_URL . ($released ? '/releases/tag/v' . GNUCMS_VERSION : '');
+        self::assertStringContainsString('href="' . $versionUrl . '"', $this->body($dashboard));
+        self::assertStringContainsString('>v' . GNUCMS_VERSION . '</small>',
+            $this->body($dashboard));
+        self::assertMatchesRegularExpression(
+            '#<ul class="[^"]*admin-user-menu[^"]*"[^>]*>\s*'
+            . '<li class="menu-title">.*?</li>\s*<li>\s*<form[^>]+action="/logout"#s',
+            $this->body($dashboard),
+            '관리자 프로필 메뉴에는 이름과 로그아웃만 표시한다'
+        );
         self::assertStringContainsString('href="/admin" class="menu-active"', $this->body($dashboard));
         self::assertStringContainsString('회원 관리', $this->body($dashboard));
         self::assertStringNotContainsString('title="메일 설정"', $this->body($dashboard));
@@ -325,6 +338,56 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(422, $blockedOwner->getStatusCode());
         self::assertStringContainsString('현재 로그인한 관리자 계정은 차단할 수 없습니다.', $this->body($blockedOwner));
         self::assertSame('active', $app->users()->findById($adminId)['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanUploadAndRemoveMemberProfileImage(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원'
+        );
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('enctype="multipart/form-data"', $form);
+        self::assertStringContainsString('name="profile_image"', $form);
+
+        $temporary = tempnam(sys_get_temp_dir(), GNUCMS_ID . '-admin-avatar-');
+        file_put_contents($temporary, base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        ));
+        $size = filesize($temporary);
+        $saved = $this->postWithFiles($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '일반회원', 'status' => 'active',
+        ], ['profile_image' => new UploadedFile($temporary, 'profile.png', 'image/png', $size ?: null)]);
+
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        $member = $app->users()->findById($memberId);
+        $avatar = $member['avatar_file'];
+        self::assertNotEmpty($avatar);
+        self::assertSame('upload', $member['avatar_source']);
+        self::assertFileExists($app->avatars()->image((string) $avatar)['path']);
+        $savedForm = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('name="remove_profile_image"', $savedForm);
+        self::assertStringContainsString('/media/avatars/' . $avatar, $savedForm);
+
+        $removed = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '일반회원', 'status' => 'active', 'remove_profile_image' => '1',
+        ]);
+        self::assertSame(303, $removed->getStatusCode(), $this->body($removed));
+        $member = $app->users()->findById($memberId);
+        self::assertNull($member['avatar_file']);
+        self::assertNull($member['avatar_source']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -636,7 +699,7 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('https://developers.naver.com/apps/#/list', $page);
         self::assertStringContainsString('https://developers.kakao.com/console/app', $page);
         self::assertSame(3, substr_count($page, '키 발급·관리'));
-        self::assertSame(6, substr_count($page, 'rel="noopener noreferrer"'));
+        self::assertSame(7, substr_count($page, 'rel="noopener noreferrer"'));
         self::assertStringContainsString('네이버 개발자센터 애플리케이션의 Client ID', $page);
         self::assertStringContainsString('JavaScript 키가 아닌 REST API 키', $page);
         self::assertStringContainsString('Client Secret (선택)', $page);
@@ -675,6 +738,16 @@ final class AdminPageTest extends WebTestCase
         $savedPage = $this->body($this->get($app, '/admin/settings/social'));
         self::assertStringNotContainsString('google-client-secret', $savedPage);
         self::assertStringContainsString('placeholder="••••••••••••••••"', $savedPage);
+        self::assertStringContainsString('data-oauth-secret-toggle', $savedPage);
+        self::assertStringContainsString(
+            'data-secret-url="/admin/settings/social/google/secret"', $savedPage
+        );
+        $revealed = $this->post($app, '/admin/settings/social/google/secret', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+        self::assertSame(200, $revealed->getStatusCode());
+        self::assertSame('no-store', $revealed->getHeaderLine('Cache-Control'));
+        self::assertSame(['secret' => 'google-client-secret'], json_decode($this->body($revealed), true));
         self::assertStringContainsString('Google로 계속', $this->body($this->get($app, '/login')));
 
         $preserved = $this->post($app, '/admin/settings/social', [
@@ -701,6 +774,91 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(303, $clearedKakaoSecret->getStatusCode());
         self::assertSame('', $app->oauthSettingsService()->runtime()['kakao']['client_secret']);
         self::assertSame([['key' => 'kakao', 'label' => '카카오']], $app->providerRegistry()->options());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanConfigureTurnstileWithoutExposingSecret(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [
+            'app' => ['url' => 'https://community.example'],
+            'turnstile' => [
+                'enabled' => false,
+                'site_key' => '',
+                'secret_key' => '',
+                'hostname' => '',
+                'transport' => static fn (): array => ['success' => true],
+            ],
+        ]);
+        $id = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com',
+            'password' => 'admin-password-123',
+        ]);
+
+        $page = $this->body($this->get($app, '/admin/settings/security'));
+        self::assertStringContainsString('자동 등록 방지', $page);
+        self::assertStringContainsString('Cloudflare Turnstile 사용', $page);
+        self::assertStringContainsString('value="community.example"', $page);
+        self::assertStringContainsString('Cloudflare에서 키 발급·관리', $page);
+
+        $incomplete = $this->post($app, '/admin/settings/security', [
+            'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1',
+            'site_key' => '', 'secret_key' => '', 'hostname' => 'community.example',
+        ]);
+        self::assertSame(422, $incomplete->getStatusCode());
+        self::assertStringContainsString('Site Key를 입력해 주세요', $this->body($incomplete));
+        self::assertStringContainsString('Secret Key를 입력해 주세요', $this->body($incomplete));
+
+        $saved = $this->post($app, '/admin/settings/security', [
+            'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1',
+            'site_key' => 'turnstile-site-key', 'secret_key' => 'turnstile-secret-key',
+            'hostname' => 'community.example',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('/admin/settings/security?saved=1', $saved->getHeaderLine('Location'));
+
+        $stored = $app->turnstileSettings()->all();
+        self::assertSame('1', $stored['enabled']);
+        self::assertSame('turnstile-site-key', $stored['site_key']);
+        self::assertStringStartsWith('v2:', $stored['secret_key']);
+        self::assertStringNotContainsString('turnstile-secret-key', $stored['secret_key']);
+        self::assertArrayNotHasKey('turnstile.secret_key', $app->cms()->settings());
+        self::assertSame('turnstile-secret-key', $app->turnstileSettingsService()->runtime()['secret_key']);
+        self::assertTrue($app->turnstile()->isEnabled());
+        self::assertSame('turnstile-site-key', $app->turnstile()->siteKey());
+
+        $savedPage = $this->body($this->get($app, '/admin/settings/security'));
+        self::assertStringNotContainsString('turnstile-secret-key', $savedPage);
+        self::assertStringContainsString('placeholder="••••••••••••••••"', $savedPage);
+        self::assertStringContainsString('data-turnstile-secret-toggle', $savedPage);
+        $revealed = $this->post($app, '/admin/settings/security/secret', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+        self::assertSame(200, $revealed->getStatusCode());
+        self::assertSame('no-store', $revealed->getHeaderLine('Cache-Control'));
+        self::assertSame(['secret' => 'turnstile-secret-key'], json_decode($this->body($revealed), true));
+        self::assertStringContainsString('data-sitekey="turnstile-site-key"', $this->body(
+            $this->get($app, '/forgot-password')
+        ));
+
+        $preserved = $this->post($app, '/admin/settings/security', [
+            'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1',
+            'site_key' => 'changed-site-key', 'secret_key' => '', 'hostname' => 'community.example',
+        ]);
+        self::assertSame(303, $preserved->getStatusCode());
+        self::assertSame('turnstile-secret-key', $app->turnstileSettingsService()->runtime()['secret_key']);
+
+        $cleared = $this->post($app, '/admin/settings/security', [
+            'csrf_token' => $_SESSION['csrf_token'], 'site_key' => 'changed-site-key',
+            'hostname' => 'community.example', 'secret_key_clear' => '1',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode());
+        self::assertSame('', $app->turnstileSettingsService()->runtime()['secret_key']);
+        self::assertFalse($app->turnstile()->isEnabled());
     }
 
 }

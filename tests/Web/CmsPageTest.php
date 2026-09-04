@@ -54,6 +54,8 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('name="site_verification_html"', $form);
         self::assertStringContainsString('name="analytics_html"', $form);
         self::assertStringContainsString('name="adsense_html"', $form);
+        self::assertStringContainsString('name="timezone"', $form);
+        self::assertStringContainsString('value="Asia/Seoul" selected', $form);
 
         $verification = '<meta name="naver-site-verification" content="naver-token">';
         $analytics = '<script data-analytics-code>window.analyticsLoaded=true;</script>';
@@ -65,6 +67,7 @@ final class CmsPageTest extends WebTestCase
             'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
             'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
             'theme' => 'default',
+            'timezone' => 'America/New_York',
             'password_login_enabled' => '1',
             'social_login_enabled' => '1',
             'registration_enabled' => '1',
@@ -82,6 +85,8 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString($adsense, $home);
 
         $admin = $this->body($this->get($app, '/admin/settings'));
+        self::assertSame('America/New_York', $app->cmsService()->settings()['timezone']);
+        self::assertStringContainsString('value="America/New_York" selected', $admin);
         self::assertStringNotContainsString($analytics, $admin, '관리 화면에서는 외부 스크립트를 실행하지 않는다.');
         self::assertStringContainsString('&lt;script data-analytics-code&gt;', $admin);
 

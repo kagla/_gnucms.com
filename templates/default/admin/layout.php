@@ -26,7 +26,6 @@
             </button>
             <ul class="dropdown-content menu rounded-box shadow-lg admin-user-menu" tabindex="0" role="menu">
               <li class="menu-title"><?= $this->e($current_user['display_name']) ?></li>
-              <li><a href="<?= $this->url('admin.login_history') ?>"><?= $this->icon('history', 17) ?> 로그인 기록</a></li>
               <li>
                 <form method="post" action="<?= $this->url('auth.logout') ?>">
                   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">

@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install development dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Verify source
+        run: |
+          composer validate --no-check-publish
+          ./vendor/bin/phpunit
+
+      - name: Prepare release pull request or GitHub Release
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Check out released source
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+
+      - name: Verify released version
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: test "$(cat version.txt)" = "${RELEASE_VERSION}"
+
+      - name: Prepare production dependencies
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+
+      - name: Build deployment archive
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          package="gnucms-${RELEASE_VERSION}"
+          mkdir -p "build/${package}"
+          git archive HEAD | tar -x -C "build/${package}"
+          cp -a vendor "build/${package}/vendor"
+          rm -rf "build/${package}/.github" "build/${package}/tests"
+          test -f "build/${package}/vendor/autoload.php"
+          (cd build && zip -qr "${package}.zip" "${package}")
+          unzip -tq "build/${package}.zip"
+          (cd build && sha256sum "${package}.zip" > "${package}.zip.sha256")
+
+      - name: Attach deployment archive
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: gh release upload "${RELEASE_TAG}" "build/gnucms-${RELEASE_VERSION}.zip" "build/gnucms-${RELEASE_VERSION}.zip.sha256" --clobber

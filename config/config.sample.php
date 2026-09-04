@@ -35,6 +35,15 @@ return [
         'password_min' => 8,
     ],
 
+    // 관리자 사이트 설정 → 보안에서 입력할 수 있다. 여기는 DB 설정이 없을 때의 fallback이다.
+    // Cloudflare DNS/CDN 없이도 Turnstile만 쓸 수 있다. secret_key는 공개 저장소에 올리지 않는다.
+    'turnstile' => [
+        'enabled'    => false,
+        'site_key'   => '',
+        'secret_key' => '',
+        'hostname'   => 'example.com',
+    ],
+
     'uploads' => [
         'dir'         => __DIR__ . '/../storage/uploads',
         // 설치 전 기본값일 뿐이다. 설치 후에는 사이트 설정(관리자 화면의 attach_max_mb)이
