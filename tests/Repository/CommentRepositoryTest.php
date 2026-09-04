@@ -120,6 +120,9 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertSame(1, $result['total']);
         $this->assertSame($found, $result['rows'][0]['id']);
         $this->assertSame('찾은 글', $result['rows'][0]['post_title']);
+
+        $words = $comments->searchByBoard($free, "할인  \t 공개", 1, 20);
+        $this->assertSame(1, $words['total'], '공백으로 나눈 모든 단어가 있으면 찾는다');
     }
 
     /** @return array{0: CommentRepository, 1: int, 2: int} */

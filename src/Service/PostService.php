@@ -174,16 +174,18 @@ final class PostService
             $summaries[] = $this->summary($row);
         }
 
-        // 전체 공지는 읽을 수 있는 게시판의 것만 온다. 관리자 전용 게시판의 공지가
-        // 제목만이라도 새어 나가지 않게 한다.
-        $readableBoardIds = [];
-        foreach ($this->boards->listBoards($acl) as $readable) {
-            $readableBoardIds[] = (int) $readable['id'];
-        }
-
         $notices = [];
-        foreach ($this->posts->notices((int) $board['id'], $readableBoardIds) as $row) {
-            $notices[] = $this->summary($row);
+        if ($q === null || $q === '') {
+            // 전체 공지는 읽을 수 있는 게시판의 것만 온다. 관리자 전용 게시판의 공지가
+            // 제목만이라도 새어 나가지 않게 한다. 검색 중에는 일치하는 공지가 data에
+            // 이미 들어 있으므로 고정 공지 영역을 비워 중복과 무관한 공지를 막는다.
+            $readableBoardIds = [];
+            foreach ($this->boards->listBoards($acl) as $readable) {
+                $readableBoardIds[] = (int) $readable['id'];
+            }
+            foreach ($this->posts->notices((int) $board['id'], $readableBoardIds) as $row) {
+                $notices[] = $this->summary($row);
+            }
         }
 
         return [

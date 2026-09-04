@@ -79,6 +79,29 @@ final class BoardSearchTest extends WebTestCase
         self::assertStringNotContainsString('비밀글 표적 댓글', $body);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testPostSearchIncludesOnlyMatchingNoticeWithoutPinnedDuplicates(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->createBoard($app);
+        $boardId = (int) $app->boardService()->getEntity($this->adminAcl(), 'free')['id'];
+        $app->posts()->create([
+            'board_id' => $boardId, 'title' => '점검 안내 공지', 'content' => '서비스 하하 점검',
+            'author_id' => '1', 'author_name' => '관리자', 'is_notice' => true,
+        ]);
+        $app->posts()->create([
+            'board_id' => $boardId, 'title' => '검색과 무관한 공지', 'content' => '다른 내용',
+            'author_id' => '1', 'author_name' => '관리자', 'is_notice' => true,
+        ]);
+
+        $body = $this->body($this->get($app, '/boards/free', ['q' => '점검 하하']));
+
+        self::assertStringContainsString('게시글 검색 결과 <strong>1</strong>개', $body);
+        self::assertStringContainsString('점검 안내 공지', $body);
+        self::assertStringContainsString('badge-primary badge-soft badge-sm">공지</span>', $body);
+        self::assertStringNotContainsString('검색과 무관한 공지', $body);
+    }
+
     private function createBoard(App $app): void
     {
         $app->boardService()->create($this->adminAcl(), [

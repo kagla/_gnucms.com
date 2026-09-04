@@ -147,13 +147,18 @@ final class CommentRepository
     ): array {
         $comments = $this->db->table('comments');
         $posts = $this->db->table('posts');
+        $terms = $this->searchTerms($q);
+        if ($terms === []) {
+            return ['rows' => [], 'total' => 0];
+        }
         $where = 'c.board_id = :board_id AND c.deleted_at IS NULL AND c.is_secret = 0'
-            . ' AND p.deleted_at IS NULL AND p.is_secret = 0'
-            . ' AND c.content LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\'';
-        $params = [
-            'board_id' => $boardId,
-            'q' => '%' . $this->escapeLike($q) . '%',
-        ];
+            . ' AND p.deleted_at IS NULL AND p.is_secret = 0';
+        $params = ['board_id' => $boardId];
+        foreach ($terms as $index => $term) {
+            $key = 'q' . $index;
+            $where .= ' AND c.content LIKE :' . $key . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'';
+            $params[$key] = '%' . $this->escapeLike($term) . '%';
+        }
         if ($category !== null && $category !== '') {
             $where .= ' AND p.category = :category';
             $params['category'] = $category;
@@ -259,6 +264,16 @@ final class CommentRepository
             [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
             $value
         );
+    }
+
+    /** 공백으로 나눈 모든 단어가 댓글 본문에 있어야 한다. */
+    private function searchTerms(string $query): array
+    {
+        if (trim($query) === '') {
+            return [];
+        }
+
+        return array_values(array_unique(preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) ?: []));
     }
 
     /** 회원 작성자의 현재 프로필 이미지를 한 번의 추가 조회로 붙인다. */

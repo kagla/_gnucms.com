@@ -151,6 +151,33 @@ final class PostRepositoryTest extends DatabaseTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testSearchSplitsWhitespaceAndMatchesTermsAcrossTitleAndContent(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create(array_replace($this->post($boardId, '잡담이다'), ['content' => '본문에는 하하가 있다']));
+        $repo->create($this->post($boardId, '잡담만 있다'));
+
+        $page = $repo->paginate($boardId, 1, 20, " 잡담  \t 하하 ");
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame('잡담이다', $page['rows'][0]['title']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSearchIncludesMatchingNotice(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $noticeId = $repo->create($this->post($boardId, '점검 공지') + ['is_notice' => true]);
+        $repo->create($this->post($boardId, '다른 공지') + ['is_notice' => true]);
+
+        $page = $repo->paginate($boardId, 1, 20, '점검');
+
+        $this->assertSame(1, $page['total']);
+        $this->assertSame($noticeId, $page['rows'][0]['id']);
+        $this->assertSame(1, $page['rows'][0]['is_notice']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testSearchTreatsPercentAsLiteral(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
@@ -179,9 +206,9 @@ final class PostRepositoryTest extends DatabaseTestCase
     public function testSearchDoesNotRevealSecretPostThroughBodyMatch(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);
-        $repo->create($this->post($boardId, '공개 제목') + [
+        $repo->create(array_replace($this->post($boardId, '공개 제목'), [
             'content' => '감춰진 검색어', 'is_secret' => true,
-        ]);
+        ]));
 
         $page = $repo->paginate($boardId, 1, 20, '감춰진 검색어');
 
