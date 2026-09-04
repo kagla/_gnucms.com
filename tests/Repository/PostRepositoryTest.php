@@ -176,6 +176,19 @@ final class PostRepositoryTest extends DatabaseTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testSearchDoesNotRevealSecretPostThroughBodyMatch(array $config): void
+    {
+        [$repo, $boardId] = $this->setUpBoard($config);
+        $repo->create($this->post($boardId, '공개 제목') + [
+            'content' => '감춰진 검색어', 'is_secret' => true,
+        ]);
+
+        $page = $repo->paginate($boardId, 1, 20, '감춰진 검색어');
+
+        $this->assertSame(0, $page['total']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testFilterByCategory(array $config): void
     {
         [$repo, $boardId] = $this->setUpBoard($config);

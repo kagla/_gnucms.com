@@ -21,6 +21,9 @@ final class CommentRepository
         'image_key'      => null,
     ];
 
+    /** LIKE 검색의 이스케이프 문자. DB 방언마다 다르게 다루는 백슬래시는 피한다. */
+    private const LIKE_ESCAPE = '!';
+
     /** @var Connection */
     private $db;
 
@@ -126,6 +129,53 @@ final class CommentRepository
         return $this->paginateForList($boardIds, $page, $perPage, null);
     }
 
+    /**
+     * 한 게시판의 공개 댓글을 검색한다. 글 제목을 같은 조회에서 붙여 검색 결과가
+     * 어느 글에 달린 댓글인지 추가 조회 없이 보여 줄 수 있게 한다.
+     *
+     * 비밀글과 비밀댓글은 검색어 일치 여부 자체가 내용을 짐작하게 할 수 있으므로
+     * 권한과 관계없이 검색 결과에서 제외한다.
+     *
+     * @return array{rows: array, total: int}
+     */
+    public function searchByBoard(
+        int $boardId,
+        string $q,
+        int $page,
+        int $perPage,
+        ?string $category = null
+    ): array {
+        $comments = $this->db->table('comments');
+        $posts = $this->db->table('posts');
+        $where = 'c.board_id = :board_id AND c.deleted_at IS NULL AND c.is_secret = 0'
+            . ' AND p.deleted_at IS NULL AND p.is_secret = 0'
+            . ' AND c.content LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\'';
+        $params = [
+            'board_id' => $boardId,
+            'q' => '%' . $this->escapeLike($q) . '%',
+        ];
+        if ($category !== null && $category !== '') {
+            $where .= ' AND p.category = :category';
+            $params['category'] = $category;
+        }
+
+        $from = $comments . ' c INNER JOIN ' . $posts . ' p ON p.id = c.post_id AND p.board_id = c.board_id';
+        $total = (int) $this->db->selectOne(
+            'SELECT COUNT(*) AS c FROM ' . $from . ' WHERE ' . $where,
+            $params
+        )['c'];
+
+        $offset = max(0, ($page - 1) * $perPage);
+        $columns = 'c.' . str_replace(', ', ', c.', self::COLUMNS);
+        $rows = $this->db->select(
+            'SELECT ' . $columns . ', p.title AS post_title FROM ' . $from
+            . ' WHERE ' . $where . ' ORDER BY c.id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        );
+
+        return ['rows' => $this->hydrateMany($rows), 'total' => $total];
+    }
+
     /** @param int[] $boardIds @return array{rows: array, total: int} */
     private function paginateForList(array $boardIds, int $page, int $perPage, ?int $authorId): array
     {
@@ -200,6 +250,15 @@ final class CommentRepository
         $row['parent_id'] = $row['parent_id'] === null ? null : (int) $row['parent_id'];
 
         return $row;
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(
+            [self::LIKE_ESCAPE, '%', '_'],
+            [self::LIKE_ESCAPE . self::LIKE_ESCAPE, self::LIKE_ESCAPE . '%', self::LIKE_ESCAPE . '_'],
+            $value
+        );
     }
 
     /** 회원 작성자의 현재 프로필 이미지를 한 번의 추가 조회로 붙인다. */

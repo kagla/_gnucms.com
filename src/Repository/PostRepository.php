@@ -81,7 +81,7 @@ final class PostRepository
 
         if ($q !== null && $q !== '') {
             $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
-                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
+                . ' OR (is_secret = 0 AND content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\'))';
             $pattern = '%' . $this->escapeLike($q) . '%';
             $params['q'] = $pattern;
             $params['q2'] = $pattern;
@@ -138,7 +138,7 @@ final class PostRepository
 
         if ($q !== null && $q !== '') {
             $where .= ' AND (title LIKE :q ESCAPE \'' . self::LIKE_ESCAPE . '\''
-                . ' OR content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\')';
+                . ' OR (is_secret = 0 AND content LIKE :q2 ESCAPE \'' . self::LIKE_ESCAPE . '\'))';
             $pattern = '%' . $this->escapeLike($q) . '%';
             $params['q'] = $pattern;
             $params['q2'] = $pattern;

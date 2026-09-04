@@ -1859,6 +1859,15 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
+.board-search.inline-search{max-width:35rem;margin-bottom:0}
+.board-search .board-search-scope{width:6.25rem;height:2.375rem;min-height:2.375rem;border-radius:9999px;background:var(--color-base-100);font-size:13px}
+.comment-search-results{margin-bottom:1rem}
+
+@media (max-width:640px){
+  .page-head-actions:has(.board-search){flex-wrap:wrap}
+  .board-search.inline-search{flex-basis:100%;max-width:none;order:-1}
+  .board-search .board-search-scope{width:5.75rem;padding-inline:.75rem}
+}
 
 /* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
 .notice-list .notice-scope{white-space:nowrap}

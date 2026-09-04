@@ -47,9 +47,19 @@ final class PostController
         $key = (string) $args['key'];
         $query = $request->getQueryParams();
 
+        $scopeValue = $query['scope'] ?? 'posts';
+        $scope = is_scalar($scopeValue) && (string) $scopeValue === 'comments' ? 'comments' : 'posts';
+
         $board = $this->app->boardService()->get($acl, $key);
         $boardEntity = $this->app->boardService()->getEntity($acl, $key);
-        $list = $this->app->postService()->listPosts($acl, $key, $query);
+        $postQuery = $query;
+        if ($scope === 'comments') {
+            unset($postQuery['q'], $postQuery['page']);
+        }
+        $list = $this->app->postService()->listPosts($acl, $key, $postQuery);
+        $commentList = $scope === 'comments'
+            ? $this->app->commentService()->searchBoard($acl, $key, $query)
+            : null;
 
         return View::fromRequest($request)->render($response, 'posts/index', [
             'board' => $board,
@@ -60,7 +70,9 @@ final class PostController
             'query' => [
                 'q'        => isset($query['q']) ? (string) $query['q'] : null,
                 'category' => isset($query['category']) ? (string) $query['category'] : null,
+                'scope'    => $scope,
             ],
+            'comment_list' => $commentList,
         ]);
     }
 

@@ -429,6 +429,50 @@ final class CommentService
         ];
     }
 
+    /** 한 게시판 안의 공개 댓글 검색 결과. */
+    public function searchBoard(Acl $acl, string $boardKey, array $query): array
+    {
+        $v = new Validator($query);
+        $page = $v->int('page', 1, 1, 100000);
+        $q = $v->optionalString('q', 100);
+        $category = $v->optionalString('category', 50);
+        $v->check();
+
+        $empty = [
+            'data' => [], 'page' => $page, 'per_page' => 20,
+            'total' => 0, 'total_pages' => 0,
+        ];
+        if ($this->boards === null || $q === null || $q === '') {
+            return $empty;
+        }
+
+        $board = $this->boards->getEntity($acl, $boardKey);
+        $perPage = max(10, min(100, (int) $board['per_page']));
+        $result = $this->comments->searchByBoard(
+            (int) $board['id'], $q, $page, $perPage, $category
+        );
+
+        $rows = [];
+        foreach ($result['rows'] as $row) {
+            $rows[] = [
+                'id' => (int) $row['id'],
+                'post_id' => (int) $row['post_id'],
+                'post_title' => (string) $row['post_title'],
+                'author_name' => (string) $row['author_name'],
+                'excerpt' => $this->plainExcerpt((string) $row['content'], 120),
+                'created_at' => $row['created_at'],
+            ];
+        }
+
+        return [
+            'data' => $rows,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $result['total'],
+            'total_pages' => $result['total'] === 0 ? 0 : (int) ceil($result['total'] / $perPage),
+        ];
+    }
+
     /**
      * 목록에 보일 한 줄. 태그를 걷고 길면 자른다.
      *
