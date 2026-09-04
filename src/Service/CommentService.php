@@ -360,6 +360,7 @@ final class CommentService
         $v = new Validator($query);
         $page = $v->int('page', 1, 1, 100000);
         $author = $v->int('author', 0, 0, PHP_INT_MAX);
+        $q = $v->optionalString('q', 100);
         $v->check();
         $perPage = 20;
         $all = !array_key_exists('author', $query);
@@ -371,7 +372,7 @@ final class CommentService
         }
         $empty = [
             'data' => [], 'page' => $page, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 0,
-            'author' => null, 'author_name' => null, 'is_all' => $all,
+            'author' => null, 'author_name' => null, 'is_all' => $all, 'q' => $q,
         ];
         if (!$all && $user === null) {
             return $empty;
@@ -389,8 +390,8 @@ final class CommentService
         }
 
         $result = $all
-            ? $this->comments->paginateAll($boardIds, $page, $perPage)
-            : $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage);
+            ? $this->comments->paginateAll($boardIds, $page, $perPage, $q)
+            : $this->comments->paginateByAuthor($author, $boardIds, $page, $perPage, $q);
 
         // 페이지당 최대 20건이라 한 건씩 낱개로 읽는다.
         $titles = [];
@@ -426,6 +427,7 @@ final class CommentService
             'author' => $all ? null : $author,
             'author_name' => $all ? null : (string) $user['display_name'],
             'is_all' => $all,
+            'q' => $q,
         ];
     }
 

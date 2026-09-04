@@ -113,9 +113,15 @@ final class CommentRepository
      * @param int[] $boardIds 읽을 수 있는 게시판 번호. 빈 배열이면 아무것도 없다
      * @return array{rows: array, total: int}
      */
-    public function paginateByAuthor(int $authorId, array $boardIds, int $page, int $perPage): array
+    public function paginateByAuthor(
+        int $authorId,
+        array $boardIds,
+        int $page,
+        int $perPage,
+        ?string $q = null
+    ): array
     {
-        return $this->paginateForList($boardIds, $page, $perPage, $authorId);
+        return $this->paginateForList($boardIds, $page, $perPage, $authorId, $q);
     }
 
     /**
@@ -124,9 +130,9 @@ final class CommentRepository
      * @param int[] $boardIds
      * @return array{rows: array, total: int}
      */
-    public function paginateAll(array $boardIds, int $page, int $perPage): array
+    public function paginateAll(array $boardIds, int $page, int $perPage, ?string $q = null): array
     {
-        return $this->paginateForList($boardIds, $page, $perPage, null);
+        return $this->paginateForList($boardIds, $page, $perPage, null, $q);
     }
 
     /**
@@ -182,7 +188,13 @@ final class CommentRepository
     }
 
     /** @param int[] $boardIds @return array{rows: array, total: int} */
-    private function paginateForList(array $boardIds, int $page, int $perPage, ?int $authorId): array
+    private function paginateForList(
+        array $boardIds,
+        int $page,
+        int $perPage,
+        ?int $authorId,
+        ?string $q
+    ): array
     {
         if ($boardIds === []) {
             return ['rows' => [], 'total' => 0];
@@ -203,6 +215,12 @@ final class CommentRepository
         if ($authorId !== null) {
             $where .= ' AND author_id = :author_id';
             $params['author_id'] = $authorId;
+        }
+        foreach ($this->searchTerms($q ?? '') as $index => $term) {
+            // 검색어 일치 여부로 비밀 댓글 내용을 짐작하지 못하게 검색 중에는 제외한다.
+            $where .= ' AND is_secret = 0 AND content LIKE :q' . $index
+                . ' ESCAPE \'' . self::LIKE_ESCAPE . '\'';
+            $params['q' . $index] = '%' . $this->escapeLike($term) . '%';
         }
         $where .= ' AND board_id IN (' . implode(', ', $marks) . ')'
             . ' AND post_id IN (SELECT id FROM ' . $this->db->table('posts')

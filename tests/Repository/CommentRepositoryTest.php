@@ -125,6 +125,20 @@ final class CommentRepositoryTest extends DatabaseTestCase
         $this->assertSame(1, $words['total'], '공백으로 나눈 모든 단어가 있으면 찾는다');
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testAllCommentsSearchUsesAndTermsAndHidesSecretComments(array $config): void
+    {
+        [$repo, $postId, $boardId] = $this->setUpPost($config);
+        $found = $repo->create($this->comment($boardId, $postId, null, '잡담입니다 그리고 하하'));
+        $repo->create($this->comment($boardId, $postId, null, '잡담만 있는 댓글'));
+        $repo->create($this->comment($boardId, $postId, null, '잡담 하하 비밀') + ['is_secret' => true]);
+
+        $result = $repo->paginateAll([$boardId], 1, 20, '잡담 하하');
+
+        $this->assertSame(1, $result['total']);
+        $this->assertSame($found, $result['rows'][0]['id']);
+    }
+
     /** @return array{0: CommentRepository, 1: int, 2: int} */
     private function setUpPost(array $config): array
     {
