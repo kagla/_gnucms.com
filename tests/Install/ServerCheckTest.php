@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ServerCheckTest extends TestCase
 {
-    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'mbstring', 'fileinfo', 'openssl', 'gd'];
+    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'mbstring', 'fileinfo', 'openssl', 'phar', 'gd', 'zip'];
 
     private string $dir;
 
@@ -48,6 +48,14 @@ final class ServerCheckTest extends TestCase
         self::assertTrue($openssl['required']);
     }
 
+    public function testMissingPharExtensionFails(): void
+    {
+        $result = $this->check(array_diff(self::ALL, ['phar']))->run();
+
+        self::assertFalse($result['ok']);
+        self::assertTrue($this->item($result, 'phar 확장')['required']);
+    }
+
     public function testNoPdoDriverFails(): void
     {
         $result = $this->check(array_diff(self::ALL, ['pdo_sqlite']))->run();
@@ -81,11 +89,13 @@ final class ServerCheckTest extends TestCase
 
     public function testOptionalItemsDoNotBlock(): void
     {
-        $result = $this->check(array_diff(self::ALL, ['gd']), null, ['mod_dir'])->run();
+        $result = $this->check(array_diff(self::ALL, ['gd', 'zip']), null, ['mod_dir'])->run();
 
         self::assertTrue($result['ok']);
         self::assertFalse($this->item($result, 'gd 확장')['ok']);
         self::assertFalse($this->item($result, 'gd 확장')['required']);
+        self::assertFalse($this->item($result, 'zip 확장')['ok']);
+        self::assertFalse($this->item($result, 'zip 확장')['required']);
         self::assertFalse($this->item($result, 'mod_rewrite')['ok']);
         self::assertFalse($this->item($result, 'mod_rewrite')['required']);
     }

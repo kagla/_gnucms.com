@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/kagla/gnucms/compare/v0.2.0...v0.3.0) (2026-09-04)
+
+
+### 기능 추가
+
+* 전체 백업 관리 기능 추가 ([741a17f](https://github.com/kagla/gnucms/commit/741a17fcb149869f5951c30345b56cd4b1baf1da))
+
+## [0.2.0](https://github.com/kagla/gnucms/compare/v0.1.0...v0.2.0) (2026-09-04)
+
+
+### Features
+
+* add board comment search ([8990e09](https://github.com/kagla/gnucms/commit/8990e09c1b1550b31818fac8e54262cf509bc163))
+* add search to all comments ([dfe5494](https://github.com/kagla/gnucms/commit/dfe549418bacda9530ad7ace4899f6bea40d1a2b))
+* show search below all posts ([a43c4d8](https://github.com/kagla/gnucms/commit/a43c4d86daa797a920eff837c7c481cff6a82ff1))
+
+
+### Bug Fixes
+
+* include notices in keyword search ([a9ee1f6](https://github.com/kagla/gnucms/commit/a9ee1f62efba44c79a51df2b2f19efb749b220c9))
+* narrow board search field ([c8dee72](https://github.com/kagla/gnucms/commit/c8dee72a5b33157452903b99aadccb35c482d2a7))
+* simplify board search controls ([a62df1e](https://github.com/kagla/gnucms/commit/a62df1e406063744e274481800cc9f50e5ceda08))
+
 ## 0.1.0 (2026-09-04)
 
 

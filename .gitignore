@@ -16,6 +16,7 @@
 /storage/backups/
 /storage/upgrade.lock
 /storage/upgrade-failed.json
+/storage/backup.lock
 
 # 로그
 /storage/logs/*

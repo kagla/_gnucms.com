@@ -1817,6 +1817,39 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .schema-stamp { font-weight: 400; font-size: .75rem; opacity: .6; }
 .schema-note { font-size: .875rem; opacity: .75; margin-top: .75rem; }
 .schema-gc { display:flex; align-items:center; gap:.6rem; margin-top:.75rem; }
+.schema-gc > .schema-note { margin-top:0; }
+.backup-create-actions { display:flex; align-items:center; flex-wrap:nowrap; gap:.55rem; }
+.backup-create-actions form { margin:0; }
+.backup-create-actions .btn { width:max-content; white-space:nowrap; }
+.backup-import { margin-top:1rem; padding-top:1rem; border-top:var(--border) solid var(--bc-10); }
+.backup-import h3 { margin:0; font-size:.95rem; }
+.backup-import-form { display:flex; align-items:flex-end; flex-wrap:wrap; gap:.6rem; }
+.backup-import-form .fieldset { flex:1 1 20rem; margin-bottom:0; }
+.backup-import-form .file-input,.backup-import-form .btn { box-sizing:border-box; height:2.25rem; min-height:2.25rem; }
+.backup-import-form .file-input { width:100%; font-size:12px; }
+.backup-import-form .btn { margin-bottom:0; white-space:nowrap; }
+.manual-backups td:last-child { min-width:14rem; white-space:nowrap; }
+.manual-backups tr.is-uploaded-backup { scroll-margin-top:6rem; }
+.manual-backups tr.is-uploaded-backup > td { background:color-mix(in oklch,var(--color-primary) 9%,var(--color-base-100)); }
+.backup-uploaded-badge { margin-left:.35rem; white-space:nowrap; vertical-align:middle; }
+.backup-actions-row { display:flex; align-items:flex-start; flex-wrap:nowrap; gap:.35rem; }
+.backup-safe-actions,.backup-danger-actions { display:flex; align-items:flex-start; flex-wrap:nowrap; gap:.3rem; }
+.backup-danger-actions { gap:.65rem; padding-left:.55rem; border-left:var(--border) solid var(--bc-10); }
+.backup-safe-actions > form,.backup-danger-actions > form,.schema-backups form { margin:0; }
+.manual-backups .btn,.schema-backups .btn { height:1.625rem; min-height:1.625rem; padding-inline:.45rem; font-size:11px; border-radius:.5rem; }
+.manual-backups details { display:block; }
+.manual-backups summary { list-style:none; }
+.manual-backups summary::-webkit-details-marker { display:none; }
+.backup-restore-form { display:flex; flex-direction:column; gap:.5rem; width:17rem; margin-top:.5rem; padding:.75rem; border:var(--border) solid var(--bc-10); border-radius:var(--radius-box); background:var(--b1); }
+.backup-restore-form label { display:flex; flex-direction:column; gap:.35rem; white-space:normal; font-size:.78rem; }
+.backup-restore-form .input,.backup-restore-form .btn { box-sizing:border-box; width:100%; height:2.25rem; min-height:2.25rem; border-radius:.6rem; }
+.backup-instructions { margin-top:1rem; }
+.backup-instructions ol { margin:.5rem 0 0 1.25rem; }
+.backup-instructions li { margin:.35rem 0; overflow-wrap:anywhere; }
+.upload-garbage-empty { padding:.75rem; border:var(--border) dashed var(--bc-10); border-radius:.6rem; text-align:center; }
+.upload-garbage-summary { margin:.75rem 0 .4rem; font-size:.875rem; }
+.upload-garbage-list td:first-child { max-width:30rem; overflow-wrap:anywhere; }
+.upload-garbage-list td:not(:first-child) { white-space:nowrap; }
 
 /* 사이트 설정의 숫자 입력은 긴 문장을 받지 않으므로 데스크톱에서 절반 폭만 쓴다. */
 .settings-write-rules-row { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem; }

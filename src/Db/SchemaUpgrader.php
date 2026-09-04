@@ -139,6 +139,50 @@ final class SchemaUpgrader
         ];
     }
 
+    /**
+     * 관리 화면에서 선택한 자동 SQLite 백업 하나를 삭제한다.
+     * 스키마 갱신과 겹치지 않게 같은 잠금을 사용하며 백업 폴더 밖 경로는 받지 않는다.
+     *
+     * @return array{deleted:string}
+     */
+    public function deleteBackup(string $name): array
+    {
+        if ($name === '' || $name !== basename($name)
+            || preg_match('/^board-v[0-9A-Za-z]+-\d{8}-\d{6}(?:-\d+)?\.sqlite$/D', $name) !== 1) {
+            throw new \RuntimeException('삭제할 자동 DB 백업 파일 이름이 올바르지 않습니다.');
+        }
+        $directory = $this->storageDir . '/backups';
+        $path = $directory . '/' . $name;
+
+        $lock = @fopen($this->storageDir . '/upgrade.lock', 'c');
+        if ($lock === false) {
+            throw new \RuntimeException('데이터베이스 구조 갱신 잠금 파일을 열 수 없습니다.');
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
+            throw new \RuntimeException('데이터베이스 구조 갱신이 진행 중입니다. 잠시 뒤 다시 시도해 주세요.');
+        }
+        try {
+            if (!is_dir($directory) || is_link($directory)) {
+                throw new \RuntimeException('자동 DB 백업 폴더를 안전하게 열 수 없습니다.');
+            }
+            if (!is_file($path) || is_link($path)) {
+                throw new \RuntimeException('자동 DB 백업 파일을 찾을 수 없습니다: ' . $name);
+            }
+            if (!unlink($path)) {
+                throw new \RuntimeException('자동 DB 백업 파일을 삭제하지 못했습니다: ' . $name);
+            }
+            if ($this->setting('system.schema_backup') === $path) {
+                $this->upsertSetting('system.schema_backup', '');
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+
+        return ['deleted' => $name];
+    }
+
     /** SQLite 면 VACUUM INTO 로 일관된 복사본을 만들고 경로를 돌려준다. 다른 DB 는 null. */
     private function backup(?string $storedStamp): ?string
     {
