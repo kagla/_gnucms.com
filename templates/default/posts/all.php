@@ -48,5 +48,17 @@ $allUrl = function ($q, $page) use ($list): string {
 ]) ?>
 
 <?php $this->insert('posts/_pager', ['list' => $list, 'page_url' => fn (int $page): string => $allUrl($query['q'], $page)]) ?>
+
+<div class="board-search-area all-posts-search-area">
+  <form class="inline-search board-search all-posts-search" method="get" action="<?= $this->url('posts.all') ?>" role="search">
+    <?php if (($list['author'] ?? null) !== null): ?><input type="hidden" name="author" value="<?= $this->e((string) $list['author']) ?>"><?php endif ?>
+    <label class="input input-bordered">
+      <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>
+      <input type="search" name="q" value="<?= $this->e($query['q'] ?? '') ?>" placeholder="전체 글에서 검색" aria-label="전체 글 검색어" required>
+    </label>
+    <button class="btn btn-outline board-search-submit" type="submit">검색</button>
+  </form>
+</div>
+
 <?php $this->insert('posts/_author_modal') ?>
 <?php $this->stop() ?>
