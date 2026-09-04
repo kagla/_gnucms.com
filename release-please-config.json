@@ -6,7 +6,8 @@
   "bump-minor-pre-major": true,
   "packages": {
     ".": {
-      "package-name": "gnucms"
+      "package-name": "gnucms",
+      "initial-version": "0.1.0"
     }
   }
 }
