@@ -187,10 +187,10 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('for="admin-drawer"', $this->body($dashboard));
         self::assertStringContainsString('class="admin-user"', $this->body($dashboard));
         self::assertStringContainsString('class="admin-version"', $this->body($dashboard));
-        $released = GNUCMS_VERSION !== 'dev' && GNUCMS_VERSION !== '0.0.0';
+        $released = preg_match('/^\d+\.\d+\.\d+$/D', GNUCMS_VERSION) === 1;
         $versionUrl = GNUCMS_REPOSITORY_URL . ($released ? '/releases/tag/v' . GNUCMS_VERSION : '');
         self::assertStringContainsString('href="' . $versionUrl . '"', $this->body($dashboard));
-        self::assertStringContainsString('>' . ($released ? 'v' . GNUCMS_VERSION : '개발판') . '</small>',
+        self::assertStringContainsString('>v' . GNUCMS_VERSION . '</small>',
             $this->body($dashboard));
         self::assertMatchesRegularExpression(
             '#<ul class="[^"]*admin-user-menu[^"]*"[^>]*>\s*'
