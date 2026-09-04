@@ -50,6 +50,8 @@ final class InstallerTest extends TestCase
         self::assertTrue($this->installer()->isInstalled());
 
         $config = require $this->configPath();
+        self::assertFalse($config['turnstile']['enabled']);
+        self::assertSame('community.example.com', $config['turnstile']['hostname']);
         $db = Connection::create($config['db']);
         self::assertTrue((new Schema($db))->exists());
         self::assertSame('내 커뮤니티', $db->selectOne("SELECT setting_value FROM site_settings WHERE setting_key = 'site_name'")['setting_value']);

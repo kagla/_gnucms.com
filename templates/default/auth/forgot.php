@@ -15,13 +15,15 @@
           <legend class="fieldset-legend">이메일</legend>
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('mail', 16) ?></span>
-            <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+            <input type="email" name="email" value="<?= $this->e($values['email'] ?? '') ?>" autocomplete="email" placeholder="you@example.com" required>
           </label>
         </fieldset>
+        <?php $this->insert('_turnstile', ['action' => 'password_reset', 'errors' => $errors]) ?>
         <button class="btn btn-primary btn-block btn-lg" type="submit">재설정 링크 받기</button>
       </form>
       <p class="auth-switch"><a class="link link-hover" href="<?= $this->url('auth.login') ?>">로그인으로 돌아가기</a></p>
     </div>
   </section>
 </div>
+<?php if ($turnstile_enabled): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <?php $this->stop() ?>

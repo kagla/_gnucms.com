@@ -243,6 +243,9 @@ final class PostController
         $this->assertCsrf($input);
 
         try {
+            if ($acl->identity()->isGuest()) {
+                $this->verifyTurnstile($request, $input, 'post_create');
+            }
             $post = $this->app->postService()->create(
                 $acl,
                 $key,
@@ -398,5 +401,16 @@ final class PostController
         if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
             throw DomainError::forbidden('요청을 확인할 수 없습니다. 다시 시도해 주세요.');
         }
+    }
+
+    private function verifyTurnstile(ServerRequestInterface $request, array $input, string $action): void
+    {
+        $token = isset($input['cf-turnstile-response']) && is_scalar($input['cf-turnstile-response'])
+            ? (string) $input['cf-turnstile-response'] : '';
+        $this->app->turnstile()->verify(
+            $token,
+            IpAddress::fromServer($request->getServerParams()),
+            $action
+        );
     }
 }

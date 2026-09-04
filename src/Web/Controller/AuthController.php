@@ -7,6 +7,7 @@ namespace GnuCms\Web\Controller;
 use GnuCms\App;
 use GnuCms\Account\ConsentTrace;
 use GnuCms\Error\DomainError;
+use GnuCms\Support\IpAddress;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
@@ -25,7 +26,7 @@ final class AuthController
     public function loginForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         return View::fromRequest($request)->render($response, 'auth/login', [
-            'errors' => [], 'values' => [], 'unverified_email' => null,
+            'errors' => [], 'values' => [], 'unverified_email' => null, 'turnstile_required' => false,
         ]);
     }
 
@@ -35,7 +36,16 @@ final class AuthController
         $this->assertCsrf($input);
         $identifier = isset($input['email']) && is_scalar($input['email'])
             ? strtolower(trim((string) $input['email'])) : null;
+        $throttleKey = $identifier !== null && filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false
+            ? 'login:' . $identifier : null;
         try {
+            if ($throttleKey !== null) {
+                // 이미 잠긴 요청으로 Cloudflare를 호출하지 않는다. AccountService도 비밀번호 검사 전에 재확인한다.
+                $this->app->passwordThrottle()->assertNotLocked($throttleKey, 'email');
+                if ($this->app->passwordThrottle()->requiresCaptcha($throttleKey)) {
+                    $this->verifyTurnstile($request, $input, 'login', true);
+                }
+            }
             $user = $this->app->accountService()->authenticate($input);
         } catch (DomainError $e) {
             $known = $identifier === null ? null : $this->app->users()->findByEmail($identifier);
@@ -53,6 +63,8 @@ final class AuthController
                     'values' => ['email' => $email],
                     // 비밀번호까지 맞았는데 인증만 안 된 사람에게는 '다시 보내기' 를 내준다.
                     'unverified_email' => isset($details['unverified']) ? $email : null,
+                    'turnstile_required' => $throttleKey !== null
+                        && $this->app->passwordThrottle()->requiresCaptcha($throttleKey),
                 ]
             );
         }
@@ -81,6 +93,7 @@ final class AuthController
         $this->assertCsrf($input);
         $avatarFile = null;
         try {
+            $this->verifyTurnstile($request, $input, 'register');
             $upload = $request->getUploadedFiles()['profile_image'] ?? null;
             if ($upload instanceof UploadedFileInterface && $upload->getError() !== UPLOAD_ERR_NO_FILE) {
                 $avatarFile = $this->app->avatars()->storeUpload($upload);
@@ -156,12 +169,22 @@ final class AuthController
         $this->assertCsrf($input);
         $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
         try {
+            $this->verifyTurnstile($request, $input, 'verification_resend');
             $this->app->accountService()->resendVerification($email);
         } catch (DomainError $e) {
+            if ($e->status() === 422 && isset($e->details()['turnstile'])) {
+                return View::fromRequest($request)->render($response->withStatus(422), 'auth/login', [
+                    'errors' => $e->details(), 'values' => ['email' => $email],
+                    'unverified_email' => $email, 'turnstile_required' => false,
+                ]);
+            }
+            if ($e->status() !== 422) {
+                throw $e;
+            }
             // 메일이 안 나가면 로그인 화면에서 그 사실을 말해 준다. 조용히 '보냈다' 고 하면 사람이 기다리기만 한다.
             return View::fromRequest($request)->render($response->withStatus(422), 'auth/login', [
                 'errors' => ['email' => '인증 메일을 보내지 못했습니다. 잠시 뒤 다시 시도해 주세요.'],
-                'values' => ['email' => $email], 'unverified_email' => $email,
+                'values' => ['email' => $email], 'unverified_email' => $email, 'turnstile_required' => false,
             ]);
         }
         return View::fromRequest($request)->render($response, 'auth/check_email');
@@ -169,7 +192,7 @@ final class AuthController
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return View::fromRequest($request)->render($response, 'auth/forgot');
+        return View::fromRequest($request)->render($response, 'auth/forgot', ['errors' => [], 'values' => []]);
     }
 
     public function forgot(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -177,7 +200,17 @@ final class AuthController
         $input = $this->input($request);
         $this->assertCsrf($input);
         $email = isset($input['email']) && is_scalar($input['email']) ? (string) $input['email'] : '';
-        $this->app->accountService()->requestPasswordReset($email);
+        try {
+            $this->verifyTurnstile($request, $input, 'password_reset');
+            $this->app->accountService()->requestPasswordReset($email);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            return View::fromRequest($request)->render($response->withStatus(422), 'auth/forgot', [
+                'errors' => $e->details(), 'values' => ['email' => $email],
+            ]);
+        }
         return View::fromRequest($request)->render($response, 'auth/reset_sent');
     }
 
@@ -253,6 +286,24 @@ final class AuthController
         $given = isset($input['csrf_token']) && is_scalar($input['csrf_token']) ? (string) $input['csrf_token'] : '';
         if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
             throw DomainError::forbidden('요청을 확인할 수 없습니다. 다시 시도해 주세요.');
+        }
+    }
+
+    private function verifyTurnstile(ServerRequestInterface $request, array $input,
+        string $action, bool $failOpen = false): void
+    {
+        $token = isset($input['cf-turnstile-response']) && is_scalar($input['cf-turnstile-response'])
+            ? (string) $input['cf-turnstile-response'] : '';
+        try {
+            $this->app->turnstile()->verify(
+                $token,
+                IpAddress::fromServer($request->getServerParams()),
+                $action
+            );
+        } catch (DomainError $e) {
+            if (!$failOpen || $e->code() !== 'SERVICE_UNAVAILABLE') {
+                throw $e;
+            }
         }
     }
 

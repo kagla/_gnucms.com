@@ -57,6 +57,9 @@ final class Kernel
         $view->addGlobal('unread_notifications', 0);
         $view->addGlobal('password_min', Validator::passwordMin());
         $view->addGlobal('oauth_providers', $app->providerRegistry()->options());
+        $view->addGlobal('turnstile_enabled', $app->turnstile()->isEnabled());
+        $view->addGlobal('turnstile_configured', $app->turnstile()->isConfigured());
+        $view->addGlobal('turnstile_site_key', $app->turnstile()->siteKey());
         $registrationAvailable = (bool) $site['registration_enabled']
             || (bool) $site['social_registration_enabled'];
         $legalDocuments = [];

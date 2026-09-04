@@ -87,6 +87,11 @@ final class DomainError extends RuntimeException
         return new self('TOO_MANY_REQUESTS', $message, 429, [], max(1, $retryAfter));
     }
 
+    public static function serviceUnavailable(string $message): self
+    {
+        return new self('SERVICE_UNAVAILABLE', $message, 503);
+    }
+
     public static function internal(string $message): self
     {
         return new self('INTERNAL', $message, 500);

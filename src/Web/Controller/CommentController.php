@@ -6,6 +6,7 @@ namespace GnuCms\Web\Controller;
 
 use GnuCms\App;
 use GnuCms\Error\DomainError;
+use GnuCms\Service\BoardService;
 use GnuCms\Support\IpAddress;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -30,6 +31,9 @@ final class CommentController
         $this->assertCsrf($input);
 
         try {
+            if ($acl->identity()->isGuest()) {
+                $this->verifyTurnstile($request, $input, 'comment_create');
+            }
             $comment = $this->app->commentService()->create(
                 $acl,
                 $postId,
@@ -313,11 +317,22 @@ final class CommentController
     ): ResponseInterface {
         $acl = $this->app->guestAcl();
         $loaded = $this->app->postService()->loadForRead($acl, $postId, null);
+        $board = $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']);
+        $belowViewList = $board['show_list_below_view']
+            ? $this->app->postService()->listPosts($acl, (string) $board['board_key'], []) : null;
 
         return View::fromRequest($request)->render($response, 'posts/show', [
             'post' => $this->app->postService()->get($acl, $postId, null, false),
-            'board' => $this->app->boardService()->get($acl, (string) $loaded['board']['board_key']),
+            'board' => $board,
             'comments' => $this->app->commentService()->listComments($acl, $postId, null),
+            'adjacent_posts' => $this->app->postService()->adjacentPosts($acl, $postId, false),
+            'navigation_scope' => 'board',
+            'below_view_list' => $belowViewList,
+            'below_view' => in_array((string) $board['list_type'], BoardService::LIST_TYPES, true)
+                ? (string) $board['list_type'] : 'list',
+            'below_view_query' => ['q' => null, 'category' => null],
+            'view_types' => BoardService::LIST_TYPES,
+            'can_write' => $acl->canWrite($loaded['board']),
             'can_comment' => $acl->canCommentOnPost($loaded['board'], $loaded['post']),
             'comment_errors' => $errors,
             'comment_values' => $values,
@@ -331,6 +346,17 @@ final class CommentController
         if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
             throw DomainError::forbidden('요청을 확인할 수 없습니다. 다시 시도해 주세요.');
         }
+    }
+
+    private function verifyTurnstile(ServerRequestInterface $request, array $input, string $action): void
+    {
+        $token = isset($input['cf-turnstile-response']) && is_scalar($input['cf-turnstile-response'])
+            ? (string) $input['cf-turnstile-response'] : '';
+        $this->app->turnstile()->verify(
+            $token,
+            IpAddress::fromServer($request->getServerParams()),
+            $action
+        );
     }
 
     private function json(ResponseInterface $response, array $data): ResponseInterface

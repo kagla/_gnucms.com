@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace GnuCms\View;
 
 use GnuCms\Support\Clock;
+use DateTimeImmutable;
+use DateTimeZone;
 use RuntimeException;
 use Throwable;
 
@@ -193,26 +195,41 @@ final class PhpTemplate
 
     public function date(mixed $v, string $format): string
     {
-        if ($v === null || $v === '') {
-            return '';
-        }
-        $ts = is_int($v) ? $v : strtotime((string) $v);
-        return $ts === false ? '' : date($format, $ts);
+        $date = $this->displayDate($v);
+        return $date === null ? '' : $date->format($format);
     }
 
     public function compactDate(mixed $v): string
     {
-        if ($v === null || $v === '') {
+        $date = $this->displayDate($v);
+        if ($date === null) {
             return '';
         }
-        $ts = is_int($v) ? $v : strtotime((string) $v);
-        if ($ts === false) {
-            return '';
-        }
+        $now = (new DateTimeImmutable('@' . Clock::timestamp()))->setTimezone($date->getTimezone());
 
-        return date('Y-m-d', $ts) === date('Y-m-d', Clock::timestamp())
-            ? date('H:i', $ts)
-            : date('m-d', $ts);
+        return $date->format('Y-m-d') === $now->format('Y-m-d')
+            ? $date->format('H:i')
+            : $date->format('m-d');
+    }
+
+    /** DB 날짜 문자열은 UTC로 읽고 사이트 설정 시간대로 바꾼다. */
+    private function displayDate(mixed $value): ?DateTimeImmutable
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            $date = is_int($value)
+                ? new DateTimeImmutable('@' . $value)
+                : new DateTimeImmutable((string) $value, new DateTimeZone('UTC'));
+            $site = $this->vars['site'] ?? null;
+            $timezone = is_array($site) && is_string($site['timezone'] ?? null)
+                ? $site['timezone'] : date_default_timezone_get();
+
+            return $date->setTimezone(new DateTimeZone($timezone));
+        } catch (Throwable $e) {
+            return null;
+        }
     }
 
     public function truncate(mixed $v, int $length): string

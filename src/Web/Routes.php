@@ -87,8 +87,14 @@ final class Routes
         $slim->post('/admin/settings', [$cms, 'settings']);
         $slim->get('/admin/settings/writing', [$cms, 'writingForm'])->setName('admin.settings.writing');
         $slim->post('/admin/settings/writing', [$cms, 'writing']);
+        $slim->get('/admin/settings/security', [$cms, 'securityForm'])->setName('admin.settings.security');
+        $slim->post('/admin/settings/security', [$cms, 'security']);
+        $slim->post('/admin/settings/security/secret', [$cms, 'turnstileSecret'])
+            ->setName('admin.settings.security.secret');
         $slim->get('/admin/settings/social', [$cms, 'oauthForm'])->setName('admin.settings.oauth');
         $slim->post('/admin/settings/social', [$cms, 'oauth']);
+        $slim->post('/admin/settings/social/{provider:google|naver|kakao}/secret', [$cms, 'oauthSecret'])
+            ->setName('admin.settings.oauth.secret');
         $slim->get('/admin/settings/maintenance', [$cms, 'maintenance'])->setName('admin.settings.maintenance');
         $slim->post('/admin/uploads/gc', [$cms, 'uploadsGc'])->setName('admin.uploads.gc');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');

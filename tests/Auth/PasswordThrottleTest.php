@@ -235,4 +235,32 @@ final class PasswordThrottleTest extends WebTestCase
         }
         $t->assertNotLocked('modify:comment:1'); // 다른 키이므로 영향이 없어야 한다
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdaptiveLoginRequiresCaptchaAfterThreeAndLocksAfterTen(array $dbConfig): void
+    {
+        $t = new PasswordThrottle($this->freshDatabase($dbConfig), '203.0.113.5', true);
+        for ($i = 0; $i < 3; $i++) {
+            self::assertFalse($t->requiresCaptcha('login:a@example.com'));
+            $t->recordFailure('login:a@example.com');
+        }
+        self::assertTrue($t->requiresCaptcha('login:a@example.com'));
+
+        for ($i = 3; $i < 10; $i++) {
+            $t->assertNotLocked('login:a@example.com', 'email');
+            $t->recordFailure('login:a@example.com');
+        }
+        try {
+            $t->assertNotLocked('login:a@example.com', 'email');
+            self::fail('적응형 로그인은 열 번째 실패 뒤 잠겨야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('10회 잘못 입력했습니다', $e->details()['email']);
+        }
+
+        for ($i = 0; $i < 5; $i++) {
+            $t->recordFailure('modify:post:1');
+        }
+        $this->expectException(DomainError::class);
+        $t->assertNotLocked('modify:post:1');
+    }
 }

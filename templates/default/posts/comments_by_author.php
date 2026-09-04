@@ -33,7 +33,7 @@ $isAll = (bool) ($list['is_all'] ?? false);
           <span class="author-comment-post"><?= $this->icon('board', 13) ?> <?= $this->e($row['post_title']) ?></span>
           <?php if ($isAll): ?><span class="author-comment-post"><?= $this->e($row['author_name']) ?></span><?php endif ?>
         </a>
-        <time class="author-comment-date" datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at'], 'Y.m.d') ?></time>
+        <time class="author-comment-date" datetime="<?= $this->e($row['created_at']) ?>"><?= $this->compactDate($row['created_at']) ?></time>
       </li>
     <?php endforeach; endif ?>
   </ul>

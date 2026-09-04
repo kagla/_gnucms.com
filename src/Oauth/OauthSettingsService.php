@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Oauth;
 
 use GnuCms\Auth\Acl;
+use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Validation\Validator;
 
@@ -121,6 +122,23 @@ final class OauthSettingsService
         }
 
         return $config;
+    }
+
+    public function clientSecret(Acl $acl, string $provider): string
+    {
+        $acl->assertGlobalAdmin();
+        if (!array_key_exists($provider, self::PROVIDERS)) {
+            throw DomainError::notFound('지원하지 않는 소셜 로그인 제공자입니다.');
+        }
+
+        $stored = $this->settings->all();
+        $key = $provider . '.client_secret';
+        if (array_key_exists($key, $stored)) {
+            return $stored[$key] === '' ? '' : $this->cipher->decrypt($stored[$key]);
+        }
+        $fallback = is_array($this->fallback[$provider] ?? null) ? $this->fallback[$provider] : [];
+
+        return (string) ($fallback['client_secret'] ?? '');
     }
 
     private function redirectUri(string $key): string

@@ -31,6 +31,9 @@ use GnuCms\Service\CommentService;
 use GnuCms\Service\NotificationService;
 use GnuCms\Service\PostService;
 use GnuCms\Spam\WriteRateLimiter;
+use GnuCms\Spam\TurnstileSettingsRepository;
+use GnuCms\Spam\TurnstileSettingsService;
+use GnuCms\Spam\TurnstileVerifier;
 use GnuCms\Mail\NativeMailer;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Mail\MailSettingsRepository;
@@ -78,6 +81,12 @@ final class App
     private $commentService = null;
 
     private ?WriteRateLimiter $writeRateLimiter = null;
+
+    private ?TurnstileVerifier $turnstileVerifier = null;
+
+    private ?TurnstileSettingsRepository $turnstileSettings = null;
+
+    private ?TurnstileSettingsService $turnstileSettingsService = null;
 
     /** @var NotificationRepository|null */
     private $notifications = null;
@@ -319,6 +328,49 @@ final class App
         }
 
         return $this->writeRateLimiter;
+    }
+
+    public function turnstile(): TurnstileVerifier
+    {
+        if ($this->turnstileVerifier === null) {
+            $config = $this->turnstileSettingsService()->runtime();
+            $transport = isset($config['transport']) && is_callable($config['transport'])
+                ? $config['transport'] : null;
+            $this->turnstileVerifier = new TurnstileVerifier($config, $transport);
+        }
+
+        return $this->turnstileVerifier;
+    }
+
+    public function turnstileSettings(): TurnstileSettingsRepository
+    {
+        if ($this->turnstileSettings === null) {
+            $this->turnstileSettings = new TurnstileSettingsRepository($this->db());
+        }
+
+        return $this->turnstileSettings;
+    }
+
+    public function turnstileSettingsService(): TurnstileSettingsService
+    {
+        if ($this->turnstileSettingsService === null) {
+            $this->turnstileSettingsService = new TurnstileSettingsService(
+                $this->turnstileSettings(),
+                new SecretCipher((string) $this->config('auth.secret', '')),
+                (array) $this->config('turnstile', []),
+                (string) $this->config('app.url', GNUCMS_URL)
+            );
+        }
+
+        return $this->turnstileSettingsService;
+    }
+
+    /** 관리자에서 키를 바꾼 같은 프로세스에서도 다음 요청부터 새 설정을 쓴다. */
+    public function refreshTurnstile(): void
+    {
+        $this->turnstileVerifier = null;
+        $this->passwordThrottle = null;
+        $this->accountService = null;
     }
 
     public function users(): UserRepository
@@ -572,7 +624,11 @@ final class App
         if ($this->passwordThrottle === null) {
             $ip = isset($_SERVER['REMOTE_ADDR']) && is_scalar($_SERVER['REMOTE_ADDR'])
                 ? (string) $_SERVER['REMOTE_ADDR'] : null;
-            $this->passwordThrottle = new PasswordThrottle($this->db(), $ip);
+            $this->passwordThrottle = new PasswordThrottle(
+                $this->db(),
+                $ip,
+                $this->turnstile()->isEnabled() && $this->turnstile()->isConfigured()
+            );
         }
 
         return $this->passwordThrottle;

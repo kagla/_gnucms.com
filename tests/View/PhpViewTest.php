@@ -126,6 +126,19 @@ final class PhpViewTest extends TestCase
         }
     }
 
+    public function testDateHelpersConvertUtcToSiteTimezone(): void
+    {
+        Clock::freeze('2026-09-03 14:02:00');
+        try {
+            $this->write('a', "<?= \$this->date('2026-09-03 14:02:00', 'Y-m-d H:i') ?>|<?= \$this->compactDate('2026-09-03 14:02:00') ?>");
+            $view = $this->view();
+            $view->addGlobal('site', ['timezone' => 'Asia/Seoul']);
+            self::assertSame('2026-09-03 23:02|23:02', $view->fetch('a'));
+        } finally {
+            Clock::unfreeze();
+        }
+    }
+
     public function testTruncateUsesCharacterCountForKoreanAndEnglish(): void
     {
         $this->write('a', "<?= \$this->e(\$this->truncate('abcdefghij', 8)) ?>|<?= \$this->e(\$this->truncate('가나다라마바사아자차', 8)) ?>");

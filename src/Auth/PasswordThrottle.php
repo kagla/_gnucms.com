@@ -9,8 +9,8 @@ use GnuCms\Error\DomainError;
 use GnuCms\Support\Clock;
 
 /**
- * 비밀번호 무한 대입을 막는다. 대상(attempt_key)+IP 별로 10분 안에 5번 틀리면
- * 잠시 잠그고, 잠긴 동안은 맞는 비밀번호도 검사하지 않는다. 성공하면 기록을 지운다.
+ * 비밀번호 무한 대입을 막는다. 기본은 대상(attempt_key)+IP 별 10분 안에 5회이고,
+ * Turnstile 적응형 로그인을 쓰는 경우 로그인만 10회다. 잠기면 맞는 비밀번호도 검사하지 않는다.
  *
  * 세션·쿠키 기반은 공격자가 쿠키를 버리면 그만이라 IP 기준이다. 프록시 헤더는
  * 믿지 않는다(동의 증적과 같은 원칙). IP 를 모르는 환경에서도 'unknown' 으로 묶어
@@ -19,15 +19,19 @@ use GnuCms\Support\Clock;
 final class PasswordThrottle
 {
     public const MAX_FAILURES = 5;
+    public const LOGIN_MAX_FAILURES = 10;
+    public const CAPTCHA_AFTER_FAILURES = 3;
     public const WINDOW_SECONDS = 600;
 
     private Connection $db;
     private string $clientIp;
+    private bool $adaptiveLogin;
 
-    public function __construct(Connection $db, ?string $clientIp)
+    public function __construct(Connection $db, ?string $clientIp, bool $adaptiveLogin = false)
     {
         $this->db = $db;
         $this->clientIp = $clientIp === null || $clientIp === '' ? 'unknown' : substr($clientIp, 0, 64);
+        $this->adaptiveLogin = $adaptiveLogin;
     }
 
     /**
@@ -47,13 +51,27 @@ final class PasswordThrottle
 
             return;
         }
-        if ((int) $row['fail_count'] < self::MAX_FAILURES) {
+        if ((int) $row['fail_count'] < $this->limitFor($key)) {
             return;
         }
 
         throw DomainError::validation([
-            $field => $this->lockedMessage($row),
+            $field => $this->lockedMessage($row, $this->limitFor($key)),
         ]);
+    }
+
+    /** Turnstile이 정상 설정된 로그인만 세 번째 실패 뒤 추가 확인을 요구한다. */
+    public function requiresCaptcha(string $key): bool
+    {
+        if (!$this->adaptiveLogin || !str_starts_with($key, 'login:')) {
+            return false;
+        }
+        $row = $this->find($key);
+        if ($row === null || Clock::timestamp() - (int) $row['first_failed_at'] >= self::WINDOW_SECONDS) {
+            return false;
+        }
+
+        return (int) $row['fail_count'] >= self::CAPTCHA_AFTER_FAILURES;
     }
 
     /**
@@ -94,7 +112,7 @@ final class PasswordThrottle
 
     /**
      * 실패를 기록하고 모든 비밀번호 화면에서 공통으로 쓸 안내 문구를 만든다.
-     * 다섯 번째 실패 응답부터 바로 잠금 사실을 알려 다음 요청을 해 보게 하지 않는다.
+     * 마지막 허용 실패 응답부터 바로 잠금 사실을 알려 다음 요청을 해 보게 하지 않는다.
      */
     public function recordFailureMessage(string $key, string $invalidMessage): string
     {
@@ -102,13 +120,14 @@ final class PasswordThrottle
         $row = $this->find($key);
         $failures = (int) ($row['fail_count'] ?? 1);
 
-        if ($failures >= self::MAX_FAILURES) {
-            return $this->lockedMessage($row);
+        $limit = $this->limitFor($key);
+        if ($failures >= $limit) {
+            return $this->lockedMessage($row, $limit);
         }
 
-        $remaining = self::MAX_FAILURES - $failures;
+        $remaining = $limit - $failures;
 
-        return $invalidMessage . ' (10분 내 5회 제한 · 남은 횟수 ' . $remaining . '회)';
+        return $invalidMessage . ' (10분 내 ' . $limit . '회 제한 · 남은 횟수 ' . $remaining . '회)';
     }
 
     /**
@@ -163,12 +182,20 @@ final class PasswordThrottle
     }
 
     /** @param array<string,mixed>|null $row */
-    private function lockedMessage(?array $row): string
+    private function lockedMessage(?array $row, ?int $limit = null): string
     {
         $elapsed = $row === null ? 0 : Clock::timestamp() - (int) $row['first_failed_at'];
         $minutes = max(1, (int) ceil((self::WINDOW_SECONDS - $elapsed) / 60));
 
-        return '비밀번호를 5회 잘못 입력했습니다. ' . $minutes . '분 뒤 다시 시도해 주세요.';
+        return '비밀번호를 ' . ($limit ?? self::MAX_FAILURES) . '회 잘못 입력했습니다. '
+            . $minutes . '분 뒤 다시 시도해 주세요.';
+    }
+
+    private function limitFor(string $key): int
+    {
+        return $this->adaptiveLogin && str_starts_with($key, 'login:')
+            ? self::LOGIN_MAX_FAILURES
+            : self::MAX_FAILURES;
     }
 
     private function keyOf(string $key): string

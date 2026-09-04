@@ -13,7 +13,7 @@
       <div class="oauth-provider-tools"><a class="btn btn-outline btn-sm" href="<?= $this->e($provider['console_url']) ?>" target="_blank" rel="noopener noreferrer"><?= $this->e($provider['label']) ?> 키 발급·관리 <span aria-hidden="true">↗</span></a></div>
       <div class="grid-2">
         <fieldset class="fieldset<?= array_key_exists($key . '_client_id', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><?= $this->e($provider['client_id_label']) ?></legend><input class="input input-bordered input-block" type="text" name="<?= $this->e($key) ?>_client_id" value="<?= $this->e($provider['client_id']) ?>" maxlength="500" autocomplete="off"><?php if (array_key_exists($key . '_client_id', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$key . '_client_id']) ?></p><?php endif ?><?php if ($key === 'kakao'): ?><p class="fieldset-label">카카오디벨로퍼스의 JavaScript 키가 아닌 REST API 키를 입력하세요.</p><?php elseif ($key === 'naver'): ?><p class="fieldset-label">네이버 개발자센터 애플리케이션의 Client ID를 입력하세요.</p><?php endif ?></fieldset>
-        <fieldset class="fieldset<?= array_key_exists($key . '_client_secret', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">Client Secret<?= $provider['client_secret_optional'] ? ' (선택)' : '' ?></legend><label class="input input-bordered input-block"><input type="password" name="<?= $this->e($key) ?>_client_secret" value="" maxlength="1000" autocomplete="new-password" placeholder="<?= $provider['client_secret_set'] ? '••••••••••••••••' : 'Client Secret 입력' ?>"><?php $this->insert('auth/_pw_toggle', ['toggle_label' => 'Client Secret']) ?></label><?php if (array_key_exists($key . '_client_secret', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$key . '_client_secret']) ?></p><?php endif ?><p class="fieldset-label"><?php if ($provider['client_secret_optional']): ?>카카오디벨로퍼스에서 Client Secret 기능이 ON일 때만 입력하세요.<?php elseif ($provider['client_secret_set']): ?>비밀키가 저장되어 있습니다. 변경할 때만 새 값을 입력하세요.<?php else: ?>비밀키는 암호화해 저장합니다.<?php endif ?></p><?php if ($provider['client_secret_set']): ?><label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="<?= $this->e($key) ?>_client_secret_clear" value="1"> 저장된 Client Secret 삭제</label><?php endif ?></fieldset>
+        <fieldset class="fieldset<?= array_key_exists($key . '_client_secret', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">Client Secret<?= $provider['client_secret_optional'] ? ' (선택)' : '' ?></legend><label class="input input-bordered input-block"><input type="password" name="<?= $this->e($key) ?>_client_secret" value="" maxlength="1000" autocomplete="new-password" placeholder="<?= $provider['client_secret_set'] ? '••••••••••••••••' : 'Client Secret 입력' ?>"><button class="pw-toggle" type="button" data-oauth-secret-toggle data-pw-label="Client Secret" data-secret-url="<?= $this->url('admin.settings.oauth.secret', ['provider' => $key]) ?>" data-csrf="<?= $this->e($csrf_token) ?>" data-client-secret-set="<?= $provider['client_secret_set'] ? '1' : '0' ?>" hidden aria-pressed="false" aria-label="Client Secret 표시" title="Client Secret 표시"><span class="pw-ico pw-ico-show" aria-hidden="true"><?= $this->icon('eye', 17) ?></span><span class="pw-ico pw-ico-hide" aria-hidden="true"><?= $this->icon('eye-off', 17) ?></span></button></label><?php if (array_key_exists($key . '_client_secret', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$key . '_client_secret']) ?></p><?php endif ?><p class="fieldset-label"><?php if ($provider['client_secret_optional']): ?>카카오디벨로퍼스에서 Client Secret 기능이 ON일 때만 입력하세요. 저장된 값은 눈 버튼으로 확인할 수 있습니다.<?php elseif ($provider['client_secret_set']): ?>비밀키가 저장되어 있습니다. 눈 버튼으로 확인하거나, 변경할 때 새 값을 입력하세요.<?php else: ?>비밀키는 암호화해 저장합니다.<?php endif ?></p><?php if ($provider['client_secret_set']): ?><label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="<?= $this->e($key) ?>_client_secret_clear" value="1"> 저장된 Client Secret 삭제</label><?php endif ?></fieldset>
       </div>
       <fieldset class="fieldset"><legend class="fieldset-legend">Callback URL</legend><input class="input input-bordered input-block oauth-callback" type="text" value="<?= $this->e($provider['redirect_uri']) ?>" readonly><p class="fieldset-label">이 주소를 <?= $this->e($provider['label']) ?> 개발자 콘솔의 Redirect URI에 등록하세요.</p></fieldset>
       <?php if ($key === 'naver'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 16) ?></span><span>네이버 로그인 API의 제공 정보에서 이메일 주소를 필수로 설정하세요. 프로필 사진을 선택 항목으로 활성화하면 최초 가입·로그인 때 가져옵니다. 이메일이 응답에 없으면 가입과 로그인이 차단되며, 별명과 프로필 사진은 선택입니다.</span></div><?php elseif ($key === 'kakao'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 16) ?></span><span>카카오 로그인 동의항목에서 카카오계정(이메일)을 필수로 설정하세요. 프로필 사진이 제공되면 최초 가입·로그인 때 가져옵니다. 이메일이 응답에 없으면 가입과 로그인이 차단되며, 닉네임과 프로필 사진은 선택입니다.</span></div><?php endif ?>
@@ -23,4 +23,37 @@
   </form>
 </div></section>
 <?php $this->stop() ?>
-<?php $this->start('scripts') ?><?php $this->insert('auth/_pw_toggle_script') ?><?php $this->stop() ?>
+<?php $this->start('scripts') ?>
+<script>
+(function(){
+  var btns=document.querySelectorAll('[data-oauth-secret-toggle]');
+  for(var i=0;i<btns.length;i++){
+    (function(btn){
+      var box=btn.closest('label'),field=box?box.querySelector('input'):null;if(!field){return}
+      var revealedStored=false,loading=false;btn.hidden=false;
+      function state(show){
+        var label=show?'Client Secret 숨기기':'Client Secret 표시';
+        field.type=show?'text':'password';btn.setAttribute('aria-pressed',show?'true':'false');
+        btn.setAttribute('aria-label',label);btn.title=label;
+      }
+      field.addEventListener('input',function(){revealedStored=false});
+      btn.addEventListener('click',async function(){
+        if(field.type==='text'){
+          state(false);if(revealedStored){field.value='';revealedStored=false}field.focus();return;
+        }
+        if(field.value!==''||btn.dataset.clientSecretSet!=='1'){state(true);field.focus();return}
+        if(loading){return}loading=true;btn.disabled=true;
+        try{
+          var body=new URLSearchParams({csrf_token:btn.dataset.csrf});
+          var res=await fetch(btn.dataset.secretUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
+          if(!res.ok){throw new Error('request failed')}
+          var data=await res.json();field.value=typeof data.secret==='string'?data.secret:'';
+          revealedStored=true;state(true);field.focus();field.setSelectionRange(field.value.length,field.value.length);
+        }catch(e){window.alert('Client Secret을 불러오지 못했습니다. 다시 로그인한 뒤 시도해 주세요.')}
+        finally{loading=false;btn.disabled=false}
+      });
+    })(btns[i]);
+  }
+})();
+</script>
+<?php $this->stop() ?>

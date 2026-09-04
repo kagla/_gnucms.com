@@ -92,6 +92,7 @@
 
       <?php if (!empty($board['use_file'])): ?><?php $this->insert('posts/_attachments', ['board' => $board, 'values' => $values, 'errors' => $errors]) ?><?php endif ?>
 
+      <?php if ($current_user['is_guest']): ?><?php $this->insert('_turnstile', ['action' => 'post_create', 'errors' => $errors]) ?><?php endif ?>
       <div class="card-actions form-actions post-create-actions">
         <button class="btn btn-primary" type="submit">등록하기</button>
       </div>
@@ -100,6 +101,7 @@
 </section>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
+<?php if ($turnstile_enabled && $current_user['is_guest']): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <?php $this->insert('posts/_editor', [
   'editor_id' => 'post-content',
   'upload_url' => $this->url('board.editor.images', ['key' => $board['board_key']]) . '?csrf_token=' . rawurlencode($csrf_token) . '&image_key=' . rawurlencode($values['image_key'] ?? ''),

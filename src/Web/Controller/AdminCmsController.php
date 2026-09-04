@@ -26,7 +26,7 @@ final class AdminCmsController
         $this->app->guestAcl()->assertGlobalAdmin();
         return View::fromRequest($request)->render($response, 'admin/settings', [
             'values' => $this->app->cmsService()->settings(), 'errors' => [],
-            'query' => $request->getQueryParams(),
+            'query' => $request->getQueryParams(), 'timezones' => \DateTimeZone::listIdentifiers(),
         ]);
     }
 
@@ -42,6 +42,7 @@ final class AdminCmsController
             }
             return View::fromRequest($request)->render($response->withStatus(422), 'admin/settings', [
                 'values' => $input, 'errors' => $e->details(), 'query' => [],
+                'timezones' => \DateTimeZone::listIdentifiers(),
             ]);
         }
         return $this->redirect($request, $response, 'admin.settings', ['saved' => '1']);
@@ -74,6 +75,59 @@ final class AdminCmsController
         return $this->redirect($request, $response, 'admin.settings.writing', ['saved' => '1']);
     }
 
+    public function securityForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return $this->renderSecurityForm($request, $response,
+            $this->app->turnstileSettingsService()->formValues($this->app->guestAcl()), []);
+    }
+
+    public function security(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        try {
+            $this->app->turnstileSettingsService()->save($this->app->guestAcl(), $input);
+            $this->app->refreshTurnstile();
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+            $current = $this->app->turnstileSettingsService()->formValues($this->app->guestAcl());
+            $values = $current;
+            $values['enabled'] = !empty($input['enabled']);
+            $values['site_key'] = is_scalar($input['site_key'] ?? null) ? (string) $input['site_key'] : '';
+            $values['hostname'] = is_scalar($input['hostname'] ?? null) ? (string) $input['hostname'] : '';
+
+            return $this->renderSecurityForm(
+                $request, $response->withStatus(422), $values, $e->details()
+            );
+        }
+
+        return $this->redirect($request, $response, 'admin.settings.security', ['saved' => '1']);
+    }
+
+    private function renderSecurityForm(ServerRequestInterface $request, ResponseInterface $response,
+        array $values, array $errors): ResponseInterface
+    {
+        return View::fromRequest($request)->render($response, 'admin/security_settings', [
+            'values' => $values, 'errors' => $errors, 'query' => $request->getQueryParams(),
+        ]);
+    }
+
+    public function turnstileSecret(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->assertCsrf($this->input($request));
+        $secret = $this->app->turnstileSettingsService()->secretKey($this->app->guestAcl());
+        $response->getBody()->write((string) json_encode(
+            ['secret' => $secret],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store');
+    }
+
     public function oauthForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         return $this->renderOauthForm($request, $response,
@@ -100,6 +154,22 @@ final class AdminCmsController
             return $this->renderOauthForm($request, $response->withStatus(422), $values, $e->details());
         }
         return $this->redirect($request, $response, 'admin.settings.oauth', ['saved' => '1']);
+    }
+
+    public function oauthSecret(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $this->assertCsrf($this->input($request));
+        $secret = $this->app->oauthSettingsService()->clientSecret(
+            $this->app->guestAcl(), (string) $args['provider']
+        );
+        $response->getBody()->write((string) json_encode(
+            ['secret' => $secret],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     private function renderOauthForm(ServerRequestInterface $request, ResponseInterface $response,

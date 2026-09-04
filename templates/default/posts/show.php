@@ -147,6 +147,7 @@
           <?php if (array_key_exists('content', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['content']) ?></p><?php endif ?>
         </fieldset>
 
+        <?php if ($current_user['is_guest']): ?><?php $this->insert('_turnstile', ['action' => 'comment_create', 'errors' => $comment_errors]) ?><?php endif ?>
         <div class="comment-form-foot">
           <?php if ($board['use_secret'] && !$current_user['is_guest']): ?>
             <label class="label comment-secret-control comment-secret">
@@ -204,6 +205,7 @@
 </dialog>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
+<?php if ($turnstile_enabled && $current_user['is_guest'] && $can_comment): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <script>
 (function(){
   var button=document.querySelector('[data-copy-post]');if(!button){return}
