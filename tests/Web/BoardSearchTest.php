@@ -19,7 +19,9 @@ final class BoardSearchTest extends WebTestCase
         $body = $this->body($this->get($app, '/boards/free'));
 
         self::assertStringContainsString('class="inline-search board-search"', $body);
+        self::assertStringContainsString('class="board-search-area"', $body);
         self::assertStringContainsString('name="scope"', $body);
+        self::assertStringContainsString('class="board-search-select-icon"', $body);
         self::assertStringContainsString('<option value="posts" selected>게시글</option>', $body);
         self::assertStringContainsString('<option value="comments">댓글</option>', $body);
     }

@@ -67,19 +67,6 @@ $commentUrl = function (int $page) use ($board, $query, $view_param): string {
     <p class="page-count"><?php if ($scope === 'comments' && $query['q'] !== null && $query['q'] !== ''): ?>“<?= $this->e($query['q']) ?>” 댓글 검색 결과 <strong><?= $this->e((string) ($commentList['total'] ?? 0)) ?></strong>개<?php elseif ($query['q'] !== null && $query['q'] !== ''): ?>“<?= $this->e($query['q']) ?>” 게시글 검색 결과 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php else: ?>글 <strong><?= $this->e((string) $list['total']) ?></strong>개<?php if ($list['notices'] !== []): ?> · 공지 <?= $this->e((string) count($list['notices'])) ?>개<?php endif ?><?php endif ?></p>
   </div>
   <div class="page-head-actions">
-    <form class="inline-search board-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
-      <?php if ($query['category'] !== null && $query['category'] !== ''): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
-      <?php if ($view_param): ?><input type="hidden" name="view" value="<?= $this->e($view_param) ?>"><?php endif ?>
-      <select class="select select-bordered board-search-scope" name="scope" aria-label="검색 범위">
-        <option value="posts"<?php if ($scope === 'posts'): ?> selected<?php endif ?>>게시글</option>
-        <option value="comments"<?php if ($scope === 'comments'): ?> selected<?php endif ?>>댓글</option>
-      </select>
-      <label class="input input-bordered">
-        <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>
-        <input type="search" name="q" value="<?= $this->e($query['q']) ?>" placeholder="<?= $this->e($board['name']) ?>에서 검색" aria-label="검색어" required>
-      </label>
-      <button class="btn btn-primary" type="submit">검색</button>
-    </form>
     <?php if (!$current_user['is_guest'] && $current_user['is_admin']): ?>
       <?php // 톱니만. 무슨 단추인지는 도움말과 화면 낭독기에 남긴다. ?>
       <a class="btn btn-outline btn-sm btn-square" href="<?= $this->url('admin.boards.edit', ['key' => $board['board_key']]) ?>"
@@ -105,6 +92,26 @@ $commentUrl = function (int $page) use ($board, $query, $view_param): string {
       $listUrl($board, $q, $category, $page, $selectedView),
 ]) ?>
 <?php endif ?>
+
+<div class="board-search-area">
+  <form class="inline-search board-search" method="get" action="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" role="search">
+    <?php if ($query['category'] !== null && $query['category'] !== ''): ?><input type="hidden" name="category" value="<?= $this->e($query['category']) ?>"><?php endif ?>
+    <?php if ($view_param): ?><input type="hidden" name="view" value="<?= $this->e($view_param) ?>"><?php endif ?>
+    <label class="board-search-select">
+      <span class="sr-only">검색 범위</span>
+      <select name="scope" aria-label="검색 범위">
+        <option value="posts"<?php if ($scope === 'posts'): ?> selected<?php endif ?>>게시글</option>
+        <option value="comments"<?php if ($scope === 'comments'): ?> selected<?php endif ?>>댓글</option>
+      </select>
+      <span class="board-search-select-icon" aria-hidden="true"><?= $this->icon('chevron-down', 13) ?></span>
+    </label>
+    <label class="input input-bordered">
+      <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>
+      <input type="search" name="q" value="<?= $this->e($query['q']) ?>" placeholder="<?= $this->e($board['name']) ?>에서 검색" aria-label="검색어" required>
+    </label>
+    <button class="btn btn-outline board-search-submit" type="submit">검색</button>
+  </form>
+</div>
 
 <?php if ($can_write): ?>
   <a class="fab btn btn-primary btn-circle" href="<?= $this->url('posts.create', ['key' => $board['board_key']]) ?>" aria-label="글쓰기"><?= $this->icon('pencil', 22) ?></a>
