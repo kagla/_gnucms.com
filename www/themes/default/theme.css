@@ -1860,7 +1860,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
 .board-search-area{display:flex;justify-content:flex-end;margin-top:1rem}
-.board-search.inline-search{width:100%;max-width:31rem;margin-bottom:0;gap:.375rem}
+.board-search.inline-search{width:100%;max-width:26rem;margin-bottom:0;gap:.375rem}
 .board-search-select{position:relative;display:flex;flex:none;width:6.5rem;height:2.375rem;border:var(--border) solid var(--bc-20);border-radius:.5rem;background:var(--color-base-100)}
 .board-search-select:focus-within{outline:2px solid color-mix(in srgb,var(--color-primary) 55%,transparent);outline-offset:1px;border-color:var(--color-primary)}
 .board-search-select select{width:100%;padding:0 1.75rem 0 .75rem;appearance:none;border:0;border-radius:inherit;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
