@@ -19,6 +19,24 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install development dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Verify source
+        run: |
+          composer validate --no-check-publish
+          ./vendor/bin/phpunit
+
       - name: Prepare release pull request or GitHub Release
         id: release
         uses: googleapis/release-please-action@v5
@@ -32,26 +50,11 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.sha }}
 
-      - name: Set up PHP
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          coverage: none
-          tools: composer:v2
-
-      - name: Install development dependencies
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Verify release
+      - name: Verify released version
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: |
-          test "$(cat version.txt)" = "${RELEASE_VERSION}"
-          composer validate --no-check-publish
-          ./vendor/bin/phpunit
+        run: test "$(cat version.txt)" = "${RELEASE_VERSION}"
 
       - name: Prepare production dependencies
         if: ${{ steps.release.outputs.release_created == 'true' }}
