@@ -65,10 +65,18 @@ final class ServerCheckTest extends TestCase
 
     public function testOldPhpFails(): void
     {
-        $result = $this->check(self::ALL, '8.0.30')->run();
+        $result = $this->check(self::ALL, '8.1.99')->run();
 
         self::assertFalse($result['ok']);
         self::assertFalse($this->item($result, 'PHP')['ok']);
+    }
+
+    public function testMinimumPhpPasses(): void
+    {
+        $result = $this->check(self::ALL, '8.2.0')->run();
+
+        self::assertTrue($result['ok']);
+        self::assertTrue($this->item($result, 'PHP')['ok']);
     }
 
     public function testOptionalItemsDoNotBlock(): void

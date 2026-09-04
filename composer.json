@@ -4,7 +4,7 @@
     "type": "project",
     "license": "MIT",
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "ext-openssl": "*",
         "ezyang/htmlpurifier": "^4.19",
         "league/oauth2-client": "^2.8",

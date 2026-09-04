@@ -10,6 +10,9 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
     if ($page && $page > 1) { $params[] = 'page=' . $page; }
     return $this->url('posts.index', ['key' => $board['board_key']]) . ($params !== [] ? '?' . implode('&', $params) : '');
 };
+// 머리글 검색 폼도 목록 partial보다 먼저 현재 보기 값을 써야 한다.
+$view = $this->def($view ?? null, 'list');
+$view_param = $view !== $this->def($board['list_type'] ?? null, 'list') ? $view : null;
 ?>
 
 <?php $this->start('title') ?><?= $this->e($board['name']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
@@ -38,12 +41,6 @@ $listUrl = function (array $board, $q, $category, $page, $view = null): string {
 <?php $this->stop() ?>
 
 <?php $this->start('body') ?>
-<?php
-// 목록 형태는 게시판 설정이 기본, ?view= 로 잠시 바꾼다.
-// view 값은 컨트롤러가 허용 목록으로 검증한 뒤 내려준다.
-$view = $this->def($view ?? null, 'list');
-?>
-
 <div class="breadcrumbs">
   <ul>
     <li><a href="<?= $this->url('boards.index') ?>">홈</a></li>

@@ -1375,6 +1375,15 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .admin-brand-copy small{color:var(--bc-soft);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-menu{flex:1;overflow-y:auto}
 .admin-menu .menu-text{overflow:hidden;text-overflow:ellipsis}
+.admin-version{
+  display:flex;align-items:center;gap:.625rem;margin-top:auto;padding:.75rem .625rem .125rem;
+  border-top:var(--border) solid var(--bc-10);color:var(--bc-soft)
+}
+.admin-version:hover{color:var(--color-primary)}
+.admin-version-icon{display:grid;place-items:center;flex:none}
+.admin-version-copy{display:flex;align-items:baseline;gap:.375rem;min-width:0}
+.admin-version-copy strong{font-size:11.5px;letter-spacing:.02em}
+.admin-version-copy small{font-size:10.5px;white-space:nowrap}
 .admin-menu li > a.menu-active{
   background:var(--brand-wash);color:var(--color-primary);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 10%,transparent);
@@ -1431,10 +1440,12 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .drawer-lg-open .admin-menu-btn{display:none}
   html[data-admin-sidebar="collapsed"] .drawer-lg-open{--admin-side-w:4.5rem}
   html[data-admin-sidebar="collapsed"] .admin-brand-copy,
-  html[data-admin-sidebar="collapsed"] .admin-menu .menu-text{display:none}
+  html[data-admin-sidebar="collapsed"] .admin-menu .menu-text,
+  html[data-admin-sidebar="collapsed"] .admin-version-copy{display:none}
   html[data-admin-sidebar="collapsed"] .admin-sidebar-head{flex-direction:column;background:none}
   html[data-admin-sidebar="collapsed"] .admin-sidebar-head .brand{justify-content:center;padding:0}
   html[data-admin-sidebar="collapsed"] .admin-menu li > a{justify-content:center;padding-inline:0}
+  html[data-admin-sidebar="collapsed"] .admin-version{justify-content:center;padding-inline:0}
   html[data-admin-sidebar="collapsed"] .admin-menu .menu-title{height:1px;padding:.5rem 0 0;overflow:hidden;text-indent:-999px;border-top:var(--border) solid var(--bc-10)}
   html[data-admin-sidebar="collapsed"] .admin-fold .icon{transform:rotate(180deg)}
 }

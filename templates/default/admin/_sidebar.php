@@ -21,4 +21,13 @@
     <li class="menu-title">설정</li>
     <li><a href="<?= $this->url('admin.settings') ?>"<?php if ($section === 'site'): ?> class="menu-active" aria-current="page"<?php endif ?> title="사이트 설정"><?= $this->icon('cog', 18) ?><span class="menu-text">사이트 설정</span></a></li>
   </ul>
+  <?php
+    $releaseReady = GNUCMS_VERSION !== 'dev' && GNUCMS_VERSION !== '0.0.0';
+    $versionLabel = $releaseReady ? 'v' . GNUCMS_VERSION : '개발판';
+    $versionUrl = GNUCMS_REPOSITORY_URL . ($releaseReady ? '/releases/tag/v' . GNUCMS_VERSION : '');
+  ?>
+  <a class="admin-version" href="<?= $this->e($versionUrl) ?>" target="_blank" rel="noopener noreferrer" title="GitHub에서 GNUCMS <?= $this->e($versionLabel) ?> 보기" aria-label="GitHub에서 GNUCMS <?= $this->e($versionLabel) ?> 보기">
+    <span class="admin-version-icon" aria-hidden="true"><?= $this->icon('external', 15) ?></span>
+    <span class="admin-version-copy"><strong>GNUCMS</strong><small><?= $this->e($versionLabel) ?></small></span>
+  </a>
 </aside>

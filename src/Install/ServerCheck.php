@@ -10,7 +10,7 @@ namespace GnuCms\Install;
  */
 final class ServerCheck
 {
-    public const MIN_PHP = '8.1.0';
+    public const MIN_PHP = '8.2.0';
     public const DRIVERS = ['pdo_sqlite', 'pdo_mysql', 'pdo_pgsql'];
 
     private string $configDir;

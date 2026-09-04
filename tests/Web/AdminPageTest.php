@@ -186,6 +186,12 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('admin-fold', $this->body($dashboard));
         self::assertStringContainsString('for="admin-drawer"', $this->body($dashboard));
         self::assertStringContainsString('class="admin-user"', $this->body($dashboard));
+        self::assertStringContainsString('class="admin-version"', $this->body($dashboard));
+        $released = GNUCMS_VERSION !== 'dev' && GNUCMS_VERSION !== '0.0.0';
+        $versionUrl = GNUCMS_REPOSITORY_URL . ($released ? '/releases/tag/v' . GNUCMS_VERSION : '');
+        self::assertStringContainsString('href="' . $versionUrl . '"', $this->body($dashboard));
+        self::assertStringContainsString('>' . ($released ? 'v' . GNUCMS_VERSION : '개발판') . '</small>',
+            $this->body($dashboard));
         self::assertMatchesRegularExpression(
             '#<ul class="[^"]*admin-user-menu[^"]*"[^>]*>\s*'
             . '<li class="menu-title">.*?</li>\s*<li>\s*<form[^>]+action="/logout"#s',
@@ -693,7 +699,7 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('https://developers.naver.com/apps/#/list', $page);
         self::assertStringContainsString('https://developers.kakao.com/console/app', $page);
         self::assertSame(3, substr_count($page, '키 발급·관리'));
-        self::assertSame(6, substr_count($page, 'rel="noopener noreferrer"'));
+        self::assertSame(7, substr_count($page, 'rel="noopener noreferrer"'));
         self::assertStringContainsString('네이버 개발자센터 애플리케이션의 Client ID', $page);
         self::assertStringContainsString('JavaScript 키가 아닌 REST API 키', $page);
         self::assertStringContainsString('Client Secret (선택)', $page);

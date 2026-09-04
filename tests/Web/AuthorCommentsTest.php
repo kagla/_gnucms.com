@@ -197,24 +197,24 @@ final class AuthorCommentsTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'email' => 'writer@example.com', 'password' => 'member-password-123',
         ]);
 
-        // 비밀글은 글쓴이 본인이나 관리자만 댓글을 달 수 있으므로, 두 글 모두 이 회원이 쓴다.
-        $normalCreate = $this->post($app, '/boards/free/new', [
-            'csrf_token' => $_SESSION['csrf_token'], 'title' => '평범한 글', 'content' => '본문입니다',
+        // 이 테스트의 관심사는 목록 권한이다. HTTP 도배 제한에 영향을 받지 않도록 fixture는 저장소로 만든다.
+        $board = $app->boards()->findByKey('free');
+        self::assertNotNull($board);
+        $postBase = [
+            'board_id' => (int) $board['id'], 'content' => '본문입니다',
+            'author_id' => (string) $memberId, 'author_name' => '댓쓴사람',
+        ];
+        $normalPostId = $app->posts()->create($postBase + ['title' => '평범한 글']);
+        $secretPostId = $app->posts()->create($postBase + ['title' => '비밀 문의', 'is_secret' => 1]);
+        $commentBase = [
+            'board_id' => (int) $board['id'], 'parent_id' => null,
+            'author_id' => (string) $memberId, 'author_name' => '댓쓴사람',
+        ];
+        $app->comments()->create($commentBase + [
+            'post_id' => $normalPostId, 'content' => '평범한 댓글입니다',
         ]);
-        preg_match('#/posts/(\d+)#', $normalCreate->getHeaderLine('Location'), $m1);
-        $normalPostId = (int) $m1[1];
-
-        $secretCreate = $this->post($app, '/boards/free/new', [
-            'csrf_token' => $_SESSION['csrf_token'], 'title' => '비밀 문의', 'content' => '본문입니다', 'is_secret' => '1',
-        ]);
-        preg_match('#/posts/(\d+)#', $secretCreate->getHeaderLine('Location'), $m2);
-        $secretPostId = (int) $m2[1];
-
-        $this->post($app, '/posts/' . $normalPostId . '/comments', [
-            'csrf_token' => $_SESSION['csrf_token'], 'content' => '평범한 댓글입니다',
-        ]);
-        $this->post($app, '/posts/' . $secretPostId . '/comments', [
-            'csrf_token' => $_SESSION['csrf_token'], 'content' => '비밀글에 남긴 댓글 본문',
+        $app->comments()->create($commentBase + [
+            'post_id' => $secretPostId, 'content' => '비밀글에 남긴 댓글 본문',
         ]);
 
         // 로그아웃해서 게스트로 요청한다 — /comments 는 항상 요청 시점의 신원을 쓴다.
