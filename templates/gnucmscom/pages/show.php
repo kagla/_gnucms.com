@@ -1,6 +1,10 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?><?= $this->e($page['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($page['seo_description'] ?: $site['site_tagline']) ?>"><?php $this->stop() ?>
+<?php $pagePath = (!empty($page['is_consent']) ? '/terms/' : '/content/') . rawurlencode((string) $page['slug']); $canonical = $site_url . $pagePath; ?>
+<?php $this->start('canonical_url') ?><?= $this->e($canonical) ?><?php $this->stop() ?>
+<?php $this->start('seo_type') ?>article<?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> 공개 내용 RSS" href="<?= $this->e($site_url) ?>/content/rss.xml"><?php $this->stop() ?>
 <?php $this->start('body') ?>
 <div class="read-progress" aria-hidden="true"></div>
 <article class="card article article-page">

@@ -6,6 +6,19 @@ $below_view_list = $below_view_list ?? null;
 ?>
 <?php $this->start('title') ?><?= $this->e($post['title']) ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $__post_description = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $post['content']))) ?: $post['title']; ?>
+<?php $canonical = $site_url . '/posts/' . (int) $post['id']; $seoDescription = mb_substr($__post_description, 0, 160); ?>
+<?php $this->start('canonical_url') ?><?= $this->e($canonical) ?><?php $this->stop() ?>
+<?php $this->start('seo_type') ?>article<?php $this->stop() ?>
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($board['name']) ?> RSS" href="<?= $this->e($site_url) ?>/boards/<?= rawurlencode((string) $board['board_key']) ?>/rss.xml"><?php $this->stop() ?>
+<?php $this->start('extra_head') ?>
+<script type="application/ld+json"><?= json_encode([
+  '@context' => 'https://schema.org', '@type' => 'Article', 'mainEntityOfPage' => $canonical,
+  'headline' => $post['title'], 'description' => $seoDescription,
+  'datePublished' => str_replace(' ', 'T', (string) $post['created_at']) . 'Z',
+  'dateModified' => str_replace(' ', 'T', (string) $post['updated_at']) . 'Z',
+  'author' => ['@type' => 'Person', 'name' => $post['author_name']],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<?php $this->stop() ?>
 <?php $this->start('seo_description') ?><?= $this->e(mb_substr($__post_description, 0, 155)) ?><?php $this->stop() ?>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e(mb_substr($__post_description, 0, 155)) ?>"><?php $this->stop() ?>
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
@@ -38,6 +51,7 @@ $below_view_list = $below_view_list ?? null;
       </div>
       <span class="article-writer-meta">
         <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'y-m-d H:i:s') ?></time>
+        <?php if (!empty($post['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($post['author_ip_masked']) ?></span><?php endif ?>
         <span class="stat-inline"><?= $this->icon('eye', 14) ?> 조회 <?= $this->e($post['view_count']) ?></span>
         <a class="stat-inline stat-inline-link" href="#comments"><?= $this->icon('comment', 14) ?> 댓글 <?= $this->e($post['comment_count']) ?></a>
       </span>
@@ -137,6 +151,7 @@ $below_view_list = $below_view_list ?? null;
           <?php if (array_key_exists('content', $comment_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($comment_errors['content']) ?></p><?php endif ?>
         </fieldset>
 
+        <?php if ($current_user['is_guest']): ?><?php $this->insert('_turnstile', ['action' => 'comment_create', 'errors' => $comment_errors]) ?><?php endif ?>
         <div class="comment-form-foot">
           <?php if ($board['use_secret'] && !$current_user['is_guest']): ?>
             <label class="label comment-secret-control comment-secret">
@@ -194,6 +209,7 @@ $below_view_list = $below_view_list ?? null;
 </dialog>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
+<?php if ($turnstile_enabled && $current_user['is_guest'] && $can_comment): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <script>
 (function(){
   var button=document.querySelector('[data-copy-post]');if(!button){return}

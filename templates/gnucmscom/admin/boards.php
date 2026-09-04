@@ -34,10 +34,11 @@
           </td>
           <td data-label="사용 기능">
             <span class="badge-row">
+              <?php if ($board['show_in_header']): ?><span class="badge badge-primary badge-soft badge-sm">상단 메뉴</span><?php endif ?>
               <?php if ($board['use_category']): ?><span class="badge badge-primary badge-soft badge-sm">분류</span><?php endif ?>
               <?php if ($board['use_secret']): ?><span class="badge badge-primary badge-soft badge-sm">비밀글</span><?php endif ?>
               <?php if ($board['use_file']): ?><span class="badge badge-primary badge-soft badge-sm">첨부</span><?php endif ?>
-              <?php if (!$board['use_category'] && !$board['use_secret'] && !$board['use_file']): ?><span class="cell-sub">기본</span><?php endif ?>
+              <?php if (!$board['show_in_header'] && !$board['use_category'] && !$board['use_secret'] && !$board['use_file']): ?><span class="cell-sub">기본</span><?php endif ?>
             </span>
           </td>
           <td data-label="정렬" class="right"><?= $this->e($board['sort_order']) ?></td>

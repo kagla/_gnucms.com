@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#100f0e" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/svg+xml" href="<?= $this->asset('favicon.svg') ?>">
 <title><?php $this->start('title') ?><?= $this->e($site['site_name']) ?><?php $this->stop() ?></title>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
@@ -13,11 +13,13 @@
 $__seo_title = trim(strip_tags($this->block('title', (string) $site['site_name'])));
 $__seo_description = trim($this->block('seo_description', (string) $site['site_tagline']));
 $__seo_path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
-$__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/' . $__seo_path);
+$__default_canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/' . $__seo_path);
+$__canonical = trim($this->block('canonical_url', $__default_canonical));
+$__seo_type = trim($this->block('seo_type', 'website'));
 ?>
 <link rel="canonical" href="<?= $this->e($__canonical) ?>">
 <meta property="og:locale" content="ko_KR">
-<meta property="og:type" content="website">
+<meta property="og:type" content="<?= $this->e($__seo_type) ?>">
 <meta property="og:site_name" content="GNUCMS">
 <meta property="og:title" content="<?= $this->e($__seo_title) ?>">
 <meta property="og:description" content="<?= $this->e($__seo_description) ?>">
@@ -30,6 +32,13 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
 <meta name="twitter:title" content="<?= $this->e($__seo_title) ?>">
 <meta name="twitter:description" content="<?= $this->e($__seo_description) ?>">
 <meta name="twitter:image" content="https://gnucms.com/og.png">
+<?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> RSS" href="<?= $this->e($site_url) ?>/rss.xml"><?php $this->stop() ?>
+<?php $this->start('external_service_head') ?>
+<?php foreach (['site_verification_html', 'analytics_html', 'adsense_html'] as $headSetting): ?>
+<?php if (($site[$headSetting] ?? '') !== ''): ?><?= (string) $site[$headSetting] ?>
+<?php endif ?>
+<?php endforeach ?>
+<?php $this->stop() ?>
 <?php $this->start('extra_head') ?><?php $this->stop() ?>
 <script>
 (function(){
@@ -70,14 +79,29 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
           </a>
         </div>
 
-        <?php $__is_free_board = isset($board['board_key']) && $board['board_key'] === 'free'; ?>
+        <?php
+        $__current_board_key = (string) ($board['board_key'] ?? '');
+        $__current_board_in_header = false;
+        foreach ($header_boards as $__header_board) {
+            if ($__current_board_key !== '' && $__header_board['board_key'] === $__current_board_key) {
+                $__current_board_in_header = true;
+                break;
+            }
+        }
+        ?>
         <nav class="site-primary-nav" aria-label="주요 메뉴">
           <a href="<?= $this->url('boards.index') ?>#about">소개</a>
           <a href="<?= $this->url('boards.index') ?>#features">기능</a>
           <a href="<?= $this->url('boards.index') ?>#install">설치</a>
           <a href="<?= $this->url('boards.index') ?>#gallery">갤러리</a>
-          <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"<?php if ($__is_free_board): ?> class="is-active" aria-current="page"<?php endif ?>>자유게시판</a>
           <a href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> class="is-active" aria-current="page"<?php endif ?>>전체 글</a>
+          <?php if (!$__current_board_in_header && $__current_board_key !== ''): ?>
+            <a href="<?= $this->url('posts.index', ['key' => $__current_board_key]) ?>" class="is-active" aria-current="page"><?= $this->e($board['name']) ?></a>
+          <?php endif ?>
+          <?php foreach ($header_boards as $__header_board): ?>
+            <?php $__is_current_board = $__current_board_key !== '' && $__current_board_key === $__header_board['board_key']; ?>
+            <a href="<?= $this->url('posts.index', ['key' => $__header_board['board_key']]) ?>"<?= $__is_current_board ? ' class="is-active" aria-current="page"' : '' ?>><?= $this->e($__header_board['name']) ?></a>
+          <?php endforeach ?>
           <?php foreach ($site_menu as $item): ?><a href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->e($item['title']) ?></a><?php endforeach ?>
         </nav>
 
@@ -104,6 +128,7 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
                 <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 17) ?> 알림</a></li>
                 <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 17) ?> 관리 콘솔</a></li><?php endif ?>
                 <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 17) ?> 회원정보 수정</a></li>
+                <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.login_history') ?>"><?= $this->icon('history', 17) ?> 로그인 기록</a></li><?php endif ?>
                 <li>
                   <form method="post" action="<?= $this->url('auth.logout') ?>">
                     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
@@ -185,6 +210,7 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
             <strong>커뮤니티</strong>
             <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>">자유게시판</a>
             <a href="<?= $this->url('posts.all') ?>">전체 글</a>
+            <a href="<?= $this->url('seo.rss') ?>">RSS</a>
             <?php foreach ($legal_pages as $doc): ?>
               <a href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
             <?php endforeach ?>
@@ -192,7 +218,7 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
         </div>
         <div class="site-footer-bottom">
           <span>© <?= date('Y') ?> GNUCMS</span>
-          <span>PHP 7.4+ · MIT License</span>
+          <span>PHP 8.2+ · MIT License</span>
         </div>
       </div>
     </footer>
@@ -259,6 +285,7 @@ $__canonical = 'https://gnucms.com' . ($__seo_path[0] === '/' ? $__seo_path : '/
           <li class="menu-title">내 활동</li>
           <li><a href="<?= $this->url('notifications.index') ?>"><?= $this->icon('bell', 18) ?> 알림<?php if ($unread_notifications > 0): ?> <span class="badge badge-primary badge-sm"><?= $this->e($unread_notifications) ?></span><?php endif ?></a></li>
           <li><a href="<?= $this->url('account.edit') ?>"><?= $this->icon('user', 18) ?> 회원정보 수정</a></li>
+          <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.login_history') ?>"><?= $this->icon('history', 18) ?> 로그인 기록</a></li><?php endif ?>
           <?php if ($current_user['is_admin']): ?><li><a href="<?= $this->url('admin.index') ?>"><?= $this->icon('cog', 18) ?> 관리 콘솔</a></li><?php endif ?>
         <?php endif ?>
       </ul>

@@ -1,9 +1,9 @@
 /* =============================================================
-   gnucms.com · atelier
-   따뜻한 공방 감성으로 꾸민 발견형 커뮤니티 테마.
+   gnucms.com · ink & copper
+   따뜻한 뉴트럴과 잉크 블랙, 번트 코퍼로 꾸민 프리미엄 커뮤니티 테마.
 
    화면 구조는 카테고리 원형 줄, 세로 커버 카드, 순위 목록, 관리 콘솔을 중심으로 잡았고,
-   색은 크림 종이 바탕 + 흙빛 오렌지로 다시 잡았다.
+   색은 웜 본 화이트 바탕 + 잉크 블랙과 번트 코퍼로 다시 잡았다.
    브랜드 자산(로고·이름·이미지·문구)은 쓰지 않고 배치 언어만 참고했다.
 
    컴포넌트는 daisyUI 5 를 CDN 에서 그대로 받아 쓴다.
@@ -37,20 +37,20 @@
 [data-theme="light"]{
   color-scheme:light;
 
-  /* 공예 마켓의 종이 같은 따뜻한 무채색. */
-  --color-base-100:#fffdf9;
-  --color-base-200:#f7f2e9;
-  --color-base-300:#eadfce;
-  --color-base-content:#403932;
+  /* 따뜻한 본 화이트와 잉크빛 텍스트. */
+  --color-base-100:#fcfaf6;
+  --color-base-200:#f3efe8;
+  --color-base-300:#e5ded3;
+  --color-base-content:#231f1b;
 
-  /* 흙빛 오렌지. 본문 위의 주요 동작과 선택 상태에 쓴다. */
-  --color-primary:#c24125;
+  /* 잉크 블랙. 본문 위의 주요 동작과 선택 상태에 쓴다. */
+  --color-primary:#2d2925;
   --color-primary-content:#ffffff;
-  --color-secondary:#287567;
+  --color-secondary:#9a4f36;
   --color-secondary-content:#ffffff;
-  --color-accent:#9a5a9e;
+  --color-accent:#7c5b2d;
   --color-accent-content:#ffffff;
-  --color-neutral:#403932;
+  --color-neutral:#2d2925;
   --color-neutral-content:#ffffff;
 
   --color-info:#1a6ba1;
@@ -64,10 +64,10 @@
   --field-border:color-mix(in srgb,var(--color-base-content) 55%,transparent);
   --field-border-width:1.5px;
 
-  /* 배너·리본처럼 글자를 얹지 않는 자리에만 쓰는 흙빛 원색. */
-  --brand-vivid:#f28b64;
-  --brand-deep:#a8361e;
-  --brand-wash:#fff0df;
+  /* 배너·리본과 브랜드 표식에 쓰는 번트 코퍼. */
+  --brand-vivid:#b56143;
+  --brand-deep:#713823;
+  --brand-wash:#f3e3da;
 
   --radius-selector:9999px;
   --radius-field:.8rem;
@@ -79,9 +79,9 @@
   --depth:0;
   --noise:0;
 
-  /* 아바타·커버용 톤 (따뜻한 공예 색을 중심으로 잡는다) */
-  --tone-0:#d94f2b; --tone-1:#287567; --tone-2:#a66a35;
-  --tone-3:#4678a8; --tone-4:#a64f76; --tone-5:#7657a8;
+  /* 아바타·커버용 보석 톤 */
+  --tone-0:#a75438; --tone-1:#8a652d; --tone-2:#9b633e;
+  --tone-3:#53606c; --tone-4:#7e4452; --tone-5:#5e587b;
 
   --shadow-1:0 2px 0 rgba(88,62,40,.05);
   --shadow-2:0 9px 26px rgba(88,62,40,.1);
@@ -94,19 +94,19 @@
 [data-theme="dark"]{
   color-scheme:dark;
 
-  --color-base-100:#201c18;
-  --color-base-200:#171411;
-  --color-base-300:#332b24;
-  --color-base-content:#f4eadc;
+  --color-base-100:#1b1917;
+  --color-base-200:#11100f;
+  --color-base-300:#302c28;
+  --color-base-content:#f1ece4;
 
-  --color-primary:#ff9874;
-  --color-primary-content:#31130a;
-  --color-secondary:#6ee7b7;
-  --color-secondary-content:#052018;
-  --color-accent:#93c5fd;
-  --color-accent-content:#0a1a2e;
-  --color-neutral:#1c2635;
-  --color-neutral-content:#dde5ee;
+  --color-primary:#d58d70;
+  --color-primary-content:#2b160f;
+  --color-secondary:#d2b071;
+  --color-secondary-content:#2a210f;
+  --color-accent:#d0b496;
+  --color-accent-content:#281b12;
+  --color-neutral:#302c28;
+  --color-neutral-content:#f1ece4;
 
   --color-info:#7dd3fc;
   --color-info-content:#08202e;
@@ -119,12 +119,12 @@
   --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
   --field-border-width:var(--border);
 
-  --brand-vivid:#ffad8c;
-  --brand-deep:#ffc2aa;
-  --brand-wash:#3a251b;
+  --brand-vivid:#d58d70;
+  --brand-deep:#edb59d;
+  --brand-wash:#3b241c;
 
-  --tone-0:#7cc4f0; --tone-1:#5eead4; --tone-2:#a5b4fc;
-  --tone-3:#7dd3fc; --tone-4:#f9a8d4; --tone-5:#c4b5fd;
+  --tone-0:#d58d70; --tone-1:#d2b071; --tone-2:#d3a47f;
+  --tone-3:#9babb8; --tone-4:#c98698; --tone-5:#aaa3c8;
 
   --shadow-1:0 1px 2px rgba(0,0,0,.5);
   --shadow-2:0 2px 6px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.5);
@@ -137,18 +137,18 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --color-base-100:#201c18;
-    --color-base-200:#171411;
-    --color-base-300:#332b24;
-    --color-base-content:#f4eadc;
-    --color-primary:#ff9874;
-    --color-primary-content:#31130a;
-    --color-secondary:#6ee7b7;
-    --color-secondary-content:#052018;
-    --color-accent:#93c5fd;
-    --color-accent-content:#0a1a2e;
-    --color-neutral:#1c2635;
-    --color-neutral-content:#dde5ee;
+    --color-base-100:#1b1917;
+    --color-base-200:#11100f;
+    --color-base-300:#302c28;
+    --color-base-content:#f1ece4;
+    --color-primary:#d58d70;
+    --color-primary-content:#2b160f;
+    --color-secondary:#d2b071;
+    --color-secondary-content:#2a210f;
+    --color-accent:#d0b496;
+    --color-accent-content:#281b12;
+    --color-neutral:#302c28;
+    --color-neutral-content:#f1ece4;
     --color-info:#7dd3fc;
     --color-info-content:#08202e;
     --color-success:#6ee7b7;
@@ -159,11 +159,11 @@
     --color-error-content:#2e0c0c;
     --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
     --field-border-width:var(--border);
-    --brand-vivid:#ffad8c;
-    --brand-deep:#ffc2aa;
-    --brand-wash:#3a251b;
-    --tone-0:#7cc4f0; --tone-1:#5eead4; --tone-2:#a5b4fc;
-    --tone-3:#7dd3fc; --tone-4:#f9a8d4; --tone-5:#c4b5fd;
+    --brand-vivid:#d58d70;
+    --brand-deep:#edb59d;
+    --brand-wash:#3b241c;
+    --tone-0:#d58d70; --tone-1:#d2b071; --tone-2:#d3a47f;
+    --tone-3:#9babb8; --tone-4:#c98698; --tone-5:#aaa3c8;
     --shadow-1:0 1px 2px rgba(0,0,0,.5);
     --shadow-2:0 2px 6px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.5);
     --shadow-3:0 10px 24px -8px rgba(0,0,0,.7),0 4px 8px -6px rgba(0,0,0,.6);
@@ -1501,6 +1501,15 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .admin-brand-copy small{color:var(--bc-soft);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-menu{flex:1;overflow-y:auto}
 .admin-menu .menu-text{overflow:hidden;text-overflow:ellipsis}
+.admin-version{
+  display:flex;align-items:center;gap:.625rem;margin-top:auto;padding:.75rem .625rem .125rem;
+  border-top:var(--border) solid var(--bc-10);color:var(--bc-soft)
+}
+.admin-version:hover{color:var(--color-primary)}
+.admin-version-icon{display:grid;place-items:center;flex:none}
+.admin-version-copy{display:flex;align-items:baseline;gap:.375rem;min-width:0}
+.admin-version-copy strong{font-size:11.5px;letter-spacing:.02em}
+.admin-version-copy small{font-size:10.5px;white-space:nowrap}
 .admin-menu li > a.menu-active{
   background:var(--color-primary);color:var(--color-primary-content);
   box-shadow:0 6px 16px -8px color-mix(in srgb,var(--color-primary) 90%,transparent);
@@ -1557,10 +1566,12 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .drawer-lg-open .admin-menu-btn{display:none}
   html[data-admin-sidebar="collapsed"] .drawer-lg-open{--admin-side-w:4.5rem}
   html[data-admin-sidebar="collapsed"] .admin-brand-copy,
-  html[data-admin-sidebar="collapsed"] .admin-menu .menu-text{display:none}
+  html[data-admin-sidebar="collapsed"] .admin-menu .menu-text,
+  html[data-admin-sidebar="collapsed"] .admin-version-copy{display:none}
   html[data-admin-sidebar="collapsed"] .admin-sidebar-head{flex-direction:column;background:none}
   html[data-admin-sidebar="collapsed"] .admin-sidebar-head .brand{justify-content:center;padding:0}
   html[data-admin-sidebar="collapsed"] .admin-menu li > a{justify-content:center;padding-inline:0}
+  html[data-admin-sidebar="collapsed"] .admin-version{justify-content:center;padding-inline:0}
   html[data-admin-sidebar="collapsed"] .admin-menu .menu-title{height:1px;padding:.5rem 0 0;overflow:hidden;text-indent:-999px;border-top:var(--border) solid var(--bc-10)}
   html[data-admin-sidebar="collapsed"] .admin-fold .icon{transform:rotate(180deg)}
 }
@@ -1930,7 +1941,7 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
    배포 저장소의 첫 화면만 쓰는 별도 문법이다. 커뮤니티/관리 화면의
    atelier 계열 색과 섞지 않고, 짙은 잉크 + 라임으로 제품 사이트답게 보인다. */
 .product-home{margin:0;background:#07110e;color:#11201a;font-family:var(--font);overflow-x:hidden}
-.product-home .to-top{background:#c9ff45;color:#0a1510;border-color:#c9ff45}
+.product-home .to-top{background:var(--premium-accent);color:var(--premium-accent-text);border-color:var(--premium-accent)}
 .product-shell{width:min(1180px,calc(100% - 48px));margin-inline:auto}
 .product-header{position:absolute;inset:0 0 auto;z-index:30;height:82px;color:#f4f8f4}
 .product-header-inner{height:100%;display:flex;align-items:center;gap:2rem}
@@ -2161,6 +2172,23 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .author-comment-post{font-size:.75rem;color:var(--bc-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .author-comment-date{font-size:.75rem;color:var(--bc-soft);white-space:nowrap}
 .author-comment-empty{color:var(--bc-soft)}
+.board-search-area{display:flex;justify-content:flex-end;margin-top:1rem}
+.board-search.inline-search{width:100%;max-width:26rem;margin-bottom:0;gap:.375rem}
+.all-posts-search.inline-search{max-width:20rem}
+.board-search-select{position:relative;display:flex;flex:none;width:6.5rem;height:2.375rem;border:var(--border) solid var(--bc-20);border-radius:.5rem;background:var(--color-base-100)}
+.board-search-select:focus-within{outline:2px solid color-mix(in srgb,var(--color-primary) 55%,transparent);outline-offset:1px;border-color:var(--color-primary)}
+.board-search-select select{width:100%;padding:0 1.75rem 0 .75rem;appearance:none;border:0;border-radius:inherit;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.board-search-select-icon{position:absolute;right:.625rem;top:50%;display:grid;transform:translateY(-50%);pointer-events:none;color:var(--bc-soft)}
+.board-search .input{border-radius:.5rem}
+.board-search .board-search-submit{height:2.375rem;min-height:2.375rem;padding-inline:.875rem;border-radius:.5rem;font-size:13px}
+.comment-search-results{margin-bottom:1rem}
+
+@media (max-width:640px){
+  .board-search-area{justify-content:stretch}
+  .board-search.inline-search{max-width:none}
+  .all-posts-search.inline-search{max-width:none}
+  .board-search-select{width:5.75rem}
+}
 
 /* 전체 공지 뱃지 글자가 줄바꿈되지 않게 한다. 색(강조색)은 badge-accent 클래스가 낸다 */
 .notice-list .notice-scope{white-space:nowrap}
@@ -2453,53 +2481,53 @@ body[data-section="board"] .chat-header time{font-size:12.5px}
 
 /* =============================================================
    2026 premium refinement
-   블루·인디고 팔레트, 얇은 경계, 짧은 상호작용을 모든 화면에 공유한다.
+   잉크 블랙·번트 코퍼 팔레트, 얇은 경계, 짧은 상호작용을 모든 화면에 공유한다.
    ============================================================= */
 :root,[data-theme="light"]{
-  --premium-page:#f4f7fb;
-  --premium-surface:#fbfcff;
-  --premium-surface-2:#eaf0f8;
-  --premium-text:#172033;
-  --premium-muted:#657189;
-  --premium-line:rgba(43,63,103,.13);
-  --premium-line-strong:rgba(43,63,103,.22);
-  --premium-accent:#315bd6;
-  --premium-accent-strong:#2748b5;
-  --premium-accent-soft:#e8eeff;
+  --premium-page:#f2efe9;
+  --premium-surface:#fbfaf7;
+  --premium-surface-2:#e8e2d9;
+  --premium-text:#211f1c;
+  --premium-muted:#706b64;
+  --premium-line:rgba(60,52,45,.14);
+  --premium-line-strong:rgba(60,52,45,.24);
+  --premium-accent:#2d2925;
+  --premium-accent-strong:#171513;
+  --premium-accent-soft:#ebe7e1;
   --premium-accent-text:#ffffff;
-  --premium-violet:#7357d9;
-  --premium-violet-soft:#f0ecff;
-  --premium-shadow:0 1px 2px rgba(25,43,79,.035),0 16px 42px rgba(34,59,110,.075);
-  --premium-shadow-hover:0 2px 4px rgba(25,43,79,.045),0 22px 54px rgba(34,59,110,.12);
+  --premium-violet:#a65338;
+  --premium-violet-soft:#f4e2da;
+  --premium-shadow:0 1px 2px rgba(49,42,35,.04),0 16px 42px rgba(67,55,44,.08);
+  --premium-shadow-hover:0 2px 4px rgba(49,42,35,.05),0 22px 54px rgba(67,55,44,.13);
   --premium-radius:16px;
   --premium-radius-sm:11px;
 }
 [data-theme="dark"]{
-  --premium-page:#0f172a;
-  --premium-surface:#151f35;
-  --premium-surface-2:#1d2a45;
-  --premium-text:#edf3ff;
-  --premium-muted:#a5b2ca;
-  --premium-line:rgba(167,184,216,.14);
-  --premium-line-strong:rgba(167,184,216,.24);
-  --premium-accent:#8ba7ff;
-  --premium-accent-strong:#a7baff;
-  --premium-accent-soft:rgba(92,126,238,.17);
-  --premium-accent-text:#101a31;
-  --premium-violet:#b29bff;
-  --premium-violet-soft:rgba(134,105,228,.17);
-  --premium-shadow:0 1px 2px rgba(2,6,23,.28),0 20px 55px rgba(2,6,23,.28);
-  --premium-shadow-hover:0 2px 4px rgba(2,6,23,.3),0 28px 64px rgba(2,6,23,.38);
+  --premium-page:#100f0e;
+  --premium-surface:#1a1816;
+  --premium-surface-2:#2d2926;
+  --premium-text:#f2ede5;
+  --premium-muted:#ada69d;
+  --premium-line:rgba(199,190,178,.14);
+  --premium-line-strong:rgba(199,190,178,.25);
+  --premium-accent:#d58d70;
+  --premium-accent-strong:#e4a68d;
+  --premium-accent-soft:rgba(181,97,65,.18);
+  --premium-accent-text:#2b160f;
+  --premium-violet:#d0a36f;
+  --premium-violet-soft:rgba(190,139,80,.18);
+  --premium-shadow:0 1px 2px rgba(5,4,3,.3),0 20px 55px rgba(5,4,3,.34);
+  --premium-shadow-hover:0 2px 4px rgba(5,4,3,.32),0 28px 64px rgba(5,4,3,.44);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --premium-page:#0f172a;--premium-surface:#151f35;--premium-surface-2:#1d2a45;
-    --premium-text:#edf3ff;--premium-muted:#a5b2ca;
-    --premium-line:rgba(167,184,216,.14);--premium-line-strong:rgba(167,184,216,.24);
-    --premium-accent:#8ba7ff;--premium-accent-strong:#a7baff;--premium-accent-soft:rgba(92,126,238,.17);--premium-accent-text:#101a31;
-    --premium-violet:#b29bff;--premium-violet-soft:rgba(134,105,228,.17);
-    --premium-shadow:0 1px 2px rgba(2,6,23,.28),0 20px 55px rgba(2,6,23,.28);
-    --premium-shadow-hover:0 2px 4px rgba(2,6,23,.3),0 28px 64px rgba(2,6,23,.38);
+    --premium-page:#100f0e;--premium-surface:#1a1816;--premium-surface-2:#2d2926;
+    --premium-text:#f2ede5;--premium-muted:#ada69d;
+    --premium-line:rgba(199,190,178,.14);--premium-line-strong:rgba(199,190,178,.25);
+    --premium-accent:#d58d70;--premium-accent-strong:#e4a68d;--premium-accent-soft:rgba(181,97,65,.18);--premium-accent-text:#2b160f;
+    --premium-violet:#d0a36f;--premium-violet-soft:rgba(190,139,80,.18);
+    --premium-shadow:0 1px 2px rgba(5,4,3,.3),0 20px 55px rgba(5,4,3,.34);
+    --premium-shadow-hover:0 2px 4px rgba(5,4,3,.32),0 28px 64px rgba(5,4,3,.44);
   }
 }
 
@@ -2516,6 +2544,8 @@ body:not(.admin-page) .input:focus-within,body:not(.admin-page) .select:focus,bo
   border-color:var(--premium-text);box-shadow:0 0 0 4px color-mix(in srgb,var(--premium-text) 9%,transparent);
 }
 body:not(.admin-page) :focus-visible{outline:2px solid var(--premium-text);outline-offset:3px}
+/* 복합 입력 컨테이너가 포커스 테두리를 그리므로 내부 input에는 중복 링을 표시하지 않는다. */
+body:not(.admin-page) .input > input:focus-visible{outline:none}
 
 /* 헤더 */
 .site-header{
@@ -2854,13 +2884,13 @@ body:not(.admin-page) .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent
 .product-activity-head h2{display:flex;align-items:center;gap:.65rem;margin:0;font-size:15px;font-weight:850;letter-spacing:-.025em}
 .product-activity-head>a{color:var(--premium-accent);font-size:12px;font-weight:750}
 .product-activity-head>a:hover{color:var(--premium-accent-strong)}
-.product-live-dot{width:8px;height:8px;border-radius:50%;background:#22a65a;box-shadow:0 0 0 5px color-mix(in srgb,#22a65a 13%,transparent)}
+.product-live-dot{width:8px;height:8px;border-radius:50%;background:#b45f43;box-shadow:0 0 0 5px color-mix(in srgb,#b45f43 14%,transparent)}
 .product-activity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
 .product-activity-item{position:relative;min-width:0;padding:14px 42px 14px 15px;border:1px solid var(--premium-line);border-radius:12px;background:color-mix(in srgb,var(--premium-surface) 96%,transparent);box-shadow:0 1px 2px rgba(0,0,0,.025);transition:transform .18s var(--ease),border-color .18s ease,box-shadow .18s ease}
 .product-activity-item.is-fresh{border-color:color-mix(in srgb,var(--premium-accent) 28%,var(--premium-line));box-shadow:0 8px 24px color-mix(in srgb,var(--premium-accent) 7%,transparent)}
 .product-activity-meta{display:flex;align-items:center;gap:.45rem;min-width:0;margin-bottom:.45rem;color:var(--premium-muted);font-size:10.5px}
 .product-activity-meta time{margin-left:auto;white-space:nowrap}
-.product-new-badge{color:#168348;font-size:9px;font-weight:900;letter-spacing:.06em}
+.product-new-badge{color:#9a4f36;font-size:9px;font-weight:900;letter-spacing:.06em}
 .product-activity-item>a{display:block;overflow:hidden;color:var(--premium-text);font-size:13.5px;font-weight:780;text-overflow:ellipsis;white-space:nowrap}
 .product-activity-item>a:hover{color:var(--premium-accent)}
 .product-activity-comments{position:absolute;right:14px;bottom:14px;display:inline-flex;align-items:center;gap:.2rem;color:var(--premium-muted);font-size:10px}

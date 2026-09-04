@@ -6,7 +6,7 @@
         <?php $this->insert('posts/_thumb', ['post' => $post, 'board_badge' => false]) ?>
       </a>
       <div class="post-row-body">
-        <a class="post-row-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></a>
+        <a class="post-row-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>"><?php if ($post['is_notice']): ?><span class="badge <?= ($post['notice_scope'] ?? 'board') === 'global' ? 'badge-accent' : 'badge-primary' ?> badge-soft badge-sm"><?= ($post['notice_scope'] ?? 'board') === 'global' ? '전체 공지' : '공지' ?></span> <?php endif ?><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></a>
         <?php if (!empty($post['excerpt'])): ?><p class="post-row-excerpt"><?= $this->e($post['excerpt']) ?></p><?php endif ?>
         <?php $this->insert('posts/_meta', ['post' => $post]) ?>
       </div>

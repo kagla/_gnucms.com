@@ -3,11 +3,13 @@
 //   list           목록 배열(data)
 //   show_board     게시판 칸을 낸다 (여러 게시판이 섞이는 화면)
 //   show_category  분류 칸을 낸다 (분류를 쓰는 게시판)
-//   compact        좁은 칸용. 이름을 8자에서 자른다
+//   compact        좁은 칸용. 날짜를 줄이고 이름을 8자에서 자른다
+//   compact_date   날짜만 줄인다. 오늘이면 H:i, 지났으면 m-d (기본은 compact 를 따른다)
 //   empty_text     한 줄도 없을 때 보일 말
 $show_board = $show_board ?? false;
 $show_category = $show_category ?? false;
 $compact = $compact ?? false;
+$compact_date = $compact_date ?? $compact;
 $empty_text = $empty_text ?? '아직 글이 없습니다.';
 $notices = $notices ?? [];
 $navigation_scope = $navigation_scope ?? 'board';
@@ -55,7 +57,7 @@ $columns = 4 + ($show_board ? 1 : 0) + ($show_category ? 1 : 0);
             </div>
           </td>
           <td data-label="글쓴이" class="cell-author post-col-author"><?php $this->insert('posts/_author', ['post' => $post, 'compact' => $compact]) ?></td>
-          <td data-label="날짜" class="post-col-date"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time></td>
+          <td data-label="날짜" class="post-col-date"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $compact_date ? $this->compactDate($post['created_at']) : $this->date($post['created_at'], 'Y.m.d') ?></time></td>
           <td data-label="조회" class="post-col-views right"><?= $this->e($post['view_count']) ?></td>
         </tr>
       <?php endforeach; endif ?>

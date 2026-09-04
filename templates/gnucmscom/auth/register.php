@@ -50,6 +50,7 @@
           <?php if (array_key_exists('profile_image', $errors)): ?><p class="validator-hint"><?= $this->e($errors['profile_image']) ?></p><?php endif ?>
         </fieldset>
         <?php $this->insert('auth/_consents') ?>
+        <?php $this->insert('_turnstile', ['action' => 'register', 'errors' => $errors]) ?>
         <button class="btn btn-primary btn-block btn-lg" type="submit">가입하기</button>
       </form>
       <?php endif ?>
@@ -58,4 +59,5 @@
   </section>
 </div>
 <?php $this->insert('auth/_pw_toggle_script') ?>
+<?php if ($turnstile_enabled): ?><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script><?php endif ?>
 <?php $this->stop() ?>

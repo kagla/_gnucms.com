@@ -1,4 +1,6 @@
 <?php $this->layout('layout') ?>
+<?php // 추적·광고 코드는 관리 콘솔에서 실행하지 않는다. ?>
+<?php $this->start('external_service_head') ?><?php $this->stop() ?>
 <?php $this->start('body_class') ?>admin-page<?php $this->stop() ?>
 <?php $this->start('admin_section') ?>dashboard<?php $this->stop() ?>
 <?php $this->start('chrome') ?>
@@ -39,7 +41,8 @@
         </div>
       </div>
     </header>
-    <div class="admin-body" id="main"><?= $this->block('body') ?></div>
+    <?php $adminBodyClass = trim($this->block('admin_body_class')); ?>
+    <div class="admin-body<?= $adminBodyClass !== '' ? ' ' . $this->e($adminBodyClass) : '' ?>" id="main"><?= $this->block('body') ?></div>
   </div>
 
   <div class="drawer-side">

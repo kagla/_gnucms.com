@@ -1,18 +1,18 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>GNUCMS · 가벼운 PHP CMS<?php $this->stop() ?>
-<?php $this->start('seo_description') ?>GNUCMS는 PHP 7.4 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다.<?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 7.4 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다."><?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다."><?php $this->stop() ?>
 <?php $this->start('extra_head') ?>
 <script type="application/ld+json"><?php echo json_encode([
   '@context' => 'https://schema.org',
   '@type' => 'SoftwareApplication',
   'name' => 'GNUCMS',
   'applicationCategory' => 'ContentManagementSystem',
-  'operatingSystem' => 'Web server with PHP 7.4 or later',
+  'operatingSystem' => 'Web server with PHP 8.2 or later',
   'description' => '게시판, 회원, 댓글, 콘텐츠 관리 기능을 제공하는 가벼운 오픈소스 PHP CMS',
   'url' => 'https://gnucms.com/',
   'downloadUrl' => 'https://github.com/kagla/gnucms/archive/refs/heads/main.zip',
-  'softwareRequirements' => 'PHP 7.4+, PDO SQLite/MySQL/PostgreSQL',
+  'softwareRequirements' => 'PHP 8.2+, PDO SQLite/MySQL/PostgreSQL',
   'license' => 'https://opensource.org/license/mit',
   'codeRepository' => 'https://github.com/kagla/gnucms',
   'inLanguage' => 'ko-KR',
@@ -54,13 +54,14 @@ $freshAfter = time() - 86400;
 <?php $this->start('body') ?>
   <section class="product-hero">
     <div class="product-shell product-hero-inner">
-      <p class="product-label">OPEN SOURCE · PHP 7.4+</p>
+      <p class="product-label">OPEN SOURCE · PHP 8.2+</p>
       <h1>필요한 것만 담은 가벼운 PHP CMS</h1>
       <div class="product-hero-summary">
         <p class="product-lead">일반 웹호스팅에 바로 올려 쓰는 게시판 중심 오픈소스 CMS입니다.</p>
         <div class="product-actions">
-          <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms/archive/refs/heads/main.zip">내려받기</a>
-          <a class="product-button" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub</a>
+          <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms#readme" target="_blank" rel="noopener">README 보기</a>
+          <a class="product-button" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub 저장소</a>
+          <a class="product-button" href="https://kagla10.mycafe24.com" target="_blank" rel="noopener">카페24 절약형 호스팅 데모</a>
         </div>
       </div>
     </div>
@@ -113,11 +114,13 @@ $freshAfter = time() - 86400;
           <?php else: ?>
             <div class="product-gallery-boards">
               <?php foreach ($galleryBoards as $board): ?>
+                <section id="feed-<?= $this->e($board['board_key']) ?>" aria-label="<?= $this->e($board['name']) ?>">
                 <?php if ($board['latest_posts'] === []): ?>
                   <p class="product-feed-empty"><?= $this->e($board['name']) ?>에 아직 등록된 사이트가 없습니다.</p>
                 <?php else: ?>
                   <?php $this->insert('home/_feed_gallery', ['board' => $board]) ?>
                 <?php endif ?>
+                </section>
               <?php endforeach ?>
             </div>
           <?php endif ?>
@@ -146,12 +149,13 @@ $freshAfter = time() - 86400;
           <?php else: ?>
             <div class="product-board-feeds">
               <?php foreach ($communityBoards as $board): ?>
-                <section aria-labelledby="hub-feed-<?= $this->e($board['board_key']) ?>">
+                <section id="feed-<?= $this->e($board['board_key']) ?>" aria-labelledby="hub-feed-<?= $this->e($board['board_key']) ?>">
                   <div class="product-board-feed-title"><h4 id="hub-feed-<?= $this->e($board['board_key']) ?>"><?= $this->e($board['name']) ?></h4><a href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>">전체보기</a></div>
                   <?php if ($board['latest_posts'] === []): ?>
                     <p class="product-feed-empty">아직 등록된 글이 없습니다.</p>
                   <?php else: ?>
-                    <?php $this->insert('home/_feed_list', ['board' => $board]) ?>
+                    <?php $__type = $this->def($board['list_type'] ?? null, 'list'); ?>
+                    <?php $this->insert(in_array($__type, ['list', 'gallery', 'news', 'magazine'], true) && $this->exists('home/_feed_' . $__type) ? 'home/_feed_' . $__type : 'home/_feed_list', ['board' => $board]) ?>
                   <?php endif ?>
                 </section>
               <?php endforeach ?>
@@ -194,7 +198,7 @@ $freshAfter = time() - 86400;
         <p>저가형 공유 호스팅부터 독립 서버까지, PHP가 실행되는 환경이라면 같은 코드로 운영할 수 있습니다.</p>
       </div>
       <dl class="product-facts">
-        <div><dt>Runtime</dt><dd>PHP 7.4 이상</dd></div>
+        <div><dt>Runtime</dt><dd>PHP 8.2 이상</dd></div>
         <div><dt>Database</dt><dd>SQLite · MySQL · PostgreSQL</dd></div>
         <div><dt>Rendering</dt><dd>서버 렌더링 PHP 템플릿</dd></div>
         <div><dt>License</dt><dd>MIT 오픈소스 라이선스</dd></div>

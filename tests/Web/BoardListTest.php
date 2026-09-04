@@ -103,7 +103,7 @@ final class BoardListTest extends WebTestCase
 
         $body = $this->body($this->get($app, '/'));
         self::assertStringContainsString('필요한 것만 담은', $body);
-        self::assertStringContainsString('내려받기', $body);
+        self::assertStringContainsString('README 보기', $body);
     }
 
     /** @dataProvider connectionProvider */
@@ -113,9 +113,11 @@ final class BoardListTest extends WebTestCase
         $body = $this->body($this->get($app, '/'));
 
         self::assertStringContainsString('가벼운 오픈소스 CMS', $body);
-        self::assertStringContainsString('PHP 7.4+', $body);
+        self::assertStringContainsString('PHP 8.2+', $body);
         self::assertStringContainsString('SQLite', $body);
         self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
+        self::assertStringContainsString('https://kagla10.mycafe24.com', $body);
+        self::assertStringContainsString('카페24 절약형 호스팅 데모', $body);
         self::assertStringNotContainsString('class="btn btn-ghost btn-circle theme-toggle"', $body);
         self::assertStringContainsString(GNUCMS_ID . '-theme', $body);
     }
