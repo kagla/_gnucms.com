@@ -2497,14 +2497,13 @@ body[data-section="board"] .chat-header time{font-size:12.5px}
   --premium-accent-text:#ffffff;
   --premium-violet:#a65338;
   --premium-violet-soft:#f4e2da;
-  --premium-indigo:#31408f;
-  --premium-indigo-strong:#26327a;
-  --premium-indigo-text:#ffffff;
-  --premium-indigo-soft:#e2e5f6;
-  --premium-jade:#2f6a5e;
-  --premium-jade-strong:#245349;
-  --premium-jade-text:#ffffff;
-  --premium-jade-soft:#dceae6;
+  /* 히어로 단추가 5초씩 오가는 두 벌. A 는 톤온톤 잉크, B 는 테라코타. */
+  --hero-a1-bg:#2d2925;--hero-a1-fg:#ffffff;--hero-a1-bd:#2d2925;
+  --hero-a2-bg:#6b6158;--hero-a2-fg:#ffffff;--hero-a2-bd:#6b6158;
+  --hero-a3-bg:#e8e2d9;--hero-a3-fg:#2d2925;--hero-a3-bd:#d6cec2;
+  --hero-b1-bg:#2d2925;--hero-b1-fg:#ffffff;--hero-b1-bd:#2d2925;
+  --hero-b2-bg:#8a3a1c;--hero-b2-fg:#ffffff;--hero-b2-bd:#8a3a1c;
+  --hero-b3-bg:#f4e2da;--hero-b3-fg:#7a2f13;--hero-b3-bd:#e0c4b7;
   --premium-shadow:0 1px 2px rgba(49,42,35,.04),0 16px 42px rgba(67,55,44,.08);
   --premium-shadow-hover:0 2px 4px rgba(49,42,35,.05),0 22px 54px rgba(67,55,44,.13);
   --premium-radius:16px;
@@ -2524,14 +2523,12 @@ body[data-section="board"] .chat-header time{font-size:12.5px}
   --premium-accent-text:#2b160f;
   --premium-violet:#d0a36f;
   --premium-violet-soft:rgba(190,139,80,.18);
-  --premium-indigo:#93a5f2;
-  --premium-indigo-strong:#a9b7f6;
-  --premium-indigo-text:#131a3d;
-  --premium-indigo-soft:rgba(104,124,214,.2);
-  --premium-jade:#7fc7b3;
-  --premium-jade-strong:#94d5c2;
-  --premium-jade-text:#0e2721;
-  --premium-jade-soft:rgba(90,160,142,.18);
+  --hero-a1-bg:#ede7dd;--hero-a1-fg:#1a1816;--hero-a1-bd:#ede7dd;
+  --hero-a2-bg:#6f665c;--hero-a2-fg:#f7f3ec;--hero-a2-bd:#6f665c;
+  --hero-a3-bg:#2d2926;--hero-a3-fg:#f2ede5;--hero-a3-bd:#4a443d;
+  --hero-b1-bg:#d58d70;--hero-b1-fg:#2b160f;--hero-b1-bd:#d58d70;
+  --hero-b2-bg:#a8492a;--hero-b2-fg:#ffe9dd;--hero-b2-bd:#a8492a;
+  --hero-b3-bg:rgba(190,139,80,.2);--hero-b3-fg:#f0c9a8;--hero-b3-bd:rgba(213,141,112,.45);
   --premium-shadow:0 1px 2px rgba(5,4,3,.3),0 20px 55px rgba(5,4,3,.34);
   --premium-shadow-hover:0 2px 4px rgba(5,4,3,.32),0 28px 64px rgba(5,4,3,.44);
 }
@@ -2542,8 +2539,12 @@ body[data-section="board"] .chat-header time{font-size:12.5px}
     --premium-line:rgba(199,190,178,.14);--premium-line-strong:rgba(199,190,178,.25);
     --premium-accent:#d58d70;--premium-accent-strong:#e4a68d;--premium-accent-soft:rgba(181,97,65,.18);--premium-accent-text:#2b160f;
     --premium-violet:#d0a36f;--premium-violet-soft:rgba(190,139,80,.18);
-    --premium-indigo:#93a5f2;--premium-indigo-strong:#a9b7f6;--premium-indigo-text:#131a3d;--premium-indigo-soft:rgba(104,124,214,.2);
-    --premium-jade:#7fc7b3;--premium-jade-strong:#94d5c2;--premium-jade-text:#0e2721;--premium-jade-soft:rgba(90,160,142,.18);
+    --hero-a1-bg:#ede7dd;--hero-a1-fg:#1a1816;--hero-a1-bd:#ede7dd;
+    --hero-a2-bg:#6f665c;--hero-a2-fg:#f7f3ec;--hero-a2-bd:#6f665c;
+    --hero-a3-bg:#2d2926;--hero-a3-fg:#f2ede5;--hero-a3-bd:#4a443d;
+    --hero-b1-bg:#d58d70;--hero-b1-fg:#2b160f;--hero-b1-bd:#d58d70;
+    --hero-b2-bg:#a8492a;--hero-b2-fg:#ffe9dd;--hero-b2-bd:#a8492a;
+    --hero-b3-bg:rgba(190,139,80,.2);--hero-b3-fg:#f0c9a8;--hero-b3-bd:rgba(213,141,112,.45);
     --premium-shadow:0 1px 2px rgba(5,4,3,.3),0 20px 55px rgba(5,4,3,.34);
     --premium-shadow-hover:0 2px 4px rgba(5,4,3,.32),0 28px 64px rgba(5,4,3,.44);
   }
@@ -2780,10 +2781,32 @@ body:not(.admin-page){
 .product-label{color:var(--premium-accent);border-color:color-mix(in srgb,var(--premium-accent) 24%,transparent);background:color-mix(in srgb,var(--premium-accent-soft) 76%,transparent)}
 .product-button-primary{border-color:var(--premium-accent);background:var(--premium-accent);color:var(--premium-accent-text)}
 .product-button-primary:hover{border-color:var(--premium-accent-strong);background:var(--premium-accent-strong);opacity:1}
-.product-button-secondary{border-color:var(--premium-indigo);background:var(--premium-indigo);color:var(--premium-indigo-text);box-shadow:0 10px 28px color-mix(in srgb,var(--premium-indigo) 22%,transparent)}
-.product-button-secondary:hover{border-color:var(--premium-indigo-strong);background:var(--premium-indigo-strong);opacity:1}
-.product-button-tertiary{border-color:var(--premium-jade);background:var(--premium-jade);color:var(--premium-jade-text);box-shadow:0 10px 28px color-mix(in srgb,var(--premium-jade) 18%,transparent)}
-.product-button-tertiary:hover{border-color:var(--premium-jade-strong);background:var(--premium-jade-strong);opacity:1}
+/* 히어로 단추 세 벌이 5초씩 두 팔레트를 오간다. 0.5초만 페이드하고 나머지는 붙잡아 둔다. */
+@keyframes product-button-cycle{
+  0%,45%{background:var(--pb-a-bg);color:var(--pb-a-fg);border-color:var(--pb-a-bd)}
+  50%,95%{background:var(--pb-b-bg);color:var(--pb-b-fg);border-color:var(--pb-b-bd)}
+  100%{background:var(--pb-a-bg);color:var(--pb-a-fg);border-color:var(--pb-a-bd)}
+}
+.product-hero .product-button{animation:product-button-cycle 10s linear infinite}
+.product-hero .product-button-primary{
+  --pb-a-bg:var(--hero-a1-bg);--pb-a-fg:var(--hero-a1-fg);--pb-a-bd:var(--hero-a1-bd);
+  --pb-b-bg:var(--hero-b1-bg);--pb-b-fg:var(--hero-b1-fg);--pb-b-bd:var(--hero-b1-bd);
+}
+.product-hero .product-button-secondary{
+  --pb-a-bg:var(--hero-a2-bg);--pb-a-fg:var(--hero-a2-fg);--pb-a-bd:var(--hero-a2-bd);
+  --pb-b-bg:var(--hero-b2-bg);--pb-b-fg:var(--hero-b2-fg);--pb-b-bd:var(--hero-b2-bd);
+}
+.product-hero .product-button-tertiary{
+  --pb-a-bg:var(--hero-a3-bg);--pb-a-fg:var(--hero-a3-fg);--pb-a-bd:var(--hero-a3-bd);
+  --pb-b-bg:var(--hero-b3-bg);--pb-b-fg:var(--hero-b3-fg);--pb-b-bd:var(--hero-b3-bd);
+}
+/* 첫 화면과 움직임을 줄인 환경에서는 테라코타 한 벌로 멈춰 세운다. */
+.product-button-secondary{border-color:var(--hero-b2-bd);background:var(--hero-b2-bg);color:var(--hero-b2-fg)}
+.product-button-tertiary{border-color:var(--hero-b3-bd);background:var(--hero-b3-bg);color:var(--hero-b3-fg)}
+@media (prefers-reduced-motion:reduce){
+  .product-hero .product-button{animation:none}
+  .product-hero .product-button-primary{border-color:var(--hero-b1-bd);background:var(--hero-b1-bg);color:var(--hero-b1-fg)}
+}
 .product-section{padding:68px 0;scroll-margin-top:72px}
 .product-section-heading{margin-bottom:2rem}
 .product-section-split{gap:clamp(2rem,5vw,3.5rem)}
