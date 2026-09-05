@@ -2282,12 +2282,15 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .product-gallery-boards{display:grid;gap:1rem}
 .product-gallery-boards .carousel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;overflow:visible}
 .product-gallery-boards .carousel-item{display:block;width:auto;min-width:0}
+/* 데스크톱은 한 줄, 모바일은 두 줄로 갤러리를 미리 보여 준다. */
+.product-gallery-boards .carousel-item:nth-child(n+4){display:none}
 .product-gallery-boards .post-card{height:100%;color:var(--product-text);border:0;background:transparent;box-shadow:none}
 .product-gallery-boards .post-cover{border-radius:7px;background:var(--product-surface)}
 .product-gallery-boards .post-card .card-body{padding:.7rem 0 0}
 .product-gallery-boards .post-card .card-title{color:var(--product-text);font-size:13px}
 .product-gallery-boards .post-meta,.product-gallery-boards .post-stats{color:var(--product-muted)}
-.product-board-feeds{display:grid;gap:1.25rem}
+/* 긴 글 제목의 최소 콘텐츠 너비가 모바일 게시판 영역을 넓히지 않도록 한다. */
+.product-board-feeds{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem}
 .product-board-feeds>section+section{padding-top:1.1rem;border-top:1px solid var(--product-line)}
 .product-board-feed-title{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.6rem}
 .product-board-feed-title h4{margin:0;color:var(--product-text);font-size:13px;font-weight:800}
@@ -2420,6 +2423,7 @@ body[data-section="board"] .comments{margin-top:1rem}
   .product-feature-list article{min-height:0}
   .product-hub-grid{grid-template-columns:1fr}
   .product-gallery-boards .carousel{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .product-gallery-boards .carousel-item:nth-child(4){display:block}
   .product-showcase-empty{grid-template-columns:auto 1fr}
   .product-showcase-empty .product-button{grid-column:1/-1}
   .site-footer-shell{width:min(100% - 32px,960px)}
