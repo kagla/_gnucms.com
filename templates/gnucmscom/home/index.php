@@ -1,7 +1,7 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>GNUCMS · 가벼운 PHP CMS<?php $this->stop() ?>
-<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다.<?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상과 SQLite, MySQL, PostgreSQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다."><?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상에서 동작하며 SQLite와 MySQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상에서 동작하며 SQLite와 MySQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다."><?php $this->stop() ?>
 <?php $this->start('extra_head') ?>
 <script type="application/ld+json"><?php echo json_encode([
   '@context' => 'https://schema.org',
@@ -12,7 +12,7 @@
   'description' => '게시판, 회원, 댓글, 콘텐츠 관리 기능을 제공하는 가벼운 오픈소스 PHP CMS',
   'url' => 'https://gnucms.com/',
   'downloadUrl' => 'https://github.com/kagla/gnucms/archive/refs/heads/main.zip',
-  'softwareRequirements' => 'PHP 8.2+, PDO SQLite/MySQL/PostgreSQL',
+  'softwareRequirements' => 'PHP 8.2+, PDO SQLite/MySQL',
   'license' => 'https://opensource.org/license/mit',
   'codeRepository' => 'https://github.com/kagla/gnucms',
   'inLanguage' => 'ko-KR',
@@ -177,7 +177,7 @@ $freshAfter = time() - 86400;
         <h2>작은 사이트부터 커뮤니티까지</h2>
       </div>
       <div class="product-rich-copy">
-        <p>게시판, 회원, 댓글, 첨부파일과 콘텐츠 관리를 한 시스템에서 운영합니다. SQLite로 시작해 MySQL 또는 PostgreSQL로 확장할 수 있고, 별도의 프런트엔드 빌드 과정이 필요하지 않습니다.</p>
+        <p>게시판, 회원, 댓글, 첨부파일과 콘텐츠 관리를 한 시스템에서 운영합니다. SQLite와 MySQL 중 환경에 맞는 데이터베이스를 선택할 수 있고, 별도의 프런트엔드 빌드 과정이 필요하지 않습니다.</p>
       </div>
     </div>
   </section>
@@ -204,13 +204,13 @@ $freshAfter = time() - 86400;
       </div>
       <dl class="product-facts">
         <div><dt>Runtime</dt><dd>PHP 8.2 이상</dd></div>
-        <div><dt>Database</dt><dd>SQLite · MySQL · PostgreSQL</dd></div>
+        <div><dt>Database</dt><dd>SQLite · MySQL</dd></div>
         <div><dt>Rendering</dt><dd>서버 렌더링 PHP 템플릿</dd></div>
         <div><dt>License</dt><dd>MIT 오픈소스 라이선스</dd></div>
       </dl>
       <div class="product-principles">
         <article><h3>보안을 기본값으로</h3><p>CSRF 보호, 비밀번호 해시, 로그인 시도 제한, HTML 정제와 권한 검사를 기본 흐름에 포함합니다.</p></article>
-        <article><h3>데이터베이스 선택 자유</h3><p>세 데이터베이스에서 동일한 기능을 제공하며, 작은 사이트는 별도 DB 서버 없이 SQLite로 시작할 수 있습니다.</p></article>
+        <article><h3>데이터베이스 선택 자유</h3><p>두 데이터베이스에서 동일한 기능을 제공하며, 작은 사이트는 별도 DB 서버 없이 SQLite로 시작할 수 있습니다.</p></article>
         <article><h3>직접 소유하는 데이터</h3><p>애플리케이션과 데이터가 자신의 서버에 남습니다. 외부 SaaS에 콘텐츠 운영을 종속시키지 않습니다.</p></article>
       </div>
     </div>

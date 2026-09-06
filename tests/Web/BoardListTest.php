@@ -114,7 +114,8 @@ final class BoardListTest extends WebTestCase
 
         self::assertStringContainsString('가벼운 오픈소스 CMS', $body);
         self::assertStringContainsString('PHP 8.2+', $body);
-        self::assertStringContainsString('SQLite', $body);
+        self::assertStringContainsString('<dd>SQLite · MySQL</dd>', $body);
+        self::assertStringContainsString('"softwareRequirements":"PHP 8.2+, PDO SQLite/MySQL"', $body);
         self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
         self::assertStringContainsString('href="https://github.com/kagla/gnucms/releases/latest"', $body);
         self::assertStringContainsString('data-github-release-version>확인 중</strong>', $body);
