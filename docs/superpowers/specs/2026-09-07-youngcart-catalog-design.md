@@ -69,8 +69,7 @@ modules/youngcart/
     _product_card.php _pager.php _options.php _breadcrumb.php _category_menu.php
     admin/dashboard.php settings.php categories.php category_form.php
     admin/products.php product_form.php product_types.php product_stock.php option_stock.php
-  assets/
-    shop.css shop.js admin.js   빌드 없는 정적 파일. 테마 자산 규칙으로 해시 URL을 붙인다
+  (정적 자산은 www/themes/default/youngcart.css, youngcart.js, youngcart-admin.js 에 둔다 — 테마 자산 규칙)
 ```
 
 `extension.json`:
@@ -409,8 +408,8 @@ reference VARCHAR(100), actor VARCHAR(100), created_at BIGINT` — 인덱스 `yc
 
 ## 10. 자산과 테마
 
-- `modules/youngcart/assets/shop.css`, `shop.js`, `admin.js`는 테마 자산 규칙에 따라 해시 URL로 불러온다.
-  선택 테마에 `extensions/youngcart/` 자산이 있으면 그것을 쓴다.
+- `www/themes/default/youngcart.css`, `youngcart.js`, `youngcart-admin.js`는 테마 자산 규칙에 따라 해시 URL로 불러온다.
+  선택 테마의 같은 경로에 파일이 있으면 그것을 쓴다.
 - 템플릿 탐색 순서는 런타임 규칙대로 테마 `extensions/youngcart/` → 패키지 `templates/` → 사이트 공통 → 코어 확장 조각이다.
 - 다크 모드·모바일 메뉴는 사이트 `layout`과 `admin/extension` 레이아웃을 그대로 쓴다.
 
