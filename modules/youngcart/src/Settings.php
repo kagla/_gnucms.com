@@ -13,8 +13,6 @@ final class Settings
     public const TYPE_LABELS = ['hit' => '히트상품', 'new' => '최신상품', 'recommend' => '추천상품', 'discount' => '할인상품', 'popular' => '인기상품'];
     public const TYPE_COLUMNS = ['hit' => 'is_hit', 'new' => 'is_new', 'recommend' => 'is_recommended', 'discount' => 'is_discount', 'popular' => 'is_popular'];
 
-    private ?array $cache = null;
-
     public function __construct(private Store $store, private HtmlSanitizer $sanitizer) {}
 
     public static function defaults(): array
@@ -35,12 +33,13 @@ final class Settings
         ];
     }
 
+    /** 매번 저장소에서 다시 읽는다. 캐시를 두면 이 인스턴스가 쓰기 전에 다른 인스턴스가
+     *  저장한 값을 계속 못 보게 되어(요청마다 새 Service를 만드는 확장 구조와 맞지 않는다) 두지 않는다. */
     public function all(): array
     {
-        if ($this->cache !== null) return $this->cache;
         $row = $this->store->selectOne('SELECT payload FROM ' . $this->store->table('yc_settings') . " WHERE id = 'settings'");
         $saved = $row === null ? [] : json_decode((string) $row['payload'], true, 8, JSON_THROW_ON_ERROR);
-        return $this->cache = array_replace_recursive(self::defaults(), is_array($saved) ? $saved : []);
+        return array_replace_recursive(self::defaults(), is_array($saved) ? $saved : []);
     }
 
     public function block(string $name): array
@@ -90,7 +89,6 @@ final class Settings
                 $this->store->db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
             }
         });
-        $this->cache = null;
         return $this->all();
     }
 }
