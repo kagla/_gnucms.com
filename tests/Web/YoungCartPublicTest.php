@@ -42,7 +42,7 @@ final class YoungCartPublicTest extends WebTestCase
         $top = $this->shop->categories->get($this->shop->categories->save(['code' => '10', 'name' => '의류', 'active' => '1', 'list_columns' => '1', 'list_rows' => '1', 'image_width' => '200', 'image_height' => '0', 'head_html' => '<p>분류 안내</p>']));
         $child = $this->shop->categories->get($this->shop->categories->save(['code' => '1010', 'name' => '셔츠', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         $ids = [];
-        foreach ([['A', '<b>파란</b> 셔츠', '300', '1'], ['B', '빨간 셔츠', '100', '1'], ['C', '숨은 셔츠', '200', '0']] as [$code, $name, $price, $active]) {
+        foreach ([['A', '파란 셔츠', '300', '1'], ['B', '빨간 셔츠', '100', '1'], ['C', '숨은 셔츠', '200', '0']] as [$code, $name, $price, $active]) {
             $ids[$code] = $this->shop->products->save(['code' => $code, 'name' => $name, 'category_id' => (string) $child['id'], 'price' => $price, 'list_price' => '500', 'stock' => $code === 'B' ? '0' : '3',
                 'active' => $active, 'is_hit' => '1', 'summary' => '요약 ' . $code, 'description' => '<p>설명 ' . $code . '</p>', 'info_group' => 'wear', 'sort_order' => $code === 'A' ? '1' : '2',
                 'option_group' => $code === 'A' ? [1 => '색상'] : [], 'options' => $code === 'A' ? [['value1' => '빨강', 'price' => '100', 'stock' => '2']] : [],
@@ -73,7 +73,7 @@ final class YoungCartPublicTest extends WebTestCase
         $seed = $this->seed();
         $home = $this->body($this->get($this->app, '/shop'));
         self::assertStringContainsString('히트상품', $home);
-        self::assertStringContainsString('&lt;b&gt;파란&lt;/b&gt; 셔츠', $home);
+        self::assertStringContainsString('파란 셔츠', $home);
         self::assertStringNotContainsString('숨은 셔츠', $home);
         self::assertStringContainsString('href="/shop/item?id=A"', $home);
         self::assertStringContainsString('href="/shop/list?ca=10"', $home);
@@ -100,7 +100,10 @@ final class YoungCartPublicTest extends WebTestCase
         self::assertStringContainsString('의류', $search);
         self::assertStringContainsString('value="셔츠"', $search);
         self::assertStringContainsString('검색어를 입력', $this->body($this->get($this->app, '/shop/search')));
-        self::assertStringContainsString('검색 결과가 없습니다', $this->body($this->get($this->app, '/shop/search', ['q' => '<script>'])));
+        $noHit = $this->body($this->get($this->app, '/shop/search', ['q' => '<script>']));
+        self::assertStringContainsString('검색 결과가 없습니다', $noHit);
+        self::assertStringContainsString('value="&lt;script&gt;"', $noHit);
+        self::assertStringNotContainsString('q=<script>', $noHit);
     }
 
     #[DataProvider('connectionProvider')]
@@ -110,7 +113,7 @@ final class YoungCartPublicTest extends WebTestCase
         $seed = $this->seed();
         $response = $this->get($this->app, '/shop/item', ['id' => 'A']);
         $item = $this->body($response);
-        self::assertStringContainsString('&lt;b&gt;파란&lt;/b&gt; 셔츠', $item);
+        self::assertStringContainsString('파란 셔츠', $item);
         self::assertStringContainsString('<p>설명 A</p>', $item);
         self::assertStringContainsString('data-yc-options', $item);
         self::assertStringContainsString('&quot;빨강&quot;', $item);
@@ -123,7 +126,7 @@ final class YoungCartPublicTest extends WebTestCase
         $request = (new ServerRequestFactory())->createServerRequest('GET', '/shop/item?id=A')->withCookieParams(['yc_hit_' . $seed['ids']['A'] => '1']);
         Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
         self::assertSame(1, (int) $this->shop->products->find($seed['ids']['A'])['hit']);
-        self::assertStringContainsString('&lt;b&gt;파란&lt;/b&gt; 셔츠', $this->body($this->get($this->app, '/shop/item', ['slug' => '파란-셔츠'])));
+        self::assertStringContainsString('파란 셔츠', $this->body($this->get($this->app, '/shop/item', ['slug' => '파란-셔츠'])));
         $b = $this->body($this->get($this->app, '/shop/item', ['id' => 'B']));
         self::assertStringContainsString('품절', $b);
         self::assertStringContainsString('관련상품', $b);
