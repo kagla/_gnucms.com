@@ -32,6 +32,11 @@ final class OptionsTest extends YoungCartTestCase
         try { (new Options($this->stubStore()))->validate(10000, ['색상'], [['value1' => '빨강'], ['value1' => '빨강']], []); self::fail(); } catch (DomainError $e) { self::assertStringContainsString('중복', $e->details()['options']); }
         try { (new Options($this->stubStore()))->validate(10000, [], [], [['value1' => '포장', 'value2' => '선물', 'price' => '-1']]); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('extras', $e->details()); }
         try { (new Options($this->stubStore()))->validate(10000, ['색상'], [['value1' => '<b>']], []); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('options', $e->details()); }
+        $many = array_map(static fn (int $i): array => ['value1' => 'v' . $i], range(1, 21));
+        try { (new Options($this->stubStore()))->validate(10000, ['색상'], $many, []); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('options', $e->details()); }
+        $normalized = (new Options($this->stubStore()))->validate(10000, ['색상'], Options::rows([['value1' => '빨강']]), Options::rows([['value1' => '포장', 'value2' => '리본']]));
+        self::assertSame(1, $normalized['select'][0]['active']);
+        self::assertSame(1, $normalized['extra'][0]['active']);
     }
 
     private function stubStore(): \GnuCms\Modules\YoungCart\Store

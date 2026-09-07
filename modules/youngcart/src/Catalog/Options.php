@@ -96,13 +96,17 @@ final class Options
             $normalized = ['value1' => $values[0], 'value2' => $values[1], 'value3' => $values[2], 'price' => $price,
                 'stock' => Input::int($row['stock'] ?? '', 'options', 0, 1000000, self::DEFAULT_STOCK),
                 'stock_alert' => Input::int($row['stock_alert'] ?? '', 'options', 0, 1000000, self::DEFAULT_ALERT),
-                'active' => Input::bool($row['active'] ?? '1'), 'sort_order' => count($select)];
+                'active' => Input::bool(($row['active'] ?? '') === '' ? '1' : $row['active']), 'sort_order' => count($select)];
             $key = self::key($normalized);
             if (isset($seen[$key])) throw DomainError::validation(['options' => '중복된 옵션 조합이 있습니다: ' . implode('/', array_filter($values))]);
             $seen[$key] = true;
             $select[] = $normalized;
         }
         if ($groups !== [] && $select === []) throw DomainError::validation(['options' => '옵션 그룹을 지정했으면 조합을 하나 이상 만들어 주세요.']);
+        for ($i = 1; $i <= 3; $i++) {
+            $distinct = count(array_unique(array_filter(array_map(static fn (array $r): string => $r['value' . $i], $select))));
+            if ($distinct > self::MAX_VALUES) throw DomainError::validation(['options' => '옵션 그룹당 값은 ' . self::MAX_VALUES . '개까지입니다.']);
+        }
         if (count($select) > self::MAX_COMBOS) throw DomainError::validation(['options' => '옵션 조합은 ' . self::MAX_COMBOS . '개까지입니다.']);
         $extra = [];
         $extraGroups = [];
@@ -119,7 +123,7 @@ final class Options
             $extra[] = ['value1' => $group, 'value2' => $name, 'value3' => '', 'price' => Input::int($row['price'] ?? '', 'extras', 0, 1000000000, 0),
                 'stock' => Input::int($row['stock'] ?? '', 'extras', 0, 1000000, self::DEFAULT_STOCK),
                 'stock_alert' => Input::int($row['stock_alert'] ?? '', 'extras', 0, 1000000, self::DEFAULT_ALERT),
-                'active' => Input::bool($row['active'] ?? '1'), 'sort_order' => count($extra)];
+                'active' => Input::bool(($row['active'] ?? '') === '' ? '1' : $row['active']), 'sort_order' => count($extra)];
         }
         if (count($extraGroups) > self::MAX_EXTRA_GROUPS) throw DomainError::validation(['extras' => '추가옵션 그룹은 ' . self::MAX_EXTRA_GROUPS . '개까지입니다.']);
         foreach ($extraGroups as $group) {
