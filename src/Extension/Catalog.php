@@ -35,6 +35,7 @@ final class Catalog
                     'key' => $key, 'id' => $id, 'section' => $section, 'name' => $id,
                     'description' => '', 'version' => '', 'requires' => [], 'optional' => [],
                     'entry_path' => null, 'public_path' => null, 'route_prefix' => null, 'admin_route_prefix' => null, 'admin_test' => false,
+                    'aliases' => true,
                     'directory' => $directory, 'error' => null,
                 ];
                 try {
@@ -83,6 +84,11 @@ final class Catalog
                         throw new RuntimeException('관리자 기본 주소는 /admin/shop 같은 경로로 지정해 주세요.');
                     }
                     $package['admin_route_prefix'] = $adminPrefix;
+                    $aliases = $manifest['aliases'] ?? true;
+                    if (!is_bool($aliases) || (!$aliases && $prefix === null)) {
+                        throw new RuntimeException('aliases 는 true/false 이며, false 는 route_prefix 가 있을 때만 지정할 수 있습니다.');
+                    }
+                    $package['aliases'] = $aliases;
                     foreach (['requires', 'optional'] as $field) {
                         $dependencies = $manifest[$field] ?? [];
                         if (!is_array($dependencies) || !array_is_list($dependencies)) {

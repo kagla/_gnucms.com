@@ -36,6 +36,7 @@ final class Manager
                     'key' => $key, 'id' => $id, 'section' => $section, 'name' => $id,
                     'description' => '', 'version' => '', 'requires' => [], 'optional' => [],
                     'entry_path' => null, 'public_path' => null, 'route_prefix' => null, 'admin_route_prefix' => null, 'admin_test' => false,
+                    'aliases' => true,
                     'error' => '활성화된 패키지의 파일을 찾을 수 없습니다.',
                 ];
             }
@@ -134,7 +135,7 @@ final class Manager
                 continue;
             }
             try {
-                $context = new Context($app, $key, $services, $package['route_prefix'], $package['admin_route_prefix']);
+                $context = new Context($app, $key, $services, $package['route_prefix'], $package['admin_route_prefix'], $package['aliases']);
                 $register = (static fn (string $file) => require $file)($package['directory'] . '/bootstrap.php');
                 if (!is_callable($register)) {
                     throw new \RuntimeException('Invalid extension entry point');
@@ -187,7 +188,7 @@ final class Manager
             }
         }
         try {
-            $context = new Context($app, $key, $this->services, $package['route_prefix'], $package['admin_route_prefix']);
+            $context = new Context($app, $key, $this->services, $package['route_prefix'], $package['admin_route_prefix'], $package['aliases']);
             $register = (static fn (string $file) => require $file)($package['directory'] . '/bootstrap.php');
             if (!is_callable($register)) {
                 throw new \RuntimeException('Invalid extension entry point');

@@ -391,4 +391,40 @@ PHP);
             self::assertSame($invalid, file_get_contents($file));
         }
     }
+
+    public function testAliasesOffRegistersOnlyPrefixedPaths(): void
+    {
+        $this->package('modules/store', ['route_prefix' => '/store', 'admin_route_prefix' => '/admin/store', 'aliases' => false], <<<'PHP'
+<?php
+return static function ($context): void {
+    $context->route('GET', '/', static function ($request, $response) { $response->getBody()->write('home'); return $response; });
+    $context->route('GET', '/products', static fn ($request, $response) => $response, admin: true);
+};
+PHP);
+        $this->manager->setEnabled('modules/store', true);
+        $slim = AppFactory::create();
+        $this->manager->boot(new App([]), $slim);
+        $patterns = array_map(static fn ($route) => $route->getPattern(), $slim->getRouteCollector()->getRoutes());
+        sort($patterns);
+        self::assertSame(['/admin/store/products', '/store', '/store/'], $patterns);
+        $factory = new ServerRequestFactory();
+        self::assertSame('home', (string) $slim->handle($factory->createServerRequest('GET', '/store'))->getBody());
+        try {
+            $slim->handle($factory->createServerRequest('GET', '/modules/store/'));
+            self::fail('Expected HttpNotFoundException for legacy alias path');
+        } catch (\Slim\Exception\HttpNotFoundException $e) {
+            self::assertSame('Not found.', $e->getMessage());
+        }
+    }
+
+    public function testAliasesRequiresRoutePrefixAndBoolean(): void
+    {
+        $this->package('modules/store', ['aliases' => false]);
+        self::assertStringContainsString('aliases', (string) $this->manager->packages()['modules/store']['error']);
+        $this->package('modules/store', ['route_prefix' => '/store', 'aliases' => 'no']);
+        self::assertStringContainsString('aliases', (string) $this->manager->packages()['modules/store']['error']);
+        $this->package('modules/store', ['route_prefix' => '/store']);
+        self::assertNull($this->manager->packages()['modules/store']['error']);
+        self::assertTrue($this->manager->packages()['modules/store']['aliases']);
+    }
 }

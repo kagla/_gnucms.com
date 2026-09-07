@@ -101,7 +101,8 @@ modules/youngcart/
 - `Extension\Catalog`가 설명 파일의 선택 필드 `aliases`(불리언, 기본 `true`)를 읽어 패키지
   배열에 넣는다. 불리언이 아니면 설명 파일 오류로 표시한다.
 - `Extension\Manager`가 `Context` 생성 시 이 값을 넘긴다.
-- `Context::paths()`는 `aliases`가 `false`면 `'/' . key . path` 항목을 만들지 않는다.
+- `Context::paths()`는 `aliases`가 `false`면 `'/' . key . path` 항목을 만들지 않는다. 같은 조건에서 `route()`의
+  관리자 라우트(`admin: true`)는 `admin_route_prefix` 아래에만 등록하고 `route_prefix` 아래의 사본을 만들지 않는다.
   `route_prefix`가 없는 패키지는 `aliases: false`를 선언할 수 없다(설명 파일 오류).
 - `docs/extensions.md` 설명 파일 절에 필드를 추가한다.
 - 테스트: `aliases: false`인 패키지의 `/modules/{id}/…`가 404이고 `route_prefix` 주소는 동작한다.
