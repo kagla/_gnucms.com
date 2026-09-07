@@ -31,6 +31,8 @@ final class ImagesTest extends YoungCartTestCase
         $response->getBody()->rewind();
         [$width] = getimagesizefromstring((string) $response->getBody());
         self::assertSame(200, $width);
+        $cached = $this->root . '/cache/youngcart/7/list-' . $name;
+        self::assertFileExists($cached);
         $response = $images->response(7, $name, 'original', new Response());
         $response->getBody()->rewind();
         self::assertSame(800, getimagesizefromstring((string) $response->getBody())[0]);
@@ -41,8 +43,15 @@ final class ImagesTest extends YoungCartTestCase
         try { $images->response(7, '../x.png', 'list', new Response()); self::fail(); } catch (DomainError $e) { self::assertSame(404, $e->status()); }
         try { $images->response(7, $name, 'huge', new Response()); self::fail(); } catch (DomainError $e) { self::assertSame(404, $e->status()); }
         try { $images->save(7, new UploadedFile((new StreamFactory())->createStream('not an image'), 'x.png', 'image/png', 12, UPLOAD_ERR_OK)); self::fail(); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
+        $png = self::png(20, 20);
+        $stream = $png->getStream();
+        $stream->rewind();
+        $mismatch = new UploadedFile((new StreamFactory())->createStream((string) $stream), 'photo.jpg', 'image/png', $png->getSize(), UPLOAD_ERR_OK);
+        try { $images->save(7, $mismatch); self::fail(); } catch (DomainError $e) { self::assertSame(422, $e->status()); self::assertStringContainsString('확장자', $e->details()['images']); }
+        try { $images->save(7, self::png(8001, 1)); self::fail(); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
         $images->delete(7, $name);
         self::assertFileDoesNotExist($images->directory(7) . '/' . $name);
+        self::assertFileDoesNotExist($cached);
         $images->deleteAll(8);
         self::assertDirectoryDoesNotExist($images->directory(8));
     }
