@@ -23,7 +23,7 @@ final class Categories
         $prefix = $parentCode ?? '';
         if ($prefix !== '' && $this->byCode($prefix) === null) throw DomainError::notFound('상위 분류를 찾을 수 없습니다.');
         if (strlen($prefix) >= self::MAX_DEPTH * 2) throw DomainError::validation(['code' => self::MAX_DEPTH . '단계 아래에는 분류를 만들 수 없습니다.']);
-        $rows = $this->store->select('SELECT code FROM ' . $this->store->table('yc_categories') . ' WHERE LENGTH(code) = ? AND code LIKE ?', [strlen($prefix) + 2, $prefix . '%']);
+        $rows = $this->store->select('SELECT code FROM ' . $this->store->table('yc_categories') . ' WHERE code LIKE ?', [$prefix . '__']);
         $max = -1;
         foreach ($rows as $row) $max = max($max, (int) base_convert(substr($row['code'], -2), 36, 10));
         $next = $max < 0 ? 36 : $max + 36;
@@ -122,8 +122,8 @@ final class Categories
 
     public function children(string $code, bool $activeOnly): array
     {
-        $rows = $this->store->select('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE LENGTH(code) = ? AND code LIKE ?'
-            . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY sort_order, code', [strlen($code) + 2, $code . '%']);
+        $rows = $this->store->select('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE code LIKE ?'
+            . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY sort_order, code', [$code . '__']);
         return array_map($this->decode(...), $rows);
     }
 

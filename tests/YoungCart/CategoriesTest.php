@@ -17,6 +17,7 @@ final class CategoriesTest extends YoungCartTestCase
         $top = $this->category('의류');
         self::assertSame('10', $top['code']); self::assertSame(1, (int) $top['depth']); self::assertNull($top['parent_id']);
         self::assertSame('20', $this->shop->categories->suggestCode(null));
+        $second = $this->category('second');
         self::assertSame('1010', $this->shop->categories->suggestCode('10'));
         $child = $this->category('셔츠', '10');
         self::assertSame((int) $top['id'], (int) $child['parent_id']); self::assertSame(2, (int) $child['depth']);
