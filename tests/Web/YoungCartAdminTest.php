@@ -100,4 +100,43 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame(303, $response->getStatusCode());
         self::assertSame('/admin/shop?install=1', $response->getHeaderLine('Location'));
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testCategoryScreens(array $config): void
+    {
+        $this->setupModule($config);
+        $this->signIn(true);
+        $form = $this->body($this->get($this->app, '/admin/shop/categories/new'));
+        self::assertStringContainsString('name="code" value="10"', $form);
+        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => '의류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        self::assertSame(303, $response->getStatusCode());
+        $top = $this->shop->categories->byCode('10');
+        self::assertSame('/admin/shop/categories/edit?id=' . $top['id'] . '&saved=1', $response->getHeaderLine('Location'));
+        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => '중복', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('이미 사용 중인 분류 코드', $this->body($response));
+        self::assertStringContainsString('value="중복"', $this->body($response));
+        self::assertStringContainsString('name="code" value="1010"', $this->body($this->get($this->app, '/admin/shop/categories/new', ['parent' => '10'])));
+        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '1010', 'name' => '셔츠', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $list = $this->body($this->get($this->app, '/admin/shop/categories'));
+        self::assertStringContainsString('의류', $list); self::assertStringContainsString('셔츠', $list);
+        self::assertStringContainsString('name="rows[' . $top['id'] . '][name]"', $list);
+        $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
+        self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
+        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(0, (int) $this->shop->categories->byCode('1010')['active']);
+        $child = $this->shop->categories->byCode('1010');
+        $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'bulk', 'rows' => [$child['id'] => ['name' => '셔츠(일괄)', 'sort_order' => '1', 'active' => '1', 'list_columns' => '2', 'list_rows' => '2', 'image_width' => '100', 'image_height' => '0']]]));
+        self::assertSame('/admin/shop/categories?saved=1', $response->getHeaderLine('Location'));
+        self::assertSame('셔츠(일괄)', $this->shop->categories->byCode('1010')['name']);
+        $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'delete', 'id' => (string) $top['id']]));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('하위 분류가 있어', $this->body($response));
+        $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'delete', 'id' => (string) $child['id']]));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertNull($this->shop->categories->byCode('1010'));
+        self::assertSame(404, $this->get($this->app, '/admin/shop/categories/edit', ['id' => '999'])->getStatusCode());
+        self::assertSame(403, $this->post($this->app, '/admin/shop/categories', ['action' => 'delete', 'id' => (string) $top['id']])->getStatusCode());
+    }
 }

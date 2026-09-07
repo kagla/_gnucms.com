@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use GnuCms\Extension\Context;
 use GnuCms\Modules\YoungCart\Admin\AdminController;
+use GnuCms\Modules\YoungCart\Admin\CategoryController;
 use GnuCms\Modules\YoungCart\Service;
 use GnuCms\Modules\YoungCart\Web\ShopController;
 
@@ -21,4 +22,10 @@ return static function (Context $context): void {
     $context->route('POST', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), admin: true);
     $context->route('GET', '/settings', static fn ($request, $response) => $admin->handle('settings', $request, $response), admin: true);
     $context->route('POST', '/settings', static fn ($request, $response) => $admin->handle('settings', $request, $response), admin: true);
+    $category = new CategoryController($service, $context->routePrefix, $context->adminRoutePrefix);
+    foreach (['categories', 'categories/new', 'categories/edit'] as $page) {
+        foreach (['GET', 'POST'] as $method) {
+            $context->route($method, '/' . $page, static fn ($request, $response) => $category->handle($page, $request, $response), admin: true);
+        }
+    }
 };
