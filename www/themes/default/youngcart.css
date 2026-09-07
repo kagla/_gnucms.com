@@ -43,3 +43,8 @@
 .yc-facets{display:flex;flex-wrap:wrap;gap:.5rem}
 .yc-search-form{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .yc-soldout-notice{padding:.75rem;border-radius:.5rem;background:#fef2f2}
+.yc-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(12rem,1fr));gap:.5rem 1rem}
+.yc-stats{display:flex;flex-wrap:wrap;gap:1rem;list-style:none;padding:0;margin:0}
+.yc-subtabs{margin-bottom:.75rem}
+.yc-table-input{width:6rem}
+.yc-combo-table td input{width:6.5rem}
