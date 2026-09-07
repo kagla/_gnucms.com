@@ -11,10 +11,12 @@ use GnuCms\Extension\PackageSchema;
 final class Service
 {
     public readonly Store $store;
+    public readonly Settings $settings;
 
     public function __construct(public readonly App $app)
     {
         $this->store = new Store($app->db());
+        $this->settings = new Settings($this->store, $app->htmlSanitizer());
     }
 
     public function ready(): bool { return $this->schema()->current(Schema::KEY, Schema::VERSION); }
