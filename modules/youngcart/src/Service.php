@@ -16,6 +16,7 @@ final class Service
     public readonly Settings $settings;
     public readonly Categories $categories;
     public readonly Options $options;
+    public readonly Images $images;
 
     public function __construct(public readonly App $app)
     {
@@ -23,6 +24,7 @@ final class Service
         $this->settings = new Settings($this->store, $app->htmlSanitizer());
         $this->categories = new Categories($this->store, $app->htmlSanitizer(), $this->settings);
         $this->options = new Options($this->store);
+        $this->images = new Images($app, $this->settings);
     }
 
     public function ready(): bool { return $this->schema()->current(Schema::KEY, Schema::VERSION); }
