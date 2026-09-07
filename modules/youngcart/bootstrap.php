@@ -6,6 +6,7 @@ use GnuCms\Extension\Context;
 use GnuCms\Modules\YoungCart\Admin\AdminController;
 use GnuCms\Modules\YoungCart\Admin\CategoryController;
 use GnuCms\Modules\YoungCart\Admin\ProductController;
+use GnuCms\Modules\YoungCart\Admin\ProductFormController;
 use GnuCms\Modules\YoungCart\Service;
 use GnuCms\Modules\YoungCart\Web\ShopController;
 
@@ -37,4 +38,10 @@ return static function (Context $context): void {
     }
     $context->route('POST', '/products/copy', static fn ($request, $response) => $product->handle('products/copy', $request, $response), admin: true);
     $context->route('GET', '/products/search', static fn ($request, $response) => $product->handle('products/search', $request, $response), admin: true);
+    $productForm = new ProductFormController($service, $context->routePrefix, $context->adminRoutePrefix);
+    foreach (['products/new', 'products/edit'] as $page) {
+        foreach (['GET', 'POST'] as $method) {
+            $context->route($method, '/' . $page, static fn ($request, $response) => $productForm->handle($page, $request, $response), admin: true);
+        }
+    }
 };

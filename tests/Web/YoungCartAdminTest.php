@@ -211,4 +211,53 @@ final class YoungCartAdminTest extends WebTestCase
         session_start(); $_SESSION = []; session_write_close();
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop/products/search', ['q' => 'x']), '/admin/shop/products/search?q=x');
     }
+
+    private function productForm(int $category, array $overrides = []): array
+    {
+        return $overrides + ['action' => 'save', 'code' => 'F1', 'name' => '폼 상품', 'category_id' => (string) $category, 'price' => '12000', 'list_price' => '0', 'point_type' => '0', 'point' => '0', 'supply_point' => '0',
+            'stock' => '4', 'stock_alert' => '0', 'buy_min' => '0', 'buy_max' => '0', 'active' => '1', 'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0',
+            'summary' => '요약', 'description' => '<p>본문</p>', 'info_group' => '', 'memo' => '', 'sort_order' => '0', 'maker' => '메이커', 'origin' => '한국',
+            'option_group' => [1 => '색상', 2 => '', 3 => ''], 'option_values' => [1 => '', 2 => '', 3 => ''],
+            'options' => [['value1' => '빨강', 'value2' => '', 'value3' => '', 'price' => '0', 'stock' => '2', 'stock_alert' => '1', 'active' => '1']], 'extras' => [], 'relations' => ''];
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testProductFormCombineSaveEditImagesAndConflicts(array $config): void
+    {
+        $this->setupModule($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $form = $this->body($this->get($this->app, '/admin/shop/products/new'));
+        self::assertMatchesRegularExpression('/name="code" value="[0-9]{10}"/', $form);
+        self::assertStringContainsString('의류', $form); self::assertStringContainsString('data-yc-info-groups', $form); self::assertStringContainsString('data-cms-editor', $form);
+        $combine = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['action' => 'combine', 'option_values' => [1 => '빨강,파랑', 2 => 'S,M', 3 => ''], 'option_group' => [1 => '색상', 2 => '크기', 3 => ''], 'options' => []])));
+        self::assertSame(200, $combine->getStatusCode());
+        $body = $this->body($combine);
+        self::assertStringContainsString('name="options[3][value2]" value="M"', $body);
+        self::assertStringContainsString('value="폼 상품"', $body);
+        self::assertSame(0, $this->shop->products->stats()['products'] - 2);
+        $response = $this->postWithFiles($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'])), ['images' => [ImagesTest::png(120, 120)]]);
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        $product = $this->shop->products->byCode('F1');
+        self::assertSame('/admin/shop/products/edit?id=' . $product['id'] . '&saved=1', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('yc_last_maker=', implode(';', $response->getHeader('Set-Cookie')));
+        self::assertCount(1, $product['images']); self::assertSame(['색상'], $product['options']['select_groups']);
+        $response = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['code' => 'F1'])));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('이미 사용 중인 상품 코드', $this->body($response));
+        self::assertStringContainsString('name="options[0][value1]" value="빨강"', $this->body($response));
+        $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $product['id']]));
+        self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
+        self::assertStringContainsString('image_delete[]', $edit); self::assertStringContainsString($product['images'][0]['filename'], $edit);
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '0', 'name' => '수정됨', 'image_delete' => [(string) $product['images'][0]['id']]])));
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        $product = $this->shop->products->get((int) $product['id']);
+        self::assertSame('수정됨', $product['name']); self::assertSame([], $product['images']);
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '0', 'name' => '충돌'])));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('다른 관리자가 먼저 저장', $this->body($response));
+        self::assertSame('수정됨', $this->shop->products->find((int) $product['id'])['name']);
+        self::assertSame(404, $this->get($this->app, '/admin/shop/products/edit', ['id' => '999'])->getStatusCode());
+        self::assertSame(403, $this->post($this->app, '/admin/shop/products/edit', $this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '1']))->getStatusCode());
+    }
 }
