@@ -50,46 +50,18 @@ final class Settings
         return $type === null ? $all[$section] : $all[$section][$type];
     }
 
-    private function flatArray(array $settings): array
-    {
-        $flat = [];
-        foreach (self::TYPES as $type) {
-            foreach ($settings['main'][$type] as $key => $value) {
-                $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
-            }
-        }
-        foreach (['category', 'type', 'search'] as $section) {
-            foreach ($settings[$section] as $key => $value) {
-                $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
-            }
-        }
-        foreach ($settings['related'] as $key => $value) {
-            $flat['related_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
-        }
-        foreach ($settings['detail'] as $key => $value) {
-            $flat['detail_' . $key] = (string) $value;
-        }
-        $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';
-        $flat['shipping_content'] = $settings['shipping']['content'];
-        $flat['exchange_content'] = $settings['exchange']['content'];
-        return $flat;
-    }
-
     public function save(array $input): array
     {
-        $current = $this->all();
-        $flatInput = $input + $this->flatArray($current);
-
         $errors = [];
-        $int = static function (string $key, int $min, int $max) use ($flatInput, &$errors): int {
-            $value = $flatInput[$key] ?? null;
+        $int = static function (string $key, int $min, int $max) use ($input, &$errors): int {
+            $value = $input[$key] ?? null;
             if (!is_string($value) && !is_int($value) || !preg_match('/^(0|[1-9][0-9]{0,6})$/D', (string) $value) || (int) $value < $min || (int) $value > $max) {
                 $errors[$key] = $min . '~' . $max . ' 사이의 정수를 입력해 주세요.';
                 return $min;
             }
             return (int) $value;
         };
-        $bool = static fn (string $key): bool => ($flatInput[$key] ?? '') === '1';
+        $bool = static fn (string $key): bool => ($input[$key] ?? '') === '1';
         $settings = ['main' => []];
         foreach (self::TYPES as $type) {
             $settings['main'][$type] = ['use' => $bool('main_' . $type . '_use'), 'columns' => $int('main_' . $type . '_columns', 1, 12),

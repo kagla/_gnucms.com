@@ -26,13 +26,16 @@ final class SettingsTest extends YoungCartTestCase
             'search_columns' => '4', 'search_rows' => '5', 'search_image_width' => '200', 'search_image_height' => '0',
             'related_use' => '1', 'related_columns' => '5', 'related_image_width' => '120', 'related_image_height' => '0',
             'detail_image_width' => '500', 'detail_image_height' => '0', 'show_tax' => '1',
-            'shipping_content' => '<p>배송 안내</p><script>x</script>', 'exchange_content' => '']);
+            'shipping_content' => '<p>배송 안내</p><script>x</script>', 'exchange_content' => ''] + $this->flat($this->shop->settings->all()));
         self::assertFalse($saved['main']['hit']['use']);
         self::assertSame(['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $saved['main']['popular']);
         self::assertSame(4, $this->shop->settings->all()['category']['columns']);
         self::assertTrue($this->shop->settings->all()['show_tax']);
         self::assertSame('<p>배송 안내</p>', $this->shop->settings->all()['shipping']['content']);
         self::assertSame(['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $this->shop->settings->block('main.popular'));
+        $flatNoShowTax = array_diff_key($this->flat($saved), ['show_tax' => true]);
+        $savedWithoutShowTax = $this->shop->settings->save($flatNoShowTax);
+        self::assertFalse($savedWithoutShowTax['show_tax']);
         try {
             $this->shop->settings->save(['category_columns' => '13'] + $this->flat($saved));
             self::fail('열 수 13은 거절해야 한다');
