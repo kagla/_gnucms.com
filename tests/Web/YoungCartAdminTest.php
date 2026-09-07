@@ -230,6 +230,13 @@ final class YoungCartAdminTest extends WebTestCase
         $form = $this->body($this->get($this->app, '/admin/shop/products/new'));
         self::assertMatchesRegularExpression('/name="code" value="[0-9]{10}"/', $form);
         self::assertStringContainsString('의류', $form); self::assertStringContainsString('data-yc-info-groups', $form); self::assertStringContainsString('data-cms-editor', $form);
+        // 폼의 첫 submit 단추는 이름 없는 숨은 단추여야 한다. 그래야 입력칸에서 Enter 를 눌러도
+        // "조합 생성"(첫 눈에 보이는 submit) 이 아니라 기본 action=save 로 암시적 제출된다.
+        $hiddenSubmitPos = strpos($form, '<button type="submit" hidden aria-hidden="true" tabindex="-1"></button>');
+        $combineButtonPos = strpos($form, 'value="combine"');
+        self::assertNotFalse($hiddenSubmitPos); self::assertNotFalse($combineButtonPos);
+        self::assertLessThan($combineButtonPos, $hiddenSubmitPos);
+        self::assertStringNotContainsString('<button type="submit" hidden aria-hidden="true" tabindex="-1" name=', $form);
         $combine = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['action' => 'combine', 'option_values' => [1 => '빨강,파랑', 2 => 'S,M', 3 => ''], 'option_group' => [1 => '색상', 2 => '크기', 3 => ''], 'options' => []])));
         self::assertSame(200, $combine->getStatusCode());
         $body = $this->body($combine);
@@ -259,5 +266,29 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame('수정됨', $this->shop->products->find((int) $product['id'])['name']);
         self::assertSame(404, $this->get($this->app, '/admin/shop/products/edit', ['id' => '999'])->getStatusCode());
         self::assertSame(403, $this->post($this->app, '/admin/shop/products/edit', $this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '1']))->getStatusCode());
+    }
+
+    /** 이미 조합이 저장돼 있는 상품에서 "조합 생성"을 다시 누르면, 화면에 아직 저장하지 않은
+     *  방금 고친 값이 DB에 저장돼 있던 값에 덮이면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testProductFormCombinePrefersSubmittedOptionValuesOverStoredOnes(array $config): void
+    {
+        $this->setupModule($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $product = $this->shop->products->get($seed['a']);
+        self::assertSame(1, (int) $product['options']['select'][0]['stock']);
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], [
+            'id' => (string) $seed['a'], 'version' => (string) $product['version'], 'code' => $product['code'], 'action' => 'combine',
+            'option_group' => [1 => '색상', 2 => '', 3 => ''], 'option_values' => [1 => '빨강,파랑', 2 => '', 3 => ''],
+            'options' => [['value1' => '빨강', 'value2' => '', 'value3' => '', 'price' => '500', 'stock' => '7', 'stock_alert' => '1', 'active' => '1']],
+        ])));
+        self::assertSame(200, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringContainsString('name="options[0][value1]" value="빨강"', $body);
+        self::assertStringContainsString('name="options[0][price]" value="500"', $body);
+        self::assertStringContainsString('name="options[0][stock]" value="7"', $body);
+        self::assertStringContainsString('name="options[1][value1]" value="파랑"', $body);
+        self::assertSame(1, (int) $this->shop->products->get($seed['a'])['options']['select'][0]['stock']);
     }
 }

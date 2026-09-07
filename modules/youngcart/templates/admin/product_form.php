@@ -26,6 +26,7 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
 <?php };
 ?>
 <form method="post" action="<?= $this->e($admin_url) ?>/products/<?= $id === null ? 'new' : 'edit' ?>" enctype="multipart/form-data" data-yc-product-form>
+  <button type="submit" hidden aria-hidden="true" tabindex="-1"></button>
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <input type="hidden" name="action" value="save" data-yc-action>
   <?php if ($id !== null): ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="version" value="<?= $this->e($v('version')) ?>"><?php endif ?>

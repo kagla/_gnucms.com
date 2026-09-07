@@ -31,7 +31,7 @@ final class ProductFormController extends AdminBase
         $action = $input['action'] ?? '';
         try {
             if ($action === 'combine') {
-                $draft = Options::draft($input, array_merge(Options::rows($input['options'] ?? []), $product['options']['select'] ?? []));
+                $draft = Options::draft($input, array_merge($product['options']['select'] ?? [], Options::rows($input['options'] ?? [])));
                 $values = $input;
                 for ($i = 1; $i <= Options::MAX_GROUPS; $i++) $values['option_group'][$i] = $draft['groups'][$i - 1] ?? '';
                 $values['options'] = $draft['rows'];
