@@ -1,0 +1,16 @@
+{
+  "id": "youngcart",
+  "type": "module",
+  "name": "쇼핑몰",
+  "description": "영카트5의 기능을 GNUCMS 방식으로 다시 만든 쇼핑몰입니다. 1단계는 분류·상품·옵션·목록·검색·상세를 제공합니다.",
+  "version": "0.1.0",
+  "api": 2,
+  "aliases": false,
+  "entry_path": "/",
+  "public_path": "/",
+  "route_prefix": "/shop",
+  "admin_route_prefix": "/admin/shop",
+  "admin_test": false,
+  "requires": [],
+  "optional": []
+}
