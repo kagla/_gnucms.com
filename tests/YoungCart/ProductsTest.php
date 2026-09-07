@@ -119,6 +119,15 @@ final class ProductsTest extends YoungCartTestCase
         self::assertSame(0, (int) $copy['is_hit']); self::assertSame(1, (int) $copy['is_popular']);
         $this->shop->products->updateStock([$copyId => ['stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
         self::assertSame(0, (int) $this->shop->products->get($copyId)['stock']);
+        try {
+            $this->shop->products->updateStock([$copyId => ['stock' => '-1', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0'], $id => ['stock' => '99', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
+            self::fail();
+        } catch (DomainError $e) {
+            self::assertSame(422, $e->status());
+            self::assertArrayHasKey('row_' . $copyId, $e->details());
+        }
+        self::assertSame(0, (int) $this->shop->products->find($copyId)['stock']);
+        self::assertNotSame(99, (int) $this->shop->products->find($id)['stock']);
         $list = $this->shop->products->stockList('', 1, 20);
         self::assertSame($copyId, (int) $list['items'][0]['id']);
         self::assertSame(1, count($this->shop->products->lowStock()['products']));

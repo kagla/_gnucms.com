@@ -347,9 +347,13 @@ final class Products
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
                 $this->store->get('yc_products', $id);
-                $data = ['updated_at' => Clock::timestamp()];
-                foreach (self::TYPES as $type) $data[$type] = Input::bool($input[$type] ?? '0');
-                $this->store->update('yc_products', $id, $data);
+                try {
+                    $data = ['updated_at' => Clock::timestamp()];
+                    foreach (self::TYPES as $type) $data[$type] = Input::bool($input[$type] ?? '0');
+                    $this->store->update('yc_products', $id, $data);
+                } catch (DomainError $e) {
+                    throw DomainError::validation(['row_' . $id => implode(' ', $e->details())]);
+                }
             }
         });
     }
@@ -357,7 +361,7 @@ final class Products
     public function stockList(string $q, int $page, int $perPage): array
     {
         $where = ''; $params = [];
-        if ($q !== '') { $where = ' WHERE (p.name LIKE ? OR p.code LIKE ?)'; $params = ['%' . $q . '%', '%' . $q . '%']; }
+        if ($q !== '') { $where = ' WHERE (p.name LIKE ? ESCAPE \'!\' OR p.code LIKE ? ESCAPE \'!\')'; $params = ['%' . self::like($q) . '%', '%' . self::like($q) . '%']; }
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_products') . ' p' . $where, $params)['c'];
         $items = $this->store->select('SELECT p.id, p.code, p.name, p.stock, p.stock_alert, p.active, p.sold_out, p.restock_notify FROM ' . $this->store->table('yc_products') . ' p' . $where
             . ' ORDER BY p.stock ASC, p.id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
@@ -370,9 +374,13 @@ final class Products
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
                 $old = $this->store->get('yc_products', $id);
-                $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
-                $this->store->update('yc_products', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0),
-                    'active' => Input::bool($input['active'] ?? '0'), 'sold_out' => Input::bool($input['sold_out'] ?? '0'), 'restock_notify' => Input::bool($input['restock_notify'] ?? '0'), 'updated_at' => Clock::timestamp()]);
+                try {
+                    $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
+                    $this->store->update('yc_products', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0),
+                        'active' => Input::bool($input['active'] ?? '0'), 'sold_out' => Input::bool($input['sold_out'] ?? '0'), 'restock_notify' => Input::bool($input['restock_notify'] ?? '0'), 'updated_at' => Clock::timestamp()]);
+                } catch (DomainError $e) {
+                    throw DomainError::validation(['row_' . $id => implode(' ', $e->details())]);
+                }
                 if ($stock !== (int) $old['stock']) $this->store->logStock($id, null, $stock - (int) $old['stock'], 'admin', 'stock', $actor);
             }
         });

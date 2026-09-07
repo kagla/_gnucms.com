@@ -208,7 +208,7 @@ final class Options
     public function stockList(string $q, int $page, int $perPage): array
     {
         $where = ''; $params = [];
-        if ($q !== '') { $where = ' WHERE (p.name LIKE ? OR p.code LIKE ?)'; $params = ['%' . $q . '%', '%' . $q . '%']; }
+        if ($q !== '') { $where = ' WHERE (p.name LIKE ? ESCAPE \'!\' OR p.code LIKE ? ESCAPE \'!\')'; $params = ['%' . Products::like($q) . '%', '%' . Products::like($q) . '%']; }
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_options') . ' o JOIN ' . $this->store->table('yc_products') . ' p ON p.id = o.product_id' . $where, $params)['c'];
         $rows = $this->store->select('SELECT o.*, p.name AS product_name, p.code AS product_code FROM ' . $this->store->table('yc_options') . ' o JOIN ' . $this->store->table('yc_products')
             . ' p ON p.id = o.product_id' . $where . ' ORDER BY o.stock ASC, o.id LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
@@ -221,8 +221,12 @@ final class Options
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
                 $old = $this->store->get('yc_options', $id);
-                $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
-                $this->store->update('yc_options', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0), 'active' => Input::bool($input['active'] ?? '0')]);
+                try {
+                    $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
+                    $this->store->update('yc_options', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0), 'active' => Input::bool($input['active'] ?? '0')]);
+                } catch (DomainError $e) {
+                    throw DomainError::validation(['row_' . $id => implode(' ', $e->details())]);
+                }
                 if ($stock !== (int) $old['stock']) $this->store->logStock((int) $old['product_id'], $id, $stock - (int) $old['stock'], 'admin', 'option-stock', $actor);
             }
         });

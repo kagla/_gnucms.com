@@ -80,6 +80,8 @@ final class OptionsTest extends YoungCartTestCase
         $options->updateStock([$redId => ['stock' => '2', 'stock_alert' => '3', 'active' => '0']], 'tester');
         self::assertSame(2, (int) $options->load($productId)['select'][0]['stock']);
         self::assertSame(-5, (int) $this->shop->store->selectOne('SELECT delta FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE option_id = ? ORDER BY id DESC LIMIT 1', [$redId])['delta']);
+        try { $options->updateStock([$redId => ['stock' => 'x']], 'tester'); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('row_' . $redId, $e->details()); }
+        self::assertSame(2, (int) $options->load($productId)['select'][0]['stock']);
     }
 
     private function minimalProductRow(string $code): array
