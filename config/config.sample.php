@@ -7,6 +7,10 @@ return [
         'url' => 'https://example.com',
     ],
 
+    // 생략하면 GNUCMS 루트의 plugins/와 modules/를 사용한다.
+    // 별도 배치 시 두 폴더를 포함한 상위 디렉터리의 절대 경로를 지정한다.
+    // 'extensions' => ['root' => '/absolute/path/to/packages'],
+
     'mail' => [
         'from' => 'no-reply@example.com',
     ],
@@ -28,7 +32,7 @@ return [
         'prefix'   => '',
     ],
 
-    // 세션·메일 비밀번호 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.
+    // 세션·메일·설정 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.
     'auth' => [
         'secret' => 'CHANGE-ME-32-BYTES-OR-LONGER-RANDOM-STRING',
         // 비밀번호 최소 길이. 회원가입·비밀번호 변경·비회원 글 비밀번호 모두 이 값을 따른다.

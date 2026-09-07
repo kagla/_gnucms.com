@@ -12,6 +12,8 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
 use GnuCms\View\View;
+use GnuCms\Web\LoginDestination;
+use GnuCms\Web\LoginRedirect;
 
 final class OauthController
 {
@@ -58,6 +60,13 @@ final class OauthController
             $states = array_slice($states, -self::MAX_PENDING_STATES, null, true);
         }
         $_SESSION['oauth_states'][$key] = $states;
+        // 복귀 주소를 state마다 보관해 여러 로그인 창의 목적지가 섞이지 않게 한다.
+        $urls = $_SESSION['oauth_state_urls'][$key] ?? [];
+        $urls = is_array($urls) ? array_intersect_key($urls, $states) : [];
+        if ($purpose === 'login') {
+            $urls[$hash] = LoginRedirect::fromRequest($request);
+        }
+        $_SESSION['oauth_state_urls'][$key] = $urls;
         if ($purpose === 'withdraw') {
             $_SESSION['oauth_state_purposes'][$key][$hash] = 'withdraw';
         }
@@ -78,6 +87,8 @@ final class OauthController
         $_SESSION['oauth_states'][$key] = $states;
         $purpose = $_SESSION['oauth_state_purposes'][$key][$hash] ?? 'login';
         unset($_SESSION['oauth_state_purposes'][$key][$hash]);
+        $returnUrl = $_SESSION['oauth_state_urls'][$key][$hash] ?? null;
+        unset($_SESSION['oauth_state_urls'][$key][$hash]);
         if ($state === '' || $expiresAt === null || (int) $expiresAt < time()) {
             $this->recordSocialLogin($request, null, null, $key, 'failure');
             throw DomainError::forbidden('소셜 로그인 요청을 확인할 수 없습니다. 다시 시도해 주세요.');
@@ -122,12 +133,13 @@ final class OauthController
         if ($user !== null) {
             $this->recordSocialLogin($request, (int) $user['id'], $profile->email, $key, 'success');
             $this->storeSession($user);
-            return $this->homeRedirect($request, $response);
+            return $this->loginRedirect($request, $response, $returnUrl);
         }
 
         $_SESSION['oauth_pending'] = [
             'profile' => $profile->toArray(),
             'expires_at' => time() + self::TTL,
+            'return_url' => $returnUrl,
         ];
         return View::fromRequest($request)->render($response, 'auth/social_email', [
             'provider_label' => $this->app->providerRegistry()->get($key)->label(),
@@ -192,7 +204,7 @@ final class OauthController
         unset($_SESSION['oauth_pending']);
         $this->storeSession($user);
 
-        return $this->homeRedirect($request, $response);
+        return $this->loginRedirect($request, $response, $pending['return_url'] ?? null);
     }
 
     private function pending(): array
@@ -249,9 +261,10 @@ final class OauthController
         $_SESSION['session_epoch'] = $user['session_epoch'];
     }
 
-    private function homeRedirect(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    private function loginRedirect(ServerRequestInterface $request, ResponseInterface $response, mixed $returnUrl): ResponseInterface
     {
-        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('boards.index');
+        $remembered = LoginDestination::consume($request);
+        $url = LoginRedirect::destination($request, $returnUrl ?? $remembered);
         return $response->withHeader('Location', $url)->withStatus(303);
     }
 }

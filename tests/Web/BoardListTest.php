@@ -32,7 +32,7 @@ final class BoardListTest extends WebTestCase
         ]);
 
         $body = $this->body($this->get($app, '/'));
-        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $body, $headerTabs);
+        preg_match('#<nav\b[^>]*aria-label="주요 메뉴"[^>]*>(.*?)</nav>#s', $body, $headerTabs);
         self::assertStringContainsString('href="/boards/members">회원메뉴</a>', $headerTabs[1] ?? '');
         self::assertStringContainsString('href="/boards/admins">관리자메뉴</a>', $headerTabs[1] ?? '');
     }

@@ -15,9 +15,9 @@ final class AdminPageTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
 
-        self::assertSame(401, $this->get($app, '/admin')->getStatusCode());
-        self::assertSame(401, $this->get($app, '/admin/boards')->getStatusCode());
-        self::assertSame(401, $this->get($app, '/admin/login-history')->getStatusCode());
+        $this->assertLoginRedirect($this->get($app, '/admin'), '/admin');
+        $this->assertLoginRedirect($this->get($app, '/admin/boards'), '/admin/boards');
+        $this->assertLoginRedirect($this->get($app, '/admin/login-history'), '/admin/login-history');
     }
 
     #[DataProvider('connectionProvider')]
@@ -259,20 +259,20 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(1, $board['show_in_header']);
         self::assertStringContainsString('href="/boards/notice">공지사항</a>', $this->body($this->get($app, '/')));
         $boardPage = $this->body($this->get($app, '/boards/notice'));
-        self::assertMatchesRegularExpression('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $boardPage);
-        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $boardPage, $headerTabs);
+        self::assertMatchesRegularExpression('#<nav\b[^>]*aria-label="주요 메뉴"[^>]*>(.*?)</nav>#s', $boardPage);
+        preg_match('#<nav\b[^>]*aria-label="주요 메뉴"[^>]*>(.*?)</nav>#s', $boardPage, $headerTabs);
         self::assertSame(1, substr_count($headerTabs[1] ?? '', 'href="/boards/notice"'),
             '현재 게시판은 활성 탭으로만 한 번 나와야 한다');
-        self::assertStringContainsString('class="tab tab-active" href="/boards/notice" aria-current="page"',
+        self::assertMatchesRegularExpression('#href="/boards/notice"[^>]*aria-current="page"#',
             $headerTabs[1] ?? '');
 
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'gallery', 'name' => '갤러리', 'show_in_header' => '1', 'sort_order' => '20',
         ]);
         $galleryPage = $this->body($this->get($app, '/boards/gallery'));
-        preg_match('#<nav class="tabs tabs-border"[^>]*>(.*?)</nav>#s', $galleryPage, $galleryTabs);
+        preg_match('#<nav\b[^>]*aria-label="주요 메뉴"[^>]*>(.*?)</nav>#s', $galleryPage, $galleryTabs);
         self::assertMatchesRegularExpression(
-            '#href="/boards/notice"[^>]*>공지사항</a>.*class="tab tab-active" href="/boards/gallery" aria-current="page">갤러리</a>#s',
+            '#href="/boards/notice"[^>]*>공지사항</a>.*href="/boards/gallery"[^>]*aria-current="page">갤러리</a>#s',
             $galleryTabs[1] ?? '',
             '선택된 게시판도 관리자가 정한 원래 순서에 있어야 한다'
         );

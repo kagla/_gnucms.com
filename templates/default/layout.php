@@ -119,6 +119,9 @@
           <nav class="tabs tabs-border" aria-label="주요 메뉴">
             <a class="tab<?php if (trim($this->block('nav_section')) === 'home'): ?> tab-active<?php endif ?>" href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> aria-current="page"<?php endif ?>>홈</a>
             <a class="tab<?php if (trim($this->block('nav_section')) === 'all'): ?> tab-active<?php endif ?>" href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> aria-current="page"<?php endif ?>>전체 글</a>
+            <?php foreach ($public_extensions ?? [] as $key => $extension): $selected = trim($this->block('nav_section')) === $key; ?>
+              <a class="tab<?= $selected ? ' tab-active' : '' ?>" href="<?= $this->e($extension['url']) ?>"<?= $selected ? ' aria-current="page"' : '' ?>><?= $this->e($extension['name']) ?></a>
+            <?php endforeach ?>
             <?php if (!$currentBoardInHeader): ?><?php $this->start('extra_tabs') ?><?php $this->stop() ?><?php endif ?>
             <?php foreach ($header_boards as $item): ?>
               <?php $isCurrentBoard = $currentBoardKey !== '' && $currentBoardKey === $item['board_key']; ?>
@@ -248,6 +251,7 @@
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
         <li><a href="<?= $this->url('posts.all') ?>"><?= $this->icon('document', 18) ?> 전체 글</a></li>
+        <?php foreach ($public_extensions ?? [] as $extension): ?><li><a href="<?= $this->e($extension['url']) ?>"><?= $this->icon('gift', 18) ?> <?= $this->e($extension['name']) ?></a></li><?php endforeach ?>
         <?php // 상단 탭과 동일하게, 게시판 화면에서는 현재 게시판만 이어서 보여 준다. ?>
         <?php if (isset($board['board_key'])): ?>
           <li><a href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>"><?= $this->icon('board', 18) ?> <?= $this->e($board['name']) ?></a></li>

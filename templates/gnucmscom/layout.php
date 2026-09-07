@@ -32,6 +32,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
 <meta name="twitter:title" content="<?= $this->e($__seo_title) ?>">
 <meta name="twitter:description" content="<?= $this->e($__seo_description) ?>">
 <meta name="twitter:image" content="https://gnucms.com/og.png">
+<?php $this->start('seo_meta') ?><?php $this->stop() ?>
 <?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> RSS" href="<?= $this->e($site_url) ?>/rss.xml"><?php $this->stop() ?>
 <?php $this->start('external_service_head') ?>
 <?php foreach (['site_verification_html', 'analytics_html', 'adsense_html'] as $headSetting): ?>
@@ -95,6 +96,9 @@ $__seo_type = trim($this->block('seo_type', 'website'));
           <a href="<?= $this->url('boards.index') ?>#install">설치</a>
           <a href="<?= $this->url('boards.index') ?>#gallery">갤러리</a>
           <a href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> class="is-active" aria-current="page"<?php endif ?>>전체 글</a>
+          <?php foreach ($public_extensions ?? [] as $key => $extension): $selected = trim($this->block('nav_section')) === $key; ?>
+            <a href="<?= $this->e($extension['url']) ?>"<?= $selected ? ' class="is-active" aria-current="page"' : '' ?>><?= $this->e($extension['name']) ?></a>
+          <?php endforeach ?>
           <?php if (!$__current_board_in_header && $__current_board_key !== ''): ?>
             <a href="<?= $this->url('posts.index', ['key' => $__current_board_key]) ?>" class="is-active" aria-current="page"><?= $this->e($board['name']) ?></a>
           <?php endif ?>
@@ -278,6 +282,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
         <li><a href="<?= $this->url('boards.index') ?>#install"><?= $this->icon('document', 18) ?> 설치</a></li>
         <li><a href="<?= $this->url('boards.index') ?>#gallery"><?= $this->icon('grid', 18) ?> 사이트 갤러리</a></li>
         <li><a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"><?= $this->icon('board', 18) ?> 자유게시판</a></li>
+        <?php foreach ($public_extensions ?? [] as $extension): ?><li><a href="<?= $this->e($extension['url']) ?>"><?= $this->icon('gift', 18) ?> <?= $this->e($extension['name']) ?></a></li><?php endforeach ?>
         <li><a href="https://github.com/kagla/gnucms" target="_blank" rel="noopener"><?= $this->icon('star', 18) ?> GitHub</a></li>
         <?php if (!empty($site_menu)): ?><li class="menu-title">안내</li><?php endif ?>
         <?php foreach ($site_menu as $item): ?><li><a href="<?= $this->url('content.show', ['slug' => $item['slug']]) ?>"><?= $this->icon('document', 18) ?> <?= $this->e($item['title']) ?></a></li><?php endforeach ?>
