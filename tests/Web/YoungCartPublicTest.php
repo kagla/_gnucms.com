@@ -89,6 +89,8 @@ final class YoungCartPublicTest extends WebTestCase
         self::assertStringContainsString('빨간 셔츠', $page2);
         self::assertStringContainsString('SOLD OUT', $page2);
         self::assertStringContainsString('빨간 셔츠', $this->body($this->get($this->app, '/shop/list', ['ca' => '10', 'sort' => 'price', 'dir' => 'asc'])));
+        self::assertStringContainsString('빨간 셔츠', $this->body($this->get($this->app, '/shop/list', ['ca' => '10', 'sortdir' => 'price_asc'])));
+        self::assertStringNotContainsString('빨간 셔츠', $this->body($this->get($this->app, '/shop/list', ['ca' => '10', 'sortdir' => '_'])));
         self::assertSame(404, $this->get($this->app, '/shop/list', ['ca' => '99'])->getStatusCode());
         self::assertSame(404, $this->get($this->app, '/shop/list')->getStatusCode());
         $type = $this->body($this->get($this->app, '/shop/type', ['t' => 'hit']));

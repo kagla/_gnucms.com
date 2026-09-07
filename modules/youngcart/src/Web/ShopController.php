@@ -41,6 +41,7 @@ final class ShopController
         $data['menu'] = $this->service->categories->children('', true);
         $sort = $query['sort'] ?? '';
         $dir = ($query['dir'] ?? '') === 'asc' ? 'asc' : 'desc';
+        if (preg_match('/^([a-z]+)_(asc|desc)$/D', $query['sortdir'] ?? '', $m)) { $sort = $m[1]; $dir = $m[2]; }
         $pageNo = preg_match('/^[1-9][0-9]{0,5}$/D', $query['page'] ?? '') ? (int) $query['page'] : 1;
         $data += ['sort' => $sort, 'dir' => $dir];
         $response = $response->withHeader('Cache-Control', 'no-store');
