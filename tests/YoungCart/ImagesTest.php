@@ -31,7 +31,14 @@ final class ImagesTest extends YoungCartTestCase
         $response->getBody()->rewind();
         [$width] = getimagesizefromstring((string) $response->getBody());
         self::assertSame(200, $width);
-        $cached = $this->root . '/cache/youngcart/7/list-' . $name;
+        $cached = $this->root . '/cache/youngcart/7/list-200-' . $name;
+        self::assertFileExists($cached);
+        $response = $images->response(7, $name, 'list', new Response(), 100);
+        $response->getBody()->rewind();
+        [$narrowWidth] = getimagesizefromstring((string) $response->getBody());
+        self::assertSame(100, $narrowWidth);
+        $cachedNarrow = $this->root . '/cache/youngcart/7/list-100-' . $name;
+        self::assertFileExists($cachedNarrow);
         self::assertFileExists($cached);
         $response = $images->response(7, $name, 'original', new Response());
         $response->getBody()->rewind();
@@ -52,6 +59,7 @@ final class ImagesTest extends YoungCartTestCase
         $images->delete(7, $name);
         self::assertFileDoesNotExist($images->directory(7) . '/' . $name);
         self::assertFileDoesNotExist($cached);
+        self::assertFileDoesNotExist($cachedNarrow);
         $images->deleteAll(8);
         self::assertDirectoryDoesNotExist($images->directory(8));
     }

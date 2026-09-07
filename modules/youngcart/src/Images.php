@@ -104,7 +104,7 @@ final class Images
         $width ??= $this->width($size);
         $file = $source;
         if ($width > 0) {
-            $target = $this->cache . '/' . $productId . '/' . $size . '-' . $filename;
+            $target = $this->cache . '/' . $productId . '/' . $size . '-' . $width . '-' . $filename;
             if (!is_dir(dirname($target))) @mkdir(dirname($target), 0755, true);
             if ((new ImageResizer())->ensure($source, $target, $width)) $file = $target;
         }
