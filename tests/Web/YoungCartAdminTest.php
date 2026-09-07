@@ -139,4 +139,17 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame(404, $this->get($this->app, '/admin/shop/categories/edit', ['id' => '999'])->getStatusCode());
         self::assertSame(403, $this->post($this->app, '/admin/shop/categories', ['action' => 'delete', 'id' => (string) $top['id']])->getStatusCode());
     }
+
+    /** 분류명에 홑따옴표와 스크립트가 섞여 있어도 삭제 확인창은 고정 문구여야 한다(인라인 JS 삽입 방지). */
+    #[DataProvider('connectionProvider')]
+    public function testCategoryListDeleteConfirmIsStatic(array $config): void
+    {
+        $this->setupModule($config);
+        $this->signIn(true);
+        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => "잡화'); alert(1);//", 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $list = $this->body($this->get($this->app, '/admin/shop/categories'));
+        self::assertStringContainsString("confirm('이 분류를 삭제할까요?')", $list);
+        self::assertStringNotContainsString("confirm('잡화", $list);
+        self::assertStringContainsString('&#039;', $list);
+    }
 }

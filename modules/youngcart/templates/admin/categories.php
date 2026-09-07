@@ -33,7 +33,7 @@
 <h2 class="card-title">삭제</h2>
 <p class="muted">하위 분류나 연결된 상품이 있으면 삭제할 수 없습니다.</p>
 <?php foreach ($tree as $row): ?>
-  <form method="post" action="<?= $this->e($admin_url) ?>/categories" class="inline" onsubmit="return confirm('<?= $this->e($row['name']) ?> 분류를 삭제할까요?')">
+  <form method="post" action="<?= $this->e($admin_url) ?>/categories" class="inline" onsubmit="return confirm('이 분류를 삭제할까요?')">
     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
     <button class="btn btn-xs btn-error btn-outline" type="submit"><?= $this->e($row['code']) ?> <?= $this->e($row['name']) ?> 삭제</button>
   </form>
