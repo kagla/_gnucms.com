@@ -18,6 +18,7 @@ final class Service
     public readonly Options $options;
     public readonly Images $images;
     public readonly Catalog\Products $products;
+    public readonly Catalog\Listing $listing;
 
     public function __construct(public readonly App $app)
     {
@@ -27,6 +28,7 @@ final class Service
         $this->options = new Options($this->store);
         $this->images = new Images($app, $this->settings);
         $this->products = new Catalog\Products($this->store, $app->htmlSanitizer(), $app->contentImages(), $this->images, $this->options, $this->categories);
+        $this->listing = new Catalog\Listing($this->store, $this->settings, $this->options);
     }
 
     public function ready(): bool { return $this->schema()->current(Schema::KEY, Schema::VERSION); }
