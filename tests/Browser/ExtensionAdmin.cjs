@@ -6,10 +6,8 @@ const {execFileSync} = require('node:child_process');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const root = path.resolve(__dirname, '../..');
 const render = (scenario, base) => execFileSync('php', [path.join(__dirname, 'ExtensionAdminFixture.php'), scenario, base], {cwd: root, encoding: 'utf8'});
-const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scenario === 'toss-live' ? '/plugins/payment-toss/settings?environment=live'
-  : ['inicis', 'kcp', 'kspay', 'toss'].includes(scenario) ? '/plugins/payment-' + scenario + '/settings'
-  : scenario === 'bizppurio' ? '/plugins/bizppurio/settings'
-  : scenario.startsWith('alimtalk-') ? '/modules/alimtalk/' + scenario.slice(9)
+const route = scenario => scenario === 'core-modules' ? '/admin/modules'
+  : scenario === 'core-list' ? '/admin/plugins'
   : scenario.startsWith('core') ? '/admin/settings' : '/' + (scenario === 'demo-message' ? 'plugins' : 'modules') + '/' + scenario + '/preview';
 
 (async () => {
@@ -37,9 +35,30 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scena
       const button = await style('#main button[type=submit]', ['fontFamily', 'fontSize', 'fontWeight', 'height', 'borderRadius']);
       await open('core-list');
       const heading = await style('h1', ['fontSize', 'fontWeight']);
+      for (const scenario of ['core-list', 'core-modules']) {
+        await open(scenario);
+        for (const width of [1280, 390]) {
+          await page.setViewport({width, height: 960});
+          const colors = [];
+          for (const theme of ['light', 'dark']) {
+            await page.mouse.move(0, 0);
+            const rows = await page.$$eval('.extensions-table tbody tr', els => els.map(el => getComputedStyle(el).backgroundColor));
+            assert.equal(rows.length, 2, scenario + ' populated rows');
+            assert.notEqual(rows[0], rows[1], scenario + ' alternating row backgrounds in ' + theme);
+            assert.ok(!['transparent', 'rgba(0, 0, 0, 0)'].includes(rows[1]), 'even rows have a visible tint');
+            colors.push(rows[1]);
+            assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), scenario + ' table width');
+            if (base === '/cms') await page.screenshot({path: '/tmp/gnucms-' + scenario + '-zebra-' + width + '-' + theme + '.png', fullPage: true});
+            await page.click('[data-theme-toggle]');
+          }
+          assert.notEqual(colors[0], colors[1], 'row tint follows light and dark themes');
+        }
+        assert.deepEqual(errors, [], scenario + ' row striping');
+        count++;
+      }
       await open('core-modules');
       assert.equal(await page.$$eval('.extensions-table .btn-outline', buttons => buttons.length), 0, 'enabled modules use address links without shortcut buttons');
-      for (const address of ['/admin/shop', '/modules/alimtalk/home']) {
+      for (const address of ['/modules/demo-reservation/preview', '/modules/example/preview']) {
         assert.equal(await page.$$eval('.extensions-table a', (links, address) => links.filter(link => link.getAttribute('href') === address).length, base + address), 2, 'module address and new-window icon remain available');
       }
       for (const width of [1280, 390]) {
@@ -53,8 +72,8 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scena
             adjacent: iconBounds.left >= linkBounds.right && iconBounds.top < linkBounds.bottom && iconBounds.bottom > linkBounds.top,
             visible: el.getBoundingClientRect().width > 0};
         });
-        assert.equal(entry.address, base + '/shop');
-        assert.equal(entry.button, base + '/shop');
+        assert.equal(entry.address, base + '/book');
+        assert.equal(entry.button, base + '/book');
         assert.ok(entry.text.includes('사용자 화면:') && !entry.text.includes('사용자 화면 열기'));
         assert.equal(entry.target, '_blank');
         assert.ok(entry.label.includes('새 창으로 열기') && entry.icon && entry.adjacent, 'new-window icon must sit beside the public address');
@@ -64,7 +83,7 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scena
         if (base === '/cms') await page.screenshot({path: '/tmp/gnucms-module-links-' + width + '.png', fullPage: true});
       }
       assert.deepEqual(errors, [], 'module user link');
-      for (const scenario of ['inicis', 'kcp', 'kspay', 'toss', 'toss-live', 'bizppurio', 'demo-message', 'demo-reservation', 'alimtalk-home', 'alimtalk-templates', 'alimtalk-send', 'alimtalk-history', 'alimtalk-detail']) {
+      for (const scenario of ['demo-message', 'demo-reservation']) {
         await page.setViewport({width: 1280, height: 960});
         await open(scenario);
         assert.equal(await page.$$eval('.admin-shell', els => els.length), 1, scenario);
@@ -73,17 +92,10 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scena
         const field = '#main input.input';
         if (await page.$(field)) assert.deepEqual(await style(field, Object.keys(input)), input, scenario + ' input');
         if (await page.$('#main button.btn-primary')) assert.deepEqual(await style('#main button.btn-primary', Object.keys(button)), button, scenario + ' button');
-        if (scenario.startsWith('toss')) {
-          assert.deepEqual(await style('#payment-client_key', Object.keys(input)), input, scenario + ' client key');
-          assert.deepEqual(await style('#payment-secret_key', Object.keys(input)), input, scenario + ' secret key');
-          assert.equal(await page.$eval('.settings-tabs a[aria-current=page]', el => new URL(el.href).searchParams.get('environment')), scenario === 'toss-live' ? 'live' : 'test');
-          assert.equal(await page.$eval('button[value=enable]', el => el.disabled), false);
-        }
-        const section = scenario.startsWith('alimtalk-') || scenario === 'demo-reservation' ? 'modules' : 'plugins';
+        const section = scenario === 'demo-reservation' ? 'modules' : 'plugins';
         assert.equal(await page.$eval('.admin-sidebar a[aria-current=page]', el => new URL(el.href).pathname), base + '/admin/' + section);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), scenario + ' desktop width');
-        if (base === '/cms' && scenario === 'inicis') await page.screenshot({path: '/tmp/gnucms-extension-admin-desktop.png', fullPage: true});
-        if (base === '/cms' && scenario === 'toss') await page.screenshot({path: '/tmp/gnucms-toss-admin-desktop.png', fullPage: true});
+        if (base === '/cms' && scenario === 'demo-message') await page.screenshot({path: '/tmp/gnucms-extension-admin-desktop.png', fullPage: true});
         await page.click('[data-theme-toggle]');
         assert.equal(await page.$eval('html', el => el.dataset.themeMode), 'dark');
         const dark = await style('body', ['backgroundColor']);
@@ -97,29 +109,20 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules' : scena
         await page.keyboard.press('Escape');
         assert.equal(await page.$eval('#admin-drawer', el => el.checked), false);
         await page.waitForFunction(() => document.querySelector('.admin-sidebar').getBoundingClientRect().right <= 1);
-        if (base === '/cms' && scenario === 'alimtalk-history') await page.screenshot({path: '/tmp/gnucms-extension-admin-mobile.png', fullPage: true});
-        if (base === '/cms' && scenario === 'toss') await page.screenshot({path: '/tmp/gnucms-toss-admin-mobile.png', fullPage: true});
+        if (base === '/cms' && scenario === 'demo-reservation') await page.screenshot({path: '/tmp/gnucms-extension-admin-mobile.png', fullPage: true});
         await page.click('[data-theme-toggle]');
         assert.deepEqual(errors, [], scenario);
         count++;
       }
-      await open('inicis');
-      await page.$eval('button[value=save]', button => button.form.requestSubmit(button));
+      await open('demo-message');
+      await page.$eval('#main button[type=submit]', button => button.form.requestSubmit(button));
       await page.waitForFunction(() => document.body.textContent.includes('submitted'));
-      assert.equal(posts.at(-1).url, 'https://gnucms.test' + base + '/plugins/payment-inicis/settings');
-      assert.equal(posts.at(-1).data.get('action'), 'save');
-      assert.equal(posts.at(-1).data.get('merchant_id'), '2999900000');
+      assert.equal(posts.at(-1).url, 'https://gnucms.test' + base + '/plugins/demo-message/preview');
+      assert.equal(posts.at(-1).data.get('title'), '주문 안내');
+      assert.equal(posts.at(-1).data.get('body'), '주문이 접수되었습니다.');
       assert.equal(posts.at(-1).data.get('csrf_token'), 'browser-test-csrf');
-      await open('toss-live');
-      await page.$eval('button[value=save]', button => button.form.requestSubmit(button));
-      await page.waitForFunction(() => document.body.textContent.includes('submitted'));
-      assert.equal(posts.at(-1).url, 'https://gnucms.test' + base + '/plugins/payment-toss/settings');
-      assert.equal(posts.at(-1).data.get('action'), 'save');
-      assert.equal(posts.at(-1).data.get('environment'), 'live');
-      assert.equal(posts.at(-1).data.get('csrf_token'), 'browser-test-csrf');
-      assert.equal(posts.at(-1).data.get('secret_key'), '');
       await page.close();
     }
-    console.log(`Extension admin browser checks passed: ${count} pages, core typography/controls, light/dark themes, mobile navigation, tables and settings submission.`);
+    console.log(`Extension admin browser checks passed: ${count} pages, core typography/controls, light/dark themes, mobile navigation, tables and form submission.`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

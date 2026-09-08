@@ -151,6 +151,131 @@ PHP);
     }
 
     #[DataProvider('connectionProvider')]
+    public function testBundledCmsExcludesShopAndCanDisableItsPreviousEnablement(array $dbConfig): void
+    {
+        $app = $this->makeBundledApp($dbConfig);
+        $adminId = $app->users()->create('bundled-admin@example.test', '', '관리자', true);
+        $this->get($app, '/login');
+        $this->sessionUser($adminId);
+        $state = new StateStore($app->storageDir() . '/extensions');
+        $remaining = ['plugins/retained'];
+        $state->update(static fn (array $enabled): array => $remaining);
+        $body = $this->body($this->get($app, '/admin/modules'));
+        self::assertStringNotContainsString('작은 쇼핑몰', $body);
+        self::assertStringNotContainsString('name="enabled[shop]"', $body);
+        self::assertStringContainsString('예약 안내문', $body);
+
+        // 이전 설치의 사용 설정이 남아 있어도 제거한 모듈은 실행되지 않는다.
+        $state->update(static fn (array $enabled): array => [...$enabled, 'modules/shop']);
+        foreach (['/shop', '/shop/orders', '/admin/shop', '/admin/shop/products', '/modules/shop', '/modules/shop/admin'] as $path) {
+            self::assertSame(404, $this->get($app, $path)->getStatusCode(), $path);
+        }
+        foreach (['/', '/account', '/admin/modules', '/plugins/retained/preview'] as $path) {
+            $response = $this->get($app, $path);
+            self::assertSame(200, $response->getStatusCode(), $path);
+            $body = $this->body($response);
+            self::assertStringNotContainsString('작은 쇼핑몰', $body);
+            self::assertStringNotContainsString('쇼핑몰 관리', $body);
+            self::assertStringNotContainsString('href="/shop', $body);
+            self::assertStringNotContainsString('href="/admin/shop', $body);
+            self::assertStringNotContainsString('내 주문', $body);
+        }
+        $response = $this->post($app, '/admin/modules/shop/state', ['enabled' => '0', 'csrf_token' => $_SESSION['csrf_token']]);
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame($remaining, $state->read());
+        self::assertStringNotContainsString('name="enabled[shop]"', $this->body($this->get($app, '/admin/modules')));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testBundledCmsExcludesPaymentPluginsAndCanDisablePreviousEnablement(array $dbConfig): void
+    {
+        $app = $this->makeBundledApp($dbConfig);
+        $adminId = $app->users()->create('payments-removed-admin@example.test', '', '관리자', true);
+        $this->get($app, '/login');
+        $this->sessionUser($adminId);
+        $state = new StateStore($app->storageDir() . '/extensions');
+        $remaining = ['plugins/retained'];
+        $providers = ['inicis', 'kcp', 'kspay', 'toss'];
+        $payments = array_map(static fn (string $id): string => 'plugins/payment-' . $id, $providers);
+        $state->update(static fn (array $enabled): array => $remaining);
+        $body = $this->body($this->get($app, '/admin/plugins'));
+        self::assertStringNotContainsString('payment-', $body);
+        self::assertStringContainsString('메시지 형식', $body);
+
+        $state->update(static fn (array $enabled): array => [...$enabled, ...$payments]);
+        foreach ($payments as $key) {
+            $path = '/' . $key . '/settings';
+            self::assertSame(404, $this->get($app, $path)->getStatusCode(), $path);
+            self::assertSame(404, $this->post($app, $path, ['action' => 'install', 'csrf_token' => $_SESSION['csrf_token']])->getStatusCode(), $path);
+        }
+        foreach (['/admin/plugins', '/admin/modules', '/plugins/retained/preview'] as $path) {
+            $response = $this->get($app, $path);
+            self::assertSame(200, $response->getStatusCode(), $path);
+            self::assertStringNotContainsString('href="/plugins/payment-', $this->body($response));
+        }
+        foreach ($providers as $id) {
+            $response = $this->post($app, '/admin/plugins/payment-' . $id . '/state', ['enabled' => '0', 'csrf_token' => $_SESSION['csrf_token']]);
+            self::assertSame(303, $response->getStatusCode());
+        }
+        self::assertSame($remaining, $state->read());
+        self::assertStringNotContainsString('payment-', $this->body($this->get($app, '/admin/plugins')));
+        self::assertSame(404, $this->post($app, '/admin/plugins/payment-inicis/state', ['enabled' => '1', 'csrf_token' => $_SESSION['csrf_token']])->getStatusCode());
+        self::assertSame($remaining, $state->read());
+    }
+
+    private function makeBundledApp(array $dbConfig): App
+    {
+        // 배포되는 패키지 설명과 진입점은 그대로 사용하고, 다른 활성 확장은 독립 예제로 검증한다.
+        // 기존 데모 테스트가 복사해서 로드한 클래스와 충돌하지 않도록 그 데모는 활성화하지 않는다.
+        foreach ((new Catalog(dirname(__DIR__, 2)))->all() as $key => $package) {
+            $manifest = json_decode(file_get_contents($package['directory'] . '/extension.json'), true, 16, JSON_THROW_ON_ERROR);
+            $this->package($key, $manifest, '<?php return require ' . var_export($package['directory'] . '/bootstrap.php', true) . ';');
+        }
+        $this->package('plugins/retained', ['entry_path' => '/preview'], <<<'PHP'
+<?php return static function ($context): void {
+    $context->route('GET', '/preview', static fn ($request, $response) => $response, admin: true);
+};
+PHP);
+        return $this->makeApp($dbConfig, [], 'default');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testBundledCmsExcludesBizppurioAndMessagingModules(array $dbConfig): void
+    {
+        $app = $this->makeBundledApp($dbConfig);
+        $adminId = $app->users()->create('messaging-removed-admin@example.test', '', '관리자', true);
+        $this->get($app, '/login');
+        $this->sessionUser($adminId);
+        $state = new StateStore($app->storageDir() . '/extensions');
+        $state->update(static fn (array $enabled): array => ['plugins/retained']);
+        self::assertStringNotContainsString('bizppurio', $this->body($this->get($app, '/admin/plugins')));
+        $modules = $this->body($this->get($app, '/admin/modules'));
+        foreach (['alimtalk', 'sms'] as $id) self::assertStringNotContainsString('name="enabled[' . $id . ']"', $modules);
+
+        $removed = ['plugins/bizppurio', 'modules/alimtalk', 'modules/sms'];
+        $state->update(static fn (array $enabled): array => [...$enabled, ...$removed]);
+        $paths = ['/plugins/bizppurio/settings', '/plugins/bizppurio/result', '/modules/sms/send', '/modules/sms/history', '/modules/sms/detail'];
+        foreach (['home', 'templates', 'send', 'history', 'detail'] as $page) $paths[] = '/modules/alimtalk/' . $page;
+        foreach ($paths as $path) {
+            self::assertSame(404, $this->get($app, $path)->getStatusCode(), $path);
+            self::assertSame(404, $this->post($app, $path, ['csrf_token' => $_SESSION['csrf_token']])->getStatusCode(), $path);
+        }
+        foreach (['/admin/modules', '/admin/plugins', '/plugins/retained/preview'] as $path) {
+            $response = $this->get($app, $path);
+            self::assertSame(200, $response->getStatusCode(), $path);
+            foreach ($removed as $key) self::assertStringNotContainsString('href="/' . $key . '/', $this->body($response));
+        }
+        foreach ($removed as $key) {
+            self::assertSame(303, $this->post($app, '/admin/' . $key . '/state', ['enabled' => '0', 'csrf_token' => $_SESSION['csrf_token']])->getStatusCode());
+            self::assertSame(404, $this->post($app, '/admin/' . $key . '/state', ['enabled' => '1', 'csrf_token' => $_SESSION['csrf_token']])->getStatusCode());
+        }
+        self::assertSame(['plugins/retained'], $state->read());
+        self::assertStringNotContainsString('bizppurio', $this->body($this->get($app, '/admin/plugins')));
+        $modules = $this->body($this->get($app, '/admin/modules'));
+        foreach (['alimtalk', 'sms'] as $id) self::assertStringNotContainsString('name="enabled[' . $id . ']"', $modules);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testPublicAddressIsVisibleWithAndWithoutAnAdminEntry(array $dbConfig): void
     {
         $bootstrap = <<<'PHP'
