@@ -103,6 +103,57 @@ final class YoungCartCommerceTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testMultipleSelectionsReachCartAndBuyCheckoutWithoutPartialUpdates(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $baseCart = $_SESSION['yc_cart'];
+        $id = $this->shop->products->save(['code' => 'SHIRT', 'name' => '옵션 셔츠', 'category_id' => $this->product['category_id'],
+            'price' => '10000', 'active' => '1', 'option_group' => [1 => '색상', 2 => '사이즈'], 'options' => [
+                ['value1' => '화이트', 'value2' => 'S', 'price' => '0', 'stock' => '5'],
+                ['value1' => '화이트', 'value2' => 'M', 'price' => '1000', 'stock' => '5'],
+            ]], []);
+        [$s, $m] = array_map('intval', array_column($this->shop->products->get($id)['options']['select'], 'id'));
+        $input = $this->form(['product_id' => $id, 'selections' => [$s => '1', $m => '2']]);
+        $response = $this->post($this->app, '/shop/cart/add', $input);
+        self::assertSame('/shop/cart?added=1', $response->getHeaderLine('Location'));
+        $cart = $_SESSION['yc_cart'];
+        self::assertSame(1, $cart[$id . ':' . $s]['quantity']);
+        self::assertSame(2, $cart[$id . ':' . $m]['quantity']);
+        $cartPage = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('화이트 / S', $cartPage);
+        self::assertStringContainsString('화이트 / M', $cartPage);
+        $buy = $this->post($this->app, '/shop/cart/add', $input + ['action' => 'buy']);
+        self::assertSame('/shop/checkout?flow=buy', $buy->getHeaderLine('Location'));
+        self::assertSame($cart, $_SESSION['yc_cart']);
+        self::assertCount(2, $_SESSION['yc_buy']);
+        $buyCart = $_SESSION['yc_buy'];
+        $this->shop->store->update('yc_options', $m, ['stock' => 0]);
+        foreach (['cart', 'buy'] as $flow) {
+            $invalid = $this->post($this->app, '/shop/cart/add', $input + ['action' => $flow]);
+            self::assertSame(422, $invalid->getStatusCode());
+            self::assertSame($cart, $_SESSION['yc_cart']);
+            self::assertSame($buyCart, $_SESSION['yc_buy']);
+        }
+        self::assertSame(5, (int) $this->shop->store->get('yc_options', $s)['stock']);
+        $this->shop->store->update('yc_options', $m, ['stock' => 5]);
+        $page = $this->body($this->get($this->app, '/shop/checkout', ['flow' => 'buy']));
+        self::assertStringContainsString('화이트 / S', $page);
+        self::assertStringContainsString('화이트 / M', $page);
+        self::assertStringContainsString('32,000원', $page);
+        preg_match('/name="checkout_token" value="([a-f0-9]{64})"/', $page, $match);
+        $buyer = $this->checkout(['flow' => 'buy', 'checkout_token' => $match[1]]);
+        $order = $this->post($this->app, '/shop/checkout', $buyer);
+        self::assertSame(303, $order->getStatusCode());
+        $detail = $this->body($this->get($this->app, $order->getHeaderLine('Location')));
+        self::assertStringContainsString('화이트 / S', $detail);
+        self::assertStringContainsString('화이트 / M', $detail);
+        self::assertSame(4, (int) $this->shop->store->get('yc_options', $s)['stock']);
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $m)['stock']);
+        self::assertSame($cart, $_SESSION['yc_cart']);
+        self::assertSame($baseCart[array_key_first($baseCart)], $cart[array_key_first($baseCart)]);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testGuestCartCheckoutDuplicateCancelAndLookup(array $config): void
     {
         $this->setupShop($config); $this->add(2);

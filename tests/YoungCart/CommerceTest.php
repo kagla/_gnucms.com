@@ -58,6 +58,45 @@ final class CommerceTest extends YoungCartTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testMultipleSelectionsValidateTogetherAndReserveEachCombination(array $config): void
+    {
+        $this->setupShop($config);
+        $product = $this->product(['buy_min' => '2', 'buy_max' => '4', 'option_group' => [1 => '색상', 2 => '사이즈'], 'options' => [
+            ['value1' => '화이트', 'value2' => 'S', 'price' => '0', 'stock' => '3'],
+            ['value1' => '화이트', 'value2' => 'M', 'price' => '1000', 'stock' => '4'],
+        ], 'extras' => [['value1' => '포장', 'value2' => '선물상자', 'price' => '2000', 'stock' => '4']]]);
+        [$s, $m] = array_map('intval', array_column($product['options']['select'], 'id'));
+        $extra = (int) $product['options']['extra'][0]['id'];
+        $foreign = $this->product(['option_group' => [1 => '색상'], 'options' => [['value1' => '화이트', 'stock' => '5']]]);
+        $foreignId = (int) $foreign['options']['select'][0]['id'];
+        foreach ([null, 'invalid', [], [$s => 0], [$s => -1], [$s => '1.5'], [$s => [1]], [0 => 1],
+            [$s => 1, $extra => 1], [$s => 1, $foreignId => 1], array_fill(1, 101, 1), [$s => 4], [$s => 2, $m => 3]] as $selections) {
+            $this->reject(fn () => $this->shop->cart->add([], ['product_id' => $product['id'], 'selections' => $selections]));
+        }
+        $input = ['product_id' => $product['id'], 'selections' => [$s => 2, $m => 1], 'extras' => [$extra => 1], 'price' => 1, 'total' => 1];
+        $cart = $this->shop->cart->add([], $input);
+        self::assertCount(3, $cart);
+        self::assertSame(33000, $this->shop->cart->quote($cart, [], true)['total']);
+        $this->reject(fn () => $this->shop->cart->add($cart, ['product_id' => $product['id'], 'selections' => [$m => 2]]), '최대');
+        self::assertSame(1, $cart[$product['id'] . ':' . $m]['quantity']);
+        foreach ([['active' => 0, 'stock' => 4], ['active' => 1, 'stock' => 0]] as $state) {
+            $this->shop->store->update('yc_options', $m, $state);
+            $this->reject(fn () => $this->shop->cart->add([], $input));
+        }
+        $this->shop->store->update('yc_options', $m, ['stock' => 4]);
+        $order = $this->place($cart);
+        self::assertSame(['화이트 / S', '화이트 / M', '포장 / 선물상자'], array_column($order['items'], 'option_label'));
+        self::assertSame([2, 1, 1], array_map('intval', array_column($order['items'], 'quantity')));
+        self::assertSame(33000, (int) $order['total']);
+        self::assertSame(1, (int) $this->shop->store->get('yc_options', $s)['stock']);
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $m)['stock']);
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $extra)['stock']);
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $s)['stock']);
+        self::assertSame(4, (int) $this->shop->store->get('yc_options', $m)['stock']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testOrderSnapshotsIdempotencyOwnershipAndCancellation(array $config): void
     {
         $this->setupShop($config);

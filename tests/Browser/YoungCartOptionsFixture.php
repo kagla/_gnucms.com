@@ -20,6 +20,7 @@ $rows = [
     [108, '__proto__', 'S', '면', 0, 1, 1],
 ];
 if ($count < 3) $rows = $count === 0 ? [] : [[101, '0', $count === 2 ? 'S' : '', '', 500, 3, 1]];
+if ($count === 2) $rows[] = [102, '0', 'M', '', 1000, 4, 1];
 $options = [
     'select_groups' => array_slice(['색상', '사이즈', '재질'], 0, $count),
     'select' => array_map(static fn (array $row): array => array_combine(['id', 'value1', 'value2', 'value3', 'price', 'stock', 'active'], $row), $rows),

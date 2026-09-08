@@ -92,3 +92,17 @@
 .yc-shop .yc-option-selection [data-yc-selection-stock]{color:var(--yc-accent);font-weight:650}
 .yc-shop [data-yc-option-stages][hidden],.yc-shop [data-yc-option-stage][hidden],.yc-shop [data-yc-option-fallback][hidden],.yc-shop [data-yc-option-selection][hidden]{display:none}
 .yc-shop .yc-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.yc-shop .yc-selected-options{display:flex;flex-direction:column;gap:.7rem}
+.yc-shop .yc-selected-option{padding:1rem;border:1px solid var(--yc-line);border-radius:9px;background:var(--yc-soft);min-width:0}
+.yc-shop .yc-selected-option-heading,.yc-shop .yc-selected-option-bottom{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.yc-shop .yc-selected-option-heading>strong{font-size:.85rem;overflow-wrap:anywhere;min-width:0}
+.yc-shop .yc-selected-option-heading>button{flex:none;min-height:32px;padding:.2rem .4rem;color:var(--yc-muted)}
+.yc-shop .yc-selected-option>p{font-size:.72rem;color:var(--yc-muted);margin:.3rem 0 .8rem;overflow-wrap:anywhere}
+.yc-shop .yc-selected-option-bottom{flex-wrap:wrap}
+.yc-shop .yc-selected-option-bottom>strong{font-size:.95rem;margin-left:auto}
+.yc-shop .yc-option-quantity-controls{display:flex;align-items:center;overflow:hidden;border:1px solid var(--yc-line);border-radius:7px;background:var(--yc-paper)}
+.yc-shop .yc-option-quantity-controls>button{display:grid;place-items:center;width:38px;min-height:40px;flex:none;padding:0;border:0;background:none;color:var(--yc-ink);cursor:pointer;font-size:1.1rem}
+.yc-shop .yc-option-quantity-controls>button:disabled{color:var(--yc-muted);opacity:.45;cursor:not-allowed}
+.yc-shop .yc-option-quantity-controls>.input{width:54px;min-height:40px;padding:.35rem .15rem;border:0;border-inline:1px solid var(--yc-line);border-radius:0;text-align:center;appearance:textfield}
+.yc-shop .yc-option-quantity-controls>.input::-webkit-inner-spin-button,.yc-shop .yc-option-quantity-controls>.input::-webkit-outer-spin-button{appearance:none;margin:0}
+.yc-shop [data-yc-selections][hidden],.yc-shop [data-yc-single-quantity][hidden]{display:none}

@@ -20,13 +20,26 @@ final class Cart
     public function add(array $cart, array $input): array
     {
         $productId = Input::id($input['product_id'] ?? null);
-        $optionId = Input::int($input['option_id'] ?? null, 'option_id', 0, PHP_INT_MAX, 0);
-        $quantity = Input::int($input['quantity'] ?? null, 'quantity', 1, self::MAX_QUANTITY);
         $product = $this->products->get($productId);
-        if ($optionId !== 0 && !in_array($optionId, array_map('intval', array_column($product['options']['select'], 'id')), true)) {
-            throw DomainError::validation(['option_id' => '선택옵션을 다시 선택해 주세요.']);
+        $selectIds = array_map('intval', array_column($product['options']['select'], 'id'));
+        if (array_key_exists('selections', $input)) {
+            if (!is_array($input['selections']) || $input['selections'] === [] || count($input['selections']) > self::MAX_LINES) {
+                throw DomainError::validation(['selections' => '구매할 옵션을 1~' . self::MAX_LINES . '개 선택해 주세요.']);
+            }
+            $add = [];
+            foreach ($input['selections'] as $id => $qty) {
+                $id = Input::id($id);
+                if (!in_array($id, $selectIds, true)) throw DomainError::validation(['selections' => '선택옵션을 다시 선택해 주세요.']);
+                $add[$id] = Input::int($qty, 'selections', 1, self::MAX_QUANTITY);
+            }
+        } else {
+            // Keep single-option forms and the no-JavaScript fallback compatible.
+            $optionId = Input::int($input['option_id'] ?? null, 'option_id', 0, PHP_INT_MAX, 0);
+            if ($optionId !== 0 && !in_array($optionId, $selectIds, true)) {
+                throw DomainError::validation(['option_id' => '선택옵션을 다시 선택해 주세요.']);
+            }
+            $add = [$optionId => Input::int($input['quantity'] ?? null, 'quantity', 1, self::MAX_QUANTITY)];
         }
-        $add = [$optionId => $quantity];
         $extras = $input['extras'] ?? [];
         if (!is_array($extras) || count($extras) > self::MAX_LINES) throw DomainError::validation(['extras' => '추가옵션을 확인해 주세요.']);
         foreach ($extras as $id => $qty) {

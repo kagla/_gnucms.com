@@ -1,5 +1,5 @@
 <?php $opts = $product['options']; $minimum = max(1, (int) $product['buy_min']); ?>
-<form class="yc-purchase-form" method="post" action="<?= $this->e($url) ?>/cart/add" data-yc-purchase data-price="<?= (int) $product['price'] ?>">
+<form class="yc-purchase-form" method="post" action="<?= $this->e($url) ?>/cart/add" data-yc-purchase data-price="<?= (int) $product['price'] ?>" data-buy-max="<?= (int) $product['buy_max'] ?>">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
   <div class="yc-options" data-yc-options="<?= $this->e(json_encode($options_json, JSON_UNESCAPED_UNICODE)) ?>">
@@ -14,17 +14,25 @@
       <?php endforeach ?>
       <p class="yc-option-feedback" role="status" aria-live="polite" aria-atomic="true" data-yc-option-feedback></p>
       <div class="yc-option-selection" data-yc-option-selection hidden><strong data-yc-selection-name></strong><div><span data-yc-selection-stock></span><span data-yc-selection-price></span></div></div>
+      <div class="yc-selected-options" data-yc-selections hidden aria-label="선택한 옵션"></div>
+      <template data-yc-selection-template>
+        <div class="yc-selected-option" data-yc-selected-option>
+          <div class="yc-selected-option-heading"><strong data-yc-line-name></strong><button class="yc-text-button" type="button" data-yc-line-remove>삭제</button></div>
+          <p data-yc-line-meta></p>
+          <div class="yc-selected-option-bottom"><div class="yc-option-quantity-controls"><button type="button" data-yc-line-minus>−</button><input class="input input-bordered" type="number" min="1" value="1" required data-yc-line-quantity><button type="button" data-yc-line-plus>+</button></div><strong data-yc-line-total></strong></div>
+        </div>
+      </template>
     </div>
     <label class="yc-option-row" data-yc-option-fallback><span><?= $this->e(implode(' / ', $opts['select_groups'])) ?></span><select class="select select-bordered" name="option_id" required data-yc-option>
       <option value="">옵션을 선택해 주세요</option>
       <?php foreach ($opts['select'] as $option): $available = (int) $option['active'] === 1 && (int) $option['stock'] > 0; ?><option value="<?= (int) $option['id'] ?>" data-price="<?= (int) $option['price'] ?>" data-stock="<?= $available ? (int) $option['stock'] : 0 ?>"<?= !$available ? ' disabled' : '' ?>><?= $this->e(implode(' / ', array_filter([$option['value1'], $option['value2'], $option['value3']], static fn ($v) => $v !== ''))) ?><?= (int) $option['price'] !== 0 ? ' (' . ((int) $option['price'] > 0 ? '+' : '') . number_format((int) $option['price']) . '원)' : '' ?><?= $available ? ' · 재고 ' . number_format((int) $option['stock']) . '개' : ' · 품절' ?></option><?php endforeach ?>
     </select></label><?php else: ?><input type="hidden" name="option_id" value="0"><?php endif ?>
-    <label class="yc-option-row"><span>수량</span><input class="input input-bordered yc-quantity" type="number" name="quantity" value="<?= $minimum ?>" min="<?= $minimum ?>" max="<?= min(9999, (int) $product['buy_max'] ?: 9999, $opts['select'] === [] ? (int) $product['stock'] : 9999) ?>" required data-yc-quantity></label>
+    <label class="yc-option-row" data-yc-single-quantity><span>수량</span><input class="input input-bordered yc-quantity" type="number" name="quantity" value="<?= $minimum ?>" min="<?= $minimum ?>" max="<?= min(9999, (int) $product['buy_max'] ?: 9999, $opts['select'] === [] ? (int) $product['stock'] : 9999) ?>" required data-yc-quantity></label>
     <?php if ($opts['extra'] !== []): ?><details class="yc-extras"><summary>추가 구성 선택 <span class="muted">선택사항</span></summary>
       <?php foreach ($opts['extra'] as $option): if ((int) $option['active'] !== 1) continue; ?><label class="yc-extra-row"><span><?= $this->e($option['value1'] . ' / ' . $option['value2']) ?><small><?= number_format((int) $option['price']) ?>원<?= (int) $option['stock'] < 1 ? ' · 품절' : '' ?></small></span><input class="input input-bordered yc-quantity" type="number" name="extras[<?= (int) $option['id'] ?>]" min="0" max="<?= min(9999, (int) $option['stock']) ?>" value="0" data-yc-extra-price="<?= (int) $option['price'] ?>" aria-label="<?= $this->e($option['value1'] . ' ' . $option['value2']) ?> 수량"<?= (int) $option['stock'] < 1 ? ' disabled' : '' ?>></label><?php endforeach ?>
     </details><?php endif ?>
     <p class="yc-total" aria-live="polite"><span>상품 금액 <small class="muted">배송비 별도</small></span><strong data-yc-total><?= number_format((int) $product['price'] * $minimum) ?>원</strong></p>
   </div>
   <div class="yc-buy-actions"><button class="yc-button yc-button-outline" type="submit" name="action" value="cart">장바구니 담기</button><button class="yc-button yc-button-primary" type="submit" name="action" value="buy">바로 주문하기</button></div>
-  <p class="yc-purchase-help">다른 옵션은 장바구니에 추가로 담을 수 있어요.</p>
+  <p class="yc-purchase-help" data-yc-purchase-help>다른 옵션은 장바구니에 추가로 담을 수 있어요.</p>
 </form>
