@@ -78,6 +78,8 @@ final class YoungCartPublicTest extends WebTestCase
         self::assertStringContainsString('href="/shop/item?id=A"', $home);
         self::assertStringContainsString('href="/shop/list?ca=10"', $home);
         self::assertStringContainsString('youngcart.css', $home);
+        self::assertStringContainsString('data-yc-search-menu', $home);
+        self::assertStringNotContainsString('class="yc-brand"', $home);
         $list = $this->body($this->get($this->app, '/shop/list', ['ca' => '10']));
         self::assertStringContainsString('<p>분류 안내</p>', $list);
         self::assertStringContainsString('href="/shop/list?ca=1010"', $list);
@@ -144,6 +146,7 @@ final class YoungCartPublicTest extends WebTestCase
         $preview = $this->body($this->get($this->app, '/shop/item', ['id' => 'C']));
         self::assertStringContainsString('숨은 셔츠', $preview);
         self::assertStringContainsString('미리보기', $preview);
+        self::assertStringNotContainsString('yc-manage-link', $preview);
         self::assertStringContainsString('/admin/shop/products/edit?id=' . $seed['ids']['C'], $preview);
     }
 

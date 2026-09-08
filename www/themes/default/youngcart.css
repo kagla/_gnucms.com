@@ -37,6 +37,26 @@
 @media(max-width:390px){.yc-hero{padding:1.3rem}.yc-hero h1{font-size:1.42rem}.yc-hero p br{display:none}.yc-hero-product{width:37%}.yc-hero-product span{font-size:.6rem}.yc-cart-image{width:70px;height:70px}.yc-cart-item-bottom{gap:.5rem}.yc-cart-item-bottom label{gap:.35rem}.yc-quantity{width:4.5rem}.yc-form-grid{grid-template-columns:1fr}.yc-category-shortcuts{grid-template-columns:repeat(4,minmax(0,1fr))}.yc-header-bottom{gap:.75rem}.yc-steps{gap:.7rem}}
 @media(prefers-reduced-motion:reduce){.yc-card-image img,.yc-button{transition:none}.yc-card:hover .yc-card-image img{transform:none}}
 @media print{.yc-header,.yc-steps,.yc-buy-actions,.yc-cancel,.yc-continue{display:none}.yc-commerce-grid{display:block}.yc-order-summary{position:static;break-inside:avoid}.yc-panel{break-inside:avoid}}
+/* Keep storefront navigation and shopping actions together. */
+.yc-header-compact{position:relative}
+.yc-header-compact .yc-header-bottom{min-height:76px}
+.yc-header-compact .yc-nav{min-width:0;align-self:stretch;align-items:stretch}
+.yc-header-compact .yc-nav>a{display:flex;align-items:center}
+.yc-header-compact .yc-header-actions{flex:none;gap:1.2rem}
+.yc-header-compact .yc-header-actions>a{min-width:44px;min-height:44px;justify-content:center}
+.yc-header-compact .yc-search-menu{flex:none}
+.yc-header-compact .yc-search-menu>summary{display:grid;place-items:center;width:44px;height:44px;list-style:none;border-radius:8px;cursor:pointer}
+.yc-header-compact .yc-search-menu>summary::-webkit-details-marker{display:none}
+.yc-header-compact .yc-search-menu>summary:hover,.yc-header-compact .yc-search-menu[open]>summary{color:var(--yc-accent);background:var(--yc-soft)}
+.yc-header-compact .yc-search{position:absolute;z-index:75;right:0;top:calc(100% + .5rem);width:min(420px,100%);max-width:100%;min-height:50px;margin:0;padding:.45rem .8rem;background:var(--yc-paper);box-shadow:0 12px 40px #0002}
+.yc-header-compact .yc-search input{font-size:.9rem}
+.yc-header-compact .yc-search button{display:grid;place-items:center;flex:none;width:40px;min-height:40px;padding:.5rem;border-radius:6px}
+@media(max-width:768px){
+  .yc-header-compact .yc-header-bottom{flex-wrap:wrap;min-height:0;gap:0 .75rem}
+  .yc-header-compact .yc-header-actions{gap:.75rem}
+  .yc-header-compact .yc-category-dropdown>summary{min-height:64px}
+  .yc-header-compact .yc-nav{order:3;flex:1 0 100%}
+}
 /* These fields stay compact even when the host theme makes form inputs full width. */
 .yc-shop input.yc-quantity{width:5.5rem;max-width:5.5rem;min-width:0}
 .yc-cart-item-bottom label{white-space:nowrap}

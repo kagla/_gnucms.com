@@ -20,7 +20,7 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
         posts.push({path: url.pathname, data: new URLSearchParams(request.postData())});
         return request.respond({status: 200, body: 'submitted'});
       }
-      if (url.pathname === '/cms/shop/cart') return request.respond({status: 200, contentType: 'text/html', body: html});
+      if (['/cms/shop/cart', '/cms/shop/search'].includes(url.pathname)) return request.respond({status: 200, contentType: 'text/html', body: html});
       const asset = url.hostname === 'cdn.jsdelivr.net' && url.pathname.endsWith('/daisyui.css')
         ? '/vendor/daisyui/daisyui.css' : url.pathname.replace(/^\/cms/, '');
       if (['/vendor/daisyui/daisyui.css', '/themes/default/theme.css', '/themes/default/youngcart.css', '/themes/default/youngcart.js'].includes(asset)) {
@@ -37,7 +37,24 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
     const setQty = (id, quantity) => page.$eval(input(id), (el, quantity) => { el.value = quantity; el.dispatchEvent(new Event('input', {bubbles: true})); }, quantity);
     const save = '.yc-cart-toolbar button';
     const submit = async selector => { await Promise.all([page.waitForNavigation(), page.click(selector)]); };
+    const search = '[data-yc-search-menu]', searchToggle = search + '>summary', searchInput = search + ' input';
+    const searchOpen = () => page.$eval(search, el => el.open);
     await page.setViewport({width: 1280, height: 960});
+    await open();
+    assert.equal(await page.$('.yc-brand, .yc-manage-link, .yc-header-main'), null);
+    assert.equal(await page.$eval('.yc-header-actions', el => el.parentElement.classList.contains('yc-header-bottom')), true);
+    assert.equal(await searchOpen(), false);
+    await page.focus(searchToggle); await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.activeElement.matches('[data-yc-search-menu] input'));
+    await page.keyboard.press('Escape');
+    assert.equal(await searchOpen(), false);
+    assert.equal(await page.$eval(searchToggle, el => el === document.activeElement), true);
+    await page.click(searchToggle); await page.click('.yc-cart-toolbar strong');
+    assert.equal(await searchOpen(), false);
+    await page.click(searchToggle); await page.type(searchInput, '옥스포드 셔츠');
+    await submit(search + ' button[type=submit]');
+    assert.equal(new URL(page.url()).pathname, '/cms/shop/search');
+    assert.equal(new URL(page.url()).searchParams.get('q'), '옥스포드 셔츠');
     await open();
     assert.equal(await page.$eval(minus(101), el => el.disabled), true);
     await page.click(plus(101));
@@ -71,6 +88,15 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
           const main = document.querySelector('.main-area').getBoundingClientRect();
           return Math.abs(header.left - main.left) < 1 && Math.abs(header.right - main.right) < 1;
         }), true, 'Shop content uses the same page width as the site header');
+        await page.$eval(search, el => { el.open = true; });
+        assert.equal(await page.evaluate(() => {
+          const header = document.querySelector('.yc-header').getBoundingClientRect();
+          const search = document.querySelector('.yc-search-menu .yc-search').getBoundingClientRect();
+          const actions = document.querySelector('.yc-header-actions').getBoundingClientRect();
+          const category = document.querySelector('.yc-category-dropdown').getBoundingClientRect();
+          return search.width > 0 && search.left >= header.left - 1 && search.right <= header.right + 1 && actions.left >= category.right && actions.right <= header.right + 1;
+        }), true, 'Search popup and right-side shopping actions fit the header');
+        await page.$eval(search, el => { el.open = false; });
         assert.equal(await page.$$eval('[data-yc-cart-quantity]', controls => controls.every(control => {
           const [minus, input, plus] = Array.from(control.children, el => el.getBoundingClientRect());
           return minus.right <= input.left + 1 && input.right <= plus.left + 1 && Math.abs(minus.top - plus.top) < 1 && Math.abs(minus.top + minus.height / 2 - input.top - input.height / 2) < 1;
@@ -86,12 +112,16 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
     await submit('.yc-remove[value="10:101"]');
     assert.equal(posts.at(-1).data.get('remove'), '10:101', 'Delete works even when quantity is invalid');
     await page.setJavaScriptEnabled(false); await open();
+    await page.click(searchToggle); assert.equal(await searchOpen(), true);
+    await page.type(searchInput, '셔츠'); await submit(search + ' button[type=submit]');
+    assert.equal(new URL(page.url()).searchParams.get('q'), '셔츠');
+    await open();
     assert.equal(await page.$eval(plus(101), el => el.getClientRects().length), 0);
     await page.focus(input(101)); await page.keyboard.down('Control'); await page.keyboard.press('A'); await page.keyboard.up('Control');
     await page.keyboard.press('Backspace'); await page.type(input(101), '4');
     await submit(save);
     assert.equal(posts.at(-1).data.get('quantities[10:101]'), '4');
     assert.deepEqual(errors, []);
-    console.log('YoungCart cart browser checks passed: quantity buttons, independent rows, limits, keyboard/direct input, save/delete, mobile/dark alignment and no-JS fallback.');
+    console.log('YoungCart cart browser checks passed: compact header/search, quantity buttons, independent rows, limits, keyboard/direct input, save/delete, mobile/dark alignment and no-JS fallback.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

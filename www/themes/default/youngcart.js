@@ -260,7 +260,12 @@
   }
   var errors = document.querySelector('[data-yc-errors]');
   if (errors) errors.focus();
-  document.querySelectorAll('.yc-category-dropdown').forEach(function (menu) {
+  document.querySelectorAll('.yc-category-dropdown, [data-yc-search-menu]').forEach(function (menu) {
+    if (menu.matches('[data-yc-search-menu]')) {
+      menu.addEventListener('toggle', function () {
+        if (menu.open) menu.querySelector('input[type=search]').focus();
+      });
+    }
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); }
     });
