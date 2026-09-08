@@ -17,6 +17,7 @@ final class Service
     public readonly Categories $categories;
     public readonly Options $options;
     public readonly Images $images;
+    public readonly HomeBanner $banner;
     public readonly Catalog\Products $products;
     public readonly Catalog\Listing $listing;
     public readonly Commerce\Cart $cart;
@@ -29,6 +30,7 @@ final class Service
         $this->categories = new Categories($this->store, $app->htmlSanitizer(), $this->settings);
         $this->options = new Options($this->store);
         $this->images = new Images($app, $this->settings);
+        $this->banner = new HomeBanner($this->store, $this->settings, $this->images);
         $this->products = new Catalog\Products($this->store, $app->htmlSanitizer(), $app->contentImages(), $this->images, $this->options, $this->categories);
         $this->listing = new Catalog\Listing($this->store, $this->settings, $this->options);
         $this->cart = new Commerce\Cart($this->products, $this->settings);

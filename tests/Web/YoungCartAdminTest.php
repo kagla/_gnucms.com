@@ -92,6 +92,50 @@ final class YoungCartAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testMainBannerEditorAndUploadGuards(array $config): void
+    {
+        $this->setupModule($config);
+        $this->signIn(false);
+        self::assertSame(403, $this->postWithFiles($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['banner_mode' => 'upload'])), ['banner_image' => ImagesTest::png(20, 20)])->getStatusCode());
+        $this->signIn(true);
+        $form = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('href="#settings-banner"', $form);
+        self::assertStringContainsString('enctype="multipart/form-data"', $form);
+        self::assertStringContainsString('name="banner_title"', $form);
+        self::assertStringContainsString('name="banner_image"', $form);
+        self::assertStringContainsString('<option value="random">메인 진열 상품 랜덤 표시</option>', $form);
+        $random = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['banner_mode' => 'random'])));
+        self::assertSame(303, $random->getStatusCode());
+        self::assertSame('random', $this->shop->settings->all()['banner']['mode']);
+        self::assertStringContainsString('<option value="random" selected>', $this->body($this->get($this->app, '/admin/shop/settings')));
+        $input = $this->settingsForm(['banner_use' => '1', 'banner_mode' => 'upload', 'banner_title' => "계절 상품\n<script>bad</script>",
+            'banner_description' => '이번 주 추천', 'banner_button_label' => '보러 가기', 'banner_button_url' => '/shop/type?t=new',
+            'banner_image_alt' => '가을 이미지', 'banner_image_caption' => '가을 추천', 'banner_image_url' => 'https://example.test/autumn']);
+        self::assertSame(403, $this->postWithFiles($this->app, '/admin/shop/settings', $input, ['banner_image' => ImagesTest::png(20, 20)])->getStatusCode());
+        self::assertSame('', $this->shop->settings->all()['banner']['image']);
+        $saved = $this->postWithFiles($this->app, '/admin/shop/settings', $this->csrf($input), ['banner_image' => ImagesTest::png(100, 100)]);
+        self::assertSame('/admin/shop/settings?saved=1', $saved->getHeaderLine('Location'));
+        $filename = $this->shop->settings->all()['banner']['image'];
+        $form = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('/shop/banner-image?f=' . $filename, $form);
+        self::assertStringContainsString('&lt;script&gt;bad&lt;/script&gt;', $form);
+        $home = $this->body($this->get($this->app, '/shop'));
+        self::assertStringContainsString("계절 상품<br>\n&lt;script&gt;bad&lt;/script&gt;", $home);
+        self::assertStringNotContainsString('<script>bad</script>', $home);
+        self::assertStringContainsString('alt="가을 이미지"', $home);
+        self::assertStringContainsString('href="https://example.test/autumn"', $home);
+        $error = $this->postWithFiles($this->app, '/admin/shop/settings', $this->csrf(['banner_button_url' => 'javascript:alert(1)'] + $input), ['banner_image' => ImagesTest::png(80, 80)]);
+        self::assertSame(422, $error->getStatusCode());
+        self::assertStringContainsString('이미지를 다시 선택', $this->body($error));
+        self::assertSame($filename, $this->shop->settings->all()['banner']['image']);
+        self::assertSame(422, $this->post($this->app, '/admin/shop/settings', $this->csrf(['banner_title' => ['bad']] + $input))->getStatusCode());
+        $hidden = $this->post($this->app, '/admin/shop/settings', $this->csrf(['banner_use' => '0'] + $input));
+        self::assertSame(303, $hidden->getStatusCode());
+        self::assertStringNotContainsString('class="yc-hero"', $this->body($this->get($this->app, '/shop')));
+        self::assertSame(200, $this->get($this->app, '/shop/banner-image', ['f' => $filename])->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testNotInstalledAdminPagesRedirectToDashboard(array $config): void
     {
         $this->setupModule($config, false);

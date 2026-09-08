@@ -99,6 +99,9 @@
   .extension-admin .overflow-x-auto:has(input) .table td::before{display:none}
 }
 .yc-shop .yc-hero h1,.yc-shop .yc-hero-product span,.yc-shop .yc-card-name{word-break:keep-all}
+.yc-shop .yc-promo-single{grid-template-columns:1fr}
+.yc-shop .yc-hero-copy{min-width:0;overflow-wrap:anywhere}
+.yc-shop .yc-hero-product{overflow-wrap:anywhere}
 .extension-admin .overflow-x-auto{overflow-x:auto;max-width:100%;min-width:0}
 /* Keep all option groups visible and enable each after its parent is selected. */
 .yc-shop .yc-option-stages{display:flex;flex-direction:column;gap:.9rem}

@@ -34,7 +34,7 @@ final class ShopController
             'img' => static fn (int $productId, ?string $file, string $size): ?string => $file === null ? null : Images::url($url, $productId, $file, $size),
             'type_labels' => Settings::TYPE_LABELS, 'sort_labels' => Listing::SORT_LABELS];
         if (!$this->service->ready()) {
-            if ($page === 'image') throw DomainError::notFound('이미지를 찾을 수 없습니다.');
+            if (in_array($page, ['image', 'banner-image'], true)) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
             return $view->render($response, 'notready', $data);
         }
         $data['settings'] = $this->service->settings->all();
@@ -49,7 +49,10 @@ final class ShopController
         switch ($page) {
             case 'index':
                 $data['blocks'] = $this->service->listing->main();
+                $data['banner'] = $this->service->banner->view($data['settings']['banner'], $data['blocks'], $data['menu'], $url, $base);
                 return $view->render($response, 'index', $data);
+            case 'banner-image':
+                return $this->service->banner->imageResponse($query['f'] ?? '', $admin, $response);
             case 'list':
                 $category = $this->service->categories->byCode($query['ca'] ?? '');
                 if ($category === null || (int) $category['active'] !== 1) throw DomainError::notFound('분류를 찾을 수 없습니다.');

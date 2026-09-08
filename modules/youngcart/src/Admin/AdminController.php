@@ -7,9 +7,11 @@ namespace GnuCms\Modules\YoungCart\Admin;
 use GnuCms\Error\DomainError;
 use GnuCms\Modules\YoungCart\Schema;
 use GnuCms\Modules\YoungCart\Settings;
+use GnuCms\Modules\YoungCart\HomeBanner;
 use GnuCms\Modules\YoungCart\Commerce\Orders;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
 
 final class AdminController extends AdminBase
 {
@@ -47,14 +49,20 @@ final class AdminController extends AdminBase
     {
         if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $data['types'] = Settings::TYPE_LABELS;
+        $current = $this->service->settings->all();
+        $data['banner_modes'] = HomeBanner::MODES;
+        $data['banner_products'] = $this->service->banner->choices();
+        $data['banner_image_url'] = $current['banner']['image'] === '' ? '' : HomeBanner::imageUrl($data['public_url'], $current['banner']['image']);
         if ($request->getMethod() === 'POST') {
+            $upload = $request->getUploadedFiles()['banner_image'] ?? null;
             try {
-                $this->service->settings->save($data['input']);
+                $this->service->banner->saveSettings($data['input'], $upload);
                 return $this->redirect($response, $data['admin_url'] . '/settings?saved=1');
             } catch (DomainError $e) {
                 $response = $response->withStatus($e->status());
                 $data['errors'] = $e->details() ?: [$e->getMessage()];
-                $data['values'] = $data['input'];
+                $data['values'] = array_filter($data['input'], static fn ($value) => is_string($value) || is_int($value)) + $this->flatten($current);
+                if ($upload !== null && (!$upload instanceof UploadedFileInterface || $upload->getError() !== UPLOAD_ERR_NO_FILE)) $data['errors'][] = '저장되지 않았습니다. 업로드할 이미지를 다시 선택해 주세요.';
                 return $this->render($request, $response, 'settings', $data);
             }
         }
@@ -67,6 +75,7 @@ final class AdminController extends AdminBase
     private function flatten(array $settings): array
     {
         $flat = [];
+        foreach ($settings['banner'] as $key => $value) if ($key !== 'image') $flat['banner_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         foreach ($settings['main'] as $type => $block) foreach ($block as $key => $value) $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         foreach (['category', 'type', 'search', 'related', 'detail'] as $section) foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';

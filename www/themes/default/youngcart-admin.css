@@ -1,4 +1,9 @@
 /* YoungCart administration. Keep the CMS shell and theme tokens; scope every rule. */
+.yc-admin-page .yc-banner-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 1.25rem}
+.yc-admin-page #settings-banner :is(.input,.select,.file-input){width:100%;max-width:100%;min-width:0}
+.yc-admin-page .yc-banner-current{padding:1rem;margin-top:1rem;border:1px solid var(--yc-line);border-radius:10px}
+.yc-admin-page .yc-banner-current img{width:160px;height:160px;object-fit:contain;background:var(--yc-soft);border-radius:8px}
+@media(max-width:600px){.yc-admin-page .yc-banner-fields{grid-template-columns:1fr}}
 .admin-body.yc-admin-page{max-width:88rem;color:var(--yc-ink);--yc-admin-radius:14px;--yc-admin-focus:var(--yc-accent)}
 [data-theme=dark] .yc-admin-page{--yc-accent:#ff9d8e}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]) .yc-admin-page{--yc-accent:#ff9d8e}}

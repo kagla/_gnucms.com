@@ -54,6 +54,11 @@
     });
   }
   labelFields(root);
+  var bannerMode=root.querySelector('[data-yc-banner-mode]');
+  if(bannerMode){
+    function showBannerFields(){root.querySelectorAll('[data-yc-banner-panel]').forEach(function(panel){panel.hidden=panel.dataset.ycBannerPanel!==bannerMode.value;});}
+    bannerMode.addEventListener('change',showBannerFields);showBannerFields();
+  }
   var errors=root.querySelector('[data-yc-errors]');
   if(errors){
     errors.querySelectorAll('[data-yc-error-field]').forEach(function(message){

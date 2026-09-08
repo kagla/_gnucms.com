@@ -16,7 +16,7 @@ return static function (Context $context): void {
     $service = new Service($context->app);
     $shop = new ShopController($service, $context->routePrefix, $context->adminRoutePrefix);
     $context->route('GET', '/', static fn ($request, $response) => $shop->handle('index', $request, $response));
-    foreach (['list', 'type', 'search', 'item', 'image'] as $page) {
+    foreach (['list', 'type', 'search', 'item', 'image', 'banner-image'] as $page) {
         $context->route('GET', '/' . $page, static fn ($request, $response) => $shop->handle($page, $request, $response));
     }
     $commerce = new \GnuCms\Modules\YoungCart\Web\CommerceController($service, $context->routePrefix, $context->adminRoutePrefix);

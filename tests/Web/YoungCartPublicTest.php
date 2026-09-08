@@ -52,6 +52,47 @@ final class YoungCartPublicTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testBannerImagesVisibilityAndSubdirectory(array $config): void
+    {
+        $this->setupModule($config);
+        $form = \GnuCms\Tests\YoungCart\HomeBannerTest::form(['banner_mode' => 'upload', 'banner_button_url' => '/shop/search', 'banner_image_url' => '/shop/type?t=new']);
+        $banner = $this->shop->banner->saveSettings($form, ImagesTest::png(80, 80))['banner'];
+        $response = $this->get($this->app, '/shop/banner-image', ['f' => $banner['image']]);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('image/png', $response->getHeaderLine('Content-Type'));
+        self::assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
+        self::assertSame('private, no-store', $response->getHeaderLine('Cache-Control'));
+        self::assertSame(404, $this->get($this->app, '/shop/banner-image', ['f' => '../other.png'])->getStatusCode());
+        self::assertSame(404, $this->get($this->app, '/shop/banner-image', ['f' => str_repeat('a', 32) . '.png'])->getStatusCode());
+        $home = Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '/cms')
+            ->handle((new ServerRequestFactory())->createServerRequest('GET', '/cms/shop'));
+        self::assertStringContainsString('src="/cms/shop/banner-image?f=' . $banner['image'] . '"', $this->body($home));
+        self::assertStringContainsString('href="/cms/shop/search"', $this->body($home));
+        self::assertStringContainsString('href="/cms/shop/type?t=new"', $this->body($home));
+        $this->shop->banner->saveSettings(['banner_mode' => 'auto'] + $form);
+        self::assertSame(404, $this->get($this->app, '/shop/banner-image', ['f' => $banner['image']])->getStatusCode());
+        $this->shop->banner->saveSettings(['banner_use' => '0', 'main_new_use' => '0', 'main_discount_use' => '0'] + $form);
+        $hidden = $this->body($this->get($this->app, '/shop'));
+        self::assertStringNotContainsString('class="yc-hero"', $hidden);
+        self::assertStringNotContainsString('class="yc-promo-grid', $hidden);
+        self::assertSame(404, $this->get($this->app, '/shop/banner-image', ['f' => $banner['image']])->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRandomBannerRendersMatchingProductAndUncachedResponse(array $config): void
+    {
+        $this->setupModule($config);
+        $this->seed();
+        $this->shop->banner->saveSettings(\GnuCms\Tests\YoungCart\HomeBannerTest::form(['banner_mode' => 'random']));
+        $response = $this->get($this->app, '/shop');
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        // A는 이미지가 있는 유일한 공개 진열 상품이다. B는 이미지 없음, C는 비공개다.
+        self::assertStringContainsString('class="yc-hero-product" href="/shop/item?id=A"', $this->body($response));
+        self::assertStringContainsString('class="yc-button yc-button-dark" href="/shop/item?id=A"', $this->body($response));
+        self::assertStringNotContainsString('숨은 셔츠', $this->body($response));
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testNotInstalledShowsPreparingPageAndNoAliasPaths(array $config): void
     {
         $this->setupModule($config, false);

@@ -21,6 +21,7 @@ final class Settings
         $main = [];
         foreach (self::TYPES as $type) $main[$type] = ['use' => $type !== 'popular'] + $block;
         return [
+            'banner' => HomeBanner::defaults(),
             'main' => $main,
             'category' => ['columns' => 3, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'type' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
@@ -50,7 +51,7 @@ final class Settings
         return $type === null ? $all[$section] : $all[$section][$type];
     }
 
-    public function save(array $input): array
+    public function save(array $input, ?string $bannerImage = null): array
     {
         $errors = [];
         $int = static function (string $key, int $min, int $max) use ($input, &$errors): int {
@@ -83,6 +84,7 @@ final class Settings
         }
         // 이전 테마의 설정 폼에서도 새 필드가 누락되면 저장된 값을 보존한다.
         $previous = $this->all();
+        $settings['banner'] = HomeBanner::validate($this->store, $input, $previous['banner'], $bannerImage);
         foreach (['fee', 'free_minimum'] as $key) {
             $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];
         }

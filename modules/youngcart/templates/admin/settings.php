@@ -10,9 +10,10 @@
     <input class="input input-bordered input-sm" type="number" id="yc-setting-<?= $this->e($name) ?>" name="<?= $this->e($name) ?>" value="<?= $this->e((string) ($values[$name] ?? '')) ?>" min="<?= $min ?>" max="<?= $max ?>" required>
     <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
 <?php }; ?>
-<?php $this->insert('admin/_form_nav', ['sections' => ['settings-shipping' => '배송·주문', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
-<form class="yc-edit-form" method="post" action="<?= $this->e($admin_url) ?>/settings">
+<?php $this->insert('admin/_form_nav', ['sections' => ['settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
+<form class="yc-edit-form" method="post" enctype="multipart/form-data" action="<?= $this->e($admin_url) ?>/settings">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+  <?php $this->insert('admin/_banner_settings') ?>
   <section class="card" id="settings-shipping"><div class="card-body"><h2 class="card-title">배송비와 주문 안내</h2><p class="muted">상점 기본배송 상품은 선불·착불별로 묶어 한 번 계산합니다. 무료 기준 0원은 금액에 따른 무료배송을 적용하지 않습니다.</p>
     <div class="yc-fields"><?php $num('shipping_fee', '기본 배송비 (원)', 0, 9999999); $num('shipping_free_minimum', '무료배송 기준 금액 (원)', 0, 9999999); ?></div>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 온라인 결제는 별도 연동 단계입니다.</span></label>
