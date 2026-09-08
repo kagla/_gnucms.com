@@ -11,7 +11,7 @@
 .yc-admin-page :is(a,button,input,select,textarea,summary):focus-visible{outline:2px solid var(--yc-admin-focus);outline-offset:3px}
 .yc-admin-page .breadcrumbs{font-size:12px;margin-bottom:1rem;color:var(--yc-muted)}
 .yc-admin-page .yc-admin-heading{align-items:center;margin-bottom:1.75rem;gap:1rem}
-.yc-admin-page .yc-admin-heading h1{font-size:28px;letter-spacing:-.055em;font-weight:800}
+.yc-admin-page .yc-admin-heading h1{font-size:25px;letter-spacing:-.055em;font-weight:800}
 .yc-admin-page .yc-admin-heading p{font-size:13px;margin-top:.4rem;line-height:1.6}
 .yc-admin-page .btn{border-radius:8px;box-shadow:none;font-weight:650}
 .yc-admin-page .btn-primary{--btn-color:var(--yc-button);background:var(--yc-button);border-color:var(--yc-button);color:#fff}
@@ -41,7 +41,7 @@
 .yc-admin-page .yc-metric{background:var(--yc-paper);border:1px solid var(--yc-line);border-radius:var(--yc-admin-radius);padding:1.3rem 1.5rem}
 .yc-admin-page .yc-metric>div{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:12px;color:var(--yc-muted);margin-bottom:.6rem}
 .yc-admin-page .yc-metric>div svg{opacity:.6}
-.yc-admin-page .yc-metric>strong{font-size:30px;font-weight:750;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1.3}
+.yc-admin-page .yc-metric>strong{font-size:28px;font-weight:750;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1.3}
 .yc-admin-page .yc-metric strong small{font-size:12px;font-weight:500;margin-left:.4rem;letter-spacing:0}
 .yc-admin-page .yc-workflow{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:0;margin:0;gap:1rem}
 .yc-admin-page .yc-workflow li{min-width:0}
@@ -49,7 +49,7 @@
 .yc-admin-page .yc-workflow a:hover{border-color:var(--yc-accent)}
 .yc-admin-page .yc-workflow .yc-workflow-priority{background:var(--yc-tint);color:var(--yc-accent)}
 .yc-admin-page .yc-workflow a>span{font-size:13px;font-weight:650}
-.yc-admin-page .yc-workflow strong{font-size:32px;letter-spacing:-.045em;font-weight:750;font-variant-numeric:tabular-nums}
+.yc-admin-page .yc-workflow strong{font-size:28px;letter-spacing:-.045em;font-weight:750;font-variant-numeric:tabular-nums}
 .yc-admin-page .yc-workflow strong small{font-size:12px;margin-left:.4rem;font-weight:500}
 .yc-admin-page .yc-workflow a>small{font-size:11px}
 .yc-admin-page .yc-panel-foot{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--yc-line);font-size:12px;flex-wrap:wrap}
@@ -214,7 +214,7 @@
   .admin-content:has(.yc-admin-page) .navbar-end>a{font-size:0;width:34px;min-width:34px;padding-inline:0}
   .admin-body.yc-admin-page{padding:1.25rem 1rem 4rem}
   .yc-admin-page .yc-admin-heading{margin-bottom:1.25rem}
-  .yc-admin-page .yc-admin-heading h1{font-size:24px}
+  .yc-admin-page .yc-admin-heading h1{font-size:22px}
   .yc-admin-page .yc-admin-heading p{font-size:12px}
   .yc-admin-page .yc-admin-nav{gap:.2rem;justify-content:space-between}
   .yc-admin-page .yc-admin-nav .tab{flex:1;flex-direction:column;gap:.3rem;padding:.55rem .4rem;height:58px;font-size:11px}
