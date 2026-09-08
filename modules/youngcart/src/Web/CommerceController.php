@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Modules\YoungCart\Web;
 
+use GnuCms\Account\UserRepository;
 use GnuCms\Error\DomainError;
 use GnuCms\Modules\YoungCart\Commerce\Orders;
 use GnuCms\Modules\YoungCart\Images;
@@ -145,6 +146,14 @@ final class CommerceController
         $data += ['flow' => $flow, 'checkout_token' => $token, 'quote' => $quote];
         $data['errors'] += $quote['errors'];
         $data['input'] = $this->safeValues($input);
+        // Prefill only when opening the form; preserve edits and intentionally empty values on POST.
+        if (!$post && $userId !== null) {
+            $user = $this->service->app->users()->findById($userId);
+            if ($user !== null) {
+                $data['input'] += ['buyer_name' => $user['display_name'], 'recipient' => $user['display_name'],
+                    'email' => UserRepository::isSocialPlaceholderEmail($user['email']) ? '' : $user['email']];
+            }
+        }
         return $view->render($response, 'checkout', $data);
     }
 

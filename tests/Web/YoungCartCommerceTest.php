@@ -172,6 +172,70 @@ final class YoungCartCommerceTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testCheckoutPrefillsOnlyCurrentMemberForCartAndBuy(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        self::assertSame(303, $this->post($this->app, '/shop/cart/add', $this->form(['product_id' => $this->product['id'], 'quantity' => 1, 'action' => 'buy']))->getStatusCode());
+        $first = $this->app->users()->create('first@example.test', '', '첫번째회원');
+        $second = $this->app->users()->create('second@example.test', '', '두번째회원');
+        foreach ([null, $first, $second] as $userId) {
+            session_start();
+            if ($userId === null) unset($_SESSION['user_id'], $_SESSION['session_epoch']);
+            else { $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; }
+            session_write_close();
+            $name = $userId === null ? '' : ($userId === $first ? '첫번째회원' : '두번째회원');
+            $email = $userId === null ? '' : ($userId === $first ? 'first@example.test' : 'second@example.test');
+            foreach (['cart', 'buy'] as $flow) {
+                $response = $this->get($this->app, '/shop/checkout', ['flow' => $flow, 'user_id' => (string) $first]);
+                self::assertSame(200, $response->getStatusCode());
+                self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+                $this->assertCheckoutValues($this->body($response), ['buyer_name' => $name, 'email' => $email, 'recipient' => $name,
+                    'phone' => '', 'recipient_phone' => '', 'postcode' => '', 'address' => '']);
+            }
+        }
+        foreach (['social@oauth.local', 'social@users.gnucms.charmgen.com'] as $index => $email) {
+            $userId = $this->app->users()->create($email, '', '소셜회원' . $index);
+            session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
+            $this->assertCheckoutValues($this->body($this->get($this->app, '/shop/checkout')), [
+                'buyer_name' => '소셜회원' . $index, 'recipient' => '소셜회원' . $index, 'email' => '',
+            ]);
+        }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutKeepsMemberEditsThroughRefreshErrorsAndOrder(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $userId = $this->app->users()->create('member@example.test', '', '가입한이름');
+        session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $input = $this->checkout(['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test', 'recipient' => '', 'agree' => '0']);
+        unset($input['password']);
+        $invalid = $this->post($this->app, '/shop/checkout', $input);
+        self::assertSame(422, $invalid->getStatusCode());
+        $this->assertCheckoutValues($this->body($invalid), ['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test', 'recipient' => '']);
+        $refresh = $this->post($this->app, '/shop/checkout', array_replace($input, ['action' => 'refresh', 'buyer_name' => '', 'email' => '']));
+        self::assertSame(200, $refresh->getStatusCode());
+        $this->assertCheckoutValues($this->body($refresh), ['buyer_name' => '', 'email' => '', 'recipient' => '', 'phone' => $input['phone'], 'address' => $input['address']]);
+        $order = $this->post($this->app, '/shop/checkout', array_replace($input, ['recipient' => '선물 수령인', 'agree' => '1']));
+        self::assertSame(303, $order->getStatusCode());
+        $body = $this->body($this->get($this->app, $order->getHeaderLine('Location')));
+        self::assertStringContainsString('다른 주문자', $body);
+        self::assertStringContainsString('delivery@example.test', $body);
+        self::assertStringContainsString('선물 수령인', $body);
+        $user = $this->app->users()->findById($userId);
+        self::assertSame('가입한이름', $user['display_name']);
+        self::assertSame('member@example.test', $user['email']);
+    }
+
+    private function assertCheckoutValues(string $body, array $expected): void
+    {
+        foreach ($expected as $name => $value) {
+            self::assertMatchesRegularExpression('/name="' . preg_quote($name, '/') . '"[^>]*value="'
+                . preg_quote(htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), '/') . '"/', $body);
+        }
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testMemberAndAdminRoutesStatusGuardsAndSubdirectory(array $config): void
     {
         $this->setupShop($config);
