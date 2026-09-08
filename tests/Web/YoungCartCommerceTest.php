@@ -66,9 +66,11 @@ final class YoungCartCommerceTest extends WebTestCase
             ]], []);
         $rows = $this->shop->products->get($id)['options']['select'];
         $body = $this->body($this->get($this->app, '/shop/item', ['id' => 'STEPS']));
-        foreach (['1단계 색상', '2단계 사이즈', '3단계 재질'] as $label) {
+        foreach (['색상', '사이즈', '재질'] as $label) {
             self::assertStringContainsString('aria-label="' . $label . '"', $body);
         }
+        self::assertStringNotContainsString('단계 ', $body);
+        self::assertStringNotContainsString('합산 재고', $body);
         self::assertSame(3, substr_count($body, 'required disabled'));
         self::assertStringContainsString('name="option_id" required data-yc-option', $body);
         self::assertStringContainsString('0 / S / 면 (+500원) · 재고 3개', $body);

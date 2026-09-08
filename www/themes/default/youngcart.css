@@ -77,12 +77,12 @@
 }
 .yc-shop .yc-hero h1,.yc-shop .yc-hero-product span,.yc-shop .yc-card-name{word-break:keep-all}
 .extension-admin .overflow-x-auto{overflow-x:auto;max-width:100%;min-width:0}
-/* Native dependent selects: progressively reveal only the next applicable group. */
+/* Keep all option groups visible and enable each after its parent is selected. */
 .yc-shop .yc-option-stages{display:flex;flex-direction:column;gap:.9rem}
 .yc-shop .yc-option-stage{display:flex;flex-direction:column;gap:.5rem;min-width:0}
 .yc-shop .yc-option-stage>span{display:flex;align-items:center;gap:.5rem;font-size:.85rem;font-weight:650;overflow-wrap:anywhere}
-.yc-shop .yc-option-stage>span>small{display:inline-grid;place-items:center;flex:none;width:21px;height:21px;border-radius:50%;background:var(--yc-tint);color:var(--yc-accent);font-size:.65rem}
 .yc-shop .yc-option-stage>.select{width:100%;min-width:0;font-size:.85rem}
+.yc-shop .yc-option-stage>.select:disabled{background:var(--yc-soft);color:var(--yc-muted);cursor:not-allowed;opacity:1}
 .yc-shop .yc-options .select{appearance:auto}
 .yc-shop .yc-option-guide,.yc-shop .yc-option-feedback{margin:0;font-size:.75rem;line-height:1.7;color:var(--yc-muted)}
 .yc-shop .yc-option-feedback{color:var(--yc-accent)}

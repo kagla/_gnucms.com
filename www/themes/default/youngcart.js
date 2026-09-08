@@ -24,6 +24,13 @@
       });
     function money(value) { return (value > 0 ? '+' : '') + value.toLocaleString('ko-KR') + '원'; }
     function matches(item, prefix) { return prefix.every(function (value, index) { return item.v[index] === value; }); }
+    function reset(index) {
+      var step = steps[index];
+      var prompt = index === 0 ? data.groups[index] + ' 선택' : '먼저 ' + data.groups[index - 1] + ' 옵션을 선택해 주세요';
+      step.replaceChildren(new Option(prompt, ''));
+      step.disabled = true;
+      step.closest('[data-yc-option-stage]').hidden = false;
+    }
     function populate(index) {
       var step = steps[index];
       var prefix = steps.slice(0, index).map(function (previous) { return previous.value; });
@@ -36,8 +43,9 @@
       step.replaceChildren(new Option(data.groups[index] + ' 선택', ''));
       values.forEach(function (info, value) {
         var finalStep = index === steps.length - 1;
-        var stockLabel = finalStep ? '재고 ' : '합산 재고 ';
-        var label = value + (info.stock > 0 ? ' · ' + stockLabel + info.stock.toLocaleString('ko-KR') + '개' : ' · 품절');
+        var label = value;
+        if (info.stock <= 0) label += ' · 품절';
+        else if (finalStep) label += ' · 재고 ' + info.stock.toLocaleString('ko-KR') + '개';
         if (finalStep && info.price !== 0) label += ' (' + money(info.price) + ')';
         var entry = new Option(label, value);
         entry.disabled = info.stock <= 0;
@@ -50,11 +58,7 @@
     function choose(index) {
       // Clear every dependent field and the submitted combination before resolving a new choice.
       option.value = '';
-      steps.slice(index + 1).forEach(function (step) {
-        step.value = '';
-        step.disabled = true;
-        step.closest('[data-yc-option-stage]').hidden = true;
-      });
+      steps.forEach(function (step, next) { if (next > index) reset(next); });
       var selected = steps[index].selectedOptions[0];
       if (!selected || selected.disabled) steps[index].value = '';
       if (steps[index].value !== '') {
@@ -91,7 +95,7 @@
           feedback.classList.add('yc-visually-hidden');
         } else {
           var next = steps.findIndex(function (step) { return step.value === ''; });
-          feedback.textContent = next < 0 ? '옵션을 다시 선택해 주세요.' : (next + 1) + '단계 ' + data.groups[next] + ' 옵션을 선택해 주세요.';
+          feedback.textContent = next < 0 ? '옵션을 다시 선택해 주세요.' : data.groups[next] + ' 옵션을 선택해 주세요.';
           feedback.classList.remove('yc-visually-hidden');
         }
       }
@@ -99,7 +103,7 @@
     if (sequential) {
       // Preserve the existing option_id contract and the no-JavaScript fallback.
       var previous = option.value;
-      steps.forEach(function (step, index) { step.addEventListener('change', function () { choose(index); }); });
+      steps.forEach(function (step, index) { reset(index); step.addEventListener('change', function () { choose(index); }); });
       populate(0);
       var restored = data.items.find(function (item) { return String(item.id) === previous && item.stock > 0; });
       if (restored) steps.forEach(function (step, index) { if (index > 0) populate(index); step.value = restored.v[index]; });

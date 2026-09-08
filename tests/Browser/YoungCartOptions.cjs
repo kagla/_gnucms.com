@@ -34,25 +34,37 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     const visible = selector => page.$eval(selector, el => el.getClientRects().length > 0);
     const text = selector => page.$eval(selector, el => el.textContent);
     const disabled = (index, value) => page.$eval(step(index), (el, value) => Array.from(el.options).find(option => option.value === value).disabled, value);
+    const fieldDisabled = index => page.$eval(step(index), el => el.disabled);
     const cart = 'button[value=cart]';
     const submit = async () => { await Promise.all([page.waitForNavigation(), page.click(cart)]); };
     await page.setViewport({width: 1280, height: 960});
     await open();
     assert.equal(await visible(step(0)), true);
-    assert.equal(await visible(step(1)), false);
-    assert.equal(await visible(step(2)), false);
+    assert.equal(await visible(step(1)), true);
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(0), false);
+    assert.equal(await fieldDisabled(1), true);
+    assert.equal(await fieldDisabled(2), true);
     assert.equal(await page.$eval(cart, el => el.disabled), true);
-    assert.equal(await page.$eval(step(0), el => el.getAttribute('aria-label')), '1단계 색상');
-    assert.match(await text(step(0)), /빨강 · 합산 재고 3개/);
-    assert.match(await text(step(0)), /파랑 · 합산 재고 6개/);
+    assert.equal(await page.$eval(step(0), el => el.getAttribute('aria-label')), '색상');
+    assert.deepEqual(await page.$$eval('[data-yc-option-stage]>span', labels => labels.map(el => el.textContent)), ['색상', '사이즈', '재질']);
+    assert.equal(await page.$eval(step(0), el => Array.from(el.options).find(option => option.value === '빨강').textContent), '빨강');
+    assert.equal(await page.$eval(step(0), el => Array.from(el.options).find(option => option.value === '파랑').textContent), '파랑');
+    assert.doesNotMatch(await text('[data-yc-option-stages]'), /재고|\d단계/);
+    assert.match(await text(step(1)), /먼저 색상 옵션/);
     assert.equal(await disabled(0, '품절색'), true);
     await select(0, '빨강');
     assert.equal(await visible(step(1)), true);
-    assert.equal(await visible(step(2)), false);
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(1), false);
+    assert.equal(await fieldDisabled(2), true);
+    assert.doesNotMatch(await text(step(1)), /재고/);
     assert.equal(await disabled(1, 'M'), true);
     assert.equal(await page.$eval(step(1), el => Array.from(el.options).some(option => option.value === 'L')), false);
     await select(1, 'S');
     assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(2), false);
+    assert.match(await text(step(2)), /면 · 재고 3개 \(\+500원\)/);
     assert.equal(await disabled(2, '실크'), true);
     // Even a scripted attempt to select a disabled choice must not resolve an option ID.
     await select(2, '실크');
@@ -70,7 +82,11 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     assert.equal(await text('[data-yc-total]'), '23,000원');
     await select(0, '파랑');
     assert.equal(await value(step(1)), '');
-    assert.equal(await visible(step(2)), false);
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(1), false);
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await page.$eval(step(2), el => el.options.length), 1);
+    assert.doesNotMatch(await text(step(2)), /재고/);
     assert.equal(await value('[name=option_id]'), '');
     assert.equal(await visible('[data-yc-option-selection]'), false);
     assert.equal(await page.$eval(cart, el => el.disabled), true);
@@ -96,6 +112,13 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     }
     await select(0, '__proto__'); await select(1, 'S'); await select(2, '면');
     assert.equal(await value('[name=option_id]'), '108');
+    await select(1, '');
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await value('[name=option_id]'), '');
+    await select(0, '');
+    assert.equal(await fieldDisabled(1), true);
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await page.$eval(cart, el => el.disabled), true);
     for (const width of [360, 390, 768]) {
       await page.setViewport({width, height: 960});
       for (const theme of ['light', 'dark']) {
@@ -111,6 +134,6 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     assert.equal(posts.at(-1).data.get('option_id'), '101');
     assert.equal(posts.at(-1).data.has('option_step[1]'), false);
     assert.deepEqual(errors, []);
-    console.log('YoungCart option browser checks passed: cascading stock/price, reset, canonical submission, 0–3 groups, mobile/dark and no-JS fallback.');
+    console.log('YoungCart option browser checks passed: visible groups, dependent enabled states, final stock/price, reset, canonical submission, 0–3 groups, mobile/dark and no-JS fallback.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -5,11 +5,11 @@
   <div class="yc-options" data-yc-options="<?= $this->e(json_encode($options_json, JSON_UNESCAPED_UNICODE)) ?>">
     <?php if ($opts['select'] !== []): ?>
     <div class="yc-option-stages" data-yc-option-stages hidden>
-      <p class="yc-option-guide" id="yc-option-guide"><?php if (count($opts['select_groups']) > 1): ?>순서대로 선택해 주세요. 앞 단계의 재고는 하위 옵션의 합계입니다.<?php else: ?>옵션별 재고를 확인하고 선택해 주세요.<?php endif ?></p>
+      <p class="yc-option-guide" id="yc-option-guide"><?php if (count($opts['select_groups']) > 1): ?>위에서부터 옵션을 선택해 주세요.<?php else: ?>옵션을 선택해 주세요.<?php endif ?></p>
       <?php foreach ($opts['select_groups'] as $index => $group): ?>
-      <label class="yc-option-stage" data-yc-option-stage hidden>
-        <span><small aria-hidden="true"><?= $index + 1 ?></small><?= $this->e($group) ?></span>
-        <select class="select select-bordered" name="option_step[<?= $index + 1 ?>]" data-yc-option-step="<?= $index ?>" aria-label="<?= $index + 1 ?>단계 <?= $this->e($group) ?>" aria-describedby="yc-option-guide" required disabled><option value=""><?= $this->e($group) ?> 선택</option></select>
+      <label class="yc-option-stage" data-yc-option-stage>
+        <span><?= $this->e($group) ?></span>
+        <select class="select select-bordered" name="option_step[<?= $index + 1 ?>]" data-yc-option-step="<?= $index ?>" aria-label="<?= $this->e($group) ?>" aria-describedby="yc-option-guide" required disabled><option value=""><?= $this->e($group) ?> 선택</option></select>
       </label>
       <?php endforeach ?>
       <p class="yc-option-feedback" role="status" aria-live="polite" aria-atomic="true" data-yc-option-feedback></p>
