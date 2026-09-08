@@ -121,6 +121,8 @@ final class YoungCartAdminTest extends WebTestCase
         $list = $this->body($this->get($this->app, '/admin/shop/categories'));
         self::assertStringContainsString('의류', $list); self::assertStringContainsString('셔츠', $list);
         self::assertStringContainsString('name="rows[' . $top['id'] . '][name]"', $list);
+        self::assertStringContainsString('form="yc-category-delete-' . $top['id'] . '"', $list);
+        self::assertStringContainsString('id="yc-category-delete-' . $top['id'] . '"', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
         self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
         $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
@@ -249,10 +251,12 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame('/admin/shop/products/edit?id=' . $product['id'] . '&saved=1', $response->getHeaderLine('Location'));
         self::assertStringContainsString('yc_last_maker=', implode(';', $response->getHeader('Set-Cookie')));
         self::assertCount(1, $product['images']); self::assertSame(['색상'], $product['options']['select_groups']);
-        $response = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['code' => 'F1'])));
+        $response = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['code' => 'F1', 'apply_scope' => 'category', 'apply_fields' => ['active']])));
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('이미 사용 중인 상품 코드', $this->body($response));
         self::assertStringContainsString('name="options[0][value1]" value="빨강"', $this->body($response));
+        self::assertStringContainsString('name="apply_scope" value="category" checked', $this->body($response));
+        self::assertStringContainsString('name="apply_fields[]" value="active" checked', $this->body($response));
         $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $product['id']]));
         self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
         self::assertStringContainsString('image_delete[]', $edit); self::assertStringContainsString($product['images'][0]['filename'], $edit);

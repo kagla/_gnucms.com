@@ -142,8 +142,18 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertSame(404, $this->get($this->app, $response->getHeaderLine('Location'))->getStatusCode(), '관리자도 공개 주소에서 다른 회원 주문을 열 수 없음');
         $list = $this->get($this->app, '/admin/shop/orders');
         self::assertSame(200, $list->getStatusCode()); self::assertStringContainsString('youngcart.css', $this->body($list));
+        $dashboard = $this->get($this->app, '/admin/shop');
+        self::assertSame('no-store', $dashboard->getHeaderLine('Cache-Control'));
+        self::assertStringContainsString($order['number'], $this->body($dashboard));
+        self::assertStringContainsString('/orders/detail?id=' . $order['id'], $this->body($dashboard));
+        self::assertStringNotContainsString($order['number'], $this->body($this->get($this->app, '/admin/shop/orders', ['status' => 'shipped'])));
         self::assertSame(200, $this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']])->getStatusCode());
         self::assertSame(403, $this->post($this->app, '/admin/shop/orders/detail', ['id' => $order['id'], 'from' => 'pending', 'status' => 'confirmed'])->getStatusCode());
+        // Validation must retain the selected action instead of silently reverting to the first option.
+        $invalid = $this->post($this->app, '/admin/shop/orders/detail', $this->form(['id' => $order['id'], 'from' => 'pending', 'status' => 'cancelled', 'note' => str_repeat('x', 501)]));
+        self::assertSame(422, $invalid->getStatusCode());
+        self::assertStringContainsString('<option value="cancelled" selected>', $this->body($invalid));
+        self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
         $status = $this->form(['id' => $order['id'], 'from' => 'pending', 'status' => 'confirmed']);
         self::assertSame(303, $this->post($this->app, '/admin/shop/orders/detail', $status)->getStatusCode());
         self::assertSame(422, $this->post($this->app, '/admin/shop/orders/detail', $status)->getStatusCode());

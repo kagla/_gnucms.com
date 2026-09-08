@@ -7,6 +7,7 @@ namespace GnuCms\Modules\YoungCart\Admin;
 use GnuCms\Error\DomainError;
 use GnuCms\Modules\YoungCart\Schema;
 use GnuCms\Modules\YoungCart\Settings;
+use GnuCms\Modules\YoungCart\Commerce\Orders;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -35,6 +36,8 @@ final class AdminController extends AdminBase
             $data['order_stats'][$row['status']] = (int) $row['count'];
         }
         $data['low_stock'] = $data['ready'] ? $this->service->products->lowStock() : ['products' => [], 'options' => []];
+        $data['recent_orders'] = $data['ready'] ? array_slice($this->service->orders->listing(null, '', 1, true)['items'], 0, 5) : [];
+        $data['statuses'] = Orders::STATUSES;
         if (($data['input']['installed'] ?? '') === '1') $data['notice'] = '쇼핑몰 데이터를 설치했습니다.';
         if (($data['input']['install'] ?? '') === '1') $data['notice'] = '먼저 쇼핑몰 데이터를 설치해 주세요.';
         return $this->render($request, $response, 'dashboard', $data);
