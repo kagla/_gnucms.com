@@ -80,6 +80,11 @@ final class ProductFormController extends AdminBase
         $values['info'] = $product['info'];
         $values['option_group'] = [1 => $product['options']['select_groups'][0] ?? '', 2 => $product['options']['select_groups'][1] ?? '', 3 => $product['options']['select_groups'][2] ?? ''];
         $values['option_values'] = [1 => '', 2 => '', 3 => ''];
+        // 저장된 조합의 순서대로 값을 복원한다. 품절·미사용 옵션과 문자열 "0"도 편집 대상이다.
+        for ($i = 1; $i <= Options::MAX_GROUPS; $i++) {
+            $items = array_column($product['options']['select'], 'value' . $i);
+            $values['option_values'][$i] = implode(',', array_unique(array_filter($items, static fn (string $value): bool => $value !== '')));
+        }
         $values['options'] = $product['options']['select'];
         $values['extras'] = $product['options']['extra'];
         $values['relations'] = implode(',', array_column($product['relations'], 'id'));

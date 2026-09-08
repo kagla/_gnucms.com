@@ -272,6 +272,47 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame(403, $this->post($this->app, '/admin/shop/products/edit', $this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '1']))->getStatusCode());
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testSavedOptionValuesReappearInEditFormWithoutLosingDraftInput(array $config): void
+    {
+        $this->setupModule($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $input = $this->productForm((int) $seed['top']['id'], [
+            'code' => 'CSV1', 'option_group' => [1 => '색상', 2 => '사이즈', 3 => '재질'],
+            'option_values' => [1 => '파랑,빨강', 2 => '0,XL', 3 => '면,실크'],
+        ]);
+        $input['options'] = \GnuCms\Modules\YoungCart\Catalog\Options::draft($input, [])['rows'];
+        $input['options'][0]['stock'] = 0;
+        $input['options'][0]['price'] = 500;
+        foreach ($input['options'] as &$row) if ($row['value1'] === '빨강') $row['active'] = 0;
+        unset($row);
+        self::assertSame(303, $this->post($this->app, '/admin/shop/products/new', $this->csrf($input))->getStatusCode());
+        $product = $this->shop->products->byCode('CSV1');
+        $id = (int) $product['id'];
+        $body = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $id]));
+        foreach ($input['option_values'] as $group => $csv) {
+            self::assertStringContainsString('name="option_values[' . $group . ']" value="' . $csv . '"', $body);
+        }
+        self::assertCount(8, $product['options']['select']);
+        $edit = $input + ['id' => (string) $id, 'version' => (string) $product['version']];
+        unset($edit['code']);
+        $edit['action'] = 'combine';
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($edit));
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('name="options[0][price]" value="500"', $this->body($response));
+        self::assertStringContainsString('name="options[0][stock]" value="0"', $this->body($response));
+        self::assertSame($product['options'], $this->shop->products->get($id)['options']);
+        // 잘못된 입력으로 저장에 실패했을 때는 방금 입력한 CSV를 보존한다.
+        $edit['action'] = 'save';
+        $edit['price'] = '-1';
+        $edit['option_values'][1] = '파랑,초록';
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($edit));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('name="option_values[1]" value="파랑,초록"', $this->body($response));
+        self::assertSame($product['options'], $this->shop->products->get($id)['options']);
+    }
+
     /** 이미 조합이 저장돼 있는 상품에서 "조합 생성"을 다시 누르면, 화면에 아직 저장하지 않은
      *  방금 고친 값이 DB에 저장돼 있던 값에 덮이면 안 된다. */
     #[DataProvider('connectionProvider')]
