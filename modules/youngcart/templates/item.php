@@ -11,8 +11,11 @@
 <?php $this->start('body') ?>
 <div class="yc-shop yc-item">
   <?php $this->insert('_header') ?>
-  <?php $this->insert('_breadcrumb') ?>
-  <?php if ($preview): ?><div class="alert alert-warning">판매하지 않는 상품의 관리자 미리보기입니다. <a href="<?= $this->e($admin_url) ?>/products/edit?id=<?= (int) $product['id'] ?>">상품 수정</a></div><?php endif ?>
+  <div class="yc-item-toolbar">
+    <?php $this->insert('_breadcrumb') ?>
+    <?php if ($admin): ?><a class="yc-button yc-button-small yc-product-edit" href="<?= $this->e($admin_url) ?>/products/edit?id=<?= (int) $product['id'] ?>"><?= $this->icon('cog', 16) ?> 상품 관리</a><?php endif ?>
+  </div>
+  <?php if ($preview): ?><div class="alert alert-warning">판매하지 않는 상품의 관리자 미리보기입니다.</div><?php endif ?>
   <?php if ($product['head_html'] !== ''): ?><div class="yc-html"><?= $this->html($product['head_html']) ?></div><?php endif ?>
   <div class="yc-item-top">
     <div class="yc-gallery" data-yc-gallery>

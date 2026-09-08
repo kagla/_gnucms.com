@@ -123,6 +123,7 @@ final class YoungCartPublicTest extends WebTestCase
         self::assertStringContainsString('&quot;빨강&quot;', $item);
         self::assertStringContainsString('상품페이지 참고', $item);
         self::assertStringContainsString('제품 소재', $item);
+        self::assertStringNotContainsString('yc-product-edit', $item);
         self::assertStringContainsString('/shop/image?p=' . $seed['ids']['A'] . '&amp;f=', $item);
         self::assertStringContainsString('href="/shop/item?id=B"', $item);
         self::assertStringContainsString('yc_hit_' . $seed['ids']['A'] . '=1', $response->getHeaderLine('Set-Cookie'));
@@ -143,11 +144,21 @@ final class YoungCartPublicTest extends WebTestCase
         $adminId = $this->app->users()->create('owner@example.test', '', '관리자', true);
         $this->get($this->app, '/login');
         session_start(); $_SESSION['user_id'] = $adminId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $adminItem = $this->body($this->get($this->app, '/shop/item', ['id' => 'A']));
+        self::assertStringContainsString('yc-product-edit', $adminItem);
+        self::assertStringContainsString('href="/admin/shop/products/edit?id=' . $seed['ids']['A'] . '"', $adminItem);
+        $subdirectoryItem = Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '/cms')
+            ->handle((new ServerRequestFactory())->createServerRequest('GET', '/cms/shop/item?id=A'));
+        self::assertStringContainsString('href="/cms/admin/shop/products/edit?id=' . $seed['ids']['A'] . '"', $this->body($subdirectoryItem));
         $preview = $this->body($this->get($this->app, '/shop/item', ['id' => 'C']));
         self::assertStringContainsString('숨은 셔츠', $preview);
         self::assertStringContainsString('미리보기', $preview);
         self::assertStringNotContainsString('yc-manage-link', $preview);
         self::assertStringContainsString('/admin/shop/products/edit?id=' . $seed['ids']['C'], $preview);
+        $memberId = $this->app->users()->create('member@example.test', '', '일반회원');
+        session_start(); $_SESSION['user_id'] = $memberId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $memberItem = $this->body($this->get($this->app, '/shop/item', ['id' => 'A']));
+        self::assertStringNotContainsString('yc-product-edit', $memberItem);
     }
 
     #[DataProvider('connectionProvider')]
