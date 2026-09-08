@@ -73,8 +73,14 @@ final class OptionsTest extends YoungCartTestCase
         self::assertFalse(Options::soldOut(['sold_out' => 0, 'stock' => 1], []));
         $json = Options::pageJson(['price' => 10000], $loaded);
         self::assertSame(['색상'], $json['select']['groups']);
-        self::assertSame(['v' => ['빨강'], 'price' => 100, 'stock' => 7], $json['select']['items'][0]);
+        self::assertSame(['id' => $redId, 'v' => ['빨강'], 'price' => 100, 'stock' => 7], $json['select']['items'][0]);
         self::assertSame([], $json['extra']['groups']);
+        $unavailable = $loaded;
+        $unavailable['select'][0]['value1'] = '0';
+        $unavailable['select'][0]['active'] = 0;
+        $json = Options::pageJson(['price' => 10000], $unavailable);
+        self::assertSame(['id' => $redId, 'v' => ['0'], 'price' => 100, 'stock' => 0], $json['select']['items'][0]);
+        self::assertSame((int) $loaded['select'][1]['id'], $json['select']['items'][1]['id']);
         $list = $options->stockList('', 1, 20);
         self::assertSame(2, $list['total']);
         $options->updateStock([$redId => ['original_stock' => (string) $this->shop->store->get('yc_options', $redId)['stock'], 'stock' => '2', 'stock_alert' => '3', 'active' => '0']], 'tester');

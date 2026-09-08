@@ -54,6 +54,53 @@ final class YoungCartCommerceTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testCascadingOptionsSubmitCanonicalIdAndRecheckAvailability(array $config): void
+    {
+        $this->setupShop($config);
+        $id = $this->shop->products->save(['code' => 'STEPS', 'name' => '단계별 옵션 상품',
+            'category_id' => $this->product['category_id'], 'price' => '10000', 'active' => '1',
+            'option_group' => [1 => '색상', 2 => '사이즈', 3 => '재질'], 'options' => [
+                ['value1' => '0', 'value2' => 'S', 'value3' => '면', 'price' => '500', 'stock' => '3', 'active' => '1'],
+                ['value1' => '0', 'value2' => 'S', 'value3' => '실크', 'price' => '1000', 'stock' => '0', 'active' => '1'],
+                ['value1' => '0', 'value2' => 'M', 'value3' => '면', 'price' => '0', 'stock' => '5', 'active' => '0'],
+            ]], []);
+        $rows = $this->shop->products->get($id)['options']['select'];
+        $body = $this->body($this->get($this->app, '/shop/item', ['id' => 'STEPS']));
+        foreach (['1단계 색상', '2단계 사이즈', '3단계 재질'] as $label) {
+            self::assertStringContainsString('aria-label="' . $label . '"', $body);
+        }
+        self::assertSame(3, substr_count($body, 'required disabled'));
+        self::assertStringContainsString('name="option_id" required data-yc-option', $body);
+        self::assertStringContainsString('0 / S / 면 (+500원) · 재고 3개', $body);
+        self::assertStringContainsString('data-stock="0" disabled>0 / M / 면 · 품절', $body);
+        preg_match('/data-yc-options="([^"]+)"/', $body, $match);
+        $json = json_decode(html_entity_decode($match[1], ENT_QUOTES, 'UTF-8'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(['색상', '사이즈', '재질'], $json['select']['groups']);
+        self::assertSame(['id' => (int) $rows[0]['id'], 'v' => ['0', 'S', '면'], 'price' => 500, 'stock' => 3], $json['select']['items'][0]);
+        self::assertSame(0, $json['select']['items'][2]['stock'], 'Inactive stock must not count toward parent availability');
+
+        $input = ['product_id' => $id, 'quantity' => 1, 'option_step' => [1 => '0', 2 => 'S', 3 => '면']];
+        foreach ([0, (int) $rows[1]['id'], (int) $rows[2]['id'], PHP_INT_MAX] as $unavailable) {
+            self::assertSame(422, $this->post($this->app, '/shop/cart/add', $this->form($input + ['option_id' => $unavailable]))->getStatusCode());
+            self::assertSame([], $_SESSION['yc_cart'] ?? []);
+        }
+        $input['option_id'] = (int) $rows[0]['id'];
+        // Stock can change after the page was loaded; displayed step values cannot authorize a purchase.
+        $this->shop->store->update('yc_options', $input['option_id'], ['stock' => 0]);
+        self::assertSame(422, $this->post($this->app, '/shop/cart/add', $this->form($input))->getStatusCode());
+        $this->shop->store->update('yc_options', $input['option_id'], ['stock' => 3]);
+        self::assertSame(303, $this->post($this->app, '/shop/cart/add', $this->form($input + ['price' => 1]))->getStatusCode());
+        self::assertSame(['product_id' => $id, 'option_id' => $input['option_id'], 'quantity' => 1], array_values($_SESSION['yc_cart'])[0]);
+        $cart = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('0 / S / 면', $cart);
+        self::assertStringContainsString('10,500원', $cart);
+        $order = $this->post($this->app, '/shop/checkout', $this->checkout());
+        self::assertSame(303, $order->getStatusCode());
+        self::assertStringContainsString('0 / S / 면', $this->body($this->get($this->app, $order->getHeaderLine('Location'))));
+        self::assertSame(2, (int) $this->shop->store->get('yc_options', $input['option_id'])['stock']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testGuestCartCheckoutDuplicateCancelAndLookup(array $config): void
     {
         $this->setupShop($config); $this->add(2);

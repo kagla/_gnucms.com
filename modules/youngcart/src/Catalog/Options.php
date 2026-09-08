@@ -195,7 +195,7 @@ final class Options
     {
         $items = [];
         foreach ($loaded['select'] as $row) {
-            $items[] = ['v' => array_values(array_filter([$row['value1'], $row['value2'], $row['value3']], static fn ($v) => $v !== '')),
+            $items[] = ['id' => (int) $row['id'], 'v' => array_values(array_filter([$row['value1'], $row['value2'], $row['value3']], static fn ($v) => $v !== '')),
                 'price' => (int) $row['price'], 'stock' => (int) $row['active'] === 1 ? (int) $row['stock'] : 0];
         }
         $extraGroups = [];
