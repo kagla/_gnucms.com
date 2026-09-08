@@ -66,6 +66,11 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
       for (const theme of ['light', 'dark']) {
         await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        assert.equal(await page.evaluate(() => {
+          const header = document.querySelector('.navbar.wrap').getBoundingClientRect();
+          const main = document.querySelector('.main-area').getBoundingClientRect();
+          return Math.abs(header.left - main.left) < 1 && Math.abs(header.right - main.right) < 1;
+        }), true, 'Shop content uses the same page width as the site header');
         assert.equal(await page.$$eval('[data-yc-cart-quantity]', controls => controls.every(control => {
           const [minus, input, plus] = Array.from(control.children, el => el.getBoundingClientRect());
           return minus.right <= input.left + 1 && input.right <= plus.left + 1 && Math.abs(minus.top - plus.top) < 1 && Math.abs(minus.top + minus.height / 2 - input.top - input.height / 2) < 1;

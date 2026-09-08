@@ -3,7 +3,7 @@
 [data-theme=dark] .yc-shop,[data-theme=dark] .yc-admin{--yc-accent:#ff9d8e}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]) .yc-shop,:root:not([data-theme=light]) .yc-admin{--yc-accent:#ff9d8e}}
 .yc-page{background:var(--color-base-100,#fff)}
-.yc-page .main-area{max-width:1240px;padding-top:0}
+.yc-page .main-area{padding-top:0}
 .yc-shop{display:flex;flex-direction:column;gap:1.75rem;color:var(--yc-ink);padding-bottom:2rem;line-height:1.6}
 .yc-shop a{text-decoration:none}.yc-shop button,.yc-shop input,.yc-shop select{font:inherit}
 .yc-shop :is(a,button,input,select,summary,textarea):focus-visible{outline:3px solid var(--yc-accent);outline-offset:4px}
