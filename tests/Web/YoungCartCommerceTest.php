@@ -206,6 +206,29 @@ final class YoungCartCommerceTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testCartQuantitySaveRecalculatesTotalsAndChecksStock(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $key = $this->product['id'] . ':0';
+        $response = $this->post($this->app, '/shop/cart', $this->form(['quantities' => [$key => '3']]));
+        self::assertSame('/shop/cart?updated=1', $response->getHeaderLine('Location'));
+        self::assertSame(3, $_SESSION['yc_cart'][$key]['quantity']);
+        $body = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('36,000원', $body);
+        self::assertStringContainsString('data-yc-cart-minus', $body);
+        self::assertStringContainsString('data-yc-cart-plus', $body);
+        self::assertStringContainsString('주문서 작성', $body);
+
+        $this->post($this->app, '/shop/cart', $this->form(['quantities' => [$key => '11']]));
+        $body = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('구매 가능 수량: 10개', $body);
+        self::assertStringNotContainsString('href="/shop/checkout"', $body);
+        self::assertSame(10, (int) $this->shop->products->get((int) $this->product['id'])['stock']);
+        self::assertSame(303, $this->post($this->app, '/shop/cart', $this->form(['remove' => $key]))->getStatusCode());
+        self::assertSame([], $_SESSION['yc_cart']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testChangedPriceRequiresReviewAndBuyNowKeepsCart(array $config): void
     {
         $this->setupShop($config); $this->add();

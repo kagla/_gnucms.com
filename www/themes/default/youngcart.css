@@ -103,6 +103,10 @@
 .yc-shop .yc-option-quantity-controls{display:flex;align-items:center;overflow:hidden;border:1px solid var(--yc-line);border-radius:7px;background:var(--yc-paper)}
 .yc-shop .yc-option-quantity-controls>button{display:grid;place-items:center;width:38px;min-height:40px;flex:none;padding:0;border:0;background:none;color:var(--yc-ink);cursor:pointer;font-size:1.1rem}
 .yc-shop .yc-option-quantity-controls>button:disabled{color:var(--yc-muted);opacity:.45;cursor:not-allowed}
+.yc-shop .yc-option-quantity-controls>button[hidden]{display:none}
+.yc-cart-item-bottom{flex-wrap:wrap}
+.yc-cart-item-bottom>.yc-option-quantity-controls{flex:none}
+.yc-cart-item-bottom>strong{margin-left:auto}
 .yc-shop .yc-option-quantity-controls>.input{width:54px;min-height:40px;padding:.35rem .15rem;border:0;border-inline:1px solid var(--yc-line);border-radius:0;text-align:center;appearance:textfield}
 .yc-shop .yc-option-quantity-controls>.input::-webkit-inner-spin-button,.yc-shop .yc-option-quantity-controls>.input::-webkit-outer-spin-button{appearance:none;margin:0}
 .yc-shop [data-yc-selections][hidden],.yc-shop [data-yc-single-quantity][hidden]{display:none}

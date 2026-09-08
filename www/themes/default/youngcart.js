@@ -214,6 +214,27 @@
     purchase.addEventListener('change', update);
     update();
   }
+  document.querySelectorAll('[data-yc-cart-quantity]').forEach(function (control) {
+    var input = control.querySelector('input[type=number]');
+    var minus = control.querySelector('[data-yc-cart-minus]');
+    var plus = control.querySelector('[data-yc-cart-plus]');
+    if (!input || !minus || !plus) return;
+    function updateButtons() {
+      minus.disabled = input.disabled || (input.valueAsNumber || 0) <= Number(input.min);
+      plus.disabled = input.disabled || input.valueAsNumber >= Number(input.max);
+    }
+    [[minus, -1], [plus, 1]].forEach(function (entry) {
+      entry[0].addEventListener('click', function () {
+        var current = Number.isFinite(input.valueAsNumber) ? Math.trunc(input.valueAsNumber) : 0;
+        input.value = String(Math.min(Number(input.max), Math.max(Number(input.min), current + entry[1])));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      entry[0].hidden = false;
+    });
+    input.addEventListener('input', updateButtons);
+    input.addEventListener('change', updateButtons);
+    updateButtons();
+  });
   var gallery = document.querySelector('[data-yc-gallery]');
   if (gallery) {
     var main = gallery.querySelector('[data-yc-main]');
