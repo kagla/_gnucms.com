@@ -37,10 +37,10 @@
 @media(max-width:390px){.yc-hero{padding:1.3rem}.yc-hero h1{font-size:1.42rem}.yc-hero p br{display:none}.yc-hero-product{width:37%}.yc-hero-product span{font-size:.6rem}.yc-cart-image{width:70px;height:70px}.yc-cart-item-bottom{gap:.5rem}.yc-cart-item-bottom label{gap:.35rem}.yc-quantity{width:4.5rem}.yc-form-grid{grid-template-columns:1fr}.yc-category-shortcuts{grid-template-columns:repeat(4,minmax(0,1fr))}.yc-header-bottom{gap:.75rem}.yc-steps{gap:.7rem}}
 @media(prefers-reduced-motion:reduce){.yc-card-image img,.yc-button{transition:none}.yc-card:hover .yc-card-image img{transform:none}}
 @media print{.yc-header,.yc-steps,.yc-buy-actions,.yc-cancel,.yc-continue{display:none}.yc-commerce-grid{display:block}.yc-order-summary{position:static;break-inside:avoid}.yc-panel{break-inside:avoid}}
-/* Product management shortcut and compact storefront navigation. */
-.yc-item-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem}
-.yc-item-toolbar>.breadcrumbs{min-width:0;margin:0}
-.yc-item-toolbar>.yc-product-edit{flex:none;white-space:nowrap}
+/* Catalog management shortcuts and compact storefront navigation. */
+.yc-item-toolbar,.yc-category-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.yc-item-toolbar>.breadcrumbs,.yc-category-toolbar>.breadcrumbs{min-width:0;margin:0}
+.yc-item-toolbar>.yc-product-edit,.yc-category-toolbar>.yc-category-edit{flex:none;white-space:nowrap}
 .yc-header-compact{position:relative}
 .yc-header-compact .yc-header-bottom{min-height:76px}
 .yc-header-compact .yc-nav{min-width:0;align-self:stretch;align-items:stretch}

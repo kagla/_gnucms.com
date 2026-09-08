@@ -162,14 +162,32 @@ final class YoungCartPublicTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testSubdirectoryInstallationLinks(array $config): void
+    public function testCategoryManagementShortcutAndSubdirectoryLinks(array $config): void
     {
         $this->setupModule($config);
-        $this->seed();
+        $seed = $this->seed();
         $response = Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '/cms')->handle((new ServerRequestFactory())->createServerRequest('GET', '/cms/shop/list?ca=10'));
         $body = $this->body($response);
         self::assertStringContainsString('href="/cms/shop/item?id=A"', $body);
         self::assertStringContainsString('/cms/shop/image?p=', $body);
         self::assertStringContainsString('action="/cms/shop/search"', $body);
+        self::assertStringNotContainsString('yc-category-edit', $body);
+
+        $adminId = $this->app->users()->create('category-admin@example.test', '', '분류 관리자', true);
+        session_start(); $_SESSION['user_id'] = $adminId; $_SESSION['session_epoch'] = 0; session_write_close();
+        foreach ([$seed['top'], $seed['child']] as $category) {
+            $list = $this->body($this->get($this->app, '/shop/list', ['ca' => $category['code']]));
+            self::assertStringContainsString('yc-category-edit', $list);
+            self::assertStringContainsString('href="/admin/shop/categories/edit?id=' . $category['id'] . '"', $list);
+            self::assertSame(200, $this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $category['id']])->getStatusCode());
+        }
+        $subdirectoryList = Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '/cms')
+            ->handle((new ServerRequestFactory())->createServerRequest('GET', '/cms/shop/list?ca=1010'));
+        self::assertStringContainsString('href="/cms/admin/shop/categories/edit?id=' . $seed['child']['id'] . '"', $this->body($subdirectoryList));
+
+        $memberId = $this->app->users()->create('category-member@example.test', '', '일반회원');
+        session_start(); $_SESSION['user_id'] = $memberId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $memberList = $this->body($this->get($this->app, '/shop/list', ['ca' => $seed['top']['code']]));
+        self::assertStringNotContainsString('yc-category-edit', $memberList);
     }
 }

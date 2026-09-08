@@ -6,7 +6,10 @@
 <?php $this->start('body') ?>
 <div class="yc-shop">
   <?php $this->insert('_header') ?>
-  <?php $this->insert('_breadcrumb') ?>
+  <div class="yc-category-toolbar">
+    <?php $this->insert('_breadcrumb') ?>
+    <?php if ($admin): ?><a class="yc-button yc-button-small yc-category-edit" href="<?= $this->e($admin_url) ?>/categories/edit?id=<?= (int) $category['id'] ?>"><?= $this->icon('cog', 16) ?> 분류 관리</a><?php endif ?>
+  </div>
   <h1 class="yc-title"><?= $this->e($category['name']) ?></h1>
   <?php if ($category['head_html'] !== ''): ?><div class="yc-html"><?= $this->html($category['head_html']) ?></div><?php endif ?>
   <?php if ($children !== []): ?><nav class="yc-children" aria-label="하위 분류"><?php foreach ($children as $child): ?><a class="btn btn-sm btn-outline" href="<?= $this->e($url) ?>/list?ca=<?= $this->e($child['code']) ?>"><?= $this->e($child['name']) ?></a><?php endforeach ?></nav><?php endif ?>
