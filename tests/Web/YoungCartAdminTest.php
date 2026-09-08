@@ -282,14 +282,18 @@ final class YoungCartAdminTest extends WebTestCase
         $this->signIn(true);
         $product = $this->shop->products->get($seed['a']);
         self::assertSame(1, (int) $product['options']['select'][0]['stock']);
-        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], [
-            'id' => (string) $seed['a'], 'version' => (string) $product['version'], 'code' => $product['code'], 'action' => 'combine',
+        $input = $this->productForm((int) $seed['top']['id'], [
+            'id' => (string) $seed['a'], 'version' => (string) $product['version'], 'action' => 'combine',
             'option_group' => [1 => '색상', 2 => '', 3 => ''], 'option_values' => [1 => '빨강,파랑', 2 => '', 3 => ''],
             'options' => [['value1' => '빨강', 'value2' => '', 'value3' => '', 'price' => '500', 'stock' => '7', 'stock_alert' => '1', 'active' => '1']],
-        ])));
+        ]);
+        unset($input['code']); // 수정 화면의 읽기 전용 상품 코드는 POST에 포함되지 않는다.
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($input));
         self::assertSame(200, $response->getStatusCode());
         $body = $this->body($response);
         self::assertStringContainsString('name="options[0][value1]" value="빨강"', $body);
+        self::assertStringContainsString('href="/shop/item?id=A1"', $body);
+        self::assertStringContainsString('value="A1" readonly', $body);
         self::assertStringContainsString('name="options[0][price]" value="500"', $body);
         self::assertStringContainsString('name="options[0][stock]" value="7"', $body);
         self::assertStringContainsString('name="options[1][value1]" value="파랑"', $body);

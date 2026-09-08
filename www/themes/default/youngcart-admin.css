@@ -138,6 +138,12 @@
 .yc-admin-page :is(.input-sm,.select-sm){min-height:38px;height:38px}
 .yc-admin-page .table :is(.input,.select){height:34px;min-height:34px;font-size:12px}
 .yc-admin-page .yc-edit-form :is(.label,.yc-checks){font-size:12px;align-items:center}
+/* Keep numeric inputs and copy buttons together; checkboxes retain their own size. */
+.yc-admin-page .yc-option-input-group{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.4rem;white-space:nowrap}
+.yc-admin-page .yc-option-input-group>.input{flex:0 0 6.5rem;width:6.5rem}
+.yc-admin-page .yc-option-input-group>.btn{flex:none;width:34px;height:34px;min-height:34px;padding:0}
+.yc-admin-page .yc-option-enabled{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.5rem;white-space:nowrap;font-size:12px;cursor:pointer}
+.yc-admin-page .yc-option-enabled>.checkbox{flex:none;width:20px;height:20px}
 .yc-admin-page .yc-edit-form .yc-checks{padding:.4rem 0 .8rem}
 .yc-admin-page .yc-edit-form .yc-checks .label{margin:0}
 .yc-admin-page .yc-edit-form .yc-apply{color:var(--yc-muted);font-size:11px;padding:.3rem .5rem;border:1px dashed var(--yc-line);border-radius:6px}

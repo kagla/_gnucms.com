@@ -2,7 +2,7 @@
 <?php $this->start('title') ?><?= $id === null ? '상품 등록' : '상품 수정' ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>modules<?php $this->stop() ?>
 <?php $this->start('extension_body') ?>
-<?php $this->insert('admin/_extension_header', ['section' => 'modules', 'heading' => $id === null ? '상품 등록' : '상품 수정', 'description' => $id === null ? '' : ($values['code'] ?? ''), 'actions' => array_merge([['url' => $admin_url . '/products', 'label' => '상품 목록']], $id === null ? [] : [['url' => $public_url . '/item?id=' . rawurlencode((string) $values['code']), 'label' => '상품 보기']])]) ?>
+<?php $this->insert('admin/_extension_header', ['section' => 'modules', 'heading' => $id === null ? '상품 등록' : '상품 수정', 'description' => $id === null ? '' : $product['code'], 'actions' => array_merge([['url' => $admin_url . '/products', 'label' => '상품 목록']], $id === null ? [] : [['url' => $public_url . '/item?id=' . rawurlencode((string) $product['code']), 'label' => '상품 보기']])]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
 <?php
@@ -37,7 +37,7 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
   </div></section>
   <section class="card" id="section-basic"><div class="card-body"><h2 class="card-title">기본정보</h2>
     <?php if ($id === null): ?><?php $field('code', '상품 코드 (영문·숫자·-·_ 1~20자)', 'text', ['maxlength' => 20, 'pattern' => '[A-Za-z0-9_-]{1,20}', 'required' => 'required']) ?>
-    <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($v('code')) ?>" readonly></fieldset><?php endif ?>
+    <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($product['code']) ?>" readonly></fieldset><?php endif ?>
     <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required']) ?>
     <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('maker', '제조사', 'text', ['maxlength' => 100]); $field('origin', '원산지', 'text', ['maxlength' => 100]); $field('brand', '브랜드', 'text', ['maxlength' => 100]); $field('model', '모델', 'text', ['maxlength' => 100]); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
     <div class="yc-checks"><?php foreach ($types as $type => $label) $check($type, $label); ?><?php $apply('types') ?></div>
@@ -84,10 +84,10 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
       <div class="overflow-x-auto"><table class="table table-sm yc-combo-table" data-yc-combos><thead><tr><th>조합</th><th>차액</th><th>재고</th><th>통보</th><th>사용</th></tr></thead><tbody>
         <?php foreach ($options_rows as $i => $row): ?><tr>
           <td><?= $this->e(implode(' / ', array_filter([$row['value1'], $row['value2'], $row['value3']], static fn ($x) => $x !== ''))) ?><?php for ($k = 1; $k <= 3; $k++): ?><input type="hidden" name="options[<?= $i ?>][value<?= $k ?>]" value="<?= $this->e($row['value' . $k]) ?>"><?php endfor ?></td>
-          <td><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][price]" value="<?= $this->e($row['price']) ?>"><button class="btn btn-xs" type="button" data-yc-copy-down="price" title="아래 모두 같은 값">↓</button></td>
-          <td><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][stock]" value="<?= $this->e($row['stock']) ?>" min="0"><button class="btn btn-xs" type="button" data-yc-copy-down="stock" title="아래 모두 같은 값">↓</button></td>
+          <td><div class="yc-option-input-group"><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][price]" value="<?= $this->e($row['price']) ?>"><button class="btn btn-xs" type="button" data-yc-copy-down="price" title="이 차액을 아래 모든 조합에 복사" aria-label="이 차액을 아래 모든 조합에 복사">↓</button></div></td>
+          <td><div class="yc-option-input-group"><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][stock]" value="<?= $this->e($row['stock']) ?>" min="0"><button class="btn btn-xs" type="button" data-yc-copy-down="stock" title="이 재고를 아래 모든 조합에 복사" aria-label="이 재고를 아래 모든 조합에 복사">↓</button></div></td>
           <td><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][stock_alert]" value="<?= $this->e($row['stock_alert']) ?>" min="0"></td>
-          <td><input type="hidden" name="options[<?= $i ?>][active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="options[<?= $i ?>][active]" value="1"<?= (string) $row['active'] === '1' ? ' checked' : '' ?>></td>
+          <td><label class="yc-option-enabled" title="체크하면 이 옵션을 판매에 사용합니다."><input type="hidden" name="options[<?= $i ?>][active]" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="options[<?= $i ?>][active]" value="1"<?= (string) $row['active'] === '1' ? ' checked' : '' ?>> 사용</label></td>
         </tr><?php endforeach ?>
       </tbody></table></div>
     <?php endif ?>
