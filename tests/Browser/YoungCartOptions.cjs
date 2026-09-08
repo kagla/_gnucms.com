@@ -36,6 +36,7 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     const disabled = (index, value) => page.$eval(step(index), (el, value) => Array.from(el.options).find(option => option.value === value).disabled, value);
     const fieldDisabled = index => page.$eval(step(index), el => el.disabled);
     const line = id => '[data-yc-selected-option="' + id + '"]';
+    const selectionOrder = () => page.$$eval('[data-yc-selected-option]', rows => rows.map(row => Number(row.dataset.ycSelectedOption)));
     const qty = id => line(id) + ' [data-yc-line-quantity]';
     const setQty = (id, value) => page.$eval(qty(id), (el, value) => { el.value = value; el.dispatchEvent(new Event('input', {bubbles: true})); }, value);
     const cart = 'button[value=cart]';
@@ -103,8 +104,10 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     assert.match(await text(line(104)), /재고 2개.*-1,000원/);
     await select(2, '면');
     assert.equal(await text('[data-yc-total]'), '42,000원');
+    assert.deepEqual(await selectionOrder(), [105, 104, 101]);
     await page.click(line(105) + ' [data-yc-line-remove]');
     assert.equal(await text('[data-yc-total]'), '32,000원');
+    assert.deepEqual(await selectionOrder(), [104, 101]);
     await submit();
     assert.equal(posts.at(-1).path, '/cms/shop/cart/add');
     for (const [key, expected] of Object.entries({product_id: '10', 'selections[101]': '2', 'selections[104]': '1', 'extras[201]': '1', action: 'cart', csrf_token: 'browser-test-csrf'})) assert.equal(posts.at(-1).data.get(key), expected);
@@ -125,11 +128,13 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
         if (count === 2) {
           await select(1, 'M');
           assert.equal(await value(qty(102)), '1');
+          assert.deepEqual(await selectionOrder(), [102, 101]);
           assert.equal(await text('[data-yc-total]'), '21,500원');
           await page.click(line(101) + ' [data-yc-line-plus]');
           assert.equal(await value(qty(101)), '2');
           await page.click(line(101) + ' [data-yc-line-minus]');
           assert.equal(await value(qty(101)), '1');
+          assert.deepEqual(await selectionOrder(), [102, 101]);
         }
       }
       assert.equal(await page.$eval(cart, el => el.disabled), false);

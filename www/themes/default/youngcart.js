@@ -63,7 +63,7 @@
         });
       });
       selectedItems.set(item.id, { item: item, row: row, input: input });
-      selectionList.appendChild(row);
+      selectionList.prepend(row);
       selectionNotice = names + ' 옵션을 추가했어요. 다른 옵션도 선택할 수 있어요.';
     }
     function updateSelections() {
