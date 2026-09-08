@@ -25,19 +25,19 @@
       <?php endif ?>
     </div>
     <div class="yc-item-info">
+      <?php if ($product['brand'] !== ''): ?><p class="yc-kicker"><?= $this->e($product['brand']) ?></p><?php endif ?>
       <h1 class="yc-item-name"><?= $this->e($product['name']) ?></h1>
       <?php if ($product['summary'] !== ''): ?><div class="yc-item-summary"><?= $this->html($product['summary']) ?></div><?php endif ?>
       <table class="table table-sm yc-item-table"><tbody>
         <?php foreach (['maker' => '제조사', 'origin' => '원산지', 'brand' => '브랜드', 'model' => '모델'] as $field => $label): if ($product[$field] !== ''): ?><tr><th scope="row"><?= $label ?></th><td><?= $this->e($product[$field]) ?></td></tr><?php endif; endforeach ?>
         <?php if ((int) $product['list_price'] > 0 && $display_price !== null): ?><tr><th scope="row">시중가격</th><td><del><?= number_format((int) $product['list_price']) ?>원</del></td></tr><?php endif ?>
         <tr><th scope="row">판매가격</th><td class="yc-item-price"><?php if (!(int) $product['active']): ?>판매중지<?php elseif ($display_price === null): ?>전화문의<?php else: ?><strong><?= number_format($display_price) ?>원</strong><?php if ($settings['show_tax']): ?> <small class="muted"><?= (int) $product['tax_free'] === 1 ? '비과세' : '부가세 포함' ?></small><?php endif ?><?php endif ?></td></tr>
-        <?php if ($display_price !== null && (int) $product['point'] > 0): ?><tr><th scope="row">포인트</th><td><?= $this->e($point_label) ?></td></tr><?php endif ?>
-        <tr><th scope="row">배송비</th><td><?= [0 => '상점 기본 배송비', 1 => '무료배송', 2 => number_format((int) $product['shipping_free_minimum']) . '원 이상 무료, 미만 ' . number_format((int) $product['shipping_fee']) . '원', 3 => number_format((int) $product['shipping_fee']) . '원', 4 => (int) $product['shipping_per_qty'] . '개마다 ' . number_format((int) $product['shipping_fee']) . '원'][(int) $product['shipping_type']] ?><?= (int) $product['shipping_method'] === 1 ? ' (착불)' : ((int) $product['shipping_method'] === 2 ? ' (선불·착불 선택)' : '') ?></td></tr>
+        <tr><th scope="row">배송비</th><td><?= [0 => ((int) $settings['shipping']['fee'] === 0 ? '무료배송' : number_format((int) $settings['shipping']['fee']) . '원' . ((int) $settings['shipping']['free_minimum'] > 0 ? ' · 기본배송 상품 ' . number_format((int) $settings['shipping']['free_minimum']) . '원 이상 무료' : '')), 1 => '무료배송', 2 => number_format((int) $product['shipping_free_minimum']) . '원 이상 무료, 미만 ' . number_format((int) $product['shipping_fee']) . '원', 3 => number_format((int) $product['shipping_fee']) . '원', 4 => (int) $product['shipping_per_qty'] . '개마다 ' . number_format((int) $product['shipping_fee']) . '원'][(int) $product['shipping_type']] ?><?= (int) $product['shipping_method'] === 1 ? ' (착불)' : ((int) $product['shipping_method'] === 2 ? ' (선불·착불 선택)' : '') ?></td></tr>
         <?php if ((int) $product['buy_min'] > 0 || (int) $product['buy_max'] > 0): ?><tr><th scope="row">구매수량</th><td><?= (int) $product['buy_min'] > 0 ? '최소 ' . (int) $product['buy_min'] . '개' : '' ?> <?= (int) $product['buy_max'] > 0 ? '최대 ' . (int) $product['buy_max'] . '개' : '' ?></td></tr><?php endif ?>
       </tbody></table>
       <?php if ($sold_out): ?><p class="yc-soldout-notice"><strong>품절</strong>된 상품입니다.<?php if ((int) $product['restock_notify'] === 1): ?> 재입고 알림은 준비 중입니다.<?php endif ?></p>
-      <?php elseif ($display_price !== null && (int) $product['active'] === 1): ?><?php $this->insert('_options') ?><?php endif ?>
-      <div class="yc-item-actions muted">장바구니와 주문은 다음 단계에서 제공됩니다.</div>
+      <?php elseif ($display_price !== null && !$preview): ?><?php $this->insert('_options') ?><?php endif ?>
+
     </div>
   </div>
   <nav class="tabs tabs-border yc-tabs" aria-label="상품 정보 탭">

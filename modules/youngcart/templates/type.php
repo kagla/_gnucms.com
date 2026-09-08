@@ -12,3 +12,4 @@
   <?php $this->insert('_pager', ['page_url' => fn (int $p): string => $url . '/type?' . http_build_query(['t' => $type, 'sort' => $sort, 'dir' => $dir, 'page' => $p])]) ?>
 </div>
 <?php $this->stop() ?>
+<?php $this->start('scripts') ?><script src="<?= $this->asset('youngcart.js') ?>" defer></script><?php $this->stop() ?>

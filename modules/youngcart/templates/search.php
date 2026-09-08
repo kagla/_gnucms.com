@@ -31,3 +31,4 @@
   <?php endif ?>
 </div>
 <?php $this->stop() ?>
+<?php $this->start('scripts') ?><script src="<?= $this->asset('youngcart.js') ?>" defer></script><?php $this->stop() ?>

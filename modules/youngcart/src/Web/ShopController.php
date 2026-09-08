@@ -39,6 +39,7 @@ final class ShopController
         }
         $data['settings'] = $this->service->settings->all();
         $data['menu'] = $this->service->categories->children('', true);
+        $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'] ?? [], 'quantity'));
         $sort = $query['sort'] ?? '';
         $dir = ($query['dir'] ?? '') === 'asc' ? 'asc' : 'desc';
         if (preg_match('/^([a-z]+)_(asc|desc)$/D', $query['sortdir'] ?? '', $m)) { $sort = $m[1]; $dir = $m[2]; }

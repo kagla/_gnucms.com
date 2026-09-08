@@ -1,0 +1,193 @@
+<?php
+
+declare(strict_types=1);
+
+namespace GnuCms\Tests\YoungCart;
+
+use GnuCms\Error\DomainError;
+use GnuCms\Modules\YoungCart\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+final class CommerceTest extends YoungCartTestCase
+{
+    private function buyer(array $extra = []): array
+    {
+        return $extra + ['buyer_name' => '테스트 구매자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000',
+            'recipient' => '받는 사람', 'recipient_phone' => '010-0000-0000', 'postcode' => '04524', 'address' => '테스트 배송지',
+            'address_detail' => '101호', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1'];
+    }
+
+    private function cart(array $product, int $quantity = 1, array $extra = []): array
+    {
+        return $this->shop->cart->add([], $extra + ['product_id' => $product['id'], 'quantity' => $quantity]);
+    }
+
+    private function place(array $cart, array $extra = [], ?int $user = null): array
+    {
+        return $this->shop->orders->place($cart, $this->buyer($extra), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $user, $this->shop->cart->quote($cart, [], true)['fingerprint']);
+    }
+
+    private function reject(callable $fn, string $message = ''): void
+    {
+        try { $fn(); self::fail('거절해야 합니다.'); }
+        catch (DomainError $e) { self::assertContains($e->status(), [404, 422]); if ($message !== '') self::assertStringContainsString($message, implode(' ', $e->details()) ?: $e->getMessage()); }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOptionsExtrasAndTamperedPricesAreRecalculated(array $config): void
+    {
+        $this->setupShop($config);
+        $product = $this->product(['option_group' => [1 => '색상'], 'options' => [['value1' => '검정', 'price' => '-1000', 'stock' => '5']],
+            'extras' => [['value1' => '포장', 'value2' => '선물상자', 'price' => '2000', 'stock' => '5']]]);
+        $select = (int) $product['options']['select'][0]['id']; $extra = (int) $product['options']['extra'][0]['id'];
+        $cart = $this->cart($product, 2, ['option_id' => $select, 'extras' => [$extra => '1'], 'price' => '1', 'total' => '1']);
+        $quote = $this->shop->cart->quote($cart, [], true);
+        self::assertSame(20000, $quote['total']);
+        $order = $this->place($cart);
+        self::assertSame(20000, (int) $order['total']);
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $select)['stock']);
+        self::assertSame(4, (int) $this->shop->store->get('yc_options', $extra)['stock']);
+        self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
+        self::assertSame(2, count($order['items']));
+        $cart = $this->shop->cart->update($cart, [$product['id'] . ':' . $select => 0]);
+        self::assertSame([], $cart, '본품 삭제 시 추가옵션도 제거');
+        $this->reject(fn () => $this->cart($product), '필수 옵션');
+        $this->reject(fn () => $this->cart($product, 1, ['option_id' => $extra]), '선택옵션');
+        $foreign = $this->product(['option_group' => [1 => '크기'], 'options' => [['value1' => '대형', 'stock' => '5']]]);
+        $this->reject(fn () => $this->cart($product, 1, ['option_id' => $foreign['options']['select'][0]['id']]), '선택옵션');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOrderSnapshotsIdempotencyOwnershipAndCancellation(array $config): void
+    {
+        $this->setupShop($config);
+        $product = $this->product(); $cart = $this->cart($product, 2);
+        $key = bin2hex(random_bytes(32)); $owner = bin2hex(random_bytes(32)); $buyer = $this->buyer();
+        $fingerprint = $this->shop->cart->quote($cart, [], true)['fingerprint'];
+        $first = $this->shop->orders->place($cart, $buyer, $key, $owner, null, $fingerprint);
+        $again = $this->shop->orders->place([], [], $key, $owner, null, $fingerprint);
+        self::assertSame($first['id'], $again['id']);
+        self::assertSame(3, (int) $this->shop->products->get((int) $product['id'])['stock']);
+        self::assertNotSame($buyer['password'], $first['guest_password']);
+        self::assertTrue(password_verify($buyer['password'], $first['guest_password']));
+        $this->shop->store->update('yc_products', (int) $product['id'], ['name' => '변경된 상품명', 'price' => 20000]);
+        self::assertSame('기본 상품', $this->shop->orders->get((int) $first['id'])['items'][0]['product_name']);
+        self::assertSame(20000, (int) $first['total']);
+        $this->reject(fn () => $this->shop->orders->owned($first['number'], null, []));
+        $this->reject(fn () => $this->shop->orders->owned($first['number'], 100, []));
+        self::assertSame($first['id'], $this->shop->orders->owned($first['number'], null, [(int) $first['id']])['id']);
+        $this->reject(fn () => $this->shop->products->delete((int) $product['id']), '주문 내역');
+        $cancelled = $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'guest', [], true);
+        self::assertSame('cancelled', $cancelled['status']);
+        self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
+        $this->reject(fn () => $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'guest', [], true), '변경');
+        self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
+        self::assertSame(2, count($cancelled['history']));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testLatestPriceStockVisibilityAndMinimumPreventCheckout(array $config): void
+    {
+        $this->setupShop($config);
+        $product = $this->product(['buy_min' => '2', 'buy_max' => '3']); $cart = $this->cart($product);
+        self::assertNotEmpty($this->shop->cart->quote($cart, [], true)['errors']);
+        $this->reject(fn () => $this->place($cart), '최소');
+        $this->reject(fn () => $this->cart($product, 4), '최대');
+        $cart = $this->cart($product, 2); $quote = $this->shop->cart->quote($cart, [], true);
+        $this->shop->store->update('yc_products', (int) $product['id'], ['price' => 11000]);
+        $this->reject(fn () => $this->shop->orders->place($cart, $this->buyer(), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null, $quote['fingerprint']), '변경');
+        self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
+        $this->shop->store->update('yc_products', (int) $product['id'], ['stock' => 1]);
+        $this->reject(fn () => $this->place($cart), '재고');
+        $this->shop->store->update('yc_products', (int) $product['id'], ['stock' => 5, 'active' => 0]);
+        $this->reject(fn () => $this->place($cart), '구매할 수 없는');
+        $this->shop->store->update('yc_products', (int) $product['id'], ['active' => 1, 'phone_inquiry' => 1]);
+        $this->reject(fn () => $this->place($cart), '구매할 수 없는');
+        self::assertSame(0, $this->shop->orders->listing(null, '', 1, true)['total']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testShippingGroupingThresholdsQuantityAndCashOnDelivery(array $config): void
+    {
+        $this->setupShop($config);
+        $settings = $this->shop->settings->all();
+        $settings['shipping']['fee'] = 3000; $settings['shipping']['free_minimum'] = 30000;
+        $this->shop->store->insert('yc_settings', ['id' => 'settings', 'payload' => json_encode($settings)]);
+        $a = $this->product(['shipping_method' => '2']); $b = $this->product();
+        $cart = $this->shop->cart->add($this->cart($a), ['product_id' => $b['id'], 'quantity' => 1]);
+        self::assertSame(3000, $this->shop->cart->quote($cart)['shipping_fee'], '기본 배송비는 묶음당 한 번');
+        $cod = $this->shop->cart->quote($cart, [$a['id'] => 'cod']);
+        self::assertSame(3000, $cod['shipping_fee']); self::assertSame(3000, $cod['cod_fee']); self::assertSame(23000, $cod['total']);
+        $cart = $this->shop->cart->add($cart, ['product_id' => $a['id'], 'quantity' => 1]);
+        self::assertSame(0, $this->shop->cart->quote($cart)['shipping_fee']);
+        foreach ([[1, 2, 0], [2, 1, 2500], [2, 2, 0], [3, 2, 2500], [4, 3, 5000]] as [$type, $qty, $fee]) {
+            $p = $this->product(['shipping_type' => (string) $type, 'shipping_fee' => '2500', 'shipping_free_minimum' => '20000', 'shipping_per_qty' => '2']);
+            self::assertSame($fee, $this->shop->cart->quote($this->cart($p, $qty))['shipping_fee']);
+        }
+        $this->reject(fn () => $this->shop->cart->quote($cart, [$a['id'] => ['cod']]), '배송비');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testLifecycleAndMemberOrderIsolation(array $config): void
+    {
+        $this->setupShop($config);
+        $p = $this->product(); $order = $this->place($this->cart($p), [], 42); $id = (int) $order['id'];
+        self::assertSame('', $order['guest_password']);
+        self::assertSame(1, $this->shop->orders->listing(42)['total']); self::assertSame(0, $this->shop->orders->listing(43)['total']);
+        $this->reject(fn () => $this->shop->orders->owned($order['number'], 43, [$id]));
+        $this->reject(fn () => $this->shop->orders->transition($id, 'pending', 'completed', 'admin'));
+        $this->shop->orders->transition($id, 'pending', 'confirmed', 'admin');
+        $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'cancelled', 'user:42', [], true));
+        $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin'));
+        $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin', ['carrier' => '테스트택배', 'tracking_number' => '123456']);
+        $this->shop->orders->transition($id, 'shipped', 'completed', 'admin');
+        self::assertSame(1, (int) $this->shop->products->get((int) $p['id'])['sold_qty']);
+        self::assertSame(4, count($this->shop->orders->get($id)['history']));
+        self::assertSame('123456', $this->shop->orders->get($id)['tracking_number']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testGuestLookupThrottleAndInvalidBuyerDoNotCreateOrders(array $config): void
+    {
+        $this->setupShop($config);
+        $cart = $this->cart($this->product());
+        $this->reject(fn () => $this->place($cart, ['email' => 'invalid', 'agree' => '0', 'password' => []]));
+        self::assertSame(0, $this->shop->orders->listing(null, '', 1, true)['total']);
+        $password = bin2hex(random_bytes(12));
+        $order = $this->place($cart, ['password' => $password]);
+        $lookup = ['number' => $order['number'], 'email' => $order['email'], 'password' => $password];
+        self::assertSame($order['id'], $this->shop->orders->lookup($lookup, '192.0.2.11')['id']);
+        for ($i = 0; $i < 5; $i++) $this->reject(fn () => $this->shop->orders->lookup(['password' => bin2hex(random_bytes(8))] + $lookup, '192.0.2.12'));
+        $this->reject(fn () => $this->shop->orders->lookup($lookup, '192.0.2.12'), '분 뒤');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPendingOptionCannotBeRemovedAndStaleStockCannotOverwriteReservation(array $config): void
+    {
+        $this->setupShop($config);
+        $p = $this->product(); $cart = $this->cart($p, 2); $this->place($cart);
+        $this->reject(fn () => $this->shop->products->updateStock([$p['id'] => 'invalid'], 'admin'), '입력값');
+        $this->reject(fn () => $this->shop->products->updateStock([$p['id'] => ['original_stock' => 5, 'stock' => 9, 'active' => 1]], 'admin'), '재고가 변경');
+        self::assertSame(3, (int) $this->shop->products->get((int) $p['id'])['stock']);
+        $p = $this->product(['option_group' => [1 => '색상'], 'options' => [['value1' => '검정', 'stock' => '5']]]);
+        $optionId = (int) $p['options']['select'][0]['id'];
+        $cart = $this->cart($p, 2, ['option_id' => $optionId]); $order = $this->place($cart);
+        $this->reject(fn () => $this->shop->options->updateStock([$optionId => ['original_stock' => 5, 'stock' => 9, 'active' => 1]], 'admin'), '재고가 변경');
+        $empty = $this->shop->options->validate(10000, [], [], []);
+        $this->reject(fn () => $this->shop->store->transaction(fn () => $this->shop->options->replace((int) $p['id'], $empty, 'admin')), '처리 중인 주문');
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'admin');
+        self::assertSame(5, (int) $this->shop->store->get('yc_options', $optionId)['stock']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testV1UpgradePreservesCatalogAndRegistersOrderBackupTables(array $config): void
+    {
+        $this->setupShop($config); $product = $this->product();
+        foreach (['yc_orders', 'yc_order_items', 'yc_order_history'] as $table) $this->shop->store->execute('DROP TABLE ' . $this->shop->store->table($table));
+        $this->app->db()->update('extension_schemas', ['schema_version' => 1], 'package_key = :key', ['key' => Schema::KEY]);
+        self::assertFalse($this->shop->ready()); $this->shop->install(); $this->shop->install();
+        self::assertSame($product['name'], $this->shop->products->get((int) $product['id'])['name']);
+        self::assertContains('yc_orders', $this->shop->schema()->backupTables());
+        self::assertSame(1, $this->place($this->cart($product))['items'][0]['quantity']);
+    }
+}

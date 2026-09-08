@@ -159,6 +159,10 @@ final class Options
                 }
             }
             foreach ($existing as $old) {
+                if ($this->store->selectOne('SELECT i.id FROM ' . $this->store->table('yc_order_items') . ' i JOIN ' . $this->store->table('yc_orders')
+                    . " o ON o.id = i.order_id WHERE i.option_id = ? AND o.status IN ('pending', 'confirmed') LIMIT 1", [(int) $old['id']]) !== null) {
+                    throw DomainError::validation(['options' => '처리 중인 주문에 포함된 옵션은 삭제할 수 없습니다. 사용 여부를 꺼 주세요.']);
+                }
                 if ((int) $old['stock'] !== 0) $this->store->logStock($productId, (int) $old['id'], -(int) $old['stock'], 'admin', 'option-removed', $actor);
                 $this->store->delete('yc_options', 'id = ?', [(int) $old['id']]);
             }
@@ -220,8 +224,13 @@ final class Options
         $this->store->transaction(function () use ($rows, $actor): void {
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
-                $old = $this->store->get('yc_options', $id);
+                $initial = $this->store->get('yc_options', $id);
+                $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $initial['product_id']]);
+                $old = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_options') . ' WHERE id = ?'
+                    . ($this->store->db->dialect()->name() === 'mysql' ? ' FOR UPDATE' : ''), [$id])
+                    ?? throw DomainError::notFound('옵션을 찾을 수 없습니다.');
                 try {
+                    $this->store->assertStockUnchanged($input, $old);
                     $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
                     $this->store->update('yc_options', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0), 'active' => Input::bool($input['active'] ?? '0')]);
                 } catch (DomainError $e) {

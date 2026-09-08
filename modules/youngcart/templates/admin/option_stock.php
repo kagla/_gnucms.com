@@ -12,7 +12,7 @@
     <?php foreach ($list['items'] as $row): $n = 'rows[' . (int) $row['id'] . ']'; ?>
       <tr><td><a href="<?= $this->e($admin_url) ?>/products/edit?id=<?= (int) $row['product_id'] ?>"><?= $this->e($row['product_name']) ?></a> <code><?= $this->e($row['product_code']) ?></code></td>
         <td><?= $row['kind'] === 'select' ? '선택' : '추가' ?></td><td><?= $this->e(implode(' / ', array_filter([$row['value1'], $row['value2'], $row['value3']]))) ?></td><td><?= number_format((int) $row['price']) ?></td>
-        <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0" required></td>
+        <td><input type="hidden" name="<?= $n ?>[original_stock]" value="<?= (int) $row['stock'] ?>"><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0" required></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock_alert]" value="<?= (int) $row['stock_alert'] ?>" min="0"></td>
         <td><input type="hidden" name="<?= $n ?>[active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[active]" value="1"<?= (int) $row['active'] === 1 ? ' checked' : '' ?>></td></tr>
     <?php endforeach ?>

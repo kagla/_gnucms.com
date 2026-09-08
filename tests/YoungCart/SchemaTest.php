@@ -15,7 +15,9 @@ final class SchemaTest extends YoungCartTestCase
         'yc_prod_order' => 'yc_products', 'yc_prod_updated' => 'yc_products',
         'yc_prod_price' => 'yc_products', 'yc_pc_category' => 'yc_product_categories',
         'yc_img_product' => 'yc_product_images', 'yc_opt_product' => 'yc_options',
-        'yc_rel_related' => 'yc_product_relations', 'yc_stock_product' => 'yc_stock_log'];
+        'yc_rel_related' => 'yc_product_relations', 'yc_stock_product' => 'yc_stock_log',
+        'yc_order_user' => 'yc_orders', 'yc_order_status' => 'yc_orders', 'yc_order_created' => 'yc_orders',
+        'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items', 'yc_history_order' => 'yc_order_history'];
 
     #[DataProvider('connectionProvider')]
     public function testInstallIsIdempotentAndRegistersTables(array $config): void
@@ -28,12 +30,12 @@ final class SchemaTest extends YoungCartTestCase
         self::assertTrue($this->shop->ready());
         $schema = $this->shop->schema();
         foreach (Schema::TABLES as $table) self::assertTrue($schema->exists($table), $table);
-        self::assertSame(9, count(Schema::TABLES));
+        self::assertSame(12, count(Schema::TABLES));
         self::assertSame([], array_diff(Schema::TABLES, $schema->backupTables()));
         $status = $schema->status(Schema::KEY);
         self::assertSame('ready', $status['state']);
-        self::assertSame(1, (int) $status['schema_version']);
-        self::assertSame(12, count(self::INDEXES));
+        self::assertSame(2, (int) $status['schema_version']);
+        self::assertSame(19, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['code' => '10', 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
             'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
@@ -52,10 +54,10 @@ final class SchemaTest extends YoungCartTestCase
         Schema::install($schema);
         self::assertTrue($this->shop->ready());
         $status = $schema->status(Schema::KEY);
-        self::assertSame(1, (int) $status['schema_version']);
+        self::assertSame(2, (int) $status['schema_version']);
         foreach (Schema::TABLES as $table) self::assertTrue($schema->exists($table), $table);
-        self::assertSame(9, count(Schema::TABLES));
-        self::assertSame(12, count(self::INDEXES));
+        self::assertSame(12, count(Schema::TABLES));
+        self::assertSame(19, count(self::INDEXES));
         $this->assertIndexesExist();
     }
 

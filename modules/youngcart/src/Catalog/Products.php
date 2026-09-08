@@ -281,6 +281,10 @@ final class Products
     {
         $this->store->get('yc_products', $id);
         $this->store->transaction(function () use ($id): void {
+            $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [$id]);
+            if ($this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_order_items') . ' WHERE product_id = ? LIMIT 1', [$id]) !== null) {
+                throw DomainError::validation(['product' => '주문 내역이 있는 상품은 삭제할 수 없습니다. 판매 여부를 꺼 주세요.']);
+            }
             foreach (['yc_option_groups', 'yc_options', 'yc_product_categories', 'yc_product_images', 'yc_stock_log'] as $table) $this->store->delete($table, 'product_id = ?', [$id]);
             $this->store->delete('yc_product_relations', 'product_id = ? OR related_id = ?', [$id, $id]);
             $this->store->delete('yc_products', 'id = ?', [$id]);
@@ -319,8 +323,10 @@ final class Products
         $this->store->transaction(function () use ($rows, $actor): void {
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
+                $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [$id]);
                 $old = $this->store->get('yc_products', $id);
                 try {
+                    $this->store->assertStockUnchanged($input, $old);
                     $categoryId = Input::id($input['category_id'] ?? '', 'category_id');
                     if ($this->store->find('yc_categories', $categoryId) === null) throw DomainError::validation(['category_id' => '분류를 찾을 수 없습니다.']);
                     $data = ['category_id' => $categoryId, 'name' => Input::text(strip_tags((string) ($input['name'] ?? '')), 'name', 250, false),
@@ -373,8 +379,10 @@ final class Products
         $this->store->transaction(function () use ($rows, $actor): void {
             foreach ($rows as $id => $input) {
                 $id = Input::id($id);
+                $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [$id]);
                 $old = $this->store->get('yc_products', $id);
                 try {
+                    $this->store->assertStockUnchanged($input, $old);
                     $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
                     $this->store->update('yc_products', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0),
                         'active' => Input::bool($input['active'] ?? '0'), 'sold_out' => Input::bool($input['sold_out'] ?? '0'), 'restock_notify' => Input::bool($input['restock_notify'] ?? '0'), 'updated_at' => Clock::timestamp()]);

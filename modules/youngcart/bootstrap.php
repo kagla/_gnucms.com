@@ -19,6 +19,17 @@ return static function (Context $context): void {
     foreach (['list', 'type', 'search', 'item', 'image'] as $page) {
         $context->route('GET', '/' . $page, static fn ($request, $response) => $shop->handle($page, $request, $response));
     }
+    $commerce = new \GnuCms\Modules\YoungCart\Web\CommerceController($service, $context->routePrefix, $context->adminRoutePrefix);
+    foreach (['cart', 'checkout', 'orders'] as $page) foreach (['GET', 'POST'] as $method) {
+        $context->route($method, '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
+    }
+    $context->route('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response));
+    foreach (['cart/add', 'order/cancel'] as $page) {
+        $context->route('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
+    }
+    $orders = new \GnuCms\Modules\YoungCart\Admin\OrderController($service, $context->routePrefix, $context->adminRoutePrefix);
+    $context->route('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), admin: true);
+    foreach (['GET', 'POST'] as $method) $context->route($method, '/orders/detail', static fn ($request, $response) => $orders->handle('orders/detail', $request, $response), admin: true);
     $admin = new AdminController($service, $context->routePrefix, $context->adminRoutePrefix);
     $context->route('GET', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), admin: true);
     $context->route('POST', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), admin: true);

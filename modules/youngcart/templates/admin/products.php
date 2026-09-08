@@ -20,7 +20,7 @@
         <td><input class="input input-bordered input-xs" type="text" name="<?= $n ?>[name]" value="<?= $this->e($row['name']) ?>" maxlength="250" required></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[price]" value="<?= (int) $row['price'] ?>" min="0" required></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[list_price]" value="<?= (int) $row['list_price'] ?>" min="0"></td>
-        <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0"></td>
+        <td><input type="hidden" name="<?= $n ?>[original_stock]" value="<?= (int) $row['stock'] ?>"><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0"></td>
         <td><input type="hidden" name="<?= $n ?>[active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[active]" value="1"<?= (int) $row['active'] === 1 ? ' checked' : '' ?>></td>
         <td><input type="hidden" name="<?= $n ?>[sold_out]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[sold_out]" value="1"<?= (int) $row['sold_out'] === 1 ? ' checked' : '' ?>></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[sort_order]" value="<?= (int) $row['sort_order'] ?>"></td>

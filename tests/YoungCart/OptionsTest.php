@@ -77,10 +77,10 @@ final class OptionsTest extends YoungCartTestCase
         self::assertSame([], $json['extra']['groups']);
         $list = $options->stockList('', 1, 20);
         self::assertSame(2, $list['total']);
-        $options->updateStock([$redId => ['stock' => '2', 'stock_alert' => '3', 'active' => '0']], 'tester');
+        $options->updateStock([$redId => ['original_stock' => (string) $this->shop->store->get('yc_options', $redId)['stock'], 'stock' => '2', 'stock_alert' => '3', 'active' => '0']], 'tester');
         self::assertSame(2, (int) $options->load($productId)['select'][0]['stock']);
         self::assertSame(-5, (int) $this->shop->store->selectOne('SELECT delta FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE option_id = ? ORDER BY id DESC LIMIT 1', [$redId])['delta']);
-        try { $options->updateStock([$redId => ['stock' => 'x']], 'tester'); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('row_' . $redId, $e->details()); }
+        try { $options->updateStock([$redId => ['original_stock' => (string) $this->shop->store->get('yc_options', $redId)['stock'], 'stock' => 'x']], 'tester'); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('row_' . $redId, $e->details()); }
         self::assertSame(2, (int) $options->load($productId)['select'][0]['stock']);
     }
 

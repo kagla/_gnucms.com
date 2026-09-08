@@ -28,7 +28,8 @@ final class Settings
             'related' => ['use' => true, 'columns' => 4, 'image_width' => 100, 'image_height' => 0],
             'detail' => ['image_width' => 400, 'image_height' => 0],
             'show_tax' => false,
-            'shipping' => ['content' => ''],
+            'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0],
+            'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
         ];
     }
@@ -80,6 +81,12 @@ final class Settings
             if (!is_string($content) || strlen($content) > 60000) { $errors[$key . '_content'] = '내용이 너무 깁니다.'; $content = ''; }
             $settings[$key] = ['content' => $this->sanitizer->clean($content)];
         }
+        // 이전 테마의 설정 폼에서도 새 필드가 누락되면 저장된 값을 보존한다.
+        $previous = $this->all();
+        foreach (['fee', 'free_minimum'] as $key) {
+            $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];
+        }
+        $settings['order_notice'] = Input::text($input['order_notice'] ?? $previous['order_notice'], 'order_notice', 2000, false);
         if ($errors !== []) throw DomainError::validation($errors);
         $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->store->transaction(function () use ($payload): void {

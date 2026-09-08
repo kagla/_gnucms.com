@@ -1,6 +1,6 @@
 <?php
-$tabs = ['dashboard' => ['', '현황'], 'categories' => ['/categories', '분류'], 'products' => ['/products', '상품'], 'settings' => ['/settings', '설정']];
-$current = str_starts_with($page, 'categories') ? 'categories' : (str_starts_with($page, 'products') ? 'products' : $page);
+$tabs = ['dashboard' => ['', '현황'], 'categories' => ['/categories', '분류'], 'products' => ['/products', '상품'], 'orders' => ['/orders', '주문'], 'settings' => ['/settings', '설정']];
+$current = str_starts_with($page, 'orders') ? 'orders' : (str_starts_with($page, 'categories') ? 'categories' : (str_starts_with($page, 'products') ? 'products' : $page));
 ?>
 <div class="extension-toolbar">
   <nav class="tabs tabs-border settings-tabs" aria-label="쇼핑몰 관리">

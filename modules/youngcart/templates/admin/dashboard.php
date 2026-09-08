@@ -5,12 +5,15 @@
 <?php $this->insert('admin/_extension_header', ['section' => 'modules', 'heading' => '쇼핑몰', 'description' => '영카트 모듈 현황', 'actions' => []]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
+<?php if ($ready): ?><section class="card"><div class="card-body"><div class="yc-section-heading"><h2 class="card-title">주문 현황</h2><a class="btn btn-sm" href="<?= $this->e($admin_url) ?>/orders">주문 관리 →</a></div>
+  <ul class="yc-stats"><?php foreach (['pending' => '주문 접수', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료'] as $key => $label): ?><li><a href="<?= $this->e($admin_url) ?>/orders?status=<?= $key ?>"><small class="muted"><?= $label ?></small><br><?= (int) ($order_stats[$key] ?? 0) ?><small>건</small></a></li><?php endforeach ?></ul>
+</div></section><?php endif ?>
 <section class="card"><div class="card-body">
   <h2 class="card-title">데이터</h2>
   <?php if ($ready): ?>
     <p>스키마 <?= (int) $status['schema_version'] ?>판이 설치되어 있습니다.</p>
   <?php else: ?>
-    <p class="muted">쇼핑몰 데이터가 설치되지 않았습니다. 설치하면 <code>yc_</code> 테이블 9개를 만듭니다. 상태: <?= $this->e($status['state'] ?? '없음') ?></p>
+    <p class="muted">쇼핑몰 데이터 설치 또는 갱신이 필요합니다. 설치하면 <code>yc_</code> 테이블 12개를 만듭니다. 상태: <?= $this->e($status['state'] ?? '없음') ?></p>
   <?php endif ?>
   <form method="post" action="<?= $this->e($admin_url) ?>">
     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="install">

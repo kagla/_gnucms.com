@@ -110,17 +110,17 @@ final class ProductsTest extends YoungCartTestCase
         self::assertSame((int) $category['id'], (int) $copy['categories'][1]['id']);
         try { $this->shop->products->copy($id, 'COPY-1', 'tester'); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('code', $e->details()); }
 
-        $this->shop->products->bulk([$copyId => ['category_id' => (string) $other['id'], 'name' => '일괄', 'list_price' => '0', 'price' => '900', 'stock' => '7', 'active' => '0', 'sold_out' => '1', 'sort_order' => '9']], 'tester');
+        $this->shop->products->bulk([$copyId => ['original_stock' => (string) $this->shop->products->get($copyId)['stock'], 'category_id' => (string) $other['id'], 'name' => '일괄', 'list_price' => '0', 'price' => '900', 'stock' => '7', 'active' => '0', 'sold_out' => '1', 'sort_order' => '9']], 'tester');
         $copy = $this->shop->products->get($copyId);
         self::assertSame('일괄', $copy['name']); self::assertSame((int) $other['id'], (int) $copy['categories'][1]['id']); self::assertSame(7, (int) $copy['stock']);
         self::assertSame(4, (int) $this->shop->store->selectOne('SELECT delta FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE product_id = ? ORDER BY id DESC LIMIT 1', [$copyId])['delta']);
         $this->shop->products->setTypes([$copyId => ['is_hit' => '0', 'is_popular' => '1']]);
         $copy = $this->shop->products->get($copyId);
         self::assertSame(0, (int) $copy['is_hit']); self::assertSame(1, (int) $copy['is_popular']);
-        $this->shop->products->updateStock([$copyId => ['stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
+        $this->shop->products->updateStock([$copyId => ['original_stock' => (string) $this->shop->products->get($copyId)['stock'], 'stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
         self::assertSame(0, (int) $this->shop->products->get($copyId)['stock']);
         try {
-            $this->shop->products->updateStock([$copyId => ['stock' => '-1', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0'], $id => ['stock' => '99', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
+            $this->shop->products->updateStock([$copyId => ['original_stock' => (string) $this->shop->products->get($copyId)['stock'], 'stock' => '-1', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0'], $id => ['original_stock' => (string) $this->shop->products->get($id)['stock'], 'stock' => '99', 'stock_alert' => '0', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
             self::fail();
         } catch (DomainError $e) {
             self::assertSame(422, $e->status());

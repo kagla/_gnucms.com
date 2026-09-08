@@ -30,6 +30,10 @@ final class AdminController extends AdminBase
         $data['status'] = $this->service->schema()->status(Schema::KEY);
         $data['version'] = Schema::VERSION;
         $data['stats'] = $data['ready'] ? $this->service->products->stats() : null;
+        $data['order_stats'] = [];
+        if ($data['ready']) foreach ($this->service->store->select('SELECT status, COUNT(*) AS count FROM ' . $this->service->store->table('yc_orders') . ' GROUP BY status') as $row) {
+            $data['order_stats'][$row['status']] = (int) $row['count'];
+        }
         $data['low_stock'] = $data['ready'] ? $this->service->products->lowStock() : ['products' => [], 'options' => []];
         if (($data['input']['installed'] ?? '') === '1') $data['notice'] = '쇼핑몰 데이터를 설치했습니다.';
         if (($data['input']['install'] ?? '') === '1') $data['notice'] = '먼저 쇼핑몰 데이터를 설치해 주세요.';
@@ -64,6 +68,9 @@ final class AdminController extends AdminBase
         foreach (['category', 'type', 'search', 'related', 'detail'] as $section) foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';
         $flat['shipping_content'] = $settings['shipping']['content'];
+        $flat['shipping_fee'] = (string) $settings['shipping']['fee'];
+        $flat['shipping_free_minimum'] = (string) $settings['shipping']['free_minimum'];
+        $flat['order_notice'] = $settings['order_notice'];
         $flat['exchange_content'] = $settings['exchange']['content'];
         return $flat;
     }

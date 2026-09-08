@@ -10,15 +10,31 @@ use GnuCms\Extension\PackageSchema;
 final class Schema
 {
     public const KEY = 'modules/youngcart';
-    public const VERSION = 1;
+    public const VERSION = 2;
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
-        'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log'];
+        'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history'];
 
     public static function install(PackageSchema $schema): void
     {
         $schema->install(self::KEY, self::VERSION, self::TABLES, static function (Connection $db): void {
             $bin = $db->dialect()->name() === 'mysql' ? ' COLLATE utf8mb4_bin' : '';
             $definitions = [
+                'yc_orders' => 'id {AUTO_PK}, number VARCHAR(32)' . $bin . ' NOT NULL UNIQUE,
+                    checkout_key VARCHAR(64) NOT NULL UNIQUE, owner_key VARCHAR(64) NOT NULL, user_id BIGINT NULL,
+                    guest_password VARCHAR(255) NOT NULL, status VARCHAR(20) NOT NULL,
+                    buyer_name VARCHAR(100) NOT NULL, email VARCHAR(191) NOT NULL, phone VARCHAR(30) NOT NULL,
+                    recipient VARCHAR(100) NOT NULL, recipient_phone VARCHAR(30) NOT NULL, postcode VARCHAR(10) NOT NULL,
+                    address VARCHAR(250) NOT NULL, address_detail VARCHAR(250) NOT NULL, delivery_note VARCHAR(500) NOT NULL,
+                    subtotal BIGINT NOT NULL, shipping_fee BIGINT NOT NULL, cod_fee BIGINT NOT NULL, total BIGINT NOT NULL,
+                    shipping_detail {TEXT} NOT NULL, order_notice {TEXT} NOT NULL,
+                    carrier VARCHAR(100) NOT NULL, tracking_number VARCHAR(100) NOT NULL,
+                    created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
+                'yc_order_items' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, product_id BIGINT NOT NULL, option_id BIGINT NULL,
+                    kind VARCHAR(8) NOT NULL, product_code VARCHAR(20) NOT NULL, product_name VARCHAR(250) NOT NULL,
+                    option_label VARCHAR(350) NOT NULL, image VARCHAR(100) NOT NULL,
+                    unit_price BIGINT NOT NULL, quantity INTEGER NOT NULL, total BIGINT NOT NULL',
+                'yc_order_history' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, status VARCHAR(20) NOT NULL,
+                    actor VARCHAR(100) NOT NULL, note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL',
                 'yc_settings' => 'id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL',
                 'yc_categories' => 'id {AUTO_PK}, code VARCHAR(10)' . $bin . ' NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
                     name VARCHAR(100) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1,
@@ -64,7 +80,11 @@ final class Schema
                 'yc_prod_order' => ['yc_products', 'sort_order'], 'yc_prod_updated' => ['yc_products', 'updated_at'],
                 'yc_prod_price' => ['yc_products', 'price'], 'yc_pc_category' => ['yc_product_categories', 'category_id'],
                 'yc_img_product' => ['yc_product_images', 'product_id'], 'yc_opt_product' => ['yc_options', 'product_id'],
-                'yc_rel_related' => ['yc_product_relations', 'related_id'], 'yc_stock_product' => ['yc_stock_log', 'product_id']];
+                'yc_rel_related' => ['yc_product_relations', 'related_id'], 'yc_stock_product' => ['yc_stock_log', 'product_id'],
+                'yc_order_user' => ['yc_orders', 'user_id'], 'yc_order_status' => ['yc_orders', 'status'],
+                'yc_order_created' => ['yc_orders', 'created_at'], 'yc_oi_order' => ['yc_order_items', 'order_id'],
+                'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
+                'yc_history_order' => ['yc_order_history', 'order_id']];
             foreach ($indexes as $index => [$table, $column]) {
                 $physical = $db->prefix() . $index;
                 $exists = match ($db->dialect()->name()) {

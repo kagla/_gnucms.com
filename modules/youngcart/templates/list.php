@@ -7,6 +7,7 @@
 <div class="yc-shop">
   <?php $this->insert('_header') ?>
   <?php $this->insert('_breadcrumb') ?>
+  <h1 class="yc-title"><?= $this->e($category['name']) ?></h1>
   <?php if ($category['head_html'] !== ''): ?><div class="yc-html"><?= $this->html($category['head_html']) ?></div><?php endif ?>
   <?php if ($children !== []): ?><nav class="yc-children" aria-label="하위 분류"><?php foreach ($children as $child): ?><a class="btn btn-sm btn-outline" href="<?= $this->e($url) ?>/list?ca=<?= $this->e($child['code']) ?>"><?= $this->e($child['name']) ?></a><?php endforeach ?></nav><?php endif ?>
   <div class="yc-toolbar"><span class="muted"><?= $list['total'] ?>개</span><?php $this->insert('_sort', ['action' => $url . '/list', 'hidden' => ['ca' => $category['code']]]) ?></div>
@@ -15,3 +16,4 @@
   <?php if ($category['tail_html'] !== ''): ?><div class="yc-html"><?= $this->html($category['tail_html']) ?></div><?php endif ?>
 </div>
 <?php $this->stop() ?>
+<?php $this->start('scripts') ?><script src="<?= $this->asset('youngcart.js') ?>" defer></script><?php $this->stop() ?>

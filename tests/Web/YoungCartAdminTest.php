@@ -55,7 +55,7 @@ final class YoungCartAdminTest extends WebTestCase
         $this->signIn(true);
         $dashboard = $this->body($this->get($this->app, '/admin/shop'));
         self::assertStringContainsString('데이터 설치', $dashboard);
-        self::assertStringContainsString('설치되지 않았습니다', $dashboard);
+        self::assertStringContainsString('설치 또는 갱신이 필요합니다', $dashboard);
         self::assertSame(403, $this->post($this->app, '/admin/shop', ['action' => 'install'])->getStatusCode());
         self::assertFalse($this->shop->ready());
         $response = $this->post($this->app, '/admin/shop', $this->csrf(['action' => 'install']));
@@ -174,10 +174,10 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertStringContainsString('name="rows[' . $seed['a'] . '][price]"', $list);
         self::assertStringNotContainsString('가방', $this->body($this->get($this->app, '/admin/shop/products', ['q' => '셔츠'])));
         self::assertStringNotContainsString('파란 셔츠', $this->body($this->get($this->app, '/admin/shop/products', ['ca' => '20'])));
-        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'bulk', 'rows' => [$seed['b'] => ['category_id' => (string) $seed['top']['id'], 'name' => '가방(일괄)', 'list_price' => '0', 'price' => '150', 'stock' => '2', 'active' => '1', 'sold_out' => '0', 'sort_order' => '1']]]));
+        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'bulk', 'rows' => [$seed['b'] => ['original_stock' => '0', 'category_id' => (string) $seed['top']['id'], 'name' => '가방(일괄)', 'list_price' => '0', 'price' => '150', 'stock' => '2', 'active' => '1', 'sold_out' => '0', 'sort_order' => '1']]]));
         self::assertSame('/admin/shop/products?saved=1', $response->getHeaderLine('Location'));
         self::assertSame('가방(일괄)', $this->shop->products->find($seed['b'])['name']);
-        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'bulk', 'rows' => [$seed['b'] => ['category_id' => '999', 'name' => 'x', 'price' => '1']]]));
+        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'bulk', 'rows' => [$seed['b'] => ['original_stock' => '2', 'category_id' => '999', 'name' => 'x', 'price' => '1']]]));
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('분류를 찾을 수 없습니다', $this->body($response));
         $response = $this->post($this->app, '/admin/shop/products/copy', $this->csrf(['id' => (string) $seed['a'], 'code' => 'A2']));
@@ -192,13 +192,13 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertSame(1, (int) $this->shop->products->find($seed['a'])['is_new']);
         $stock = $this->body($this->get($this->app, '/admin/shop/products/stock'));
         self::assertStringContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
-        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
+        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['original_stock' => '3', 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
         self::assertSame(9, (int) $this->shop->products->find($seed['a'])['stock']);
         $optionId = (int) $this->shop->products->get($seed['a'])['options']['select'][0]['id'];
         $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock'));
         self::assertStringContainsString('name="rows[' . $optionId . '][stock]"', $optionStock);
         self::assertStringContainsString('빨강', $optionStock);
-        $this->post($this->app, '/admin/shop/products/option-stock', $this->csrf(['rows' => [$optionId => ['stock' => '4', 'stock_alert' => '0', 'active' => '1']]]));
+        $this->post($this->app, '/admin/shop/products/option-stock', $this->csrf(['rows' => [$optionId => ['original_stock' => '1', 'stock' => '4', 'stock_alert' => '0', 'active' => '1']]]));
         self::assertSame(4, (int) $this->shop->products->get($seed['a'])['options']['select'][0]['stock']);
         $json = $this->get($this->app, '/admin/shop/products/search', ['q' => '가방', 'exclude' => (string) $seed['a']]);
         self::assertSame('application/json; charset=utf-8', $json->getHeaderLine('Content-Type'));
