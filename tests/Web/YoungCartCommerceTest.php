@@ -256,6 +256,30 @@ final class YoungCartCommerceTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testCheckoutPostcodeSearchKeepsServerValidationAndEnteredAddress(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $body = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertStringContainsString('data-yc-postcode-search', $body);
+        self::assertStringContainsString('youngcart-postcode.js', $body);
+        self::assertStringNotContainsString('t1.kakaocdn.net', $body, 'The SDK is loaded on demand');
+        $input = $this->checkout(['postcode' => '1234', 'address' => '테스트길 10 (건물 & 별관)', 'address_detail' => '202호']);
+        $response = $this->post($this->app, '/shop/checkout', $input);
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        $this->assertCheckoutValues($body, ['postcode' => '1234', 'address' => $input['address'], 'address_detail' => '202호']);
+        self::assertStringContainsString('aria-describedby="yc-error-postcode"', $body);
+        self::assertStringContainsString('우편번호 5자리', $body);
+        $input['postcode'] = '04524';
+        $response = $this->post($this->app, '/shop/checkout', $input);
+        self::assertSame(303, $response->getStatusCode());
+        $order = $this->body($this->get($this->app, $response->getHeaderLine('Location')));
+        self::assertStringContainsString('04524', $order);
+        self::assertStringContainsString('테스트길 10 (건물 &amp; 별관)', $order);
+        self::assertStringContainsString('202호', $order);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testCheckoutKeepsMemberEditsThroughRefreshErrorsAndOrder(array $config): void
     {
         $this->setupShop($config); $this->add();

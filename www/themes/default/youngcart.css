@@ -106,3 +106,13 @@
 .yc-shop .yc-option-quantity-controls>.input{width:54px;min-height:40px;padding:.35rem .15rem;border:0;border-inline:1px solid var(--yc-line);border-radius:0;text-align:center;appearance:textfield}
 .yc-shop .yc-option-quantity-controls>.input::-webkit-inner-spin-button,.yc-shop .yc-option-quantity-controls>.input::-webkit-outer-spin-button{appearance:none;margin:0}
 .yc-shop [data-yc-selections][hidden],.yc-shop [data-yc-single-quantity][hidden]{display:none}
+.yc-shop .yc-postcode-label{font-weight:600}.yc-shop .yc-postcode-label>small{color:var(--yc-accent);font-size:.7rem;font-weight:400}
+.yc-shop .yc-postcode-controls{display:flex;align-items:center;gap:.6rem}
+.yc-shop .yc-postcode-controls>.input{width:150px;min-width:0;flex:0 1 150px}
+.yc-shop .yc-postcode-controls>button{flex:none;min-height:44px;white-space:nowrap}
+.yc-shop .yc-postcode-status{font-size:.75rem;color:var(--yc-accent);line-height:1.7;margin:.7rem 0 0}
+.yc-shop .yc-postcode-panel{border:1px solid var(--yc-line);border-radius:9px;overflow:hidden;margin-top:1rem;min-width:0}
+.yc-shop .yc-postcode-heading{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.6rem 1rem;background:var(--yc-soft);font-size:.85rem}
+.yc-shop .yc-postcode-heading>button{min-height:32px}
+.yc-shop .yc-postcode-host{width:100%;height:460px;background:#fff}
+.yc-shop [data-yc-postcode-search][hidden],.yc-shop [data-yc-postcode-panel][hidden],.yc-shop [data-yc-postcode-status][hidden]{display:none}
