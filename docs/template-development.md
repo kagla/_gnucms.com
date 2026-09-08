@@ -69,6 +69,10 @@ cp -r www/themes/default www/themes/mytheme
 daisyUI 는 CDN 으로 읽는다(`layout.php` 의 `<link>`). 이 서버는 composer·npm·컴파일을 쓸 수
 없으므로 빌드가 필요한 자산은 넣지 않는다.
 
+기본 테마의 로고 줄과 주요 메뉴 줄은 공통 `.wrap`의 최대 폭(`--wrap`)과 좌우 여백(`--pad`)을
+사용한다. 주요 메뉴는 남는 폭에 간격을 고르게 배분하고, 항목이 많거나 화면이 좁으면 한 줄로
+가로 스크롤한다. 이 배치는 `.header-tabs` 안에만 적용되므로 본문·관리자의 탭 배치와 독립적이다.
+
 ## 5. 아이콘
 
 `_icons.php` 가 `['home' => '<path …/>', …]` 를 돌려주고 `$this->icon('home', 18, 'cls')` 가
