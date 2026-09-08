@@ -37,19 +37,20 @@ const root = path.resolve(__dirname, '../..');
             const bounds = nav.getBoundingClientRect(), tabs = Array.from(nav.children, el => el.getBoundingClientRect());
             const all = document.querySelector('.gnb-all');
             const gaps = tabs.slice(1).map((rect, index) => rect.left - tabs[index].right);
+            const gap = parseFloat(getComputedStyle(nav).columnGap);
             return {
               aligned: Math.abs(top.left - row.left) < 1 && Math.abs(top.right - row.right) < 1,
               oneRow: tabs.every(rect => Math.abs(rect.top - tabs[0].top) < 1),
               fits: nav.scrollWidth <= nav.clientWidth + 1,
-              filled: Math.abs(tabs.at(-1).right - bounds.right) < 1 && Math.max(...gaps) - Math.min(...gaps) < 1,
+              leftAligned: Math.abs(tabs[0].left - bounds.left) < 1 && gaps.every(value => Math.abs(value - gap) < 1),
               allAligned: !all.getClientRects().length || Math.abs(all.querySelector('svg').getBoundingClientRect().left - document.querySelector('.brand').getBoundingClientRect().left) < 1,
               overflow: document.documentElement.scrollWidth > innerWidth,
             };
           });
           assert.equal(layout.aligned && layout.oneRow && layout.allAligned, true, scenario + ' at ' + width + 'px: ' + JSON.stringify(layout));
           assert.equal(layout.overflow, false, 'Only the menu scrolls horizontally');
-          if (layout.fits) assert.equal(layout.filled, true, 'Menu links fill the available width with even spacing');
-          else {
+          assert.equal(layout.leftAligned, true, 'Menu links start at the left with the configured gap, without stretching the spacing');
+          if (!layout.fits) {
             await page.focus('.header-tabs .tab:last-child');
             await page.waitForFunction(() => {
               const el = document.querySelector('.header-tabs .tab:last-child');
@@ -61,6 +62,6 @@ const root = path.resolve(__dirname, '../..');
       }
     }
     assert.deepEqual(errors, []);
-    console.log('Header browser checks passed: matching row widths, full-width spacing, aligned start, single-row overflow, keyboard access, mobile and dark mode.');
+    console.log('Header browser checks passed: matching row widths, left-aligned menu spacing, aligned start, single-row overflow, keyboard access, mobile and dark mode.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -351,7 +351,7 @@ html:not([data-theme-mode]) .theme-ico-light{display:inline-flex}
 /* GNB: 카테고리 줄 */
 .header-tabs{overflow:hidden}
 .header-tabs .wrap{display:flex;align-items:center;gap:.75rem}
-.header-tabs .tabs{display:flex;justify-content:space-between;flex-wrap:nowrap}
+.header-tabs .tabs{display:flex;justify-content:flex-start;flex-wrap:nowrap}
 .header-tabs .gnb-all{padding-inline-start:0}
 .gnb-all{
   flex:none;display:inline-flex;align-items:center;gap:.375rem;
