@@ -129,6 +129,9 @@ final class Routes
             ->setName('admin.messages.templates.fetch');
         $slim->post('/admin/messages/templates/toggle', [$msg, 'toggleTemplate'])
             ->setName('admin.messages.templates.toggle');
+        $slim->get('/admin/messages/send', [$msg, 'send'])->setName('admin.messages.send');
+        $slim->post('/admin/messages/send/preview', [$msg, 'preview'])->setName('admin.messages.send.preview');
+        $slim->post('/admin/messages/send/dispatch', [$msg, 'dispatch'])->setName('admin.messages.send.dispatch');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
         $slim->post('/admin/content/trash/{id:[0-9]+}/restore', [$cms, 'restore'])->setName('admin.content.restore');
