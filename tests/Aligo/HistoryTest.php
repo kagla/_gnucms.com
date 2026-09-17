@@ -57,6 +57,20 @@ final class HistoryTest extends DatabaseTestCase
         return $jobId;
     }
 
+    /**
+     * 예약된 작업 하나를 만든다. seed() 와 같은 모양이지만(수신자는 이미 'accepted' —
+     * 알리고가 접수는 했다) 작업은 'scheduled'이고 scheduled_at 이 박혀 있다. 실제 발송은
+     * 알리고 쪽에서 scheduledAt 이 돼야 일어난다 — 그 전에는 결과를 물어도 소용없다.
+     */
+    private function seedScheduled(string $channel, string $mid, string $scheduledAt, ?string $requestedAt = null): int
+    {
+        $jobId = $this->seed($channel, $mid, $requestedAt ?? Clock::now());
+        $this->db->update('message_jobs', ['status' => 'scheduled', 'scheduled_at' => $scheduledAt],
+            'id = :id', ['id' => $jobId]);
+
+        return $jobId;
+    }
+
     private function job(int $jobId): array
     {
         return (array) $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
@@ -435,5 +449,150 @@ final class HistoryTest extends DatabaseTestCase
         $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => []]));
         $this->history->refresh();
         self::assertNull($this->history->lastFailure(), '이번 방문에 실패가 없었으면 남기지 않는다');
+    }
+
+    /** 예약 시각이 아직 오지 않은 건은 알리고에 물어봐야 소용없다 — 조회 예산을 쓰지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testDoesNotPollAJobWhoseSendTimeHasNotCome(array $config): void
+    {
+        $this->boot($config);
+        $future = gmdate('Y-m-d H:i:s', Clock::timestamp() + 3600);
+        $this->seedScheduled('sms', 'M1', $future);
+
+        self::assertSame(0, $this->history->refresh());
+        self::assertSame([], $this->transport->requests);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPollsOnceTheSendTimeHasPassed(array $config): void
+    {
+        $this->boot($config);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        $this->seedScheduled('sms', 'M1', $past);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송성공'],
+        ]]));
+
+        self::assertSame(1, $this->history->refresh());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testTheGiveUpClockCountsFromTheScheduledTimeNotTheRequest(array $config): void
+    {
+        $this->boot($config);
+        // 8일 전에 요청했지만 발송은 어제였다 — 아직 포기할 때가 아니다.
+        $requested = gmdate('Y-m-d H:i:s', Clock::timestamp() - 8 * 86400);
+        $scheduled = gmdate('Y-m-d H:i:s', Clock::timestamp() - 86400);
+        $jobId = $this->seedScheduled('sms', 'M1', $scheduled, $requested);
+        $this->transport->queue(200, '{"result_code":1,"list":[]}');
+
+        $this->history->refresh();
+
+        self::assertSame('accepted', $this->db->selectOne('SELECT status FROM '
+            . $this->db->table('message_recipients') . ' WHERE job_id = ?', [$jobId])['status']);
+    }
+
+    /**
+     * 반대 방향도 확인한다: 예약 시각 기준으로 8일이 지났으면(요청이야 언제였든) 포기해야
+     * 한다. requested_at 을 되돌리지 않고 scheduled_at 만으로 포기 처리가 되는지 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheGiveUpClockFiresWhenTheScheduledTimeItselfIsStale(array $config): void
+    {
+        $this->boot($config);
+        $scheduled = gmdate('Y-m-d H:i:s', Clock::timestamp() - 8 * 86400);
+        $jobId = $this->seedScheduled('sms', 'M1', $scheduled, Clock::now());
+
+        self::assertSame(0, $this->history->refresh(), '이미 포기한 건이라 조회할 것이 없다');
+        self::assertSame([], $this->transport->requests);
+        self::assertSame('unknown', $this->db->selectOne('SELECT status FROM '
+            . $this->db->table('message_recipients') . ' WHERE job_id = ?', [$jobId])['status']);
+    }
+
+    /**
+     * 예산 확인은 반환값이 아니라 실제로 나간 요청으로 해야 한다 — refresh() 가 1을
+     * 돌려줘도 그게 "M2 만 물었다"는 증거는 아니다(M1 을 잘못 물었는데 응답이 마침
+     * 성공으로 와도 우연히 1이 될 수 있다). 그래서 몇 번, 어느 mid 로 불렀는지를 직접 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testARefreshWithOneFutureAndOneDueJobOnlySpendsOneLookupOnTheDueOne(array $config): void
+    {
+        $this->boot($config);
+        $future = gmdate('Y-m-d H:i:s', Clock::timestamp() + 3600);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        $this->seedScheduled('sms', 'FUTURE1', $future);
+        $this->seedScheduled('sms', 'DUE1', $past);
+        $this->transport->queue(200, '{"result_code":1,"list":[]}');
+
+        $this->history->refresh();
+
+        self::assertCount(1, $this->transport->requests, '예약 시각이 안 된 건은 조회 예산을 쓰지 않는다');
+        self::assertSame('DUE1', $this->transport->requests[0]['fields']['mid'] ?? null,
+            '물은 mid 가 아직 때가 안 된 FUTURE1 이 아니라 DUE1 이어야 한다');
+    }
+
+    /**
+     * recomputeJob() 은 집계로 상태를 정하기 전에 취소·예약부터 봐야 한다. 취소는
+     * 관리자가 이미 정한 사실이므로 뒤늦게 들어온 결과가 집계를 바꿔도 절대 뒤집히면
+     * 안 된다. apply() 를 거치지 않고 recomputeJob() 자체를 직접 불러(반사) 그 경로만
+     * 따로 검증한다 — 조회 대상 쿼리가 이 건을 애초에 고르지 않더라도(방어선이 하나
+     * 더 있어야) 안전해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testRecomputeJobNeverFlipsACancelledJobBack(array $config): void
+    {
+        $this->boot($config);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        $jobId = $this->seedScheduled('sms', 'M1', $past);
+        $this->db->update('message_jobs', ['status' => 'cancelled', 'cancelled_at' => Clock::now()],
+            'id = :id', ['id' => $jobId]);
+        // 취소 처리 뒤에도(예: 취소에 실패한 mid) 결과가 뒤늦게 적힐 수 있는 상황을 흉내낸다.
+        $this->db->update('message_recipients', ['status' => 'sent', 'result_at' => Clock::now()],
+            'job_id = :j', ['j' => $jobId]);
+
+        $method = new ReflectionMethod(History::class, 'recomputeJob');
+        $method->setAccessible(true);
+        $method->invoke($this->history, $jobId);
+
+        self::assertSame('cancelled', $this->job($jobId)['status'],
+            '취소는 관리자가 정한 사실이다 — 집계로 다시 sending 이 되면 안 된다');
+    }
+
+    /**
+     * 반대로, 발송 시각이 지난 예약 작업은 실제 결과가 들어오면 보통 작업처럼 집계를
+     * 따라가야 한다 — 가드가 지나치게 넓어서 예약을 영원히 'scheduled'에 가둬 버리면 안 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAScheduledJobLeavesScheduledOnceItsSendTimeIsPolled(array $config): void
+    {
+        $this->boot($config);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        $jobId = $this->seedScheduled('sms', 'M1', $past);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송성공'],
+        ]]));
+
+        $this->history->refresh();
+
+        self::assertSame('sent', $this->job($jobId)['status'],
+            '발송 시각이 지나 실제 결과가 들어오면 예약 상태에서 벗어나야 한다');
+    }
+
+    /** 같은 이유로, 예약 시각이 아직 오지 않은 작업도 집계로 흔들리면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testRecomputeJobLeavesAFutureScheduledJobAlone(array $config): void
+    {
+        $this->boot($config);
+        $future = gmdate('Y-m-d H:i:s', Clock::timestamp() + 3600);
+        $jobId = $this->seedScheduled('sms', 'M1', $future);
+        $this->db->update('message_recipients', ['status' => 'sent', 'result_at' => Clock::now()],
+            'job_id = :j', ['j' => $jobId]);
+
+        $method = new ReflectionMethod(History::class, 'recomputeJob');
+        $method->setAccessible(true);
+        $method->invoke($this->history, $jobId);
+
+        self::assertSame('scheduled', $this->job($jobId)['status'],
+            '예약 시각이 오기 전까지는 예약 상태를 그대로 유지한다');
     }
 }

@@ -85,12 +85,17 @@ final class History
     private function refreshPrimary(int $limit): array
     {
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
+        // 예약 발송은 접수(booked) 시점에 이미 수신자 행이 'accepted'로 찍히지만, 알리고는
+        // scheduled_at 이 되기 전에는 이 mid 에 대해 아무것도 모른다 — status 만 보고 고르면
+        // 아직 나가지도 않은 건에 조회 예산(하루 다섯 번)을 쓰게 된다. j.scheduled_at 이
+        // NULL(즉시 발송)이거나 이미 지났을 때만 후보로 삼는다.
         $rows = $this->db->select(
             'SELECT r.mid AS mid, j.channel AS channel FROM ' . $this->db->table('message_recipients') . ' r'
             . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
             . ' WHERE r.status = ? AND r.mid IS NOT NULL AND (r.checked_at IS NULL OR r.checked_at < ?)'
+            . ' AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)'
             . ' GROUP BY r.mid, j.channel ORDER BY MIN(r.id) LIMIT ' . max(1, $limit),
-            ['accepted', $cutoff]
+            ['accepted', $cutoff, Clock::now()]
         );
 
         $calls = 0;
@@ -134,11 +139,16 @@ final class History
     private function refreshFallbacks(int $limit): array
     {
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
+        // 대체문자는 원 알림톡 결과가 들어온 뒤에야 생기므로 이 시점엔 scheduled_at 은
+        // 이미 지나 있을 수밖에 없다 — 그래도 조건을 refreshPrimary() 와 똑같이 맞춰
+        // 둔다. 판단 기준이 한 곳(이 조건)에만 있어야 나중에 둘이 어긋나지 않는다.
         $rows = $this->db->select(
             'SELECT r.smid AS smid FROM ' . $this->db->table('message_recipients') . ' r'
+            . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
             . ' WHERE r.fallback_status = ? AND r.smid IS NOT NULL AND (r.checked_at IS NULL OR r.checked_at < ?)'
+            . ' AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)'
             . ' GROUP BY r.smid ORDER BY MIN(r.id) LIMIT ' . max(1, $limit),
-            ['accepted', $cutoff]
+            ['accepted', $cutoff, Clock::now()]
         );
 
         $calls = 0;
@@ -245,9 +255,31 @@ final class History
      * 대체발송을 켠 알림톡은 fallback_status 가 최종 답이다 — 알림톡이 실패해도
      * 대체문자가 도착했으면 그 사람은 메시지를 받았다. 그래서 COALESCE 로 대체발송
      * 결과를 먼저 본다. 각 상태가 무엇으로 집계되는지는 JobStatus 에 적어 뒀다.
+     *
+     * 'scheduled'·'cancelled'는 이 집계에서 나오는 값이 아니다(JobStatus 독백 참고) —
+     * 수신자를 세어서 아는 사실이 아니라 호출부가 이미 정한 작업 자체의 사실이다.
+     * 그래서 집계를 손대기 전에 먼저 걸러야 한다: 취소는 관리자가 멈췄다는 사실이므로
+     * 뒤늦게 도착한 결과(취소에 실패한 mid 가 나중에 응답을 줄 수 있다)가 있어도 절대
+     * 뒤집지 않는다. 예약은 발송 시각이 오기 전까지만 그렇다 — 접수(booked) 직후부터
+     * 수신자는 이미 'accepted'라 그 사이 집계만 보면 'sending'으로 보이겠지만, 알리고는
+     * 그 시각이 오기 전엔 아무것도 하지 않았으므로 작업은 여전히 예약일 뿐이다. 시각이
+     * 지나면(더는 여기 걸리지 않으면) 보통 작업처럼 집계를 따라 상태가 넘어간다.
      */
     private function recomputeJob(int $jobId): void
     {
+        $job = $this->db->selectOne('SELECT status, scheduled_at, finished_at FROM '
+            . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        if ($job === null) {
+            // 작업 자체가 없으면(있을 수 없지만 방어적으로) 셀 것이 없다.
+            return;
+        }
+        if ($job['status'] === 'cancelled') {
+            return;
+        }
+        if ($job['status'] === 'scheduled' && $job['scheduled_at'] !== null && $job['scheduled_at'] > Clock::now()) {
+            return;
+        }
+
         $effective = 'COALESCE(fallback_status, status)';
         $tally = $this->db->selectOne(
             'SELECT'
@@ -269,14 +301,10 @@ final class History
             'failure' => (int) $tally['f'],
             'status' => JobStatus::of((int) $tally['s'], (int) $tally['f'], $pending, (int) $tally['u']),
         ];
-        if ($pending === 0) {
+        if ($pending === 0 && ($job['finished_at'] ?? null) === null) {
             // 더 기다릴 수신자가 없으면 그때가 이 작업이 끝난 시각이다. 이미 적혀 있으면
             // 그대로 둔다 — 늦게 온 결과가 종료 시각을 계속 뒤로 미루면 안 된다.
-            $job = $this->db->selectOne('SELECT finished_at FROM '
-                . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
-            if ($job !== null && ($job['finished_at'] ?? null) === null) {
-                $fields['finished_at'] = Clock::now();
-            }
+            $fields['finished_at'] = Clock::now();
         }
 
         $this->db->update('message_jobs', $fields, 'id = :id', ['id' => $jobId]);
@@ -297,17 +325,31 @@ final class History
      * 오래된 건은 조회를 멈춘다. 무한히 묻지 않는다. 포기한 뒤에는 그 작업의 집계를
      * 다시 센다 — 포기한 건은 결과 조회를 더 타지 않으므로 여기서 정리하지 않으면
      * 작업이 영원히 "결과를 기다리는 중"으로 남는다.
+     *
+     * 포기 시계는 requested_at(접수를 요청한 시각)이 아니라 COALESCE(scheduled_at,
+     * requested_at)부터 잰다 — 예약은 접수와 실제 발송 사이에 최대 30일(SendTime::MAX_DAYS)
+     * 간격이 날 수 있어서, requested_at 만 보면 5일 뒤로 예약한 건이 나가기도 전에
+     * "결과를 알 수 없음"이 된다. 작업을 봐야 하므로 SELECT 쪽은 JOIN 을 쓰고, UPDATE
+     * 쪽은 SQLite 가 UPDATE...JOIN 을 지원하지 않아 같은 조건을 상관 서브쿼리로 쓴다 —
+     * DISTINCT job_id 로 작업을 추려 recomputeJob() 을 도는 지금 구조는 그대로 둔다.
      */
     private function giveUpOnStaleRows(): void
     {
         $limit = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::GIVE_UP_DAYS * 86400);
-        $jobs = $this->db->select('SELECT DISTINCT job_id FROM ' . $this->db->table('message_recipients')
-            . ' WHERE status = ? AND requested_at < ?', ['accepted', $limit]);
+        $jobs = $this->db->select(
+            'SELECT DISTINCT r.job_id AS job_id FROM ' . $this->db->table('message_recipients') . ' r'
+            . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
+            . ' WHERE r.status = ? AND COALESCE(j.scheduled_at, r.requested_at) < ?',
+            ['accepted', $limit]
+        );
         if ($jobs === []) {
             return;
         }
         $this->db->update('message_recipients', ['status' => 'unknown'],
-            'status = :status AND requested_at < :limit', ['status' => 'accepted', 'limit' => $limit]);
+            'status = :status AND COALESCE('
+            . '(SELECT scheduled_at FROM ' . $this->db->table('message_jobs') . ' WHERE id = job_id),'
+            . ' requested_at) < :limit',
+            ['status' => 'accepted', 'limit' => $limit]);
         foreach ($jobs as $job) {
             $this->recomputeJob((int) $job['job_id']);
         }
