@@ -38,4 +38,18 @@ final class PhoneNumberTest extends TestCase
         self::assertSame('15881234', PhoneNumber::normalizeSender('1588-1234'));
         self::assertSame('01012345678', PhoneNumber::normalizeSender('010-1234-5678'));
     }
+
+    public function testSenderRejectsNumbersThatAreNotAllocated(): void
+    {
+        foreach (['1234-5678', '1999-9999', '1000-1234', '123'] as $value) {
+            try {
+                PhoneNumber::normalizeSender($value);
+                self::fail($value . ' should have thrown DomainError');
+            } catch (DomainError) {
+                // Expected
+            }
+        }
+        // Verify that valid representative numbers still work
+        self::assertSame('15881234', PhoneNumber::normalizeSender('1588-1234'));
+    }
 }

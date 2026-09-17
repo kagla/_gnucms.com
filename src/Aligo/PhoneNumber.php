@@ -10,7 +10,7 @@ use GnuCms\Error\DomainError;
 final class PhoneNumber
 {
     private const MOBILE = '/^01[016789]\d{7,8}$/D';
-    private const SENDER = '/^(01[016789]\d{7,8}|0[2-6]\d{7,9}|1[0-9]{3}\d{4})$/D';
+    private const SENDER = '/^(01[016789]\d{7,8}|0[2-6]\d{7,9}|1[5-8]\d{6})$/D';
 
     public static function digits(string $value): string
     {
