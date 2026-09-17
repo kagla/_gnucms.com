@@ -50,6 +50,8 @@ use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\ContentRenderer;
 use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Maintenance\BackupManager;
+use GnuCms\Aligo\AligoService;
+use GnuCms\Aligo\StreamTransport;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -145,6 +147,8 @@ final class App
     private ?ContentImageService $contentImages = null;
 
     private ?BackupManager $backupManager = null;
+
+    private ?AligoService $aligoService = null;
 
     private ?string $configFile;
 
@@ -545,6 +549,19 @@ final class App
             );
         }
         return $this->mailSettingsService;
+    }
+
+    public function aligo(): AligoService
+    {
+        if ($this->aligoService === null) {
+            $this->aligoService = new AligoService(
+                $this->db(),
+                new StreamTransport(),
+                new SecretCipher((string) $this->config('auth.secret', ''))
+            );
+        }
+
+        return $this->aligoService;
     }
 
     public function sendMailTest(): void
