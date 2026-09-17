@@ -42,4 +42,16 @@ final class MessageTextTest extends TestCase
         $this->expectException(DomainError::class);
         MessageText::assertFits('짧은 본문', str_repeat('가', 23)); // 46바이트
     }
+
+    public function testAcceptsBoundaryValues(): void
+    {
+        // 정확한 경계값이 통과해야 한다.
+        // 2000바이트 본문 (한글 1000자)
+        MessageText::assertFits(str_repeat('가', 1000), null);
+        // 44바이트 제목 (한글 22자)
+        MessageText::assertFits('짧은 본문', str_repeat('가', 22));
+        // SMS 경계값: 90바이트는 SMS, 91바이트는 LMS
+        self::assertSame('sms', MessageText::channelFor(str_repeat('a', 90)));
+        self::assertSame('lms', MessageText::channelFor(str_repeat('a', 91)));
+    }
 }
