@@ -63,4 +63,36 @@ final class MessageTemplatesTest extends WebTestCase
         $this->assertLoginRedirect(
             $this->get($app, '/admin/messages/templates'), '/admin/messages/templates');
     }
+
+    /**
+     * 템플릿 탭 안내는 숫자만 URL 로 받아 문장은 서버가 만든다. 예전에는 문장 자체를
+     * ?notice= 로 받아, 공격자가 만든 URL 을 관리자가 열면 우리가 그 문장을 시스템
+     * 성공 알림처럼 보여줬다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheNoticeIsComposedFromCountsNotFromFreeText(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $composed = $this->body($this->get($app, '/admin/messages/templates',
+            ['imported' => '3', 'updated' => '1', 'disabled' => '0']));
+        $injected = $this->body($this->get($app, '/admin/messages/templates',
+            ['notice' => '계정이 만료되었습니다. 여기로 로그인하세요']));
+
+        self::assertStringContainsString('가져오기 3건, 갱신 1건, 사용 중지 0건', $composed);
+        self::assertStringNotContainsString('계정이 만료되었습니다', $injected);
+    }
+
+    /** 숫자가 아닌 값이 들어와도 문장은 숫자 자리에 0 만 넣는다 — 글자가 새어 들어오지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testNonNumericCountsFallBackToZero(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/messages/templates',
+            ['imported' => '<b>경고</b>', 'updated' => '-5', 'disabled' => '1']));
+
+        self::assertStringContainsString('가져오기 0건, 갱신 0건, 사용 중지 1건', $html);
+        self::assertStringNotContainsString('경고', $html);
+    }
 }

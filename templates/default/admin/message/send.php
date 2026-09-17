@@ -22,7 +22,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
       <?php if ($status['test_mode']): ?><span class="badge badge-warning badge-soft">테스트 모드</span><?php endif ?>
     </div>
 
-    <?php if ($notice !== null): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div><?php endif ?>
+    <?php /* 이 화면에는 성공 알림이 없다 — 발송하면 이력 상세로 넘어가고 안내는 거기서 보여준다. */ ?>
     <?php if ($error !== null): ?><div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?></span></div><?php endif ?>
 
     <form method="get" action="<?= $this->url('admin.messages.send') ?>" class="member-search-form">
@@ -101,6 +101,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
         <?php if ($variable_names === []): ?>
           <p class="card-sub">본문에 #{ } 로 표시한 변수가 없습니다.</p>
         <?php else: ?>
+          <p class="card-sub"><strong>여기 입력한 값은 받는 사람 전원에게 똑같이 나갑니다.</strong> 아래 미리보기는 첫 번째 수신자 것만 보여주지만, 100명을 골랐다면 100명 모두에게 같은 값이 들어간 본문이 갑니다. 수신자마다 다른 값을 넣으려면 지금은 값별로 나눠 보내야 합니다.</p>
           <div class="grid-2">
           <?php foreach ($variable_names as $name): ?>
             <fieldset class="fieldset">
@@ -137,9 +138,9 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
         <div class="form-section">
           <h2 class="form-section-title">미리보기</h2>
           <div class="alert alert-info">
-            <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?><?php if ($preview['ineligible'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['ineligible']) ?>명은 탈퇴하거나 차단된 회원이라 제외됩니다<?php endif ?></p>
+            <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?><?php if ($preview['ineligible'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['ineligible']) ?>명은 탈퇴하거나 차단된 회원이라 제외됩니다<?php endif ?><?php if ($preview['missing'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['missing']) ?>명은 회원을 찾을 수 없어 제외됩니다<?php endif ?></p>
             <?php if ($preview['sample'] !== null): ?>
-              <p class="card-sub">첫 번째 수신자에게 나갈 본문<?php if ($preview['bytes'] !== null): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?></p>
+              <p class="card-sub">첫 번째 수신자에게 나갈 본문<?php if ($preview['bytes'] !== null): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?><?php if ($variable_names !== [] && $preview['count'] > 1): ?> — 나머지 <?= $this->e($preview['count'] - 1) ?>명에게도 같은 변수값이 들어간 본문이 갑니다<?php endif ?></p>
               <pre class="tpl-detail-content"><?= $this->e($preview['sample']) ?></pre>
             <?php else: ?>
               <p class="card-sub">받는 사람이 없어 미리 볼 본문이 없습니다.</p>
@@ -163,6 +164,23 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
 <?php $this->start('scripts') ?>
 <script>
 (function () {
+  // 발송 버튼을 두 번 누르면 요청도 두 번 가고 실제 전화기에도 두 번 간다. 보내기
+  // 시작하면 바로 잠근다. 서버도 같은 내용을 짧은 시간 안에 두 번 받으면 두 번째는
+  // 보내지 않는다(AdminMessageController::dispatch) — 이 잠금은 그 앞의 첫 번째 방어다.
+  var form = document.getElementById('send-form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      // 잠그는 일은 제출이 시작된 뒤로 미룬다. 제출 전에 버튼을 disabled 로 만들면
+      // 브라우저가 그 버튼을 제출에서 빼 formaction 이 무시될 수 있다.
+      window.setTimeout(function () {
+        var buttons = form.querySelectorAll('button[type="submit"]');
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].disabled = true;
+        }
+      }, 0);
+    });
+  }
+
   var radios = document.querySelectorAll('[data-channel-radio]');
   var sections = document.querySelectorAll('[data-channel-only]');
   if (!radios.length || !sections.length) { return; }

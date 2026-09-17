@@ -21,6 +21,13 @@ final class History
     private Connection $db;
     private AlimtalkApi $alimtalk;
     private SmsApi $sms;
+    /**
+     * 이번 refresh() 에서 마지막으로 실패한 조회의 사유. 개별 조회 실패는 다음 방문에
+     * 다시 시도하면 되므로 예외로 올리지 않지만, 아무 데도 남기지 않으면 키가 취소된
+     * 사이트의 관리자는 결과가 천천히 "결과를 알 수 없음"으로 바뀌는 것만 보고 이유를
+     * 끝내 알 수 없다. 화면이 읽어 갈 수 있게 여기 담아 둔다.
+     */
+    private ?string $lastFailure = null;
 
     public function __construct(Connection $db, AlimtalkApi $alimtalk, SmsApi $sms)
     {
@@ -29,17 +36,53 @@ final class History
         $this->sms = $sms;
     }
 
+    /**
+     * $limit 은 이번 방문에 부를 알리고 조회 횟수의 상한이다. 두 대기열(알림톡 결과·
+     * 대체문자 결과)이 이 예산을 나눠 쓴다 — 예전에는 양쪽에 같은 값을 그대로 넘겨
+     * "최대 5개"가 실제로는 최대 10개였다. 화면 하나가 API를 오래 붙잡지 않는 것이
+     * 이 상한의 목적이므로, 합쳐서 세는 쪽이 맞다.
+     */
     public function refresh(int $limit = self::BATCH): int
     {
+        $this->lastFailure = null;
+        $limit = max(1, $limit);
         $this->giveUpOnStaleRows();
         $this->giveUpOnStaleFallbacks();
 
         // 알림톡 결과와 대체문자 결과는 서로 다른 대기열이다 — 대체문자 결과 조회는
         // status 가 아니라 fallback_status 로 대상을 고른다(아래 refreshFallbacks 참고).
-        return $this->refreshPrimary($limit) + $this->refreshFallbacks($limit);
+        $primary = $this->refreshPrimary($limit);
+        $remaining = $limit - $primary['calls'];
+        $fallback = $remaining > 0 ? $this->refreshFallbacks($remaining) : ['calls' => 0, 'done' => 0];
+
+        return $primary['done'] + $fallback['done'];
     }
 
-    private function refreshPrimary(int $limit): int
+    /** 이번 refresh() 에서 마지막으로 실패한 조회의 사유. 실패가 없었으면 null. */
+    public function lastFailure(): ?string
+    {
+        return $this->lastFailure;
+    }
+
+    /**
+     * 화면에 적을 실패 사유 한 줄. 검증 오류의 겉 메시지는 "입력값을 확인해 주세요."
+     * 같은 일반 문장이라 도움이 되지 않으므로, 담긴 사유("알리고 계정을 먼저 저장해
+     * 주세요." 등)를 꺼내 쓴다. 어느 쪽이든 API 키 원문은 실리지 않는다.
+     */
+    private static function reasonOf(DomainError | TransportFailure $e): string
+    {
+        if ($e instanceof DomainError) {
+            $details = $e->details();
+            if ($details !== []) {
+                return (string) reset($details);
+            }
+        }
+
+        return $e->getMessage();
+    }
+
+    /** @return array{calls:int,done:int} 실제로 부른 조회 횟수와 그중 성공한 횟수 */
+    private function refreshPrimary(int $limit): array
     {
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
         $rows = $this->db->select(
@@ -50,6 +93,7 @@ final class History
             ['accepted', $cutoff]
         );
 
+        $calls = 0;
         $done = 0;
         foreach ($rows as $row) {
             $mid = (string) $row['mid'];
@@ -58,18 +102,21 @@ final class History
                 'mid = :mid AND status = :status AND (checked_at IS NULL OR checked_at < :cutoff)',
                 ['mid' => $mid, 'status' => 'accepted', 'cutoff' => $cutoff]);
             if ($claimed === 0) {
+                // 다른 요청이 이미 가져갔다. API 를 부르지 않았으므로 예산도 쓰지 않았다.
                 continue;
             }
+            $calls++;
             try {
                 $this->apply($mid, (string) $row['channel']);
             } catch (DomainError | TransportFailure $e) {
                 // 조회 실패는 다음 방문에 다시 시도한다. 결과를 잃지 않는다.
+                $this->lastFailure = self::reasonOf($e);
                 continue;
             }
             $done++;
         }
 
-        return $done;
+        return ['calls' => $calls, 'done' => $done];
     }
 
     /**
@@ -81,8 +128,10 @@ final class History
      * 바로 대체문자까지 묻지는 않는다 — 방금 그 확인 때 찍힌 checked_at 이 아직 재확인
      * 주기(60초) 안이라 다음 방문에서야 대체문자 조회가 시작된다. 데이터 유실은 아니고
      * 한 주기 늦게 시작될 뿐이다.
+     *
+     * @return array{calls:int,done:int} 실제로 부른 조회 횟수와 그중 성공한 횟수
      */
-    private function refreshFallbacks(int $limit): int
+    private function refreshFallbacks(int $limit): array
     {
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
         $rows = $this->db->select(
@@ -92,6 +141,7 @@ final class History
             ['accepted', $cutoff]
         );
 
+        $calls = 0;
         $done = 0;
         foreach ($rows as $row) {
             $smid = (string) $row['smid'];
@@ -101,16 +151,18 @@ final class History
             if ($claimed === 0) {
                 continue;
             }
+            $calls++;
             try {
                 $this->applyFallback($smid);
             } catch (DomainError | TransportFailure $e) {
                 // 이번 조회 실패도 다음 방문에 다시 시도한다.
+                $this->lastFailure = self::reasonOf($e);
                 continue;
             }
             $done++;
         }
 
-        return $done;
+        return ['calls' => $calls, 'done' => $done];
     }
 
     private function apply(string $mid, string $channel): void
@@ -282,10 +334,17 @@ final class History
         }
     }
 
+    /**
+     * 아직 결과를 기다리는 수신자 수. 이력 화면의 "결과를 기다리는 중" 안내와 갱신
+     * 버튼이 이 값으로 나타나고 사라진다. 대체문자 대기열(fallback_status)도 함께
+     * 세야 한다 — 알림톡 결과가 다 잡힌 뒤 대체문자 결과만 남은 동안에도 갱신할 일이
+     * 남아 있는데, status 만 세면 그 사이 안내와 버튼이 통째로 사라진다.
+     */
     public function pendingCount(): int
     {
         return (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM '
-            . $this->db->table('message_recipients') . ' WHERE status = ?', ['accepted'])['c'];
+            . $this->db->table('message_recipients')
+            . ' WHERE status = ? OR fallback_status = ?', ['accepted', 'accepted'])['c'];
     }
 
     public function jobs(int $page = 1, int $perPage = 20): array

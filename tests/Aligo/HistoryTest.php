@@ -380,4 +380,60 @@ final class HistoryTest extends DatabaseTestCase
         self::assertSame('accepted', $row1['status'], '실패한 조회는 재시도할 수 있게 그대로 남는다');
         self::assertSame('sent', $row2['status']);
     }
+
+    /**
+     * 대기 안내와 갱신 버튼은 pendingCount() 로 나타나고 사라진다. 알림톡 결과가 다
+     * 잡히고 대체문자 결과만 남은 동안에도 갱신할 일이 남아 있는데, status 만 세면
+     * 그 사이 안내와 버튼이 통째로 사라져 관리자가 손으로 갱신할 방법이 없어진다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testPendingCountSeesTheFallbackQueueToo(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('at', 'A1', Clock::now());
+        // 알림톡은 실패로 확정됐고 대체문자 결과만 남은 상태.
+        $this->db->update('message_recipients',
+            ['status' => 'failed', 'smid' => 'FB1', 'fallback_status' => 'accepted', 'result_at' => Clock::now()],
+            'job_id = :j', ['j' => $jobId]);
+
+        self::assertSame(1, $this->history->pendingCount());
+    }
+
+    /**
+     * 조회 상한은 방문 한 번에 부를 알리고 호출 수다. 두 대기열에 같은 값을 그대로
+     * 넘기면 "최대 N개"가 실제로는 최대 2N개가 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testThePollingBudgetIsSharedByBothQueues(array $config): void
+    {
+        $this->boot($config);
+        $this->seed('sms', 'M1', Clock::now());
+        $fallbackJob = $this->seed('at', 'A1', Clock::now(), ['01055556666']);
+        $this->db->update('message_recipients',
+            ['status' => 'failed', 'smid' => 'FB1', 'fallback_status' => 'accepted', 'result_at' => Clock::now()],
+            'job_id = :j', ['j' => $fallbackJob]);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => []]));
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => []]));
+
+        $this->history->refresh(1);
+
+        self::assertCount(1, $this->transport->requests, '두 대기열이 예산을 나눠 쓴다');
+    }
+
+    /** 조회에 실패하면 그 사유를 화면이 읽어 갈 수 있게 남긴다. 성공하면 남기지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheLastLookupFailureIsAvailableToTheScreen(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('sms', 'M1', Clock::now());
+        $this->transport->queueFailure();
+
+        $this->history->refresh();
+        self::assertNotNull($this->history->lastFailure());
+
+        $this->expireRecheckWindow($jobId);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => []]));
+        $this->history->refresh();
+        self::assertNull($this->history->lastFailure(), '이번 방문에 실패가 없었으면 남기지 않는다');
+    }
 }

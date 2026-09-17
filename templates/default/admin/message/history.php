@@ -5,7 +5,9 @@
 <?php
 // 알리고는 결과 웹훅이 없다 — 관리자가 이 화면을 열 때마다 컨트롤러가 조금씩 결과를
 // 물어 채운다. 그래서 "sending" 은 "전송 중"이 아니라 "결과를 기다리는 중"이라고
-// 적는다 — 실제로 보내는 중이 아니라, 단지 아직 결과를 모를 뿐이다.
+// 적는다 — 실제로 보내는 중이 아니라, 단지 아직 결과를 모를 뿐이다. 그 조회가 계속
+// 실패하고 있으면(키 취소 등) 사유를 대기 안내 위에 그대로 적는다 — 이유 없이 결과가
+// "결과를 알 수 없음"으로 바뀌는 것만 보이면 관리자가 손쓸 방법이 없다.
 $jobStatusLabels = [
     'sending' => ['label' => '결과를 기다리는 중', 'class' => 'badge-ghost'],
     'sent'    => ['label' => '성공', 'class' => 'badge-success'],
@@ -28,6 +30,13 @@ $pageUrl = function (int $p) {
     <div class="page-head">
       <div><h1 class="card-title"><?= $this->icon('history', 19) ?> 이력</h1><p class="card-sub">보낸 작업과 그 결과입니다. 알리고는 결과를 스스로 알려오지 않으므로, 이 화면을 열 때마다 조금씩 물어 채웁니다 — 접속이 없으면 결과 확인도 늦어집니다.</p></div>
     </div>
+
+    <?php if ($refresh_error !== null): ?>
+      <div class="alert alert-warning">
+        <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
+        <span>결과를 물어보다 실패했습니다: <?= $this->e($refresh_error) ?> — 저장된 결과는 그대로 보여줍니다. 계속 실패하면 설정 → 알림톡·문자에서 계정과 API 키를 확인하세요.</span>
+      </div>
+    <?php endif ?>
 
     <?php if ($pending > 0): ?>
       <div class="alert alert-info">

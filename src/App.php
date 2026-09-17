@@ -551,6 +551,16 @@ final class App
         return $this->mailSettingsService;
     }
 
+    /**
+     * 테스트에서 알리고 전송기를 가짜로 바꾼다. 메일의 setMailer() 와 같은 이유다 —
+     * 화면을 지나는 시험이 실제 알리고 서버를 부르면 안 된다. 발송을 막는 문(채널
+     * 허용 스위치)은 AligoService::send() 안에 있으므로 이 교체로 열리지 않는다.
+     */
+    public function setAligo(AligoService $service): void
+    {
+        $this->aligoService = $service;
+    }
+
     public function aligo(): AligoService
     {
         if ($this->aligoService === null) {

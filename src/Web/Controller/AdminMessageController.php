@@ -10,6 +10,7 @@ use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
+use GnuCms\Support\Clock;
 use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -21,10 +22,22 @@ use Slim\Routing\RouteContext;
  * 템플릿·빈 변수·꺼진 채널)은 모두 AligoService::send() 가 맡고, 이 화면은 그 앞에서
  * 무엇이 나갈지 보여줄 뿐이다. 이력 탭은 알리고에 결과 웹훅이 없어 History::refresh()
  * 를 화면을 열 때마다 조용히 한 번 불러 조금씩 갱신한다 — 실패해도 목록은 저장된
- * 값으로 그대로 보여주고, 다음 방문에서 다시 시도한다.
+ * 값으로 그대로 보여주고, 다음 방문에서 다시 시도한다(실패 사유는 화면에 적는다).
+ *
+ * 화면에 그대로 찍을 문장을 쿼리 문자열로 받지 않는다. 받으면 공격자가 만든 URL 을
+ * 관리자가 열었을 때 우리가 그 문장을 시스템 성공 알림처럼 보여주게 된다. 그래서
+ * 리다이렉트에는 숫자·작업 번호 같은 구조화된 값만 싣고 문장은 여기서 만든다.
  */
 final class AdminMessageController
 {
+    /**
+     * 같은 내용을 이 시간 안에 다시 보내면 두 번째 요청은 실제로 보내지 않는다.
+     * 발송 버튼을 두 번 누르거나 결과 화면에서 새로고침을 눌렀을 때 실제 전화기에
+     * 두 번 가고 요금도 두 번 나가는 것을 막는다. 토큰을 따로 발급·소모·만료시키는
+     * 장치를 새로 만들지 않고, 세션에 "방금 무엇을 보냈는지"만 적어 둔다.
+     */
+    private const DOUBLE_SUBMIT_SECONDS = 10;
+
     private App $app;
 
     public function __construct(App $app)
@@ -35,10 +48,9 @@ final class AdminMessageController
     public function templates(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        $query = $request->getQueryParams();
-        $notice = is_string($query['notice'] ?? null) ? $query['notice'] : null;
 
-        return $this->render($request, $response, null, $notice);
+        return $this->render($request, $response, null,
+            $this->templatesNotice($request->getQueryParams()));
     }
 
     public function fetchTemplates(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -56,11 +68,11 @@ final class AdminMessageController
             return $this->render($request, $response->withStatus(422), $this->firstError($e));
         }
 
-        $notice = sprintf(
-            '가져오기 %d건, 갱신 %d건, 사용 중지 %d건', $counts['imported'], $counts['updated'], $counts['disabled']
-        );
-
-        return $this->redirect($request, $response, 'admin.messages.templates', ['notice' => $notice]);
+        return $this->redirect($request, $response, 'admin.messages.templates', [
+            'imported' => (string) (int) $counts['imported'],
+            'updated' => (string) (int) $counts['updated'],
+            'disabled' => (string) (int) $counts['disabled'],
+        ]);
     }
 
     public function toggleTemplate(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -86,10 +98,8 @@ final class AdminMessageController
     public function send(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        $query = $request->getQueryParams();
-        $notice = is_string($query['notice'] ?? null) ? $query['notice'] : null;
 
-        return $this->renderSend($request, $response, [], null, [], null, $notice);
+        return $this->renderSend($request, $response, [], null, [], null);
     }
 
     /**
@@ -111,14 +121,28 @@ final class AdminMessageController
             }
 
             return $this->renderSend(
-                $request, $response->withStatus(422), $input, $this->firstError($e), $e->details(), null, null
+                $request, $response->withStatus(422), $input, $this->firstError($e), $e->details(), null
             );
         }
 
-        return $this->renderSend($request, $response, $input, null, [], $preview, null);
+        return $this->renderSend($request, $response, $input, null, [], $preview);
     }
 
-    /** 실제 발송. collect() 가 만든 요청을 그대로 AligoService::send() 하나에만 넘긴다. */
+    /**
+     * 실제 발송. collect() 가 만든 요청을 그대로 AligoService::send() 하나에만 넘긴다.
+     *
+     * 보내기 전에 중복 발송을 한 번 막는다. 발송 버튼은 평범한 submit 이라 두 번
+     * 누르면 요청도 두 번 가고, 그러면 작업도 두 개 만들어져 실제 전화기에 두 번
+     * 가고 요금도 두 번 나간다. 화면 쪽에서도 누르는 즉시 버튼을 잠그지만(send.php),
+     * 자바스크립트를 믿고 돈을 걸 수는 없으므로 여기서도 막는다.
+     *
+     * 막는 방법은 세션에 "방금 무엇을 보냈는지"(내용 지문·시각·작업 번호)를 적어 두고,
+     * 같은 지문이 DOUBLE_SUBMIT_SECONDS 안에 다시 오면 보내지 않고 그때 만든 작업으로
+     * 보내는 것이다. 토큰을 따로 발급·보관·소모·만료시키는 장치를 새로 들이지 않는다.
+     * PHP 세션은 요청마다 잠기므로 두 번째 클릭은 첫 번째가 끝난 뒤에야 들어오고,
+     * 그때는 이 기록이 이미 남아 있다. 내용이 조금이라도 다르면 지문이 달라지므로
+     * 일부러 다시 보내는 것은 막지 않는다.
+     */
     public function dispatch(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
@@ -126,6 +150,13 @@ final class AdminMessageController
         $this->app->guestAcl()->assertGlobalAdmin();
 
         $collected = $this->collect($input);
+        $fingerprint = self::fingerprint($collected['request']);
+        $alreadySent = $this->recentlySentJob($fingerprint);
+        if ($alreadySent !== null) {
+            return $this->redirect($request, $response, 'admin.messages.history.detail',
+                ['sent' => (string) $alreadySent, 'duplicate' => '1'], ['id' => (string) $alreadySent]);
+        }
+
         try {
             $jobId = $this->app->aligo()->send($collected['request']);
         } catch (DomainError $e) {
@@ -134,15 +165,58 @@ final class AdminMessageController
             }
 
             return $this->renderSend(
-                $request, $response->withStatus(422), $input, $this->firstError($e), $e->details(), null, null
+                $request, $response->withStatus(422), $input, $this->firstError($e), $e->details(), null
             );
         }
+        $this->rememberSend($fingerprint, $jobId);
 
         // 방금 만든 작업의 이력 상세로 보낸다. 알리고는 결과 웹훅이 없으므로 이 시점엔
         // 아직 결과를 모른다 — 그 화면 자체가 "결과를 기다리는 중"이라고 정직하게 말한다.
+        // 문장이 아니라 숫자만 넘긴다(클래스 주석 참고). 제외 인원은 collect() 가 이미
+        // 세어 뒀으므로 버리지 않고 그대로 실어 보낸다 — 관리자는 "누가 빠졌는지"를
+        // 미리보기에서만이 아니라 보낸 뒤에도 알 수 있어야 한다.
         return $this->redirect($request, $response, 'admin.messages.history.detail', [
-            'notice' => sprintf('발송을 시작했습니다. 작업 번호 #%d.', $jobId),
+            'sent' => (string) $jobId,
+            'to' => (string) $this->jobTotal($jobId),
+            'nophone' => (string) $collected['skipped'],
+            'blocked' => (string) $collected['ineligible'],
+            'missing' => (string) $collected['missing'],
         ], ['id' => (string) $jobId]);
+    }
+
+    /** 실제로 보낸 사람 수. 번호 정규화·중복 제거가 끝난 뒤의 수라 화면 입력 수와 다를 수 있다. */
+    private function jobTotal(int $jobId): int
+    {
+        $row = $this->app->db()->selectOne('SELECT total FROM '
+            . $this->app->db()->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+
+        return $row === null ? 0 : (int) $row['total'];
+    }
+
+    /** 같은 발송 요청인지 가리는 지문. 번호·본문·변수까지 들어가므로 내용이 다르면 달라진다. */
+    private static function fingerprint(array $request): string
+    {
+        return hash('sha256', serialize($request));
+    }
+
+    /** 방금 같은 내용을 보냈으면 그때 만든 작업 번호. 아니면 null. */
+    private function recentlySentJob(string $fingerprint): ?int
+    {
+        $memo = $_SESSION['aligo_last_send'] ?? null;
+        if (!is_array($memo) || ($memo['hash'] ?? null) !== $fingerprint) {
+            return null;
+        }
+        if (Clock::timestamp() - (int) ($memo['at'] ?? 0) > self::DOUBLE_SUBMIT_SECONDS) {
+            return null;
+        }
+        $jobId = (int) ($memo['job'] ?? 0);
+
+        return $jobId > 0 ? $jobId : null;
+    }
+
+    private function rememberSend(string $fingerprint, int $jobId): void
+    {
+        $_SESSION['aligo_last_send'] = ['hash' => $fingerprint, 'at' => Clock::timestamp(), 'job' => $jobId];
     }
 
     /**
@@ -153,10 +227,18 @@ final class AdminMessageController
     public function history(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
+        $refreshError = null;
         try {
             $this->app->aligo()->history->refresh();
+            // refresh() 자체는 개별 조회 실패를 삼키고 다음 방문에 다시 시도한다.
+            // 그 실패를 여기서도 버리면, API 키가 취소된 사이트의 관리자는 결과가
+            // 천천히 "결과를 알 수 없음"으로 바뀌는 것만 볼 뿐 이유를 끝내 알 수 없다.
+            $refreshError = $this->app->aligo()->history->lastFailure();
         } catch (DomainError | TransportFailure $e) {
             // 조회에 실패해도 이력 목록은 보여준다. 다음 방문에 다시 시도한다.
+            // 사유는 화면에 적는다 — DomainError·TransportFailure 메시지에는 API 키가
+            // 실리지 않는다(원문 대신 ResultCodes 가 정리한 사유만 담긴다).
+            $refreshError = $e->getMessage();
         }
         $page = max(1, (int) ($request->getQueryParams()['page'] ?? 1));
         $listing = $this->app->aligo()->history->jobs($page);
@@ -165,6 +247,7 @@ final class AdminMessageController
         return View::fromRequest($request)->render($response, 'admin/message/history', [
             'listing' => $listing,
             'pending' => $this->app->aligo()->history->pendingCount(),
+            'refresh_error' => $refreshError,
             'query' => $request->getQueryParams(),
         ]);
     }
@@ -209,11 +292,10 @@ final class AdminMessageController
 
             return $r;
         }, $job['recipients']);
-        $query = $request->getQueryParams();
 
         return View::fromRequest($request)->render($response, 'admin/message/history_detail', [
             'job' => $job,
-            'notice' => is_string($query['notice'] ?? null) ? $query['notice'] : null,
+            'notice' => $this->dispatchNotice($request->getQueryParams(), (int) $job['id']),
         ]);
     }
 
@@ -248,11 +330,15 @@ final class AdminMessageController
         $recipients = [];
         $skipped = 0;
         $ineligible = 0;
+        $missing = 0;
         foreach ((array) ($input['members'] ?? []) as $userId) {
             $row = $this->app->db()->selectOne('SELECT id, display_name, phone, status FROM '
                 . $this->app->db()->table('users') . ' WHERE id = ?', [(string) $userId]);
             if ($row === null) {
-                $skipped++;
+                // 그 회원이 아예 없다. "번호가 없어 제외"와는 다른 사실이므로 같은
+                // 집계에 섞지 않는다 — 화면을 열어 둔 사이에 지워졌거나, 목록에 없던
+                // 회원 ID 가 그대로 들어온 경우다.
+                $missing++;
                 continue;
             }
             // 탈퇴·차단 회원은 번호가 남아 있어도(탈퇴 처리는 번호를 지우지 않는다) 고를 수
@@ -290,7 +376,61 @@ final class AdminMessageController
             ],
             'skipped' => $skipped,
             'ineligible' => $ineligible,
+            'missing' => $missing,
         ];
+    }
+
+    /**
+     * 템플릿 탭 안내 문장. 가져오기 결과를 숫자로만 받아 문장은 여기서 만든다 —
+     * 문장 자체를 쿼리로 받으면 공격자가 만든 URL 이 시스템 알림처럼 보이게 된다.
+     */
+    private function templatesNotice(array $query): ?string
+    {
+        if (!isset($query['imported'])) {
+            return null;
+        }
+
+        return sprintf('가져오기 %d건, 갱신 %d건, 사용 중지 %d건',
+            self::countParam($query, 'imported'),
+            self::countParam($query, 'updated'),
+            self::countParam($query, 'disabled'));
+    }
+
+    /**
+     * 발송 직후 이력 상세에 보여줄 안내 문장. sent 가 지금 보고 있는 작업과 같을 때만
+     * 보여준다 — 아무 작업 상세에나 붙여 성공 알림을 띄울 수 있으면 안 된다.
+     */
+    private function dispatchNotice(array $query, int $jobId): ?string
+    {
+        if ($jobId <= 0 || self::countParam($query, 'sent') !== $jobId) {
+            return null;
+        }
+        $sentence = (($query['duplicate'] ?? '') === '1')
+            ? sprintf('같은 내용을 방금 보냈기 때문에 다시 보내지 않았습니다. 그때 만들어진 작업 #%d 입니다.', $jobId)
+            : sprintf('발송을 시작했습니다. 작업 번호 #%d.', $jobId);
+
+        $parts = [];
+        foreach ([
+            'to' => '받는 사람 %d명',
+            'nophone' => '번호가 없어 제외 %d명',
+            'blocked' => '탈퇴·차단으로 제외 %d명',
+            'missing' => '회원을 찾지 못해 제외 %d명',
+        ] as $name => $format) {
+            $count = self::countParam($query, $name);
+            if ($count > 0) {
+                $parts[] = sprintf($format, $count);
+            }
+        }
+
+        return $parts === [] ? $sentence : $sentence . ' ' . implode(' · ', $parts) . '.';
+    }
+
+    /** 쿼리에서 0 이상의 정수만 읽는다. 숫자가 아니면 0 으로 본다. */
+    private static function countParam(array $query, string $name): int
+    {
+        $value = $query[$name] ?? null;
+
+        return is_scalar($value) && ctype_digit(trim((string) $value)) ? (int) $value : 0;
     }
 
     /**
@@ -313,6 +453,7 @@ final class AdminMessageController
             'count' => count($recipients),
             'skipped' => $collected['skipped'],
             'ineligible' => $collected['ineligible'],
+            'missing' => $collected['missing'],
             'bytes' => $sample === null ? null : MessageText::byteLength($sample),
             'classify' => $sample === null ? null : MessageText::channelFor($sample),
         ];
@@ -397,8 +538,13 @@ final class AdminMessageController
         return $row;
     }
 
+    /**
+     * 발송 탭에는 성공 알림이 없다. 이 화면으로 리다이렉트하며 안내를 남기는 코드가
+     * 코드베이스에 하나도 없었으므로, 그 자리를 남겨 두면 공격자가 만든 URL 만이
+     * 그것을 채울 수 있다.
+     */
     private function renderSend(ServerRequestInterface $request, ResponseInterface $response, array $input,
-        ?string $error, array $fieldErrors, ?array $preview, ?string $notice): ResponseInterface
+        ?string $error, array $fieldErrors, ?array $preview): ResponseInterface
     {
         $selectedIds = array_map('strval', (array) ($input['members'] ?? []));
         $query = $request->getQueryParams();
@@ -415,7 +561,6 @@ final class AdminMessageController
             'preview' => $preview,
             'error' => $error,
             'field_errors' => $fieldErrors,
-            'notice' => $notice,
         ]);
     }
 

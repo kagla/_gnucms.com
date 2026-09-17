@@ -147,4 +147,65 @@ final class MessageHistoryTest extends WebTestCase
             self::assertSame(1, substr_count($html, $badgeMarkup), $badgeMarkup . ' 배지 개수');
         }
     }
+
+    /**
+     * 조회가 계속 실패하면(키가 취소됐다든가) 관리자는 결과가 천천히 "결과를 알 수
+     * 없음"으로 바뀌는 것만 볼 뿐 이유를 알 수 없었다. 사유를 화면에 적되, 목록 자체는
+     * 저장된 값으로 그대로 보여준다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailingLookupIsShownAsAWarningWithoutBreakingTheList(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        // 알리고 계정을 저장하지 않은 채로 결과를 기다리는 건이 있으면 조회가 실패한다.
+        $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringContainsString('결과를 물어보다 실패했습니다', $html);
+        self::assertStringContainsString('알리고 계정을 먼저 저장해 주세요', $html);
+        // 목록은 그대로 보인다 — 조회 실패가 화면을 깨뜨리지 않는다.
+        self::assertStringContainsString('결과를 기다리는 중', $html);
+    }
+
+    /** 조회가 잘 되면 경고 띠는 나오지 않는다 — 있지도 않은 실패를 매번 보여주면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testNoWarningWhenThereIsNothingToLookUp(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringNotContainsString('결과를 물어보다 실패했습니다', $html);
+    }
+
+    /**
+     * 상세 화면의 안내는 서버가 만든 문장만 보여준다. 예전에는 ?notice= 로 아무 문장이나
+     * 성공 알림처럼 띄울 수 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testDetailDoesNotEchoANoticeFromTheUrl(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $jobId = $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId,
+            ['notice' => '계정이 만료되었습니다. 여기로 로그인하세요']));
+
+        self::assertStringNotContainsString('계정이 만료되었습니다', $html);
+    }
+
+    /** 발송 안내는 그 발송의 상세에서만 보여준다 — 아무 작업에나 붙일 수 없다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSentNoticeOnlyShowsOnItsOwnJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $jobId = $this->seed($app);
+
+        $mine = $this->body($this->get($app, '/admin/messages/history/' . $jobId, ['sent' => (string) $jobId]));
+        $other = $this->body($this->get($app, '/admin/messages/history/' . $jobId, ['sent' => (string) ($jobId + 7)]));
+
+        self::assertStringContainsString('발송을 시작했습니다', $mine);
+        self::assertStringNotContainsString('발송을 시작했습니다', $other);
+    }
 }
