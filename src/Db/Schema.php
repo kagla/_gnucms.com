@@ -343,7 +343,12 @@ final class Schema
             // 훑으므로 알림톡 대기열(mid, status)과 똑같이 인덱스가 필요하다.
             'CREATE INDEX ix_message_recipients_fallback ON message_recipients (fallback_status, smid)',
             'CREATE UNIQUE INDEX ux_alimtalk_templates_code ON alimtalk_templates (tpl_code)',
-            // 예약 발송 대기열. 실행기가 (scheduled_at, status) 로 훑어 때가 된 예약 작업만 골라낸다.
+            // 예약 발송 조회용 인덱스. 채널을 끄거나 템플릿이 승인을 잃었을 때 그 채널·템플릿에
+            // 걸린 예약을 찾아 취소하고(AligoService::scheduledJobIdsWhere()), 아직 발송 시각이
+            // 안 된 예약을 결과 조회 대상에서 빼는 데(History::refreshPrimary()·refreshFallbacks())
+            // status·scheduled_at 을 함께 쓴다. 알리고가 예약 시각에 스스로 내보내므로, GNUCMS
+            // 쪽에는 그 시각을 기다렸다가 발송을 실행하는 것이 없다 — 이 인덱스는 그런 실행기가
+            // 아니라 위 두 조회를 위한 것이다.
             'CREATE INDEX ix_message_jobs_scheduled ON message_jobs (scheduled_at, status)',
         ];
     }
