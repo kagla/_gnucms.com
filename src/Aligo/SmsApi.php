@@ -73,18 +73,16 @@ final class SmsApi
         return $decoded;
     }
 
-    /** msg_1, msg_2, title 처럼 사람이 읽는 값만 EUC-KR 로 바꾼다. 번호·건수는 그대로다. */
+    /** msg_1, msg_2, ..., msg_500, title 처럼 사람이 읽는 값만 EUC-KR 로 바꾼다. msg_type·번호·건수는 그대로다. */
     private function encodeText(array $fields): array
     {
         foreach ($fields as $name => $value) {
             if ($value === null || !is_string($value)) {
                 continue;
             }
-            foreach (self::TEXT_FIELDS as $prefix) {
-                if ($name === $prefix || str_starts_with($name, $prefix . '_')) {
-                    $fields[$name] = MessageText::toEucKr($value, $name === 'title' ? 'title' : 'body');
-                    break;
-                }
+            // 정확히 title 또는 msg_숫자 형태만 변환한다 (msg_type 같은 플래그는 제외).
+            if (preg_match('/^(msg_\d+|title)$/', $name)) {
+                $fields[$name] = MessageText::toEucKr($value, $name === 'title' ? 'title' : 'body');
             }
         }
 

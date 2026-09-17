@@ -125,4 +125,19 @@ final class SmsApiTest extends DatabaseTestCase
         self::assertSame(2, $result['fcnt']);
         self::assertStringContainsString('/send_mass/', $this->transport->requests[0]['url']);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testFlagFieldsLikeMsg_typeAreNotConverted(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"result_code":1,"msg_id":"M2","success_cnt":1,"error_cnt":0}');
+
+        $api->sendMass(['cnt' => '1', 'msg_type' => '알림', 'rec_1' => '01012345678', 'msg_1' => '알림']);
+
+        $fields = $this->transport->requests[0]['fields'];
+        // msg_type should arrive unchanged (UTF-8), not converted to EUC-KR
+        self::assertSame('알림', $fields['msg_type']);
+        // msg_1 should be converted to EUC-KR
+        self::assertSame(mb_convert_encoding('알림', 'EUC-KR', 'UTF-8'), $fields['msg_1']);
+    }
 }
