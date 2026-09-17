@@ -507,6 +507,60 @@ final class DispatchTest extends DatabaseTestCase
             . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId])['status']);
     }
 
+    /**
+     * 알리고가 예약 접수를 하나도 받아들이지 않았다면(부팅 자체가 실패) 이 예약은
+     * 존재하지 않는다 — 'scheduled'라고 적으면 화면이 시스템이 모르는 사실을 안다고
+     * 말하는 것이고, 나중에(4단계) 취소를 시도하면 존재하지도 않는 mid를 취소하려 든다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAScheduleThatFailsToBookReadsFailedNotScheduled(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->transport->queueFailure();
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $at, 'recipients' => [['phone' => '01012345678']]]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('failed', $job['status'], '알리고가 하나도 접수하지 않았으면 예약됐다고 적으면 안 된다');
+        self::assertNotNull($job['finished_at'], '더 일어날 일이 없으므로 끝난 시각이 있어야 한다');
+
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_recipients') . ' WHERE job_id = ?', [$jobId]);
+        self::assertSame('failed', $row['status']);
+        self::assertNull($row['mid'], '접수되지 못한 수신자는 mid 가 없어야 한다 — 나중에 취소 대상이 되면 안 된다');
+    }
+
+    /**
+     * 502명이면 묶음이 둘이다(500 + 2). 첫 묶음은 접수되고 둘째 묶음은 접수 자체가
+     * 실패해도, 첫 묶음은 실제로 나갈 것이고 취소도 할 수 있으므로 예약은 살아 있다.
+     * 'partial'로 적지 않는다 — partial은 "이미 다 끝났는데 일부 실패"를 뜻하고,
+     * 예약은 아직 끝나지 않았다(그 시각에 나간다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAPartlyBookedScheduleStaysScheduledWithFailureCounted(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(500);
+        $this->transport->queueFailure();
+
+        $recipients = [];
+        for ($i = 0; $i < 502; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) $i, 8, '0', STR_PAD_LEFT)];
+        }
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $at, 'recipients' => $recipients]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '일부라도 접수됐으면 예약은 살아 있다 — partial 이 아니다');
+        self::assertSame(500, (int) $job['success']);
+        self::assertSame(2, (int) $job['failure']);
+        self::assertNull($job['finished_at']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testARefusedScheduleCreatesNoJobAndSendsNothing(array $config): void
     {

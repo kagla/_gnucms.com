@@ -165,14 +165,22 @@ final class Dispatch
 
         $this->db->update('message_jobs', [
             'success' => $success, 'failure' => $failure,
-            // 예약 건은 집계와 무관하게 'scheduled'다 — 접수 건수가 곧 전달 결과가 아니고,
-            // 실제로 나가는 시각은 아직 오지 않았다. JobStatus::of() 는 이 두 값을 모른다
-            // (JobStatus 문서 참고) — 예약 여부는 호출부가 먼저 판단해야 하는 사실이다.
-            'status' => $scheduledAt !== null ? 'scheduled' : JobStatus::of($success, $failure, $pending, 0),
-            // 예약 건은 아직 나가지도 않았으므로 끝난 시각이 있을 수 없다. 그 외에는
-            // 아직 결과를 기다리는 수신자가 있으면 아직 끝난 것이 아니다 — 결과가 다
-            // 들어오면 History 가 그때 종료 시각을 적는다.
-            'finished_at' => $scheduledAt !== null ? null : ($pending === 0 ? Clock::now() : null),
+            // 예약은 적어도 한 묶음이라도 접수(booked)됐을 때만 'scheduled'다 — 그
+            // 묶음은 실제로 그 시각에 나갈 것이고 취소도 할 수 있다. 일부가 섞여 있어도
+            // 'partial'로 적지 않는다 — 'partial'은 "이미 다 끝났는데 일부만 실패"를
+            // 뜻하고, 예약은 아직 끝나지 않았다(그 시각에 나간다). 실패 건수는 이미
+            // failure 칼럼에 남는다. 반대로 단 하나도 접수되지 못했다면(pending === 0,
+            // 곧 success === 0) 알리고는 이 예약을 전혀 모른다 — 'scheduled'라고 적으면
+            // 화면이 시스템이 모르는 사실을 안다고 말하는 것이고, 나중에 취소를 시도하면
+            // 존재하지 않는 mid를 취소하려 든다. 그럴 때는 보통 발송과 같은 규칙
+            // (JobStatus::of())으로 넘겨 'failed'가 되게 한다.
+            'status' => ($scheduledAt !== null && $pending > 0)
+                ? 'scheduled'
+                : JobStatus::of($success, $failure, $pending, 0),
+            // 접수된 채 기다리는(pending) 수신자가 있으면 아직 끝난 것이 아니다 — 예약이
+            // 살아 있는 경우도 pending > 0 이므로 이 규칙 하나로 함께 풀린다. 예약이든
+            // 아니든 pending === 0 이면 더 일어날 일이 없으므로 그 자리에서 끝난다.
+            'finished_at' => $pending === 0 ? Clock::now() : null,
         ], 'id = :id', ['id' => $jobId]);
 
         return $jobId;
