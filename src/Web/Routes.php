@@ -132,6 +132,12 @@ final class Routes
         $slim->get('/admin/messages/send', [$msg, 'send'])->setName('admin.messages.send');
         $slim->post('/admin/messages/send/preview', [$msg, 'preview'])->setName('admin.messages.send.preview');
         $slim->post('/admin/messages/send/dispatch', [$msg, 'dispatch'])->setName('admin.messages.send.dispatch');
+        $slim->get('/admin/messages/history', [$msg, 'history'])->setName('admin.messages.history');
+        // refresh 를 {id} 보다 먼저 등록한다 — 안 그러면 /history/refresh 가 {id} 에 잡힌다.
+        $slim->post('/admin/messages/history/refresh', [$msg, 'refresh'])
+            ->setName('admin.messages.history.refresh');
+        $slim->get('/admin/messages/history/{id:[0-9]+}', [$msg, 'historyDetail'])
+            ->setName('admin.messages.history.detail');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
         $slim->post('/admin/content/trash/{id:[0-9]+}/restore', [$cms, 'restore'])->setName('admin.content.restore');

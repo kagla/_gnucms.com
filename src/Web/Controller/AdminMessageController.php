@@ -6,6 +6,7 @@ namespace GnuCms\Web\Controller;
 
 use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\PhoneNumber;
+use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
@@ -15,10 +16,12 @@ use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
 
 /**
- * 운영 › 알림톡·문자 화면. 3단계(발송·템플릿·이력)의 시작이며, 이 파일은 그중
- * 템플릿·발송 탭을 담당한다(이력은 다음 과제). 발송 탭에서는 여기서 메시지를
- * 만들거나 승인하지 않는다 — 실제 거절(미승인 템플릿·빈 변수·꺼진 채널)은 모두
- * AligoService::send() 가 맡고, 이 화면은 그 앞에서 무엇이 나갈지 보여줄 뿐이다.
+ * 운영 › 알림톡·문자 화면. 발송·템플릿·이력 3개 탭을 모두 이 컨트롤러가 담당한다.
+ * 발송 탭에서는 여기서 메시지를 만들거나 승인하지 않는다 — 실제 거절(미승인
+ * 템플릿·빈 변수·꺼진 채널)은 모두 AligoService::send() 가 맡고, 이 화면은 그 앞에서
+ * 무엇이 나갈지 보여줄 뿐이다. 이력 탭은 알리고에 결과 웹훅이 없어 History::refresh()
+ * 를 화면을 열 때마다 조용히 한 번 불러 조금씩 갱신한다 — 실패해도 목록은 저장된
+ * 값으로 그대로 보여주고, 다음 방문에서 다시 시도한다.
  */
 final class AdminMessageController
 {
@@ -135,11 +138,101 @@ final class AdminMessageController
             );
         }
 
-        // 이력 상세 화면은 다음 과제에서 만든다. 아직 없는 라우트로 보내면 urlFor() 가
-        // 던져 이 화면 자체가 깨지므로, 지금은 발송 탭으로 돌아와 결과 알림만 보여준다.
-        return $this->redirect($request, $response, 'admin.messages.send', [
+        // 방금 만든 작업의 이력 상세로 보낸다. 알리고는 결과 웹훅이 없으므로 이 시점엔
+        // 아직 결과를 모른다 — 그 화면 자체가 "결과를 기다리는 중"이라고 정직하게 말한다.
+        return $this->redirect($request, $response, 'admin.messages.history.detail', [
             'notice' => sprintf('발송을 시작했습니다. 작업 번호 #%d.', $jobId),
+        ], ['id' => (string) $jobId]);
+    }
+
+    /**
+     * 이력 목록. 화면을 그리기 전에 결과 조회를 한 번 시도한다 — 알리고가 웹훅을 주지
+     * 않으므로 관리자가 들를 때마다 조금씩 갱신하는 것이 유일한 갱신 수단이다. 조회
+     * 자체가 실패해도(알리고 접속 불가 등) 목록은 저장된 값 그대로 보여준다.
+     */
+    public function history(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        try {
+            $this->app->aligo()->history->refresh();
+        } catch (DomainError | TransportFailure $e) {
+            // 조회에 실패해도 이력 목록은 보여준다. 다음 방문에 다시 시도한다.
+        }
+        $page = max(1, (int) ($request->getQueryParams()['page'] ?? 1));
+        $listing = $this->app->aligo()->history->jobs($page);
+        $listing['items'] = array_map([$this, 'withTemplateLabel'], $listing['items']);
+
+        return View::fromRequest($request)->render($response, 'admin/message/history', [
+            'listing' => $listing,
+            'pending' => $this->app->aligo()->history->pendingCount(),
+            'query' => $request->getQueryParams(),
         ]);
+    }
+
+    /**
+     * 관리자가 손으로 한 번 더 결과를 조회한다. 실패해도(알리고 접속 불가 등) 화면은
+     * 깨지지 않고 목록으로 그대로 돌아간다 — 다음 방문에서 또 시도할 수 있다.
+     */
+    public function refresh(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        try {
+            $this->app->aligo()->history->refresh();
+        } catch (DomainError | TransportFailure $e) {
+            // 갱신 실패도 조용히 넘어간다. 목록은 저장된 값으로 다시 그려진다.
+        }
+        $page = max(1, (int) ($input['page'] ?? 1));
+
+        return $this->redirect(
+            $request, $response, 'admin.messages.history', $page > 1 ? ['page' => $page] : []
+        );
+    }
+
+    /** 작업 하나의 상세. 수신자별 결과를 전체 번호로 보여준다(목록과 달리 여기서만 전체를 보여준다). */
+    public function historyDetail(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $args
+    ): ResponseInterface {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $job = $this->app->aligo()->history->job((int) $args['id']);
+        if ($job === null) {
+            throw DomainError::notFound('이력을 찾을 수 없습니다.');
+        }
+        $job = $this->withTemplateLabel($job);
+        $job['sender_display'] = PhoneNumber::format((string) $job['sender']);
+        $job['recipients'] = array_map(static function (array $r): array {
+            // 상세 화면에서만 전체 번호를 보여준다 — 목록에서는 절대 이 값을 쓰지 않는다.
+            $r['phone_display'] = PhoneNumber::format((string) $r['phone']);
+
+            return $r;
+        }, $job['recipients']);
+        $query = $request->getQueryParams();
+
+        return View::fromRequest($request)->render($response, 'admin/message/history_detail', [
+            'job' => $job,
+            'notice' => is_string($query['notice'] ?? null) ? $query['notice'] : null,
+        ]);
+    }
+
+    /**
+     * 목록 표의 "템플릿" 칸에 쓸 이름. 알림톡만 템플릿을 쓰므로 문자 작업은 null 로 둬
+     * 뷰가 "-"를 보여주게 한다. 사본이 지워지거나 못 찾으면 코드라도 그대로 보여준다.
+     */
+    private function withTemplateLabel(array $job): array
+    {
+        $tplCode = (string) ($job['tpl_code'] ?? '');
+        if ($job['channel'] !== 'at' || $tplCode === '') {
+            $job['template_label'] = null;
+
+            return $job;
+        }
+        $template = $this->app->aligo()->templates->find($tplCode);
+        $job['template_label'] = $template !== null ? (string) $template['name'] : $tplCode;
+
+        return $job;
     }
 
     /** 화면 입력을 Dispatch 가 받는 모양으로 바꾼다. 미리보기와 발송이 같은 것을 쓴다. */
@@ -361,9 +454,9 @@ final class AdminMessageController
     }
 
     private function redirect(ServerRequestInterface $request, ResponseInterface $response, string $route,
-        array $query = []): ResponseInterface
+        array $query = [], array $routeParams = []): ResponseInterface
     {
-        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor($route);
+        $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor($route, $routeParams);
         if ($query !== []) {
             $url .= '?' . http_build_query($query);
         }
