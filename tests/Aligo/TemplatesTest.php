@@ -93,9 +93,11 @@ final class TemplatesTest extends DatabaseTestCase
         $this->templates->fetch();
         $this->templates->setEnabled('T1', true);
 
-        // 알리고 목록에서 T1 이 통째로 빠짐 (삭제되었거나 더는 이 발신프로필 소속이 아님).
-        $this->queueList([]);
-        self::assertSame(['imported' => 0, 'updated' => 0, 'disabled' => 1], $this->templates->fetch());
+        // T1 은 빠지고 다른 템플릿만 온, 비어있지 않은 목록 — T1 이 통째로 사라진 것으로 본다
+        // (삭제되었거나 더는 이 발신프로필 소속이 아님).
+        $this->queueList([['templtCode' => 'T2', 'templtName' => '다른 안내', 'templtContent' => '본문',
+            'status' => 'A', 'inspStatus' => 'APR']]);
+        self::assertSame(['imported' => 1, 'updated' => 0, 'disabled' => 1], $this->templates->fetch());
         self::assertSame([], $this->templates->usable());
 
         // 사본 자체는 남아 마지막으로 확인한 내용·승인상태를 그대로 보여준다 (이력용).
@@ -105,8 +107,42 @@ final class TemplatesTest extends DatabaseTestCase
         self::assertSame('A', $copy['status']);
         self::assertSame('APR', $copy['insp_status']);
 
-        // 이미 꺼져 있던 사본이 다시 사라져도 disabled 는 중복으로 늘지 않는다.
+        // 이미 꺼져 있던 사본이 다시 같은 목록에 없어도 disabled 는 중복으로 늘지 않는다.
+        $this->queueList([['templtCode' => 'T2', 'templtName' => '다른 안내', 'templtContent' => '본문',
+            'status' => 'A', 'inspStatus' => 'APR']]);
+        self::assertSame(['imported' => 0, 'updated' => 0, 'disabled' => 0], $this->templates->fetch());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testEmptyListLeavesAnEnabledCopyEnabled(array $config): void
+    {
+        $this->boot($config);
+        $this->queueList([['templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '본문',
+            'status' => 'A', 'inspStatus' => 'APR']]);
+        $this->templates->fetch();
+        $this->templates->setEnabled('T1', true);
+
+        // 정상적인 빈 목록인지, 알리고 쪽 이상 응답으로 우연히 비었는지는 구별할 수 없다.
+        // 구분할 수 없다면 꺼서 알림톡 전체를 조용히 멈추기보다는 그대로 둔다.
         $this->queueList([]);
+        self::assertSame(['imported' => 0, 'updated' => 0, 'disabled' => 0], $this->templates->fetch());
+        self::assertCount(1, $this->templates->usable());
+        $copy = $this->templates->find('T1');
+        self::assertSame(1, (int) $copy['enabled']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSecondIdenticalFetchDoesNotChurnCounts(array $config): void
+    {
+        $this->boot($config);
+        $item = ['templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안내',
+            'templateType' => 'BA', 'templateEmType' => 'NONE', 'status' => 'A', 'inspStatus' => 'APR',
+            'buttons' => [['ordering' => 1, 'name' => '확인', 'linkType' => 'WL']]];
+
+        $this->queueList([$item]);
+        self::assertSame(['imported' => 1, 'updated' => 0, 'disabled' => 0], $this->templates->fetch());
+
+        $this->queueList([$item]);
         self::assertSame(['imported' => 0, 'updated' => 0, 'disabled' => 0], $this->templates->fetch());
     }
 }

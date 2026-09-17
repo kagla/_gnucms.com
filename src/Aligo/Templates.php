@@ -11,9 +11,12 @@ use GnuCms\Support\Clock;
 /**
  * 알리고에서 승인 템플릿을 가져와 사본으로 보관한다. 여기서 템플릿을 만들거나 고치지 않는다.
  * 승인(APR)이고 정상(A)인 사본만 켤 수 있고, 가져오기에서 그 조건을 잃으면 자동으로 꺼진다.
- * 알리고 목록에서 사본이 통째로 사라져도 마찬가지로 꺼진다 — 더는 상태를 확인할 수 없는
- * 템플릿으로 계속 발송할 수는 없다. 다만 내용은 지우지 않고 마지막으로 확인한 값 그대로
- * 남겨 이력·감사 목적에 쓴다.
+ * 알리고 목록에 있었는데(=목록이 비어있지 않은데) 이 사본만 빠졌다면 마찬가지로 꺼진다 —
+ * 더는 상태를 확인할 수 없는 템플릿으로 계속 발송할 수는 없다. 다만 내용은 지우지 않고
+ * 마지막으로 확인한 값 그대로 남겨 이력·감사 목적에 쓴다. 반대로 목록 자체가 통째로 비어
+ * 오면(네트워크·알리고 쪽 이상 응답일 수 있다) 아무것도 끄지 않는다 — 묵은 사본을 켜 둔
+ * 채로 두는 대가는 발송 시점의 실패 한 건이지만, 잘못 껐다가는 알림톡 전체가 아무도
+ * 모르게 조용히 멈춘다.
  */
 final class Templates
 {
@@ -35,9 +38,11 @@ final class Templates
             throw DomainError::validation(['senderkey' => '발신프로필키를 먼저 저장해 주세요.']);
         }
 
+        $items = $this->api->templates($account['senderkey']);
+
         $counts = ['imported' => 0, 'updated' => 0, 'disabled' => 0];
         $seen = [];
-        foreach ($this->api->templates($account['senderkey']) as $item) {
+        foreach ($items as $item) {
             $code = (string) ($item['templtCode'] ?? '');
             if ($code === '') {
                 continue;
@@ -54,35 +59,46 @@ final class Templates
                 'status' => $status,
                 'insp_status' => $insp,
                 'buttons' => (string) json_encode($item['buttons'] ?? [], JSON_UNESCAPED_UNICODE),
-                'fetched_at' => Clock::now(),
             ];
 
             $existing = $this->find($code);
             if ($existing === null) {
-                $this->db->insert('alimtalk_templates', $row + ['tpl_code' => $code, 'enabled' => 0]);
+                $this->db->insert('alimtalk_templates', $row + [
+                    'tpl_code' => $code, 'enabled' => 0, 'fetched_at' => Clock::now(),
+                ]);
                 $counts['imported']++;
                 continue;
             }
 
             // 승인·정상을 잃은 사본은 켜져 있었더라도 끈다.
-            if ((int) $existing['enabled'] === 1 && !$this->approved($status, $insp)) {
+            $disabling = (int) $existing['enabled'] === 1 && !$this->approved($status, $insp);
+            if (!$disabling && !$this->changed($existing, $row)) {
+                // 알리고 쪽 값이 그대로면 다시 쓰지 않는다 — 두 번째로 같은 목록을 가져와도
+                // imported·updated·disabled 가 모두 0 이어야 한다.
+                continue;
+            }
+            if ($disabling) {
                 $row['enabled'] = 0;
                 $counts['disabled']++;
             }
+            $row['fetched_at'] = Clock::now();
             $this->db->update('alimtalk_templates', $row, 'tpl_code = :code', ['code' => $code]);
             $counts['updated']++;
         }
 
-        // 이번 목록에 없는 사본: 알리고에서 삭제되었거나 이 발신프로필 소속이 아니게 된
-        // 것이다. 더는 승인 상태를 확인할 수 없으므로 켜져 있었다면 끈다. 내용·상태는
-        // 마지막으로 확인한 값 그대로 남겨 새로 쓰지 않는다 — 이력을 지울 이유가 없다.
-        foreach ($this->usable() as $row) {
-            $code = (string) $row['tpl_code'];
-            if (isset($seen[$code])) {
-                continue;
+        // 목록이 비어 있지 않은데 이번 목록에 없는 사본: 알리고에서 삭제되었거나 이
+        // 발신프로필 소속이 아니게 된 것이다. 더는 승인 상태를 확인할 수 없으므로 켜져
+        // 있었다면 끈다. 내용·상태는 마지막으로 확인한 값 그대로 남겨 새로 쓰지 않는다.
+        // 목록 자체가 비어 왔을 때는 건드리지 않는다 — 맨 위 docblock 참고.
+        if ($items !== []) {
+            foreach ($this->usable() as $row) {
+                $code = (string) $row['tpl_code'];
+                if (isset($seen[$code])) {
+                    continue;
+                }
+                $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => $code]);
+                $counts['disabled']++;
             }
-            $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => $code]);
-            $counts['disabled']++;
         }
 
         return $counts;
@@ -121,5 +137,17 @@ final class Templates
     private function approved(string $status, string $insp): bool
     {
         return $status === 'A' && $insp === 'APR';
+    }
+
+    /** senderkey·name·content·template_type·emphasis_type·status·insp_status·buttons 중 하나라도 다르면 참. */
+    private function changed(array $existing, array $row): bool
+    {
+        foreach ($row as $column => $value) {
+            if ((string) ($existing[$column] ?? '') !== (string) $value) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
