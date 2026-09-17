@@ -18,6 +18,7 @@ final class Schema
         'site_settings', 'contents', 'consent_uses', 'consents_given', 'notifications',
         'password_attempts', 'login_events', 'write_rate_limits',
         'extension_schemas',
+        'message_jobs', 'message_recipients', 'alimtalk_templates',
     ];
 
     private const INDEXES = [
@@ -29,6 +30,8 @@ final class Schema
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
         'ux_write_rate_limits',
+        'ix_message_recipients_job', 'ix_message_recipients_mid', 'ux_alimtalk_templates_code',
+        'ix_message_jobs_created',
     ];
 
     /** @var Connection */
@@ -58,7 +61,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '22';
+    public const VERSION = '23';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -130,6 +133,7 @@ final class Schema
         $this->migrateLoginEvents();
         $this->migrateWriteRateLimits();
         $this->migrateProfileImages();
+        $this->migrateAligoMessaging();
         $this->migrateExtensionSchemas();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('system.schema_version', $stamp);
@@ -246,6 +250,87 @@ final class Schema
     {
         $this->addColumnIfMissing('users', 'avatar_file', 'VARCHAR(40) NULL');
         $this->addColumnIfMissing('users', 'avatar_source', 'VARCHAR(10) NULL');
+    }
+
+    /** 알리고 발송 작업·수신자·알림톡 템플릿 사본. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migrateAligoMessaging(): void
+    {
+        foreach ($this->aligoStatements() as $sql) {
+            // 표가 이미 있으면 건너뛴다. 세 표가 한 번에 생기지 않은 설치도 있을 수 있다.
+            if (preg_match('/^CREATE TABLE (\w+)/', $sql, $m) === 1) {
+                if (!$this->tableExists($m[1])) {
+                    $this->db->execute($this->expand($sql));
+                }
+                continue;
+            }
+            // 인덱스는 표를 새로 만들며 이미 함께 생겼을 수 있으니, 있으면 조용히 건너뛴다.
+            preg_match('/^CREATE (?:UNIQUE )?INDEX (\w+)/', $sql, $m);
+            $this->createIndexIfMissing($m[1], $sql);
+        }
+        $this->addColumnIfMissing('users', 'phone', 'VARCHAR(20) NULL');
+    }
+
+    private function aligoStatements(): array
+    {
+        return [
+            'CREATE TABLE message_jobs (
+                id           {AUTO_PK},
+                channel      VARCHAR(8)   NOT NULL,
+                tpl_code     VARCHAR(40)  NULL,
+                senderkey    VARCHAR(64)  NULL,
+                sender       VARCHAR(20)  NOT NULL,
+                title        VARCHAR(60)  NULL,
+                body         TEXT         NOT NULL,
+                failover     SMALLINT     NOT NULL DEFAULT 0,
+                event_key    VARCHAR(40)  NULL,
+                created_by   VARCHAR(64)  NULL,
+                total        INTEGER      NOT NULL DEFAULT 0,
+                success      INTEGER      NOT NULL DEFAULT 0,
+                failure      INTEGER      NOT NULL DEFAULT 0,
+                status       VARCHAR(12)  NOT NULL,
+                test_mode    SMALLINT     NOT NULL DEFAULT 0,
+                created_at   {DATETIME}   NOT NULL,
+                finished_at  {DATETIME}   NULL
+            ){SUFFIX}',
+            'CREATE TABLE message_recipients (
+                id              {AUTO_PK},
+                job_id          BIGINT       NOT NULL,
+                mid             VARCHAR(32)  NULL,
+                msgid           VARCHAR(40)  NULL,
+                phone           VARCHAR(20)  NOT NULL,
+                name            VARCHAR(60)  NULL,
+                user_id         VARCHAR(64)  NULL,
+                body            TEXT         NOT NULL,
+                status          VARCHAR(12)  NOT NULL,
+                rslt            VARCHAR(8)   NULL,
+                rslt_message    VARCHAR(200) NULL,
+                fallback_body   TEXT         NULL,
+                smid            VARCHAR(32)  NULL,
+                fallback_status VARCHAR(12)  NULL,
+                requested_at    {DATETIME}   NULL,
+                sent_at         {DATETIME}   NULL,
+                result_at       {DATETIME}   NULL,
+                checked_at      {DATETIME}   NULL
+            ){SUFFIX}',
+            'CREATE TABLE alimtalk_templates (
+                id             {AUTO_PK},
+                tpl_code       VARCHAR(40)  NOT NULL,
+                senderkey      VARCHAR(64)  NOT NULL,
+                name           VARCHAR(200) NOT NULL,
+                content        TEXT         NOT NULL,
+                template_type  VARCHAR(4)   NULL,
+                emphasis_type  VARCHAR(8)   NULL,
+                status         VARCHAR(4)   NULL,
+                insp_status    VARCHAR(4)   NULL,
+                buttons        TEXT         NULL,
+                enabled        SMALLINT     NOT NULL DEFAULT 0,
+                fetched_at     {DATETIME}   NOT NULL
+            ){SUFFIX}',
+            'CREATE INDEX ix_message_jobs_created ON message_jobs (created_at, id)',
+            'CREATE INDEX ix_message_recipients_job ON message_recipients (job_id, id)',
+            'CREATE INDEX ix_message_recipients_mid ON message_recipients (mid, status)',
+            'CREATE UNIQUE INDEX ux_alimtalk_templates_code ON alimtalk_templates (tpl_code)',
+        ];
     }
 
     /** 알림함 표. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
@@ -546,7 +631,8 @@ final class Schema
             $this->consentUseStatements(), $this->consentsGivenStatements(),
             $this->notificationStatements(),
             $this->passwordThrottleStatements(), $this->loginEventStatements(),
-            $this->writeRateLimitStatements(), $this->extensionSchemaStatements());
+            $this->writeRateLimitStatements(), $this->extensionSchemaStatements(),
+            $this->aligoStatements());
     }
 
     private function accountStatements(): array
@@ -574,6 +660,7 @@ final class Schema
                 withdrawn_at   {DATETIME}   NULL,
                 avatar_file    VARCHAR(40)  NULL,
                 avatar_source  VARCHAR(10)  NULL,
+                phone          VARCHAR(20)  NULL,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL
             ){SUFFIX}';
