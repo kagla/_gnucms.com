@@ -33,19 +33,34 @@ final class HistoryTest extends DatabaseTestCase
             new AlimtalkApi($this->transport, $settings), new SmsApi($this->transport, $settings));
     }
 
-    private function seed(string $channel, string $mid, string $sentAt): int
+    /**
+     * 접수까지만 끝난 작업 하나를 만든다. Dispatch 가 접수 직후에 실제로 남기는 모양
+     * 그대로다 — 수신자는 'accepted'(결과를 기다리는 중)이고 작업도 'sending' 이다.
+     * 작업을 'sent'(전원 성공)로 심어 두면 코드가 만들 수 없는 상태를 시험하는 셈이 된다.
+     *
+     * @param list<string> $phones 수신자 번호. 기본은 한 명이다.
+     */
+    private function seed(string $channel, string $mid, string $sentAt, array $phones = ['01012345678']): int
     {
         $jobId = (int) $this->db->insert('message_jobs', [
             'channel' => $channel, 'sender' => '0212345678', 'body' => '본문', 'failover' => 0,
-            'total' => 1, 'success' => 1, 'failure' => 0, 'status' => 'sent', 'test_mode' => 0,
-            'created_at' => $sentAt,
+            'total' => count($phones), 'success' => count($phones), 'failure' => 0,
+            'status' => 'sending', 'test_mode' => 0, 'created_at' => $sentAt,
         ]);
-        $this->db->insert('message_recipients', [
-            'job_id' => $jobId, 'mid' => $mid, 'phone' => '01012345678', 'body' => '본문',
-            'status' => 'accepted', 'requested_at' => $sentAt, 'sent_at' => $sentAt,
-        ]);
+        foreach ($phones as $phone) {
+            $this->db->insert('message_recipients', [
+                'job_id' => $jobId, 'mid' => $mid, 'phone' => $phone, 'body' => '본문',
+                'status' => 'accepted', 'requested_at' => $sentAt, 'sent_at' => $sentAt,
+            ]);
+        }
 
         return $jobId;
+    }
+
+    private function job(int $jobId): array
+    {
+        return (array) $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
     }
 
     /** 재확인 주기(60초)가 이미 지난 것처럼 만든다. Clock 을 얼리지 않고 checked_at 만 되돌린다. */
@@ -73,6 +88,100 @@ final class HistoryTest extends DatabaseTestCase
         self::assertSame('sent', $row['status']);
         self::assertSame('D1', $row['msgid']);
         self::assertNotNull($row['result_at']);
+
+        // 수신자 결과를 적었으면 작업 집계도 같이 따라와야 한다 — 그러지 않으면 목록과
+        // 상세가 서로 다른 말을 한다.
+        $job = $this->job($jobId);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame(0, (int) $job['failure']);
+        self::assertSame('sent', $job['status']);
+        self::assertNotNull($job['finished_at'], '더 기다릴 수신자가 없으면 그때가 끝난 시각이다');
+    }
+
+    /**
+     * 이 분기가 이 수정의 핵심이다. 예전에는 작업 집계를 Dispatch 가 접수 시각에 한 번
+     * 쓰고 끝이라, 전원이 실패로 돌아온 작업도 목록에서는 "상태 성공 · 성공 N · 실패 0"
+     * 으로 보였다 — 같은 화면의 상세에는 실패가 줄줄이 나열된 채로.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEveryRecipientFailingTurnsTheJobIntoAFailure(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('sms', 'M1', Clock::now(), ['01012345678', '01098765432']);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송실패'],
+            ['mdid' => 'D2', 'receiver' => '01098765432', 'sms_state' => '전송실패'],
+        ]]));
+
+        $this->history->refresh();
+
+        $job = $this->job($jobId);
+        self::assertSame(0, (int) $job['success']);
+        self::assertSame(2, (int) $job['failure']);
+        self::assertSame('failed', $job['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOneSuccessAndOneFailureMakeThePartialStatus(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('sms', 'M1', Clock::now(), ['01012345678', '01098765432']);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송성공'],
+            ['mdid' => 'D2', 'receiver' => '01098765432', 'sms_state' => '전송실패'],
+        ]]));
+
+        $this->history->refresh();
+
+        $job = $this->job($jobId);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame(1, (int) $job['failure']);
+        self::assertSame('partial', $job['status']);
+    }
+
+    /** 아직 결과를 기다리는 수신자가 남아 있으면 작업을 최종 상태로 넘기지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testAJobStaysPendingWhileOneRecipientIsStillWaiting(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('sms', 'M1', Clock::now(), ['01012345678', '01098765432']);
+        // 알리고가 한 명분 결과만 돌려준 상황 — 나머지 한 명은 여전히 'accepted' 다.
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송성공'],
+        ]]));
+
+        $this->history->refresh();
+
+        $job = $this->job($jobId);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame('sending', $job['status'], '한 명이라도 기다리는 중이면 확정하지 않는다');
+        self::assertNull($job['finished_at']);
+    }
+
+    /** 7일이 지나 조회를 포기한 건은 성공도 실패도 아니다 — 작업도 그렇게 말해야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testGivingUpLeavesTheJobUnknownRatherThanFailed(array $config): void
+    {
+        $this->boot($config);
+        $jobId = $this->seed('sms', 'M1', Clock::now(), ['01012345678', '01098765432']);
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01012345678', 'sms_state' => '전송성공'],
+        ]]));
+        $this->history->refresh();
+        // 남은 한 명을 7일이 지난 것처럼 만들어 포기 처리를 태운다.
+        $this->db->update('message_recipients',
+            ['requested_at' => date('Y-m-d H:i:s', strtotime('-8 days'))],
+            'job_id = :j AND status = :s', ['j' => $jobId, 's' => 'accepted']);
+        $this->expireRecheckWindow($jobId);
+
+        // 포기 처리는 그 작업의 집계까지 같이 정리해야 한다 — 포기한 건은 결과 조회를
+        // 더 타지 않으므로, 여기서 정리하지 않으면 작업이 영영 "결과를 기다리는 중"이다.
+        $this->history->refresh();
+
+        $job = $this->job($jobId);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame(0, (int) $job['failure'], '포기한 건을 실패로 세면 관리자가 다시 보낸다');
+        self::assertSame('unknown', $job['status']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -152,6 +261,13 @@ final class HistoryTest extends DatabaseTestCase
             . ' WHERE job_id = ?', [$jobId]);
         self::assertSame('failed', $row['status'], '원 알림톡 결과는 그대로 남는다');
         self::assertSame('sent', $row['fallback_status']);
+
+        // 알림톡이 실패해도 대체문자가 도착했으면 그 사람은 메시지를 받았다 — 작업
+        // 집계에서는 성공이다.
+        $job = $this->job($jobId);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame(0, (int) $job['failure']);
+        self::assertSame('sent', $job['status']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -175,6 +291,11 @@ final class HistoryTest extends DatabaseTestCase
         $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ?', [$jobId]);
         self::assertSame('failed', $row['fallback_status']);
+
+        $job = $this->job($jobId);
+        self::assertSame(0, (int) $job['success']);
+        self::assertSame(1, (int) $job['failure']);
+        self::assertSame('failed', $job['status']);
     }
 
     #[DataProvider('connectionProvider')]

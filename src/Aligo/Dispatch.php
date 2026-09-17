@@ -21,9 +21,14 @@ use GnuCms\Support\Clock;
  *   created_by 요청한 관리자 표시명 (선택)
  *   recipients [['phone' =>, 'name' =>, 'user_id' =>, 'vars' => []], ...]
  *
- * message_jobs.status 는 네 값 중 하나다: 'sending'(발송 중 — 결과 기록 자체가 실패해
- * 여기 머무를 수도 있다), 'sent'(전원 성공), 'failed'(전원 실패), 'partial'(일부만 성공).
- * 이력 화면은 이 네 값을 모두 구분해서 보여줘야 한다.
+ * message_jobs.status 는 JobStatus::VALUES 의 다섯 값 중 하나다 — 그 규칙과 뜻은
+ * JobStatus 한 곳에 적혀 있고, 여기(접수 직후)와 History(결과가 들어올 때마다)가
+ * 같은 규칙을 쓴다. 접수 직후에는 아직 아무 전달도 확인되지 않았으므로 보통
+ * 'sending'(결과를 기다리는 중)이다 — 'sent'(전원 성공)는 결과를 다 확인한 뒤에만 붙는다.
+ *
+ * success·failure 도 두 단계의 뜻이 다르다. 접수 직후에는 알리고가 돌려준 접수
+ * 성공·실패 건수(scnt·fcnt)이고, 결과가 들어오기 시작하면 History 가 수신자 행에서
+ * 다시 세어 전달 성공·실패 건수로 바꾼다. 둘 다 "그 시점에 알 수 있는 가장 정확한 값"이다.
  */
 final class Dispatch
 {
@@ -121,6 +126,7 @@ final class Dispatch
 
         $success = 0;
         $failure = 0;
+        $pending = 0;
         foreach (array_chunk($prepared, self::CHUNK) as $chunk) {
             try {
                 $result = $channel === 'at'
@@ -141,14 +147,22 @@ final class Dispatch
             // 발송 실패와 섞이지 않게 한다. 기록 자체가 실패하면 여기서 그대로 올려보낸다 —
             // 작업이 'sending' 상태로 남는 편이 "결과를 모른다"는 정직한 표시다.
             $this->markChunk($chunk, 'accepted', $result['mid'], null);
-            $success += count($chunk);
+            // 묶음 크기가 아니라 알리고가 돌려준 접수 건수를 쓴다. 500명을 보냈는데
+            // scnt 498·fcnt 2 로 답했다면 2명은 접수조차 되지 않은 것이고, 그걸
+            // count($chunk) 로 세면 이력이 500건 성공이라고 거짓말한다. 어느 2명인지는
+            // 알리고가 알려주지 않으므로 수신자 행은 모두 'accepted' 로 남는다 —
+            // 그 2명은 결과 조회에서 끝내 답이 없어 나중에 'unknown' 으로 정리된다.
+            $success += $result['scnt'];
+            $failure += $result['fcnt'];
+            $pending += count($chunk);
         }
 
-        $status = $failure === 0 ? 'sent' : ($success === 0 ? 'failed' : 'partial');
         $this->db->update('message_jobs', [
             'success' => $success, 'failure' => $failure,
-            'status' => $status,
-            'finished_at' => Clock::now(),
+            'status' => JobStatus::of($success, $failure, $pending, 0),
+            // 아직 결과를 기다리는 수신자가 있으면 아직 끝난 것이 아니다. 결과가 다
+            // 들어오면 History 가 그때 종료 시각을 적는다.
+            'finished_at' => $pending === 0 ? Clock::now() : null,
         ], 'id = :id', ['id' => $jobId]);
 
         return $jobId;

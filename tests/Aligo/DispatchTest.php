@@ -67,8 +67,12 @@ final class DispatchTest extends DatabaseTestCase
         $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
         self::assertSame('sms', $job['channel']);
         self::assertSame(2, (int) $job['total']);
-        self::assertSame(2, (int) $job['success']);
-        self::assertSame('sent', $job['status']);
+        self::assertSame(2, (int) $job['success'], '알리고가 접수한 건수');
+        // 접수 직후에는 아직 아무 전달도 확인되지 않았다 — 'sent'(전원 성공)는 결과를
+        // 다 확인한 뒤에만 붙는다. 여기서 'sent' 라고 적으면 수신자는 "결과를 기다리는
+        // 중"인데 작업은 "성공"이라고 말하는, 한 화면이 스스로 모순되는 이력이 된다.
+        self::assertSame('sending', $job['status']);
+        self::assertNull($job['finished_at'], '아직 기다리는 수신자가 있으면 끝난 것이 아니다');
 
         $rows = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ? ORDER BY id', [$jobId]);
@@ -388,6 +392,54 @@ final class DispatchTest extends DatabaseTestCase
         self::assertSame('accepted', $rows[0]['status']);
         self::assertSame('accepted', $rows[1]['status']);
         self::assertSame('M42', $rows[0]['mid'], '응답의 mid 를 읽어야 결과 조회도 할 수 있다');
+    }
+
+    /**
+     * 알리고는 묶음마다 접수 성공·실패 건수를 돌려준다. 묶음 크기로 세면 알리고가
+     * 2건을 거절했다고 답해도 이력에는 500건 접수 성공으로 남는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testUsesAligoReportedCountsInsteadOfTheChunkSize(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->transport->queue(200, (string) json_encode(
+            ['result_code' => 1, 'msg_id' => 'M1', 'success_cnt' => 3, 'error_cnt' => 2]));
+
+        $recipients = [];
+        for ($i = 0; $i < 5; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) $i, 8, '0', STR_PAD_LEFT)];
+        }
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요', 'recipients' => $recipients]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame(3, (int) $job['success']);
+        self::assertSame(2, (int) $job['failure']);
+        // 이미 확인된 실패가 있으므로 '일부 실패'다 — 나머지는 아직 결과를 기다린다.
+        self::assertSame('partial', $job['status']);
+    }
+
+    /** 알림톡도 같다 — info.scnt·info.fcnt 를 그대로 쓴다. */
+    #[DataProvider('connectionProvider')]
+    public function testAlimtalkUsesAligoReportedCounts(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('at', true);
+        $this->transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '안녕하세요',
+            'status' => 'A', 'inspStatus' => 'APR']]]));
+        $this->templates->fetch();
+        $this->templates->setEnabled('T1', true);
+        $this->transport->queue(200, (string) json_encode(
+            ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 1]]));
+
+        $jobId = $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1', 'recipients' => [
+            ['phone' => '01012345678'], ['phone' => '01098765432'],
+        ]]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame(1, (int) $job['success']);
+        self::assertSame(1, (int) $job['failure']);
     }
 
     #[DataProvider('connectionProvider')]

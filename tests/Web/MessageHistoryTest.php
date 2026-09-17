@@ -26,20 +26,30 @@ final class MessageHistoryTest extends WebTestCase
         return $app;
     }
 
+    /**
+     * 접수까지만 끝난 작업. Dispatch 가 접수 직후에 실제로 남기는 모양 그대로다 —
+     * 수신자가 'accepted'(결과를 기다리는 중)인데 작업은 'sent'(전원 성공)인 조합은
+     * 코드가 만들 수 없는 상태이므로 심지 않는다.
+     */
     private function seed(App $app): int
     {
         $db = $app->db();
         $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
             'body' => '안녕하세요', 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
-            'status' => 'sent', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+            'status' => 'sending', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
         $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M1', 'phone' => '01012345678',
             'body' => '안녕하세요', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
 
         return $jobId;
     }
 
+    /**
+     * 이력 목록은 작업 단위라 수신번호가 아예 실리지 않는다 — 가려서 보여주는 것이
+     * 아니라 애초에 없다. 번호는 상세에서만 보인다(아래 testDetailShowsTheWholeNumber).
+     * 그래서 표시용 하이픈 형태뿐 아니라 숫자 원문도 함께 없는지 본다.
+     */
     #[DataProvider('connectionProvider')]
-    public function testListMasksTheMiddleOfEveryNumber(array $dbConfig): void
+    public function testListCarriesNoRecipientNumbersAtAll(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
         $this->seed($app);
@@ -47,6 +57,7 @@ final class MessageHistoryTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/messages/history'));
 
         self::assertStringNotContainsString('010-1234-5678', $html);
+        self::assertStringNotContainsString('01012345678', $html);
         self::assertStringContainsString('결과를 기다리는 중', $html);
     }
 
@@ -87,7 +98,7 @@ final class MessageHistoryTest extends WebTestCase
     {
         $app = $this->adminApp($dbConfig);
         $db = $app->db();
-        foreach (['sending', 'sent', 'failed', 'partial'] as $status) {
+        foreach (['sending', 'sent', 'failed', 'partial', 'unknown'] as $status) {
             $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
                 'body' => '본문 ' . $status, 'failover' => 0, 'total' => 1, 'success' => 0, 'failure' => 0,
                 'status' => $status, 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
@@ -103,6 +114,7 @@ final class MessageHistoryTest extends WebTestCase
             'badge-success badge-soft">성공</span>',
             'badge-error badge-soft">실패</span>',
             'badge-warning badge-soft">일부 실패</span>',
+            'badge-warning badge-soft">결과를 알 수 없음</span>',
         ] as $badgeMarkup) {
             self::assertSame(1, substr_count($html, $badgeMarkup), $badgeMarkup . ' 배지 개수');
         }

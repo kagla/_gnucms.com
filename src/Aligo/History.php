@@ -147,6 +147,7 @@ final class History
                 'result_at' => Clock::now(),
             ], 'mid = :mid AND phone = :phone', ['mid' => $mid, 'phone' => $phone]);
         }
+        $this->recomputeJobs('mid', $mid);
     }
 
     /**
@@ -165,6 +166,68 @@ final class History
                 'fallback_status' => self::smsSucceeded($item) ? 'sent' : 'failed',
             ], 'smid = :smid AND phone = :phone', ['smid' => $smid, 'phone' => $phone]);
         }
+        $this->recomputeJobs('smid', $smid);
+    }
+
+    /**
+     * 방금 결과를 적은 수신자 행이 속한 작업의 집계를 다시 센다. mid·smid 하나는 한
+     * 작업 안에서만 쓰이지만(500명 분할은 작업 안에서 일어난다), 값이 겹쳐 들어오는
+     * 경우까지 안전하도록 관련된 작업을 모두 다시 센다.
+     */
+    private function recomputeJobs(string $column, string $value): void
+    {
+        $rows = $this->db->select('SELECT DISTINCT job_id FROM '
+            . $this->db->table('message_recipients') . ' WHERE ' . $column . ' = ?', [$value]);
+        foreach ($rows as $row) {
+            $this->recomputeJob((int) $row['job_id']);
+        }
+    }
+
+    /**
+     * 작업의 success·failure·status 를 수신자 행에서 다시 센다. Dispatch 가 접수 직후에
+     * 적은 값은 "알리고가 몇 건을 접수했나"였고, 결과가 들어오기 시작하면 "몇 명에게
+     * 실제로 갔나"로 바뀌어야 한다. 이걸 하지 않으면 전원이 차단으로 실패한 작업이
+     * 목록에서는 "상태 성공 · 성공 500 · 실패 0" 으로 보이고 상세에서는 500건 실패가
+     * 나열되는, 같은 화면이 스스로 모순되는 이력이 된다.
+     *
+     * 대체발송을 켠 알림톡은 fallback_status 가 최종 답이다 — 알림톡이 실패해도
+     * 대체문자가 도착했으면 그 사람은 메시지를 받았다. 그래서 COALESCE 로 대체발송
+     * 결과를 먼저 본다. 각 상태가 무엇으로 집계되는지는 JobStatus 에 적어 뒀다.
+     */
+    private function recomputeJob(int $jobId): void
+    {
+        $effective = 'COALESCE(fallback_status, status)';
+        $tally = $this->db->selectOne(
+            'SELECT'
+            . ' SUM(CASE WHEN ' . $effective . " = 'sent' THEN 1 ELSE 0 END) AS s,"
+            . ' SUM(CASE WHEN ' . $effective . " = 'failed' THEN 1 ELSE 0 END) AS f,"
+            . ' SUM(CASE WHEN ' . $effective . " IN ('queued', 'accepted') THEN 1 ELSE 0 END) AS p,"
+            . ' SUM(CASE WHEN ' . $effective . " = 'unknown' THEN 1 ELSE 0 END) AS u,"
+            . ' COUNT(*) AS c FROM ' . $this->db->table('message_recipients') . ' WHERE job_id = ?',
+            [$jobId]
+        );
+        if ($tally === null || (int) $tally['c'] === 0) {
+            // 수신자 행이 하나도 없으면 셀 것이 없다. 있지도 않은 결과로 상태를 덮지 않는다.
+            return;
+        }
+
+        $pending = (int) $tally['p'];
+        $fields = [
+            'success' => (int) $tally['s'],
+            'failure' => (int) $tally['f'],
+            'status' => JobStatus::of((int) $tally['s'], (int) $tally['f'], $pending, (int) $tally['u']),
+        ];
+        if ($pending === 0) {
+            // 더 기다릴 수신자가 없으면 그때가 이 작업이 끝난 시각이다. 이미 적혀 있으면
+            // 그대로 둔다 — 늦게 온 결과가 종료 시각을 계속 뒤로 미루면 안 된다.
+            $job = $this->db->selectOne('SELECT finished_at FROM '
+                . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+            if ($job !== null && ($job['finished_at'] ?? null) === null) {
+                $fields['finished_at'] = Clock::now();
+            }
+        }
+
+        $this->db->update('message_jobs', $fields, 'id = :id', ['id' => $jobId]);
     }
 
     /**
@@ -178,12 +241,24 @@ final class History
         return str_contains((string) ($item['sms_state'] ?? ''), '성공');
     }
 
-    /** 오래된 건은 조회를 멈춘다. 무한히 묻지 않는다. */
+    /**
+     * 오래된 건은 조회를 멈춘다. 무한히 묻지 않는다. 포기한 뒤에는 그 작업의 집계를
+     * 다시 센다 — 포기한 건은 결과 조회를 더 타지 않으므로 여기서 정리하지 않으면
+     * 작업이 영원히 "결과를 기다리는 중"으로 남는다.
+     */
     private function giveUpOnStaleRows(): void
     {
         $limit = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::GIVE_UP_DAYS * 86400);
+        $jobs = $this->db->select('SELECT DISTINCT job_id FROM ' . $this->db->table('message_recipients')
+            . ' WHERE status = ? AND requested_at < ?', ['accepted', $limit]);
+        if ($jobs === []) {
+            return;
+        }
         $this->db->update('message_recipients', ['status' => 'unknown'],
             'status = :status AND requested_at < :limit', ['status' => 'accepted', 'limit' => $limit]);
+        foreach ($jobs as $job) {
+            $this->recomputeJob((int) $job['job_id']);
+        }
     }
 
     /**
@@ -195,8 +270,16 @@ final class History
     private function giveUpOnStaleFallbacks(): void
     {
         $limit = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::GIVE_UP_DAYS * 86400);
+        $jobs = $this->db->select('SELECT DISTINCT job_id FROM ' . $this->db->table('message_recipients')
+            . ' WHERE fallback_status = ? AND result_at < ?', ['accepted', $limit]);
+        if ($jobs === []) {
+            return;
+        }
         $this->db->update('message_recipients', ['fallback_status' => 'unknown'],
             'fallback_status = :status AND result_at < :limit', ['status' => 'accepted', 'limit' => $limit]);
+        foreach ($jobs as $job) {
+            $this->recomputeJob((int) $job['job_id']);
+        }
     }
 
     public function pendingCount(): int
