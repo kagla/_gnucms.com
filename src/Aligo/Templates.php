@@ -40,7 +40,11 @@ final class Templates
 
         $items = $this->api->templates($account['senderkey']);
 
-        $counts = ['imported' => 0, 'updated' => 0, 'disabled' => 0];
+        // disabledTplCodes 는 이번 fetch() 에서 승인·정상을 잃거나 목록에서 사라져 실제로
+        // 꺼진(=이전에 enabled=1 이었던) 사본의 코드만 담는다. AligoService::importTemplates()
+        // 가 이 코드들로 걸린 예약을 찾아 취소한다 — Templates 는 Dispatch 를 모르므로
+        // 여기서는 "무엇이 꺼졌는지"만 돌려주고 취소는 하지 않는다.
+        $counts = ['imported' => 0, 'updated' => 0, 'disabled' => 0, 'disabled_tpl_codes' => []];
         $seen = [];
         foreach ($items as $item) {
             $code = (string) ($item['templtCode'] ?? '');
@@ -80,6 +84,7 @@ final class Templates
             if ($disabling) {
                 $row['enabled'] = 0;
                 $counts['disabled']++;
+                $counts['disabled_tpl_codes'][] = $code;
             }
             $row['fetched_at'] = Clock::now();
             $this->db->update('alimtalk_templates', $row, 'tpl_code = :code', ['code' => $code]);
@@ -98,6 +103,7 @@ final class Templates
                 }
                 $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => $code]);
                 $counts['disabled']++;
+                $counts['disabled_tpl_codes'][] = $code;
             }
         }
 

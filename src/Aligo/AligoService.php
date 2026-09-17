@@ -24,12 +24,14 @@ final class AligoService
     public Templates $templates;
     public History $history;
 
+    private Connection $db;
     private Dispatch $dispatch;
     private AlimtalkApi $alimtalkApi;
     private SmsApi $smsApi;
 
     public function __construct(Connection $db, Transport $transport, SecretCipher $cipher)
     {
+        $this->db = $db;
         $this->settings = new Settings(new SettingsRepository($db), $cipher);
         $this->alimtalkApi = new AlimtalkApi($transport, $this->settings);
         $this->smsApi = new SmsApi($transport, $this->settings);
@@ -51,6 +53,104 @@ final class AligoService
     public function cancel(int $jobId): array
     {
         return $this->dispatch->cancel($jobId);
+    }
+
+    /**
+     * 채널 발송 허용 스위치를 바꾼다. 관리자 화면에서 채널을 끄는 유일한 통로
+     * (AdminAligoController::toggle())가 이 메서드를 거치므로, 여기서 취소를 조율하지
+     * 않으면 스위치를 꺼도 이미 걸린 예약은 그대로 나간다.
+     *
+     * Settings 는 Dispatch 를 모른다(거꾸로 Dispatch 가 Settings 를 안다) — 순환을
+     * 만들지 않기 위해 Settings::setEnabled() 는 스위치만 바꾸고, 이미 모든 조각을
+     * 쥐고 있는 이 클래스가 그 뒤에 취소를 조율한다.
+     *
+     * 스위치는 취소 결과와 무관하게 반드시 반영된다 — 먼저 스위치를 바꾸고 나서 취소를
+     * 시도하므로, 취소가 일부·전부 실패해도 스위치가 되돌아가지 않는다. "스위치를
+     * 껐는데 예약이 살아 있다"는 상태가 가장 위험하지만, 그 사실을 반환값의
+     * failed·reasons 로 정직하게 드러내는 편이 스위치를 되돌려 "끄기 자체가 실패했다"고
+     * 감추는 것보다 낫다 — 관리자는 후자를 보면 다시 끄기를 시도하지 않는다.
+     *
+     * 켜는 경우는 취소할 것이 없으므로 스위치만 바꾼다.
+     *
+     * @return array{cancelled:int,failed:int,reasons:list<string>}
+     */
+    public function setChannelEnabled(string $channel, bool $on): array
+    {
+        $this->settings->setEnabled($channel, $on);
+        if ($on) {
+            return ['cancelled' => 0, 'failed' => 0, 'reasons' => []];
+        }
+
+        return $this->cancelJobs($this->scheduledJobIdsForChannel($channel));
+    }
+
+    /**
+     * 알리고에서 템플릿을 다시 가져온다. 승인·정상을 잃거나 목록에서 사라져 자동으로
+     * 꺼진 사본이 있으면, 그 템플릿으로 걸린 예약도 함께 취소 요청한다 — 더는 승인
+     * 상태를 확인할 수 없는 템플릿으로 나갈 예약을 그대로 둘 수는 없다.
+     *
+     * Templates 는 Dispatch 를 모른다 — Templates::fetch() 는 무엇이 꺼졌는지(tpl_code
+     * 목록)만 돌려주고, 취소는 모든 조각을 쥔 이 클래스가 그 뒤에서 조율한다.
+     *
+     * @return array{imported:int,updated:int,disabled:int,disabled_tpl_codes:list<string>,
+     *     cancelled:int,failed:int,reasons:list<string>}
+     */
+    public function importTemplates(): array
+    {
+        $counts = $this->templates->fetch();
+        $cancellation = $this->cancelJobs($this->scheduledJobIdsForTemplates($counts['disabled_tpl_codes']));
+
+        return $counts + $cancellation;
+    }
+
+    /** @return list<int> 그 채널(sms 는 lms 포함)에 예약된 채로 남아 있는 작업 id */
+    private function scheduledJobIdsForChannel(string $channel): array
+    {
+        $channels = $channel === 'at' ? ['at'] : ['sms', 'lms'];
+
+        return $this->scheduledJobIdsWhere('channel IN (' . implode(',', array_fill(0, count($channels), '?')) . ')', $channels);
+    }
+
+    /** @param list<string> $tplCodes @return list<int> 그 템플릿 코드들로 예약된 채로 남아 있는 작업 id */
+    private function scheduledJobIdsForTemplates(array $tplCodes): array
+    {
+        if ($tplCodes === []) {
+            return [];
+        }
+
+        return $this->scheduledJobIdsWhere('tpl_code IN (' . implode(',', array_fill(0, count($tplCodes), '?')) . ')', $tplCodes);
+    }
+
+    /** @param list<string> $params @return list<int> */
+    private function scheduledJobIdsWhere(string $condition, array $params): array
+    {
+        $rows = $this->db->select('SELECT id FROM ' . $this->db->table('message_jobs')
+            . ' WHERE status = ? AND ' . $condition, array_merge(['scheduled'], $params));
+
+        return array_map(static fn (array $row): int => (int) $row['id'], $rows);
+    }
+
+    /**
+     * 주어진 작업들을 하나씩 Dispatch::cancel() 로 취소한다. 작업 하나가 실패해도
+     * 나머지 작업의 취소 시도를 막지 않는다 — Dispatch::cancel() 이 mid 하나의 실패를
+     * 삼키지 않는 것과 같은 이유다.
+     *
+     * @param list<int> $jobIds
+     * @return array{cancelled:int,failed:int,reasons:list<string>}
+     */
+    private function cancelJobs(array $jobIds): array
+    {
+        $cancelled = 0;
+        $failed = 0;
+        $reasons = [];
+        foreach ($jobIds as $jobId) {
+            $result = $this->dispatch->cancel($jobId);
+            $cancelled += $result['cancelled'];
+            $failed += $result['failed'];
+            array_push($reasons, ...$result['reasons']);
+        }
+
+        return ['cancelled' => $cancelled, 'failed' => $failed, 'reasons' => $reasons];
     }
 
     /** 발신프로필 목록. 읽기 전용 조회라서 채널 허용 여부와 무관하게 열어 둔다. */

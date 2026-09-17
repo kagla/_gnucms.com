@@ -89,7 +89,7 @@ final class AdminAligoController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
         try {
-            $this->app->aligo()->settings->setEnabled(
+            $this->app->aligo()->setChannelEnabled(
                 (string) ($input['channel'] ?? ''), ($input['action'] ?? '') === 'enable'
             );
         } catch (DomainError $e) {

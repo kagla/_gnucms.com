@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Web;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\App;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\AdminViewFixture;
+use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -60,6 +64,41 @@ final class AligoSettingsTest extends WebTestCase
             'channel' => 'sms', 'action' => 'enable']);
 
         self::assertSame(422, $response->getStatusCode());
+    }
+
+    /**
+     * 화면의 끄기 버튼(=/admin/aligo/toggle)이 실제로 예약을 취소하는지 확인한다.
+     * AdminAligoController::toggle() 이 AligoService::setChannelEnabled() 가 아니라
+     * 예전처럼 Settings::setEnabled() 를 직접 부르는 채로 남아 있으면, 이 테스트는
+     * 스위치는 꺼져도 작업이 여전히 'scheduled'로 남아 실패한다 — 관리자가 채널을 끄는
+     * 유일한 통로가 새 조율 경로를 실제로 타는지는 이 경로로만 검증할 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTurningAChannelOffThroughTheScreenCancelsItsSchedules(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = new FakeAligoTransport();
+        $app->setAligo(new AligoService($app->db(), $transport,
+            new SecretCipher('web-test-secret-that-is-long-enough')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $app->aligo()->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $response = $this->post($app, '/admin/aligo/toggle', ['csrf_token' => $_SESSION['csrf_token'],
+            'channel' => 'sms', 'action' => 'disable']);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertFalse($app->aligo()->settings->isEnabled('sms'));
+
+        $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
     }
 
     #[DataProvider('connectionProvider')]
