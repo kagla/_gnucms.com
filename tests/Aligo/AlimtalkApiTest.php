@@ -76,4 +76,72 @@ final class AlimtalkApiTest extends DatabaseTestCase
         $this->expectException(DomainError::class);
         $api->heartInfo();
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testCallerCannotOverrideCredentials(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0,"info":{"mid":"M1","scnt":1,"fcnt":0}}');
+
+        $api->send(['apikey' => 'CALLER', 'userid' => 'CALLER']);
+
+        $request = $this->transport->requests[0];
+        self::assertSame('KEY', $request['fields']['apikey']);
+        self::assertSame('shop', $request['fields']['userid']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testProfilesCallsCorrectUrlAndReturnsArray(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0,"list":[{"senderKey":"SK1","name":"Store","uuid":"u1","status":"A"}]}');
+
+        $result = $api->profiles();
+
+        self::assertIsArray($result);
+        self::assertCount(1, $result);
+        self::assertStringContainsString('/akv10/profile/list/', $this->transport->requests[0]['url']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testTemplatesCallsCorrectUrlAndReturnsArray(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0,"list":[{"tpl_code":"T1","tpl_name":"Welcome"}]}');
+
+        $result = $api->templates('SK1');
+
+        self::assertIsArray($result);
+        self::assertCount(1, $result);
+        $request = $this->transport->requests[0];
+        self::assertStringContainsString('/akv10/template/list/', $request['url']);
+        self::assertSame('SK1', $request['fields']['senderkey']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testDetailCallsCorrectUrlAndReturnsArray(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0,"list":[{"sms_cnt":1,"sts":"complete"}]}');
+
+        $result = $api->detail('M123');
+
+        self::assertIsArray($result);
+        self::assertCount(1, $result);
+        $request = $this->transport->requests[0];
+        self::assertStringContainsString('/akv10/history/detail/', $request['url']);
+        self::assertSame('M123', $request['fields']['mid']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testMalformedListInSuccessfulResponseReturnsEmptyArray(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0,"list":"not-an-array"}');
+
+        $result = $api->profiles();
+
+        self::assertIsArray($result);
+        self::assertEmpty($result);
+    }
 }

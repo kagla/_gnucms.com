@@ -27,12 +27,14 @@ final class AlimtalkApi
 
     public function profiles(): array
     {
-        return $this->call('/akv10/profile/list/', [])['list'] ?? [];
+        $list = $this->call('/akv10/profile/list/', [])['list'] ?? [];
+        return is_array($list) ? $list : [];
     }
 
     public function templates(string $senderkey): array
     {
-        return $this->call('/akv10/template/list/', ['senderkey' => $senderkey])['list'] ?? [];
+        $list = $this->call('/akv10/template/list/', ['senderkey' => $senderkey])['list'] ?? [];
+        return is_array($list) ? $list : [];
     }
 
     public function send(array $fields): array
@@ -48,7 +50,8 @@ final class AlimtalkApi
 
     public function detail(string $mid): array
     {
-        return $this->call('/akv10/history/detail/', ['mid' => $mid, 'limit' => '500'])['list'] ?? [];
+        $list = $this->call('/akv10/history/detail/', ['mid' => $mid, 'limit' => '500'])['list'] ?? [];
+        return is_array($list) ? $list : [];
     }
 
     private function call(string $path, array $fields): array
@@ -58,10 +61,10 @@ final class AlimtalkApi
             throw DomainError::validation(['api_key' => '알리고 계정을 먼저 저장해 주세요.']);
         }
 
-        $response = $this->transport->post(self::BASE . $path, $fields + [
+        $response = $this->transport->post(self::BASE . $path, [
             'apikey' => $account['alimtalk_api_key'],
             'userid' => $account['user_id'],
-        ]);
+        ] + $fields);
 
         $decoded = json_decode($response['body'], true);
         if (!is_array($decoded)) {
