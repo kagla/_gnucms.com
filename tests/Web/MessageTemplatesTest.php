@@ -62,11 +62,15 @@ final class MessageTemplatesTest extends WebTestCase
 
     /**
      * 화면의 "다시 가져오기" 버튼(=/admin/messages/templates/fetch)이 실제로 예약을
-     * 취소하는지 확인한다. AdminMessageController::fetchTemplates() 가
-     * AligoService::importTemplates() 가 아니라 예전처럼 Templates::fetch() 를 직접
-     * 부르는 채로 남아 있으면, 이 테스트는 스위치(사본이 꺼지는 것)는 그대로 일어나도
-     * 작업이 여전히 'scheduled'로 남아 실패한다 — 관리자가 템플릿을 다시 가져오는 유일한
-     * 통로가 새 조율 경로를 실제로 타는지는 이 경로로만 검증할 수 있다.
+     * 취소하는지, 그리고 그 취소 결과가 화면에 보이는지 확인한다.
+     * AdminMessageController::fetchTemplates() 가 AligoService::importTemplates() 가
+     * 아니라 예전처럼 Templates::fetch() 를 직접 부르는 채로 남아 있으면, 이 테스트는
+     * 스위치(사본이 꺼지는 것)는 그대로 일어나도 작업이 여전히 'scheduled'로 남아
+     * 실패한다 — 관리자가 템플릿을 다시 가져오는 유일한 통로가 새 조율 경로를 실제로
+     * 타는지는 이 경로로만 검증할 수 있다. 취소 결과가 리다이렉트 쿼리(cancel_ok)에
+     * 실려 오는지, 그리고 그 숫자가 가져오기 안내 문장에 실제로 반영되는지까지
+     * 함께 본다 — 설정 화면(AdminAligoController::toggle())은 이미 이 숫자를
+     * 보여주므로, 여기서도 같은 사실을 침묵하면 안 된다.
      */
     #[DataProvider('connectionProvider')]
     public function testRefetchingThroughTheScreenCancelsScheduleOfATemplateThatLostApproval(array $dbConfig): void
@@ -107,6 +111,35 @@ final class MessageTemplatesTest extends WebTestCase
         $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
             . ' WHERE id = ?', [$jobId]);
         self::assertSame('cancelled', $job['status']);
+
+        // 취소 결과가 리다이렉트에 숫자로 실려 오고, 그 숫자가 화면 문장에 그대로 반영된다.
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('1', $query['cancel_ok'] ?? null);
+        self::assertSame('0', $query['cancel_failed'] ?? null);
+
+        $html = $this->body($this->get($app, '/admin/messages/templates', $query));
+        self::assertStringContainsString('승인을 잃어 예약돼 있던 발송 1개를 함께 취소했습니다', $html);
+    }
+
+    /**
+     * FIX 2: 취소가 일부만 성공하면(500명이 넘는 작업처럼 mid 가 여러 개면 일부 묶음은
+     * 발송 5분 전을 지나 취소가 거절될 수 있다) 그 사실이 "취소했습니다"로 뭉개지지
+     * 않고 몇 개가 남았는지 그대로 문장에 남아야 한다 — 부분 실패를 성공 문장으로
+     * 매끈하게 다듬으면 안 된다는 것이 이 기능 전체의 요구사항이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheTemplateTabNoticeStillShowsAPartialCancellationNotAsASuccess(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/messages/templates',
+            ['imported' => '0', 'updated' => '1', 'disabled' => '1', 'cancel_ok' => '1', 'cancel_failed' => '1']));
+
+        self::assertStringContainsString(
+            '승인을 잃은 템플릿에 걸린 예약 2개 중 1개를 취소했고, 1개는 발송 5분 전을 지나 취소하지 못했습니다', $html
+        );
+        // "취소했습니다"만 있고 실패를 뭉개는 문장은 나오면 안 된다.
+        self::assertStringNotContainsString('승인을 잃어 예약돼 있던 발송', $html);
     }
 
     #[DataProvider('connectionProvider')]

@@ -69,11 +69,21 @@ final class AdminMessageController
             return $this->render($request, $response->withStatus(422), $this->firstError($e));
         }
 
-        return $this->redirect($request, $response, 'admin.messages.templates', [
+        $query = [
             'imported' => (string) (int) $counts['imported'],
             'updated' => (string) (int) $counts['updated'],
             'disabled' => (string) (int) $counts['disabled'],
-        ]);
+        ];
+        // 승인·정상 상태를 잃어 자동으로 꺼진 템플릿에 걸려 있던 예약의 취소 결과.
+        // AdminAligoController::toggle() 과 같은 규칙으로, 취소할 것이 아예 없었으면
+        // (cancelled=0, failed=0) 문장에 더할 것이 없으므로 숫자 자체를 싣지 않는다
+        // (templatesNotice() 도 이 값이 없으면 문장에 취소 얘기를 더하지 않는다).
+        if ($counts['cancelled'] > 0 || $counts['failed'] > 0) {
+            $query['cancel_ok'] = (string) (int) $counts['cancelled'];
+            $query['cancel_failed'] = (string) (int) $counts['failed'];
+        }
+
+        return $this->redirect($request, $response, 'admin.messages.templates', $query);
     }
 
     public function toggleTemplate(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -479,7 +489,41 @@ final class AdminMessageController
         return sprintf('가져오기 %d건, 갱신 %d건, 사용 중지 %d건',
             self::countParam($query, 'imported'),
             self::countParam($query, 'updated'),
-            self::countParam($query, 'disabled'));
+            self::countParam($query, 'disabled'))
+            . $this->templateCancellationSentence($query);
+    }
+
+    /**
+     * 승인·정상 상태를 잃어 자동으로 꺼진 템플릿에 걸려 있던 예약의 취소 결과.
+     * fetchTemplates() 가 cancel_ok·cancel_failed 로 실어 넘긴 숫자만으로 여기서
+     * 문장을 짓는다(클래스 주석의 원칙 그대로 — 문장 자체를 쿼리로 받지 않는다).
+     * AdminAligoController::savedNotice() 와 같은 규칙을 이 탭의 말투로 옮긴 것이다 —
+     * 채널을 끌 때와 마찬가지로 템플릿이 승인을 잃을 때도 예약이 함께 취소되므로,
+     * 두 화면이 같은 사실을 서로 다르게(한쪽은 숫자로, 한쪽은 침묵으로) 말하면 안
+     * 된다. 부분 취소("일부만 취소")는 절대 "취소했습니다"로 뭉개지 않는다 — 취소
+     * 요청은 갔지만 그중 일부는 발송 5분 전을 지나 여전히 예약된 채로 남아 있다는
+     * 사실이 이 기능 전체의 존재 이유다.
+     */
+    private function templateCancellationSentence(array $query): string
+    {
+        $ok = self::countParam($query, 'cancel_ok');
+        $failed = self::countParam($query, 'cancel_failed');
+        if ($ok === 0 && $failed === 0) {
+            return '.';
+        }
+        if ($failed === 0) {
+            return sprintf(' 승인을 잃어 예약돼 있던 발송 %d개를 함께 취소했습니다.', $ok);
+        }
+        if ($ok === 0) {
+            return sprintf(
+                ' 승인을 잃은 템플릿에 걸린 예약을 취소하려 했지만 %d개는 발송 5분 전을 지나 취소하지 못했습니다.', $failed
+            );
+        }
+
+        return sprintf(
+            ' 승인을 잃은 템플릿에 걸린 예약 %d개 중 %d개를 취소했고, %d개는 발송 5분 전을 지나 취소하지 못했습니다.',
+            $ok + $failed, $ok, $failed
+        );
     }
 
     /**
