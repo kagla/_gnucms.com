@@ -19,9 +19,10 @@ use GnuCms\Support\Clock;
  *   failover   알림톡 실패 시 문자 대체발송 (선택)
  *   event_key  이 발송을 일으킨 알림 이벤트 (선택)
  *   created_by 요청한 관리자 표시명 (선택)
+ *   scheduled_at 예약 시각. 비우면 즉시 발송 — SendTime::parse() 가 검증해 UTC로 바꾼다 (선택)
  *   recipients [['phone' =>, 'name' =>, 'user_id' =>, 'vars' => []], ...]
  *
- * message_jobs.status 는 JobStatus::VALUES 의 다섯 값 중 하나다 — 그 규칙과 뜻은
+ * message_jobs.status 는 JobStatus::VALUES 의 일곱 값 중 하나다 — 그 규칙과 뜻은
  * JobStatus 한 곳에 적혀 있고, 여기(접수 직후)와 History(결과가 들어올 때마다)가
  * 같은 규칙을 쓴다. 접수 직후에는 아직 아무 전달도 확인되지 않았으므로 보통
  * 'sending'(결과를 기다리는 중)이다 — 'sent'(전원 성공)는 결과를 다 확인한 뒤에만 붙는다.
@@ -61,6 +62,10 @@ final class Dispatch
                 ($channel === 'at' ? '알림톡' : '문자') . ' 발송이 허용되어 있지 않습니다. 설정에서 허용해 주세요.']);
         }
         $account = $this->settings->runtime();
+
+        // 예약 시각은 수신자를 준비하기 전에, 무엇보다 먼저 검증한다 — 잘못된 시각을
+        // 나중에 걸러내면 이미 만들어진 작업 행이나 알리고 호출이 유령으로 남는다.
+        $scheduledAt = SendTime::parse($request['scheduled_at'] ?? null);
 
         [$body, $tplCode] = $this->resolveBody($channel, $request);
         $title = trim((string) ($request['title'] ?? '')) ?: null;
@@ -106,8 +111,9 @@ final class Dispatch
             'created_by' => $request['created_by'] ?? null,
             'total' => count($prepared),
             'success' => 0, 'failure' => 0,
-            'status' => 'sending',
+            'status' => $scheduledAt !== null ? 'scheduled' : 'sending',
             'test_mode' => $account['test_mode'] ? 1 : 0,
+            'scheduled_at' => $scheduledAt,
             'created_at' => Clock::now(),
         ]);
 
@@ -130,8 +136,8 @@ final class Dispatch
         foreach (array_chunk($prepared, self::CHUNK) as $chunk) {
             try {
                 $result = $channel === 'at'
-                    ? $this->alimtalk->send($this->alimtalkFields($chunk, $request, $account))
-                    : $this->sms->sendMass($this->smsFields($chunk, $stored, $title, $account));
+                    ? $this->alimtalk->send($this->alimtalkFields($chunk, $request, $account, $scheduledAt))
+                    : $this->sms->sendMass($this->smsFields($chunk, $stored, $title, $account, $scheduledAt));
             } catch (DomainError | TransportFailure $e) {
                 // 발송 자체가 실패했다(응답이 없거나 알리고가 거절했다). 재시도하지 않는다 —
                 // 응답을 못 받은 채 다시 보내면 중복 발송이 된다.
@@ -159,10 +165,14 @@ final class Dispatch
 
         $this->db->update('message_jobs', [
             'success' => $success, 'failure' => $failure,
-            'status' => JobStatus::of($success, $failure, $pending, 0),
-            // 아직 결과를 기다리는 수신자가 있으면 아직 끝난 것이 아니다. 결과가 다
+            // 예약 건은 집계와 무관하게 'scheduled'다 — 접수 건수가 곧 전달 결과가 아니고,
+            // 실제로 나가는 시각은 아직 오지 않았다. JobStatus::of() 는 이 두 값을 모른다
+            // (JobStatus 문서 참고) — 예약 여부는 호출부가 먼저 판단해야 하는 사실이다.
+            'status' => $scheduledAt !== null ? 'scheduled' : JobStatus::of($success, $failure, $pending, 0),
+            // 예약 건은 아직 나가지도 않았으므로 끝난 시각이 있을 수 없다. 그 외에는
+            // 아직 결과를 기다리는 수신자가 있으면 아직 끝난 것이 아니다 — 결과가 다
             // 들어오면 History 가 그때 종료 시각을 적는다.
-            'finished_at' => $pending === 0 ? Clock::now() : null,
+            'finished_at' => $scheduledAt !== null ? null : ($pending === 0 ? Clock::now() : null),
         ], 'id = :id', ['id' => $jobId]);
 
         return $jobId;
@@ -223,7 +233,7 @@ final class Dispatch
         return 'sms';
     }
 
-    private function alimtalkFields(array $chunk, array $request, array $account): array
+    private function alimtalkFields(array $chunk, array $request, array $account, ?string $scheduledAt): array
     {
         $fields = [
             'senderkey' => $account['senderkey'],
@@ -231,6 +241,10 @@ final class Dispatch
             'sender' => $account['sender'],
             'testMode' => $account['test_mode'] ? 'Y' : 'N',
         ];
+        if ($scheduledAt !== null) {
+            // 알림톡은 문자와 달리 한 칸(senddate)에 날짜·시간을 함께 담는다.
+            $fields['senddate'] = SendTime::alimtalk($scheduledAt);
+        }
         if (!empty($request['failover'])) {
             $fields['failover'] = 'Y';
         }
@@ -251,7 +265,7 @@ final class Dispatch
         return $fields;
     }
 
-    private function smsFields(array $chunk, string $stored, ?string $title, array $account): array
+    private function smsFields(array $chunk, string $stored, ?string $title, array $account, ?string $scheduledAt): array
     {
         $fields = [
             'sender' => $account['sender'],
@@ -259,6 +273,10 @@ final class Dispatch
             'msg_type' => strtoupper($stored),
             'testmode_yn' => $account['test_mode'] ? 'Y' : 'N',
         ];
+        if ($scheduledAt !== null) {
+            // 문자는 날짜(rdate)와 시간(rtime)을 각각 다른 칸에 담는다.
+            $fields += SendTime::sms($scheduledAt);
+        }
         if ($stored === 'lms' && $title !== null) {
             $fields['title'] = $title;
         }

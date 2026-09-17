@@ -13,6 +13,7 @@ use GnuCms\Aligo\Templates;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\DatabaseTestCase;
 use GnuCms\Tests\Support\FakeAligoTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -457,5 +458,81 @@ final class DispatchTest extends DatabaseTestCase
         self::assertSame('Y', $this->transport->requests[0]['fields']['testmode_yn']);
         self::assertSame(1, (int) $this->db->selectOne('SELECT test_mode FROM '
             . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId])['test_mode']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSchedulesInsteadOfSendingNow(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $at, 'recipients' => [['phone' => '01012345678']]]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status']);
+        self::assertNotNull($job['scheduled_at']);
+
+        $fields = $this->transport->requests[0]['fields'];
+        self::assertArrayHasKey('rdate', $fields);
+        self::assertArrayHasKey('rtime', $fields);
+    }
+
+    /** 알림톡은 rdate·rtime 이 아니라 senddate 한 칸을 쓴다. */
+    #[DataProvider('connectionProvider')]
+    public function testAlimtalkScheduleUsesSenddate(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('at', true);
+        $this->transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
+            'status' => 'A', 'inspStatus' => 'APR']]]));
+        $this->templates->fetch();
+        $this->templates->setEnabled('T1', true);
+        $this->transport->queue(200, (string) json_encode(
+            ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $jobId = $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678', 'vars' => ['이름' => '홍길동']]]]);
+
+        $fields = $this->transport->requests[1]['fields'];
+        self::assertMatchesRegularExpression('/^\d{14}$/D', $fields['senddate']);
+        self::assertArrayNotHasKey('rdate', $fields);
+        self::assertArrayNotHasKey('rtime', $fields);
+        self::assertSame('scheduled', $this->db->selectOne('SELECT status FROM '
+            . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId])['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testARefusedScheduleCreatesNoJobAndSendsNothing(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+
+        try {
+            $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+                'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 60),
+                'recipients' => [['phone' => '01012345678']]]);
+            self::fail('10분 안쪽 예약은 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('scheduled_at', $e->details());
+        }
+        self::assertSame([], $this->transport->requests);
+        self::assertSame(0, (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM '
+            . $this->db->table('message_jobs'))['c']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAScheduledSendStillNeedsTheChannelSwitch(array $config): void
+    {
+        $this->boot($config);
+        $this->expectException(DomainError::class);
+        $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600),
+            'recipients' => [['phone' => '01012345678']]]);
     }
 }
