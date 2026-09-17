@@ -298,6 +298,66 @@ final class Dispatch
         return $fields;
     }
 
+    /**
+     * 예약된 작업을 취소한다. 500명이 넘는 작업은 묶음마다 다른 mid 를 갖고, 그중
+     * 일부만 취소될 수 있다(발송 5분 전이 지난 묶음은 알리고가 거절한다). 그 사실을
+     * 삼키면 관리자는 전부 멈춘 줄 안다 — 그래서 개수를 세어 그대로 돌려준다.
+     *
+     * @return array{cancelled:int,failed:int,reasons:list<string>}
+     */
+    public function cancel(int $jobId): array
+    {
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        if ($job === null || $job['status'] !== 'scheduled') {
+            throw DomainError::validation(['job' => '예약된 작업만 취소할 수 있습니다.']);
+        }
+
+        // job_id는 스케줄이 걸려 있어도 job.status 하나만으로는 어느 수신자가 실제로
+        // 알리고에 접수됐는지 알 수 없다 — 한 묶음은 접수(mid 있음)되고 다른 묶음은
+        // 접수 자체가 실패(mid 없음)했을 수 있다. status = 'accepted' 로도 한 번 더
+        // 좁혀 두면, 이 작업을 다시 취소하려 시도할 때(먼저 취소된 mid가 섞여 있어도)
+        // 이미 성공적으로 취소된 mid 를 또 부르지 않는다.
+        $rows = $this->db->select('SELECT DISTINCT mid FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? AND mid IS NOT NULL AND status = ?', [$jobId, 'accepted']);
+        $mids = array_map(static fn (array $row): string => (string) $row['mid'], $rows);
+
+        $cancelled = 0;
+        $failed = 0;
+        $reasons = [];
+        foreach ($mids as $mid) {
+            try {
+                if ($job['channel'] === 'at') {
+                    $this->alimtalk->cancel($mid);
+                } else {
+                    $this->sms->cancel($mid);
+                }
+            } catch (DomainError | TransportFailure $e) {
+                // 이 mid 의 취소 결과를 알 수 없는 채로 다시 부르지 않는다 — 발송과 같은
+                // 이유다. 실패 하나가 나머지 mid 의 취소 시도를 막지도 않는다.
+                $failed++;
+                $reasons[] = $mid . ': ' . $e->getMessage();
+                continue;
+            }
+            $cancelled++;
+            $this->db->update('message_recipients', ['status' => 'cancelled'],
+                'job_id = :job_id AND mid = :mid AND status = :status',
+                ['job_id' => $jobId, 'mid' => $mid, 'status' => 'accepted']);
+        }
+
+        // 취소한 mid 가 하나도 없거나(있을 수 없는 상황이지만 방어적으로), 하나라도
+        // 실패했다면 작업은 아직 취소된 것이 아니다 — 나갈 메시지가 남아 있는데
+        // 취소됐다고 적으면 거짓말이다. 상태를 그대로 둔다.
+        if ($cancelled > 0 && $failed === 0) {
+            $this->db->update('message_jobs', [
+                'status' => 'cancelled',
+                'cancelled_at' => Clock::now(),
+            ], 'id = :id', ['id' => $jobId]);
+        }
+
+        return ['cancelled' => $cancelled, 'failed' => $failed, 'reasons' => $reasons];
+    }
+
     private function markChunk(array $chunk, string $status, ?string $mid, ?string $reason): void
     {
         foreach ($chunk as $one) {

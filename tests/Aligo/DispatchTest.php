@@ -589,4 +589,103 @@ final class DispatchTest extends DatabaseTestCase
             'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600),
             'recipients' => [['phone' => '01012345678']]]);
     }
+
+    /** @return array{0:int} 예약된 작업 id 하나 (502명, 두 묶음 500+2, 둘 다 접수됨) */
+    private function bookScheduledJobOfFiveHundredTwo(): int
+    {
+        $this->queueSmsOk(500);
+        $this->queueSmsOk(2);
+        $recipients = [];
+        for ($i = 0; $i < 502; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) $i, 8, '0', STR_PAD_LEFT)];
+        }
+
+        return $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600),
+            'recipients' => $recipients]);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCancelsEveryMidOfTheJob(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $jobId = $this->bookScheduledJobOfFiveHundredTwo();
+
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $requestsBeforeCancel = count($this->transport->requests);
+
+        $result = $this->dispatch->cancel($jobId);
+
+        self::assertSame(2, $result['cancelled']);
+        self::assertSame(0, $result['failed']);
+        self::assertSame([], $result['reasons']);
+        // mid 는 묶음마다 하나다 — 502명이라도 취소 요청은 2건(mid 개수)이어야 한다.
+        // 수신자 수만큼(502건) 부르면 알리고에 존재하지도 않는 취소 요청을 500번 더
+        // 보내는 셈이다.
+        self::assertCount($requestsBeforeCancel + 2, $this->transport->requests);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+        self::assertNotNull($job['cancelled_at']);
+
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? ORDER BY id', [$jobId]);
+        foreach ($rows as $row) {
+            self::assertSame('cancelled', $row['status']);
+        }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testReportsAPartialCancellationInsteadOfHidingIt(array $config): void
+    {
+        // 두 묶음 중 하나만 취소된다. 작업은 취소되지 않은 것으로 남고, 이유가 그대로 올라온다.
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $jobId = $this->bookScheduledJobOfFiveHundredTwo();
+
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $this->transport->queue(200, '{"result_code":-804,"message":"too late"}');
+
+        $result = $this->dispatch->cancel($jobId);
+
+        self::assertSame(1, $result['cancelled']);
+        self::assertSame(1, $result['failed']);
+        self::assertNotSame([], $result['reasons']);
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '남은 묶음이 아직 나갈 것이므로 취소됐다고 적으면 안 된다');
+        self::assertNull($job['cancelled_at']);
+
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? ORDER BY id', [$jobId]);
+        // 500명 묶음(mid=M500)이 먼저 취소됐고, 2명 묶음(mid=M2)은 취소에 실패해 그대로다.
+        self::assertSame('cancelled', $rows[0]['status']);
+        self::assertSame('accepted', $rows[501]['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRefusesToCancelWhatIsNotScheduled(array $config): void
+    {
+        // 즉시 발송한 작업은 취소할 수 없다 — 이미 나갔다.
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+        $immediateJobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $requestsBeforeCancel = count($this->transport->requests);
+        try {
+            $this->dispatch->cancel($immediateJobId);
+            self::fail('예약이 아닌 작업은 취소할 수 없어야 한다');
+        } catch (DomainError $e) {
+            // 기대한 대로다.
+        }
+        // 예외가 호출 자체를 막았는지, 아니면 알리고를 먼저 부르고 나서 실패했는지가
+        // 갈린다 — 요청 수가 그대로여야 후자가 아니라는 증거가 된다.
+        self::assertCount($requestsBeforeCancel, $this->transport->requests,
+            '취소 요청이 알리고로 나가면 안 된다');
+    }
 }

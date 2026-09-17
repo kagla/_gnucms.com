@@ -47,6 +47,12 @@ final class AligoService
         return $this->dispatch->send($request);
     }
 
+    /** 예약된 작업 취소. Dispatch::cancel() 로 그대로 넘긴다 — 같은 문을 쓴다. */
+    public function cancel(int $jobId): array
+    {
+        return $this->dispatch->cancel($jobId);
+    }
+
     /** 발신프로필 목록. 읽기 전용 조회라서 채널 허용 여부와 무관하게 열어 둔다. */
     public function profiles(): array
     {
