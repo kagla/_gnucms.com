@@ -14,6 +14,7 @@ use GnuCms\Web\Controller\FileController;
 use GnuCms\Web\Controller\PostController;
 use GnuCms\Web\Controller\PageController;
 use GnuCms\Web\Controller\AdminAligoController;
+use GnuCms\Web\Controller\AdminMessageController;
 use GnuCms\Web\Controller\AdminCmsController;
 use GnuCms\Web\Controller\CmsImageController;
 use GnuCms\Web\Controller\CommentController;
@@ -122,6 +123,12 @@ final class Routes
         $slim->post('/admin/aligo/verify', [$aligo, 'verify'])->setName('admin.aligo.verify');
         $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
         $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
+        $msg = new AdminMessageController($app);
+        $slim->get('/admin/messages/templates', [$msg, 'templates'])->setName('admin.messages.templates');
+        $slim->post('/admin/messages/templates/fetch', [$msg, 'fetchTemplates'])
+            ->setName('admin.messages.templates.fetch');
+        $slim->post('/admin/messages/templates/toggle', [$msg, 'toggleTemplate'])
+            ->setName('admin.messages.templates.toggle');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
         $slim->post('/admin/content/trash/{id:[0-9]+}/restore', [$cms, 'restore'])->setName('admin.content.restore');
