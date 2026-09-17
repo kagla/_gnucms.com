@@ -137,7 +137,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
         <div class="form-section">
           <h2 class="form-section-title">미리보기</h2>
           <div class="alert alert-info">
-            <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?></p>
+            <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?><?php if ($preview['withdrawn'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['withdrawn']) ?>명은 탈퇴한 회원이라 제외됩니다<?php endif ?></p>
             <?php if ($preview['sample'] !== null): ?>
               <p class="card-sub">첫 번째 수신자에게 나갈 본문<?php if ($preview['bytes'] !== null): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?></p>
               <pre class="tpl-detail-content"><?= $this->e($preview['sample']) ?></pre>

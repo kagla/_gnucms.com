@@ -154,10 +154,22 @@ final class AdminMessageController
 
         $recipients = [];
         $skipped = 0;
+        $withdrawn = 0;
         foreach ((array) ($input['members'] ?? []) as $userId) {
-            $row = $this->app->db()->selectOne('SELECT id, display_name, phone FROM '
+            $row = $this->app->db()->selectOne('SELECT id, display_name, phone, status FROM '
                 . $this->app->db()->table('users') . ' WHERE id = ?', [(string) $userId]);
-            if ($row === null || ($row['phone'] ?? '') === '') {
+            if ($row === null) {
+                $skipped++;
+                continue;
+            }
+            // 탈퇴 회원은 번호가 남아 있어도(탈퇴 처리는 번호를 지우지 않는다) 고를 수 없다.
+            // "번호 없음"과 다른 사유이므로 같은 집계에 섞지 않는다 — 관리자가 어느 쪽인지
+            // 구분해서 볼 수 있어야 한다.
+            if ((string) $row['status'] === 'withdrawn') {
+                $withdrawn++;
+                continue;
+            }
+            if (($row['phone'] ?? '') === '') {
                 $skipped++;
                 continue;
             }
@@ -182,6 +194,7 @@ final class AdminMessageController
                 'recipients' => $recipients,
             ],
             'skipped' => $skipped,
+            'withdrawn' => $withdrawn,
         ];
     }
 
@@ -204,6 +217,7 @@ final class AdminMessageController
             'sample' => $sample,
             'count' => count($recipients),
             'skipped' => $collected['skipped'],
+            'withdrawn' => $collected['withdrawn'],
             'bytes' => $sample === null ? null : MessageText::byteLength($sample),
             'classify' => $sample === null ? null : MessageText::channelFor($sample),
         ];
@@ -244,7 +258,11 @@ final class AdminMessageController
         return array_map([$this, 'withPhoneDisplay'], $rows);
     }
 
-    /** 이름·이메일로 회원을 찾는다. 이미 선택된 회원은 "선택된 회원" 목록에 있으므로 여기 또 보여주지 않는다. */
+    /**
+     * 이름·이메일로 회원을 찾는다. 이미 선택된 회원은 "선택된 회원" 목록에 있으므로 여기
+     * 또 보여주지 않는다. 탈퇴 회원은 여기서부터 제외한다 — 탈퇴 처리로 이름·이메일이
+     * 익명화될 뿐 번호는 지워지지 않으므로, 걸러 두지 않으면 검색으로 다시 찾아 고를 수 있다.
+     */
     private function searchMembers(string $q, array $excludeIds): array
     {
         if ($q === '') {
@@ -253,8 +271,9 @@ final class AdminMessageController
         $needle = '%' . mb_strtolower($q) . '%';
         $rows = $this->app->db()->select('SELECT id, display_name, phone, email FROM '
             . $this->app->db()->table('users')
-            . ' WHERE LOWER(display_name) LIKE ? OR LOWER(email) LIKE ? ORDER BY id DESC LIMIT 20',
-            [$needle, $needle]);
+            . ' WHERE (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?) AND status <> ?'
+            . ' ORDER BY id DESC LIMIT 20',
+            [$needle, $needle, 'withdrawn']);
         $rows = array_values(array_filter(
             $rows,
             static fn (array $row): bool => !in_array((string) $row['id'], $excludeIds, true)
