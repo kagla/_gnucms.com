@@ -236,6 +236,71 @@ final class DispatchTest extends DatabaseTestCase
         self::assertNotSame('', (string) $row['rslt_message']);
     }
 
+    /**
+     * 알리고가 실제로 받아들인 뒤, 그 결과를 'accepted'로 남기는 DB 쓰기 자체가 실패하면
+     * — 보냈는데 이력에는 "안 보냄"으로 남는 상황이 된다. 그 기록을 보고 관리자가 다시
+     * 보내면 실제 전화기에 중복 발송이 된다. 그러니 이 경우는 발송 실패(catch)로 떨어져
+     * 'failed'로 덮이면 안 되고, 예외가 그대로 올라가 작업이 'sending'(=모른다)으로
+     * 남아야 한다. status 칼럼에 UPDATE 가 걸리면 실패하는 트리거로 그 DB 쓰기 실패를
+     * 실제로 일으킨다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAcceptedChunkIsNotMisrecordedAsFailedWhenRecordingItFails(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+
+        $table = $this->db->table('message_recipients');
+        if (str_starts_with($config['dsn'], 'sqlite:')) {
+            $this->db->execute("CREATE TRIGGER trg_boom BEFORE UPDATE OF status ON $table "
+                . "WHEN NEW.status = 'accepted' BEGIN SELECT RAISE(ABORT, '강제 실패'); END");
+        } else {
+            $this->db->execute("CREATE TRIGGER trg_boom BEFORE UPDATE ON $table FOR EACH ROW "
+                . "BEGIN IF NEW.status = 'accepted' THEN SIGNAL SQLSTATE '45000' "
+                . "SET MESSAGE_TEXT = '강제 실패'; END IF; END");
+        }
+
+        try {
+            $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+                'recipients' => [['phone' => '01012345678']]]);
+            self::fail('기록 실패는 그대로 드러나야 한다');
+        } catch (DomainError $e) {
+            // 기대한 대로다 — 전송은 성공했지만 결과를 남기지 못했다는 사실이 조용히
+            // 삼켜지지 않고 호출자에게 올라간다.
+        }
+
+        self::assertCount(1, $this->transport->requests, '발송은 재시도하지 않는다');
+
+        // 이 테스트는 이 send() 호출 하나만 하는 신선한 DB 이므로 행은 각 표에 하나뿐이다.
+        $job = $this->db->selectOne('SELECT status FROM ' . $this->db->table('message_jobs'));
+        self::assertSame('sending', $job['status'], '보낸 것을 실패로 둔갑시키면 안 된다');
+
+        $row = $this->db->selectOne('SELECT status FROM ' . $table);
+        self::assertNotSame('failed', $row['status'], '보낸 메시지를 실패로 잘못 기록하면 안 된다');
+    }
+
+    /** 한 묶음은 성공하고 다른 묶음은 실패하면, 상태만 보고도 "일부만 안 갔다"를 알 수 있어야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testPartiallyFailedJobIsRecordedAsPartial(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(500);
+        $this->transport->queueFailure();
+
+        $recipients = [];
+        for ($i = 0; $i < 502; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) $i, 8, '0', STR_PAD_LEFT)];
+        }
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요', 'recipients' => $recipients]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('partial', $job['status']);
+        self::assertSame(500, (int) $job['success']);
+        self::assertSame(2, (int) $job['failure']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testTestModeIsPassedThroughAndRecorded(array $config): void
     {

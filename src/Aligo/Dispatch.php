@@ -20,6 +20,10 @@ use GnuCms\Support\Clock;
  *   event_key  이 발송을 일으킨 알림 이벤트 (선택)
  *   created_by 요청한 관리자 표시명 (선택)
  *   recipients [['phone' =>, 'name' =>, 'user_id' =>, 'vars' => []], ...]
+ *
+ * message_jobs.status 는 네 값 중 하나다: 'sending'(발송 중 — 결과 기록 자체가 실패해
+ * 여기 머무를 수도 있다), 'sent'(전원 성공), 'failed'(전원 실패), 'partial'(일부만 성공).
+ * 이력 화면은 이 네 값을 모두 구분해서 보여줘야 한다.
  */
 final class Dispatch
 {
@@ -111,18 +115,28 @@ final class Dispatch
                 $result = $channel === 'at'
                     ? $this->alimtalk->send($this->alimtalkFields($chunk, $request, $account))
                     : $this->sms->sendMass($this->smsFields($chunk, $stored, $title, $account));
-                $this->markChunk($chunk, 'accepted', $result['mid'], null);
-                $success += count($chunk);
             } catch (DomainError | TransportFailure $e) {
-                // 발송은 재시도하지 않는다. 응답을 못 받은 채 다시 보내면 중복 발송이 된다.
+                // 발송 자체가 실패했다(응답이 없거나 알리고가 거절했다). 재시도하지 않는다 —
+                // 응답을 못 받은 채 다시 보내면 중복 발송이 된다.
                 $this->markChunk($chunk, 'failed', null, $e->getMessage());
                 $failure += count($chunk);
+                continue;
             }
+
+            // 알리고는 이미 이 묶음을 받아들였다. markChunk() 를 위 try 안에 두면, 전송은
+            // 성공했는데 그 결과를 남기는 DB 쓰기만 실패해도 위 catch 로 떨어져 'failed'로
+            // 덮인다 — 이력에는 "안 보냄"으로 남고, 그걸 보고 관리자가 다시 보내면 실제
+            // 전화기에는 중복 발송이 된다. 그래서 markChunk() 를 try 밖으로 빼 그 예외가
+            // 발송 실패와 섞이지 않게 한다. 기록 자체가 실패하면 여기서 그대로 올려보낸다 —
+            // 작업이 'sending' 상태로 남는 편이 "결과를 모른다"는 정직한 표시다.
+            $this->markChunk($chunk, 'accepted', $result['mid'], null);
+            $success += count($chunk);
         }
 
+        $status = $failure === 0 ? 'sent' : ($success === 0 ? 'failed' : 'partial');
         $this->db->update('message_jobs', [
             'success' => $success, 'failure' => $failure,
-            'status' => $failure === 0 ? 'sent' : ($success === 0 ? 'failed' : 'sent'),
+            'status' => $status,
             'finished_at' => Clock::now(),
         ], 'id = :id', ['id' => $jobId]);
 
