@@ -121,14 +121,14 @@ final class AligoSchemaTest extends DatabaseTestCase
         self::assertTrue($this->hasIndex($db, $config, 'ix_message_recipients_fallback'));
     }
 
-    private function hasIndex(Connection $db, array $config, string $logicalName): bool
+    private function hasIndex(Connection $db, array $config, string $logicalName, string $table = 'message_recipients'): bool
     {
         $name = $db->prefix() . $logicalName;
         if (str_starts_with($config['dsn'], 'sqlite:')) {
             return $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
                 [$name]) !== null;
         }
-        foreach ($db->select('SHOW INDEX FROM ' . $db->table('message_recipients')) as $row) {
+        foreach ($db->select('SHOW INDEX FROM ' . $db->table($table)) as $row) {
             if ((string) ($row['Key_name'] ?? '') === $name) {
                 return true;
             }
@@ -137,8 +137,60 @@ final class AligoSchemaTest extends DatabaseTestCase
         return false;
     }
 
-    public function testSchemaVersionIsTwentyThree(): void
+    #[DataProvider('connectionProvider')]
+    public function testScheduleColumnsExistOnAFreshInstall(array $config): void
     {
-        self::assertSame('23', Schema::VERSION);
+        $db = $this->freshDatabase($config);
+        self::assertSame([], $db->select('SELECT scheduled_at, cancelled_at FROM '
+            . $db->table('message_jobs')));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testUpgradingAVersion23InstallAddsTheScheduleColumns(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        // 판 23 설치는 이 인덱스가 없다 — scheduled_at 위에 얹혀 있으므로 칸보다 먼저 지운다.
+        $db->execute('DROP INDEX ' . $db->index('ix_message_jobs_scheduled')
+            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_jobs')));
+        $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN scheduled_at');
+        $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN cancelled_at');
+
+        (new Schema($db))->migrateAligoMessaging();
+
+        self::assertSame([], $db->select('SELECT scheduled_at, cancelled_at FROM '
+            . $db->table('message_jobs')));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testFreshInstallIndexesTheScheduledQueue(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+
+        self::assertTrue($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
+    }
+
+    /**
+     * 판 23 설치는 scheduled_at 칸도 인덱스도 없다. 칸이 생기기 전에 인덱스부터 만들려 하면
+     * createIndexIfMissing() 이 "칸 없음" 오류를 "이미 있음"으로 오인해 조용히 삼키고,
+     * 인덱스는 영영 만들어지지 않는다 — 칸을 먼저 붙인 뒤 인덱스를 만들어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testUpgradingAVersion23InstallAddsTheScheduledIndex(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->execute('DROP INDEX ' . $db->index('ix_message_jobs_scheduled')
+            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_jobs')));
+        $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN scheduled_at');
+        $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN cancelled_at');
+        self::assertFalse($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
+
+        (new Schema($db))->migrateAligoMessaging();
+
+        self::assertTrue($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
+    }
+
+    public function testSchemaVersionIsTwentyFour(): void
+    {
+        self::assertSame('24', Schema::VERSION);
     }
 }

@@ -27,11 +27,19 @@ namespace GnuCms\Aligo;
  *   3. 포기한 건(unknown)이 남아 있으면 'unknown' 이다. 이것을 실패로 접으면 관리자가
  *      "실패"를 보고 다시 보내 중복 발송이 되고, 성공으로 접으면 오지 않은 메시지를
  *      갔다고 말하게 된다. 확인하지 못한 것은 확인하지 못했다고 보여준다.
+ *
+ * 'scheduled'(예약)·'cancelled'(취소)는 이 집계에서 나오지 않는다 — 수신자 결과를 세어서
+ * 아는 사실이 아니라, 호출부가 tally 를 보기도 전에 이미 알고 있는 작업 자체의 사실이다
+ * (예약해 두었으니 예약이고, 취소했으니 취소다). 그래서 of() 는 이 두 값을 만들지 않고,
+ * 그대로 둔다 — 호출부가 예약·취소를 먼저 판단한 뒤에야 tally 규칙으로 넘어온다.
  */
 final class JobStatus
 {
-    /** 이 다섯 값이 message_jobs.status 가 가질 수 있는 전부다. 이력 화면은 다섯을 모두 구분해 보여준다. */
-    public const VALUES = ['sending', 'sent', 'failed', 'partial', 'unknown'];
+    /**
+     * message_jobs.status 가 가질 수 있는 값 전부. 이력 화면은 일곱을 모두 구분해 보여준다.
+     * 이 중 'scheduled'·'cancelled' 두 값은 of() 가 만들지 않는다 — 위 docblock 참고.
+     */
+    public const VALUES = ['scheduled', 'sending', 'sent', 'failed', 'partial', 'unknown', 'cancelled'];
 
     public static function of(int $success, int $failure, int $pending, int $unknown): string
     {

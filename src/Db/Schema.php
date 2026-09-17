@@ -31,7 +31,7 @@ final class Schema
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
         'ux_write_rate_limits',
         'ix_message_recipients_job', 'ix_message_recipients_mid', 'ix_message_recipients_fallback',
-        'ux_alimtalk_templates_code', 'ix_message_jobs_created',
+        'ux_alimtalk_templates_code', 'ix_message_jobs_created', 'ix_message_jobs_scheduled',
     ];
 
     /** @var Connection */
@@ -61,7 +61,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '23';
+    public const VERSION = '24';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -255,6 +255,14 @@ final class Schema
     /** 알리고 발송 작업·수신자·알림톡 템플릿 사본. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
     public function migrateAligoMessaging(): void
     {
+        // 판 23 을 이미 적용한 설치에는 message_jobs 표가 있으므로 칸만 붙인다. 아래
+        // 루프가 만드는 ix_message_jobs_scheduled 인덱스보다 반드시 앞서야 한다 — 칸이
+        // 없는 채로 인덱스를 만들려 하면 createIndexIfMissing() 이 "칸 없음" 오류를
+        // "이미 있음"으로 오인해 조용히 삼키고, 인덱스는 영영 만들어지지 않는다.
+        $datetime = $this->db->dialect()->typeMap()['{DATETIME}'];
+        $this->addColumnIfMissing('message_jobs', 'scheduled_at', $datetime . ' NULL');
+        $this->addColumnIfMissing('message_jobs', 'cancelled_at', $datetime . ' NULL');
+
         foreach ($this->aligoStatements() as $sql) {
             // 표가 이미 있으면 건너뛴다. 세 표가 한 번에 생기지 않은 설치도 있을 수 있다.
             if (preg_match('/^CREATE TABLE (\w+)/', $sql, $m) === 1) {
@@ -289,6 +297,8 @@ final class Schema
                 failure      INTEGER      NOT NULL DEFAULT 0,
                 status       VARCHAR(12)  NOT NULL,
                 test_mode    SMALLINT     NOT NULL DEFAULT 0,
+                scheduled_at {DATETIME}   NULL,
+                cancelled_at {DATETIME}   NULL,
                 created_at   {DATETIME}   NOT NULL,
                 finished_at  {DATETIME}   NULL
             ){SUFFIX}',
@@ -333,6 +343,8 @@ final class Schema
             // 훑으므로 알림톡 대기열(mid, status)과 똑같이 인덱스가 필요하다.
             'CREATE INDEX ix_message_recipients_fallback ON message_recipients (fallback_status, smid)',
             'CREATE UNIQUE INDEX ux_alimtalk_templates_code ON alimtalk_templates (tpl_code)',
+            // 예약 발송 대기열. 실행기가 (scheduled_at, status) 로 훑어 때가 된 예약 작업만 골라낸다.
+            'CREATE INDEX ix_message_jobs_scheduled ON message_jobs (scheduled_at, status)',
         ];
     }
 
