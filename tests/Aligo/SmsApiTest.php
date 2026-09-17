@@ -126,6 +126,47 @@ final class SmsApiTest extends DatabaseTestCase
         self::assertStringContainsString('/send_mass/', $this->transport->requests[0]['url']);
     }
 
+    /**
+     * 문자 API 는 EUC-KR 서비스다. 응답의 message 칸이 EUC-KR 한글로 오면 예전 코드는
+     * json_decode() 가 null 을 돌려줘 "응답을 읽지 못했습니다" 예외를 냈다 — 알리고는
+     * 이미 받아들여 전화기가 울린 뒤인데도 Dispatch 는 그 묶음을 통째로 'failed' 로
+     * 적고, 그걸 본 관리자가 다시 보내면 중복 발송·이중 과금이 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testReadsAnEucKrEncodedResponse(array $config): void
+    {
+        $api = $this->api($config);
+        $json = (string) json_encode(['result_code' => 1, 'message' => '성공적으로 전송요청 하였습니다.',
+            'msg_id' => 'M777', 'success_cnt' => 3, 'error_cnt' => 0], JSON_UNESCAPED_UNICODE);
+        $eucKr = (string) mb_convert_encoding($json, 'EUC-KR', 'UTF-8');
+        self::assertFalse(mb_check_encoding($eucKr, 'UTF-8'), '이 본문은 UTF-8 이 아니어야 시험이 성립한다');
+        $this->transport->queue(200, $eucKr);
+
+        $result = $api->sendMass(['cnt' => '3', 'rec_1' => '01012345678', 'msg_1' => '안녕하세요']);
+
+        self::assertSame('M777', $result['mid']);
+        self::assertSame(3, $result['scnt']);
+        self::assertSame(0, $result['fcnt']);
+    }
+
+    /** EUC-KR 응답 안의 실패 사유도 읽을 수 있어야 한다 — 깨진 글자가 아니라 사람이 읽는 문장으로. */
+    #[DataProvider('connectionProvider')]
+    public function testReadsAnEucKrEncodedFailureReason(array $config): void
+    {
+        $api = $this->api($config);
+        $json = (string) json_encode(['result_code' => -101, 'message' => '등록되지 않은 발신번호입니다.'],
+            JSON_UNESCAPED_UNICODE);
+        $this->transport->queue(200, (string) mb_convert_encoding($json, 'EUC-KR', 'UTF-8'));
+
+        try {
+            $api->sendMass(['cnt' => '1', 'rec_1' => '01012345678', 'msg_1' => '안녕']);
+            self::fail('음수 코드는 예외가 되어야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('발신번호', $e->getMessage());
+            self::assertTrue(mb_check_encoding($e->getMessage(), 'UTF-8'));
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testFlagFieldsLikeMsg_typeAreNotConverted(array $config): void
     {

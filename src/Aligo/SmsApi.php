@@ -13,8 +13,6 @@ use GnuCms\Error\DomainError;
 final class SmsApi
 {
     private const BASE = 'https://apis.aligo.in';
-    /** EUC-KR 로 바꿔 보내야 하는 필드 이름 앞머리 */
-    private const TEXT_FIELDS = ['msg', 'title'];
 
     private Transport $transport;
     private Settings $settings;
@@ -59,7 +57,7 @@ final class SmsApi
             'user_id' => $account['user_id'],
         ] + $this->encodeText($fields));
 
-        $decoded = json_decode($response['body'], true);
+        $decoded = json_decode(self::toUtf8((string) $response['body']), true);
         if (!is_array($decoded)) {
             throw DomainError::serviceUnavailable(
                 '알리고 문자 응답을 읽지 못했습니다 (HTTP ' . $response['status'] . ').');
@@ -71,6 +69,22 @@ final class SmsApi
         }
 
         return $decoded;
+    }
+
+    /**
+     * 응답 본문을 UTF-8 로 맞춘다. 문자 API 는 EUC-KR 서비스라 응답의 message 같은
+     * 한글 칸이 EUC-KR 로 올 수 있는데, 그대로 json_decode() 하면 null 이 돌아와
+     * "응답을 읽지 못했습니다"가 된다. 그 예외를 Dispatch 가 잡으면 이미 알리고가
+     * 받아들여 전화기가 울린 묶음이 통째로 'failed' 로 기록되고, 그걸 본 관리자가
+     * 다시 보내 중복 발송·이중 과금이 된다. 이미 UTF-8 이면 아무것도 하지 않는다.
+     */
+    private static function toUtf8(string $body): string
+    {
+        if ($body === '' || mb_check_encoding($body, 'UTF-8')) {
+            return $body;
+        }
+
+        return (string) mb_convert_encoding($body, 'UTF-8', 'EUC-KR');
     }
 
     /** msg_1, msg_2, ..., msg_500, title 처럼 사람이 읽는 값만 EUC-KR 로 바꾼다. msg_type·번호·건수는 그대로다. */

@@ -167,7 +167,12 @@ final class History
         }
     }
 
-    /** 문자 조회 응답 한 건이 성공인지 판단한다. 알림톡 대체문자와 순수 문자 발송이 함께 쓴다. */
+    /**
+     * 문자 조회 응답 한 건이 성공인지 판단한다. 알림톡 대체문자와 순수 문자 발송이 함께 쓴다.
+     * 비교 대상인 '성공'은 UTF-8 문자열이다 — 문자 API 응답은 EUC-KR 로 올 수 있으므로
+     * SmsApi::call() 이 디코딩 전에 UTF-8 로 맞춰 준다. 그 정규화를 거치지 않은 본문과
+     * 비교하면 실제로 성공한 건이 전부 실패로 기록된다.
+     */
     private static function smsSucceeded(array $item): bool
     {
         return str_contains((string) ($item['sms_state'] ?? ''), '성공');

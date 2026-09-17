@@ -361,6 +361,35 @@ final class DispatchTest extends DatabaseTestCase
         self::assertSame(2, (int) $job['failure']);
     }
 
+    /**
+     * 알리고 문자 API 는 EUC-KR 서비스라 응답 본문도 EUC-KR 로 올 수 있다. 그 응답을
+     * 읽지 못해 예외가 나면, 이미 알리고가 받아들여 전화기가 울린 묶음이 통째로
+     * 'failed' 로 기록된다 — 그걸 본 관리자가 다시 보내면 중복 발송·이중 과금이다.
+     * 지금까지의 모든 시험이 UTF-8 응답만 먹여 왔기 때문에 보이지 않던 경로다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEucKrResponseIsRecordedAsAcceptedNotFailed(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $json = (string) json_encode(['result_code' => 1, 'message' => '성공적으로 전송요청 하였습니다.',
+            'msg_id' => 'M42', 'success_cnt' => 2, 'error_cnt' => 0], JSON_UNESCAPED_UNICODE);
+        $this->transport->queue(200, (string) mb_convert_encoding($json, 'EUC-KR', 'UTF-8'));
+
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요', 'recipients' => [
+            ['phone' => '01012345678'], ['phone' => '01098765432'],
+        ]]);
+
+        $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertNotSame('failed', $job['status'], '보낸 것을 실패로 둔갑시키면 관리자가 다시 보낸다');
+        self::assertSame(0, (int) $job['failure']);
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? ORDER BY id', [$jobId]);
+        self::assertSame('accepted', $rows[0]['status']);
+        self::assertSame('accepted', $rows[1]['status']);
+        self::assertSame('M42', $rows[0]['mid'], '응답의 mid 를 읽어야 결과 조회도 할 수 있다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testTestModeIsPassedThroughAndRecorded(array $config): void
     {
