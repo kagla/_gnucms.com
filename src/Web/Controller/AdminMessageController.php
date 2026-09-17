@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace GnuCms\Web\Controller;
 
-use DateTimeImmutable;
-use DateTimeZone;
 use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Aligo\SendTime;
@@ -115,8 +113,11 @@ final class AdminMessageController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        $collected = $this->collect($input);
+        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parseKst(), collect()
+        // 가 위임한다)이 여기서 실패할 수 있고, 그 실패도 buildPreview() 의 실패(빈 변수
+        // 거절 등)와 똑같이 422 로 다시 그려 입력을 지키지 않으면 안 된다.
         try {
+            $collected = $this->collect($input);
             $preview = $this->buildPreview($collected);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
@@ -152,15 +153,18 @@ final class AdminMessageController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        $collected = $this->collect($input);
-        $fingerprint = self::fingerprint($collected['request']);
-        $alreadySent = $this->recentlySentJob($fingerprint);
-        if ($alreadySent !== null) {
-            return $this->redirect($request, $response, 'admin.messages.history.detail',
-                ['sent' => (string) $alreadySent, 'duplicate' => '1'], ['id' => (string) $alreadySent]);
-        }
-
+        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parseKst(), collect()
+        // 가 위임한다)이 여기서 실패할 수 있고, 지문을 만들거나 알리고를 부르기도 전에
+        // 같은 422 로 다시 그려 입력을 지켜야 한다.
         try {
+            $collected = $this->collect($input);
+            $fingerprint = self::fingerprint($collected['request']);
+            $alreadySent = $this->recentlySentJob($fingerprint);
+            if ($alreadySent !== null) {
+                return $this->redirect($request, $response, 'admin.messages.history.detail',
+                    ['sent' => (string) $alreadySent, 'duplicate' => '1'], ['id' => (string) $alreadySent]);
+            }
+
             $jobId = $this->app->aligo()->send($collected['request']);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
@@ -438,33 +442,16 @@ final class AdminMessageController
     }
 
     /**
-     * 발송 시각 입력(KST 벽시계)을 SendTime::parse() 가 요구하는 형태로 바꾼다. 이
-     * 화면의 다른 모든 시각(요청 시각 등)과 마찬가지로 관리자는 한국 표준시로 읽고
-     * 쓴다. 그런데 SendTime::parse() 는 받은 문자열을 이미 UTC로 본다 — 그 클래스의
-     * 계약이며, 입력 시점에는 어떤 오프셋도 적용하지 않는다(SendTime 문서 주석 참고).
-     * 그래서 KST→UTC 변환은 여기, 화면 입력이 Dispatch 로 넘어가기 직전 단 한 곳에서만
-     * 한다 — 틀리면 예약이 9시간 어긋난 시각에 나간다.
-     *
-     * 형식이 아예 다르면(파싱 실패) 원본을 그대로 돌려준다 — 여기서 따로 오류를 내지
-     * 않고, SendTime::parse() 가 같은 "형식이 올바르지 않습니다" 오류를 내게 둔다.
+     * 발송 시각 입력을 SendTime 에 그대로 맡긴다. 이 화면의 다른 모든 시각(요청 시각
+     * 등)과 마찬가지로 관리자는 한국 표준시(KST)로 읽고 쓴다 — KST→UTC 변환·형식 검증·
+     * 하한(10분)·상한(30일) 검증은 모두 SendTime::parseKst() 하나가 맡는다(그 클래스
+     * 문서 주석 참고: 시간대는 그 클래스 밖에서 다루지 않는다). 형식이 잘못됐거나
+     * 범위를 벗어나면 SendTime::parseKst() 가 DomainError 를 던진다 — 여기서 잡지
+     * 않고 그대로 올려보낸다(collect() 호출부가 잡는다).
      */
     private function scheduledAtForRequest(string $raw): ?string
     {
-        $raw = trim($raw);
-        if ($raw === '') {
-            return null;
-        }
-        $normalized = str_contains($raw, 'T') ? $raw : preg_replace('/\s+/', 'T', $raw, 1);
-        foreach (['!Y-m-d\TH:i:s', '!Y-m-d\TH:i'] as $format) {
-            $dt = DateTimeImmutable::createFromFormat($format, $normalized, new DateTimeZone('Asia/Seoul'));
-            $errors = DateTimeImmutable::getLastErrors();
-            $clean = $errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0);
-            if ($dt !== false && $clean) {
-                return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s');
-            }
-        }
-
-        return $raw;
+        return SendTime::parseKst($raw);
     }
 
     /**
@@ -568,10 +555,10 @@ final class AdminMessageController
     private function buildPreview(array $collected): array
     {
         $request = $collected['request'];
-        // 예약 시각도 실제 발송(Dispatch::send())과 같은 규칙(SendTime::parse())으로
-        // 먼저 검증한다 — 10분 안쪽·30일 밖 같은 거절은 발송 버튼을 눌러서야가 아니라
-        // 미리보기 단계에서 바로 알 수 있어야 한다.
-        $scheduledAt = SendTime::parse($request['scheduled_at'] ?? null);
+        // scheduled_at 은 collect() 안에서 이미 SendTime::parseKst() 가 검증·정규화했다
+        // (실패했다면 그 예외가 이미 preview()/dispatch() 의 422 처리로 빠졌을 것이고
+        // 여기까지 오지 않는다) — 여기서 다시 검증하지 않는다.
+        $scheduledAt = $request['scheduled_at'] ?? null;
         $recipients = $request['recipients'];
         $body = $request['channel'] === 'at' ? $this->templateBody($request['tpl_code']) : $request['body'];
 
