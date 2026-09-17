@@ -19,7 +19,8 @@ use GnuCms\Support\Clock;
  *   failover   알림톡 실패 시 문자 대체발송 (선택)
  *   event_key  이 발송을 일으킨 알림 이벤트 (선택)
  *   created_by 요청한 관리자 표시명 (선택)
- *   scheduled_at 예약 시각. 비우면 즉시 발송 — SendTime::parse() 가 검증해 UTC로 바꾼다 (선택)
+ *   scheduled_at 예약 시각. 비우면 즉시 발송 — SendTime::parse() 가 검증해 UTC로 바꾼다.
+ *                오프셋 없는 값은 한국 시각(KST)으로 읽는다(그 클래스 문서 주석 참고) (선택)
  *   recipients [['phone' =>, 'name' =>, 'user_id' =>, 'vars' => []], ...]
  *
  * message_jobs.status 는 JobStatus::VALUES 의 일곱 값 중 하나다 — 그 규칙과 뜻은

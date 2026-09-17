@@ -32,10 +32,32 @@ final class SendTimeTest extends TestCase
         }
     }
 
+    /** 명시적 오프셋이 붙어 있어도 하한·상한 검증은 똑같이 적용된다 — 오프셋이 검증을 피해 가지 않는다. */
+    public function testOffsetInputSharesTheSameBounds(): void
+    {
+        $tooSoon = gmdate('Y-m-d\TH:i', Clock::timestamp() + 60) . '+00:00';
+
+        try {
+            SendTime::parse($tooSoon);
+            self::fail('10분 안쪽 예약은 오프셋이 있어도 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('scheduled_at', $e->details());
+        }
+    }
+
+    /**
+     * 오프셋 없는 입력은 한국 표준시(KST) 벽시계로 읽는다 — 그 절대 시각(지금부터
+     * 1시간 뒤)이 UTC 로 저장된다. 정확한 숫자로 왕복을 검증한다(형식만 보는 정규식이
+     * 아니라): 저장값이 실제로 "그 벽시계가 가리키는 절대 시각"과 같아야 한다.
+     */
     public function testAcceptsAValidTimeAndStoresItAsUtc(): void
     {
-        $at = SendTime::parse(gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600));
-        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $at);
+        $targetUtc = Clock::timestamp() + 3600;
+        $bareKst = gmdate('Y-m-d\TH:i', $targetUtc + 9 * 3600);
+
+        $at = SendTime::parse($bareKst);
+
+        self::assertSame(gmdate('Y-m-d H:i:00', $targetUtc), $at);
     }
 
     public function testFormatsForBothApisInKoreanTime(): void
@@ -47,31 +69,60 @@ final class SendTimeTest extends TestCase
     }
 
     /**
-     * parseKst() 는 parse() 와 달리 받은 문자열을 한국 표준시(KST) 벽시계로 본다 —
-     * 화면의 datetime-local 입력이 쓰는 유일한 입구다. "14:00" 을 KST 로 넣으면 저장은
-     * 그보다 9시간 이른 UTC "05:00" 이어야 한다 — 이 부호(빼기)와 크기(9시간)를 둘 다
-     * 못박는다. parse() 로 같은 문자열을 넣으면(이미 UTC로 본다) 다른 값이 나온다는
-     * 것도 함께 확인해, 두 메서드가 실제로 다른 시간대를 본다는 것을 증명한다.
+     * 오프셋 없는 문자열은 한국 표준시(KST) 벽시계로 읽는다 — 화면의 datetime-local
+     * 입력과 확장이 오프셋 없이 넘기는 값 모두 이 규칙 하나를 공유한다. "14:00" 을
+     * 오프셋 없이 넣으면 저장은 그보다 9시간 이른 UTC "05:00" 이어야 한다 — 이
+     * 부호(빼기)와 크기(9시간)를 둘 다 못박는다.
      */
-    public function testParseKstReadsTheInputAsKoreanWallClockTime(): void
+    public function testBareInputIsReadAsKoreanWallClockTime(): void
     {
         $date = gmdate('Y-m-d', Clock::timestamp() + 86400); // 내일 날짜(하한·상한 안에 들어오게)
         $typedKst = $date . 'T14:00';
 
-        self::assertSame($date . ' 05:00:00', SendTime::parseKst($typedKst));
-        self::assertNotSame(SendTime::parseKst($typedKst), SendTime::parse($typedKst));
+        self::assertSame($date . ' 05:00:00', SendTime::parse($typedKst));
     }
 
-    /** parseKst() 도 parse() 와 같은 하한·상한을 적용한다 — 검증 규칙은 공유된다. */
-    public function testParseKstSharesTheSameBoundsAsParse(): void
+    /**
+     * FIX 1 의 핵심: 확장이 명시적으로 "+09:00" 오프셋을 붙이면, 오프셋을 붙이지 않은
+     * 같은 벽시계 문자열과 정확히 같은 절대 시각(=같은 저장값)이 나와야 한다 — 오프셋
+     * 없는 입력이 이미 KST 로 읽히므로, "+09:00"은 그 읽기를 명시적으로 확인해 줄 뿐
+     * 다른 결과를 내면 안 된다.
+     */
+    public function testExplicitKstOffsetBooksTheSameInstantAsBareInput(): void
     {
-        $tooSoonKst = gmdate('Y-m-d\TH:i', Clock::timestamp() + 60 + 9 * 3600);
+        $date = gmdate('Y-m-d', Clock::timestamp() + 86400);
+        $bare = $date . 'T14:00';
+        $withOffset = $bare . '+09:00';
 
-        try {
-            SendTime::parseKst($tooSoonKst);
-            self::fail('10분 안쪽 예약은 KST 입구에서도 거절해야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('scheduled_at', $e->details());
-        }
+        self::assertSame(SendTime::parse($bare), SendTime::parse($withOffset));
+        self::assertSame($date . ' 05:00:00', SendTime::parse($withOffset));
+    }
+
+    /**
+     * 다른 명시적 오프셋("+00:00")은 같은 벽시계 숫자라도 다른 절대 시각을 가리켜야
+     * 한다 — 오프셋이 실제로 존중되고 있다는 증거는 "같은 것으로 읽는다"가 아니라
+     * "다른 오프셋은 다르게 읽는다"에 있다. "+00:00"으로 준 "14:00"은 UTC 14:00 그
+     * 자체이므로, 오프셋 없이(KST 로) 읽은 "14:00"(=UTC 05:00)보다 정확히 9시간 뒤다.
+     */
+    public function testADifferentExplicitOffsetBooksADifferentInstant(): void
+    {
+        $date = gmdate('Y-m-d', Clock::timestamp() + 86400);
+        $kstReading = SendTime::parse($date . 'T14:00');
+        $utcReading = SendTime::parse($date . 'T14:00+00:00');
+
+        self::assertNotSame($kstReading, $utcReading);
+        self::assertSame($date . ' 14:00:00', $utcReading);
+        self::assertSame(
+            strtotime($utcReading . ' UTC') - strtotime($kstReading . ' UTC'),
+            9 * 3600
+        );
+    }
+
+    /** "Z"(UTC를 뜻하는 ISO-8601 표기)도 명시적 오프셋으로 취급되어 "+00:00"과 같은 결과를 낸다. */
+    public function testZSuffixIsTreatedAsAnExplicitUtcOffset(): void
+    {
+        $date = gmdate('Y-m-d', Clock::timestamp() + 86400);
+
+        self::assertSame(SendTime::parse($date . 'T14:00+00:00'), SendTime::parse($date . 'T14:00Z'));
     }
 }

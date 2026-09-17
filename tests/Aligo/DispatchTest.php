@@ -467,7 +467,10 @@ final class DispatchTest extends DatabaseTestCase
         $this->settings->setEnabled('sms', true);
         $this->queueSmsOk(1);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        // 'Z' 로 명시적 UTC 오프셋을 붙인다 — 이 값 자체의 시간대는 이 시험의 관심사가
+        // 아니라 "미래의 어느 절대 시각"이면 충분하다(오프셋 없이 넘기면 SendTime::parse()
+        // 가 KST 로 읽어 9시간 이르게 해석하므로 하한을 벗어난다. SendTimeTest 참고).
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
             'scheduled_at' => $at, 'recipients' => [['phone' => '01012345678']]]);
 
@@ -479,6 +482,81 @@ final class DispatchTest extends DatabaseTestCase
         $fields = $this->transport->requests[0]['fields'];
         self::assertArrayHasKey('rdate', $fields);
         self::assertArrayHasKey('rtime', $fields);
+    }
+
+    /**
+     * FIX 1: 확장이 부르는 $app->aligo()->send(['scheduled_at' => …]) 가 실제로 거치는
+     * 경로가 바로 Dispatch::send() 다. 오프셋 없는 한국 시각 벽시계 값을 그대로 넘기면
+     * SendTime::parse() 가 그 값을 KST 로 읽으므로, 관리자 화면과 마찬가지로 발신자가
+     * 뜻한 절대 시각 그대로 예약돼야 한다(9시간 어긋나면 안 된다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBareKoreanWallClockThroughTheExtensionEntryBooksTheInstantTheCallerMeant(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+
+        $targetUtc = Clock::timestamp() + 3600;
+        $bareKst = gmdate('Y-m-d\TH:i', $targetUtc + 9 * 3600);
+
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $bareKst, 'recipients' => [['phone' => '01012345678']]]);
+
+        $job = $this->db->selectOne('SELECT scheduled_at FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame(gmdate('Y-m-d H:i:00', $targetUtc), $job['scheduled_at']);
+    }
+
+    /**
+     * 같은 벽시계 숫자에 "+09:00"을 명시적으로 붙여도 오프셋 없는 입력과 정확히 같은
+     * 절대 시각(=같은 저장값)이 나와야 한다 — 오프셋 없는 입력이 이미 KST 로 읽히므로,
+     * "+09:00"은 그 읽기를 확인해 줄 뿐이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testExplicitKstOffsetThroughTheExtensionEntryBooksTheSameInstantAsBareInput(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+        $this->queueSmsOk(1);
+
+        $targetUtc = Clock::timestamp() + 3600;
+        $bareKst = gmdate('Y-m-d\TH:i', $targetUtc + 9 * 3600);
+
+        $bareJobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $bareKst, 'recipients' => [['phone' => '01012345678']]]);
+        $offsetJobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $bareKst . '+09:00', 'recipients' => [['phone' => '01098765432']]]);
+
+        $bareAt = $this->db->selectOne('SELECT scheduled_at FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$bareJobId])['scheduled_at'];
+        $offsetAt = $this->db->selectOne('SELECT scheduled_at FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$offsetJobId])['scheduled_at'];
+        self::assertSame($bareAt, $offsetAt);
+    }
+
+    /**
+     * 다른 명시적 오프셋("+00:00")은 같은 벽시계 숫자라도 다른 절대 시각을 가리켜야
+     * 한다 — 이것이 "오프셋이 실제로 존중된다"의 증거다: "+00:00"으로 준 값은 그
+     * 자체가 UTC 이므로, KST 로 읽은 값(=$targetUtc)보다 정확히 9시간 뒤에 저장된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testADifferentExplicitOffsetThroughTheExtensionEntryBooksADifferentInstant(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $this->queueSmsOk(1);
+
+        $targetUtc = Clock::timestamp() + 3600;
+        $bareKst = gmdate('Y-m-d\TH:i', $targetUtc + 9 * 3600);
+
+        $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'scheduled_at' => $bareKst . '+00:00', 'recipients' => [['phone' => '01012345678']]]);
+
+        $job = $this->db->selectOne('SELECT scheduled_at FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame(gmdate('Y-m-d H:i:00', $targetUtc + 9 * 3600), $job['scheduled_at']);
     }
 
     /** 알림톡은 rdate·rtime 이 아니라 senddate 한 칸을 쓴다. */
@@ -495,7 +573,7 @@ final class DispatchTest extends DatabaseTestCase
         $this->transport->queue(200, (string) json_encode(
             ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $jobId = $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678', 'vars' => ['이름' => '홍길동']]]]);
 
@@ -519,7 +597,7 @@ final class DispatchTest extends DatabaseTestCase
         $this->settings->setEnabled('sms', true);
         $this->transport->queueFailure();
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
             'scheduled_at' => $at, 'recipients' => [['phone' => '01012345678']]]);
 
@@ -550,7 +628,7 @@ final class DispatchTest extends DatabaseTestCase
         for ($i = 0; $i < 502; $i++) {
             $recipients[] = ['phone' => '010' . str_pad((string) $i, 8, '0', STR_PAD_LEFT)];
         }
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $jobId = $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
             'scheduled_at' => $at, 'recipients' => $recipients]);
 
@@ -586,7 +664,7 @@ final class DispatchTest extends DatabaseTestCase
         $this->boot($config);
         $this->expectException(DomainError::class);
         $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
-            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600),
+            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z',
             'recipients' => [['phone' => '01012345678']]]);
     }
 
@@ -601,7 +679,7 @@ final class DispatchTest extends DatabaseTestCase
         }
 
         return $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',
-            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600),
+            'scheduled_at' => gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z',
             'recipients' => $recipients]);
     }
 

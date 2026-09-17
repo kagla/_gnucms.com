@@ -151,7 +151,10 @@ final class AligoServiceTest extends DatabaseTestCase
             'sender' => '0212345678', 'senderkey' => 'SK1']);
         $service->settings->setEnabled('sms', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        // 'Z' 로 명시적 UTC 오프셋을 붙인다 — 오프셋 없이 넘기면 SendTime::parse() 가
+        // KST 로 읽어 9시간 이르게 해석되므로 하한(10분)을 벗어난다(SendTimeTest 참고).
+        // 이 값 자체의 시간대는 아래 시험들의 관심사가 아니다.
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
         $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678']]]);
@@ -188,7 +191,7 @@ final class AligoServiceTest extends DatabaseTestCase
         $service->templates->fetch();
         $service->templates->setEnabled('T1', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
         $smsJobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678']]]);
@@ -232,7 +235,7 @@ final class AligoServiceTest extends DatabaseTestCase
             'sender' => '0212345678', 'senderkey' => 'SK1']);
         $service->settings->setEnabled('sms', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
         $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678']]]);
@@ -274,7 +277,7 @@ final class AligoServiceTest extends DatabaseTestCase
         $service->templates->setEnabled('T1', true);
         $service->templates->setEnabled('T2', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, (string) json_encode(['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
         $t1JobId = $service->send(['channel' => 'at', 'tpl_code' => 'T1', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678']]]);
@@ -333,7 +336,7 @@ final class AligoServiceTest extends DatabaseTestCase
             'sender' => '0212345678', 'senderkey' => 'SK1']);
         $service->settings->setEnabled('sms', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
         $staleJobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01011111111']]]);

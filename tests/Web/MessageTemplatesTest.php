@@ -85,7 +85,9 @@ final class MessageTemplatesTest extends WebTestCase
         $app->aligo()->templates->fetch();
         $app->aligo()->templates->setEnabled('T1', true);
 
-        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        // 'Z' 로 명시적 UTC 오프셋을 붙인다 — 오프셋 없이 넘기면 SendTime::parse() 가
+        // KST 로 읽어 9시간 이르게 해석되므로 하한(10분)을 벗어난다(SendTimeTest 참고).
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, (string) json_encode(['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
         $jobId = $app->aligo()->send(['channel' => 'at', 'tpl_code' => 'T1', 'scheduled_at' => $at,
             'recipients' => [['phone' => '01012345678']]]);

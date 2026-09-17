@@ -113,7 +113,7 @@ final class AdminMessageController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parseKst(), collect()
+        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parse(), collect()
         // 가 위임한다)이 여기서 실패할 수 있고, 그 실패도 buildPreview() 의 실패(빈 변수
         // 거절 등)와 똑같이 422 로 다시 그려 입력을 지키지 않으면 안 된다.
         try {
@@ -153,7 +153,7 @@ final class AdminMessageController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parseKst(), collect()
+        // collect() 도 이 try 안에 있다 — scheduled_at 검증(SendTime::parse(), collect()
         // 가 위임한다)이 여기서 실패할 수 있고, 지문을 만들거나 알리고를 부르기도 전에
         // 같은 422 로 다시 그려 입력을 지켜야 한다.
         try {
@@ -442,16 +442,28 @@ final class AdminMessageController
     }
 
     /**
-     * 발송 시각 입력을 SendTime 에 그대로 맡긴다. 이 화면의 다른 모든 시각(요청 시각
-     * 등)과 마찬가지로 관리자는 한국 표준시(KST)로 읽고 쓴다 — KST→UTC 변환·형식 검증·
-     * 하한(10분)·상한(30일) 검증은 모두 SendTime::parseKst() 하나가 맡는다(그 클래스
-     * 문서 주석 참고: 시간대는 그 클래스 밖에서 다루지 않는다). 형식이 잘못됐거나
-     * 범위를 벗어나면 SendTime::parseKst() 가 DomainError 를 던진다 — 여기서 잡지
-     * 않고 그대로 올려보낸다(collect() 호출부가 잡는다).
+     * 발송 시각 입력을 SendTime 에 그대로 맡긴다. 이 화면의 datetime-local 입력값은
+     * 오프셋을 낼 수 없으므로 SendTime::parse() 가 이 값을 언제나 한국 표준시(KST)
+     * 벽시계로 읽는다 — 이 화면의 다른 모든 시각(요청 시각 등)과 같은 기준이다.
+     * KST→UTC 변환·형식 검증·하한(10분)·상한(30일) 검증은 모두 SendTime::parse()
+     * 하나가 맡는다(그 클래스 문서 주석 참고: 시간대는 그 클래스 밖에서 다루지
+     * 않는다). 형식이 잘못됐거나 범위를 벗어나면 SendTime::parse() 가 DomainError 를
+     * 던진다 — 여기서 잡지 않고 그대로 올려보낸다(collect() 호출부가 잡는다).
+     *
+     * 여기서 UTC로 바꾼 값은 buildPreview() 의 표시용으로도 쓰이지만, dispatch() 는
+     * 이 값을 담은 request 배열을 그대로 $app->aligo()->send() 에 넘기고, 그 안의
+     * Dispatch::send() 가 검증을 위해 SendTime::parse() 를 한 번 더 부른다(확장이
+     * 부르는 것과 같은 문을 관리자 화면도 그대로 쓰기 때문이다). 오프셋을 붙이지
+     * 않고 그대로 돌려주면, 이미 UTC로 바꿔 둔 값이 오프셋 없는 문자열로 보여 그
+     * 두 번째 parse() 에서 다시 KST로 읽혀 9시간이 또 빠진다. "+00:00"을 붙여 이
+     * 값이 이미 절대 시각(UTC)이라는 것을 명시해 두면 두 번째 parse() 는 있는
+     * 그대로 존중할 뿐 다시 변환하지 않는다.
      */
     private function scheduledAtForRequest(string $raw): ?string
     {
-        return SendTime::parseKst($raw);
+        $utc = SendTime::parse($raw);
+
+        return $utc === null ? null : $utc . '+00:00';
     }
 
     /**
@@ -555,7 +567,7 @@ final class AdminMessageController
     private function buildPreview(array $collected): array
     {
         $request = $collected['request'];
-        // scheduled_at 은 collect() 안에서 이미 SendTime::parseKst() 가 검증·정규화했다
+        // scheduled_at 은 collect() 안에서 이미 SendTime::parse() 가 검증·정규화했다
         // (실패했다면 그 예외가 이미 preview()/dispatch() 의 422 처리로 빠졌을 것이고
         // 여기까지 오지 않는다) — 여기서 다시 검증하지 않는다.
         $scheduledAt = $request['scheduled_at'] ?? null;
