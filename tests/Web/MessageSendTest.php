@@ -7,6 +7,7 @@ namespace GnuCms\Tests\Web;
 use GnuCms\Aligo\AligoService;
 use GnuCms\App;
 use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -339,5 +340,77 @@ final class MessageSendTest extends WebTestCase
 
         self::assertStringContainsString('받는 사람 전원에게 똑같이 나갑니다', $html);
         self::assertStringContainsString('나머지 1명에게도 같은 변수값', $html);
+    }
+
+    /**
+     * 화면의 발송 시각 입력은 이 화면의 다른 모든 시각(요청 시각 등)과 같이 관리자가
+     * 사이트가 실제로 쓰는 시간대(한국 표준시)로 읽고 쓴다. datetime-local 입력값을
+     * 그대로 SendTime::parse() 에 넘기면 그 클래스는 이미 UTC로 본다(9시간 어긋난다) —
+     * 그래서 관리자가 입력한 KST 벽시계 값을 미리 UTC로 바꿔서 넘긴다.
+     *
+     * 예약은 알리고에 호출 자체를 미루는 것이 아니라, 알리고 API 를 한 번 부르되 그
+     * 안에 rdate·rtime(문자는 두 칸, DispatchTest::testSchedulesInsteadOfSendingNow
+     * 참고)을 실어 "그 시각에 내보내 달라"고 알리고에 맡기는 것이다 — 그래서 "지금
+     * 나가지 않았다"는 사실은 요청이 없었다는 것으로는 확인할 수 없고, 작업이
+     * 'scheduled' 로 남아 아직 끝나지 않았다는 것(finished_at·success·failure)과
+     * 실제로 나간 rdate·rtime 이 미래의 그 시각이라는 것으로 확인해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testSchedulingFromTheScreenCreatesAScheduledJob(array $dbConfig): void
+    {
+        $app = $this->ready($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->queueSmsOk($transport, 1);
+        $target = Clock::timestamp() + 3600;
+        $target -= $target % 60; // datetime-local 에는 초가 없다 — 분 단위로 맞춘다.
+        $targetKst = $target + 9 * 3600;
+        $typedKst = gmdate('Y-m-d\TH:i', $targetKst);
+
+        $response = $this->post($app, '/admin/messages/send/dispatch', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'channel' => 'sms', 'body' => '예약 발송 테스트', 'numbers' => '010-1111-2222',
+            'scheduled_at' => $typedKst,
+        ]);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        self::assertCount(1, $transport->requests, '알리고에 예약을 등록하는 호출은 한 번 나간다');
+        $fields = $transport->requests[0]['fields'];
+        self::assertSame(gmdate('Ymd', $targetKst), $fields['rdate'] ?? null,
+            '관리자가 입력한 한국 날짜가 알리고에도 한국 날짜 그대로 전달돼야 한다');
+        self::assertSame(gmdate('Hi', $targetKst), $fields['rtime'] ?? null,
+            '관리자가 입력한 한국 시각이 알리고에도 한국 시각 그대로 전달돼야 한다');
+
+        $job = $app->db()->selectOne('SELECT status, scheduled_at, finished_at FROM '
+            . $app->db()->table('message_jobs') . ' ORDER BY id DESC LIMIT 1');
+        self::assertSame('scheduled', $job['status']);
+        self::assertSame(gmdate('Y-m-d H:i:s', $target), $job['scheduled_at'],
+            '관리자가 입력한 한국 시각이 올바르게 UTC로 저장돼야 한다');
+        self::assertNull($job['finished_at'], '예약된 작업은 실제로 나갈 시각이 오기 전까지 끝난 것이 아니다');
+    }
+
+    /**
+     * 10분 안쪽 예약은 422 로 거절되고, 관리자가 입력한 본문·수신자·시각이 화면에
+     * 그대로 남아야 한다 — 절반쯤 채운 대량 발송을 검증 오류 하나로 잃어버리면 안 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testARefusedTimeKeepsWhatTheAdminTyped(array $dbConfig): void
+    {
+        $app = $this->ready($dbConfig);
+        $tooSoon = gmdate('Y-m-d\TH:i', Clock::timestamp() + 60 + 9 * 3600); // 1분 뒤(KST 표기)
+
+        $response = $this->post($app, '/admin/messages/send/dispatch', [
+            'csrf_token' => $_SESSION['csrf_token'],
+            'channel' => 'sms', 'body' => '잃어버리면 안 되는 본문', 'numbers' => "010-9999-8888\n010-7777-6666",
+            'scheduled_at' => $tooSoon,
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $html = $this->body($response);
+        self::assertStringContainsString('10분 뒤부터 30일 이내로 정해 주세요', $html);
+        self::assertStringContainsString('잃어버리면 안 되는 본문', $html);
+        self::assertStringContainsString('010-9999-8888', $html);
+        self::assertStringContainsString($tooSoon, $html, '입력한 시각 그대로 폼에 남아야 한다');
+        self::assertSame(0, (int) $app->db()->selectOne('SELECT COUNT(*) AS c FROM '
+            . $app->db()->table('message_jobs'))['c']);
     }
 }

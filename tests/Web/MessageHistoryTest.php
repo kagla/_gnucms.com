@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Web;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\App;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
+use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -41,6 +45,72 @@ final class MessageHistoryTest extends WebTestCase
             'body' => '안녕하세요', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
 
         return $jobId;
+    }
+
+    /** 예약된 작업 하나(수신자 1명, mid 하나, 아직 접수된 채로 취소를 기다리는 상태). */
+    private function seedScheduled(App $app, int $secondsFromNow = 3600): array
+    {
+        $db = $app->db();
+        $scheduledAt = gmdate('Y-m-d H:i:s', Clock::timestamp() + $secondsFromNow);
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '예약 발송', 'failover' => 0, 'total' => 1, 'success' => 0, 'failure' => 0,
+            'status' => 'scheduled', 'scheduled_at' => $scheduledAt, 'test_mode' => 0,
+            'created_at' => '2026-09-17 10:00:00']);
+        $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M1', 'phone' => '01012345678',
+            'body' => '예약 발송', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
+
+        return ['id' => $jobId, 'scheduled_at' => $scheduledAt];
+    }
+
+    /** 이미 끝난 작업 — 취소를 제공하면 안 되는 대조군. */
+    private function seedSent(App $app): int
+    {
+        return (int) $app->db()->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '이미 보냄', 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+            'status' => 'sent', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+    }
+
+    /**
+     * 취소 대상이 되는 두 묶음(mid)을 직접 심는다. 502명짜리 진짜 예약(Dispatch 의
+     * 500명 단위 청크)을 만들지 않고도, 부분 취소(한 묶음 성공·한 묶음 실패)를
+     * 재현하기 위한 최소 상태다 — Dispatch::cancel() 은 job_id 의 서로 다른 mid 개수만큼
+     * 취소를 시도한다.
+     */
+    private function seedScheduledWithTwoBatches(App $app): int
+    {
+        $db = $app->db();
+        $scheduledAt = gmdate('Y-m-d H:i:s', Clock::timestamp() + 3600);
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '예약 발송', 'failover' => 0, 'total' => 2, 'success' => 0, 'failure' => 0,
+            'status' => 'scheduled', 'scheduled_at' => $scheduledAt, 'test_mode' => 0,
+            'created_at' => '2026-09-17 10:00:00']);
+        foreach (['M1' => '01011110001', 'M2' => '01011110002'] as $mid => $phone) {
+            $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => $mid, 'phone' => $phone,
+                'body' => '예약 발송', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
+        }
+
+        return $jobId;
+    }
+
+    /**
+     * 실제 알리고 대신 가짜 전송기를 끼운다. 취소가 실제로 알리고를 부르는지 확인하는
+     * 시험은 진짜 서버를 부르면 안 된다.
+     */
+    private function fakeAligo(App $app): FakeAligoTransport
+    {
+        $transport = new FakeAligoTransport();
+        $app->setAligo(new AligoService($app->db(), $transport,
+            new SecretCipher('web-test-secret-that-is-long-enough')));
+
+        return $transport;
+    }
+
+    /** 취소 호출이 실제로 알리고 계정을 조회할 수 있게 계정과 채널을 준비해 둔다. */
+    private function ready(App $app): void
+    {
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
     }
 
     /**
@@ -231,5 +301,88 @@ final class MessageHistoryTest extends WebTestCase
 
         $html = $this->body($this->get($app, '/admin/messages/history', ['failed' => '1']));
         self::assertStringContainsString('결과 조회에 실패했습니다', $html);
+    }
+
+    /** 예약 작업의 상세에는 발송 예정 시각과 취소 버튼이 함께 보여야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testHistoryShowsTheScheduleAndOffersCancel(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $scheduled = $this->seedScheduled($app);
+        $sentJobId = $this->seedSent($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id']));
+
+        self::assertStringContainsString('예약됨', $html);
+        self::assertStringContainsString('발송 예정', $html);
+        $expectedDisplay = (new \DateTimeImmutable($scheduled['scheduled_at'], new \DateTimeZone('UTC')))
+            ->setTimezone(new \DateTimeZone('Asia/Seoul'))->format('Y.m.d H:i');
+        self::assertStringContainsString($expectedDisplay, $html, '한국 시각으로 바뀌어 보여야 한다');
+        self::assertStringContainsString(
+            '/admin/messages/history/' . $scheduled['id'] . '/cancel', $html, '취소 폼이 있어야 한다'
+        );
+        self::assertStringContainsString('예약 취소', $html);
+
+        // 이미 끝난 작업(취소할 수 없는 상태)은 취소 버튼을 보여주면 안 된다.
+        $sentHtml = $this->body($this->get($app, '/admin/messages/history/' . $sentJobId));
+        self::assertStringNotContainsString('예약 취소', $sentHtml);
+        self::assertStringNotContainsString(
+            '/admin/messages/history/' . $sentJobId . '/cancel', $sentHtml
+        );
+    }
+
+    /**
+     * 취소는 두 묶음 중 하나만 성공할 수 있다(발송 5분 전이 지난 묶음은 알리고가
+     * 거절한다). 화면은 "취소했습니다"로 뭉개지 않고 성공·실패 개수를 그대로 보여줘야
+     * 한다 — 아직 나갈 발송이 남아 있다는 사실을 관리자가 놓치면 안 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCancellingFromTheScreenReportsPartialFailure(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $jobId = $this->seedScheduledWithTwoBatches($app);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $transport->queue(200, '{"result_code":-804,"message":"too late"}');
+
+        $response = $this->post($app, '/admin/messages/history/' . $jobId . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('1', $query['cancel_ok']);
+        self::assertSame('1', $query['cancel_failed']);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId, $query));
+        self::assertStringContainsString('1개 취소', $html);
+        self::assertStringContainsString('1개는 발송 5분 전을 지나 취소할 수 없었습니다', $html);
+        // 부분 취소를 "전부 취소했습니다"처럼 보여주면 안 된다.
+        self::assertStringNotContainsString('예약을 취소했습니다.', $html);
+
+        $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '남은 묶음이 아직 나갈 것이므로 취소됐다고 적으면 안 된다');
+    }
+
+    /**
+     * 취소 라우트는 CSRF 표는 갖고 있지만 로그인하지 않은 손님을 로그인 화면으로
+     * 돌려보내야 한다 — 200 이 아니라는 사실만으로는 부족하다(예: 403 도 200 이 아니다).
+     * /login 을 먼저 열어 세션에 유효한 csrf_token 을 얻어 두면, 그 표는 통과하고
+     * 그 뒤의 관리자 검사에서 로그인 화면으로 밀려나는지를 정확히 가릴 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testGuestCannotCancel(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->get($app, '/login');
+
+        $response = $this->post($app, '/admin/messages/history/1/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        $this->assertLoginRedirect($response);
     }
 }

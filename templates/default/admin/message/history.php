@@ -9,6 +9,8 @@
 // 실패하고 있으면(키 취소 등) 사유를 대기 안내 위에 그대로 적는다 — 이유 없이 결과가
 // "결과를 알 수 없음"으로 바뀌는 것만 보이면 관리자가 손쓸 방법이 없다.
 $jobStatusLabels = [
+    // 예약된 채로 아직 발송 시각이 오지 않은 작업. scheduled_at 열에 그 시각을 보여준다.
+    'scheduled' => ['label' => '예약됨', 'class' => 'badge-info'],
     'sending' => ['label' => '결과를 기다리는 중', 'class' => 'badge-ghost'],
     'sent'    => ['label' => '성공', 'class' => 'badge-success'],
     'failed'  => ['label' => '실패', 'class' => 'badge-error'],
@@ -16,6 +18,8 @@ $jobStatusLabels = [
     // 7일이 지나도 결과를 알아내지 못해 조회를 포기한 건이 남은 작업. 성공이라고도
     // 실패라고도 말하지 않는다 — 실패로 적으면 관리자가 다시 보내 중복 발송이 된다.
     'unknown' => ['label' => '결과를 알 수 없음', 'class' => 'badge-warning'],
+    // 관리자가 멈춘 예약. 실패가 아니다 — 나가지 않도록 의도적으로 멈춘 것이다.
+    'cancelled' => ['label' => '취소됨', 'class' => 'badge-ghost'],
 ];
 $channelLabels = ['at' => '알림톡', 'sms' => '문자'];
 $totalPages = (int) ceil($listing['total'] / max(1, $listing['per_page']));
@@ -52,14 +56,15 @@ $pageUrl = function (int $p) {
 
     <div class="table-wrap">
       <table class="table table-zebra">
-        <thead><tr><th>요청 시각</th><th>채널</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
+        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
         <tbody>
         <?php if ($listing['items'] === []): ?>
-          <tr class="table-empty"><td colspan="9">아직 보낸 작업이 없습니다.</td></tr>
+          <tr class="table-empty"><td colspan="10">아직 보낸 작업이 없습니다.</td></tr>
         <?php else: foreach ($listing['items'] as $row): ?>
           <?php $statusInfo = $jobStatusLabels[$row['status']] ?? ['label' => (string) $row['status'], 'class' => 'badge-ghost']; ?>
           <tr>
             <td data-label="요청 시각"><time datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at'], 'Y.m.d H:i') ?></time></td>
+            <td data-label="발송 예정"><?php if ($row['scheduled_at'] !== null): ?><time datetime="<?= $this->e($row['scheduled_at']) ?>"><?= $this->date($row['scheduled_at'], 'Y.m.d H:i') ?></time><?php else: ?>-<?php endif ?></td>
             <td data-label="채널"><?= $this->e($channelLabels[$row['channel']] ?? $row['channel']) ?></td>
             <td data-label="템플릿"><?= $row['template_label'] !== null ? $this->e($row['template_label']) : '-' ?></td>
             <td data-label="총" class="right"><?= $this->e($row['total']) ?></td>

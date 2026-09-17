@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace GnuCms\Web\Controller;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\PhoneNumber;
+use GnuCms\Aligo\SendTime;
 use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
 use GnuCms\App;
@@ -309,7 +312,47 @@ final class AdminMessageController
         return View::fromRequest($request)->render($response, 'admin/message/history_detail', [
             'job' => $job,
             'notice' => $this->dispatchNotice($request->getQueryParams(), (int) $job['id']),
+            'cancel_notice' => $this->cancelNotice($request->getQueryParams(), (int) $job['id']),
         ]);
+    }
+
+    /**
+     * 예약된 작업의 취소. AligoService::cancel() 이 돌려주는 결과(부분 취소 포함)를
+     * 문장이 아니라 숫자로만 리다이렉트에 싣는다(클래스 주석 참고) — 문장은
+     * cancelNotice() 가 이력 상세에서 조립한다. 부분 취소는 절대 숨기지 않는다: 몇 개가
+     * 취소되고 몇 개가 취소되지 못했는지 둘 다 싣는다.
+     *
+     * 더는 'scheduled'가 아닌 작업(이미 나갔거나, 이미 취소됐거나)을 취소하려 하면
+     * AligoService::cancel() 이 422 로 거절한다 — 그 사실도 숫자 대신 깃발
+     * (cancel_blocked)로만 넘긴다.
+     */
+    public function cancel(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $jobId = (int) $args['id'];
+
+        try {
+            $result = $this->app->aligo()->cancel($jobId);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+
+            return $this->redirect($request, $response, 'admin.messages.history.detail', [
+                'cancel' => (string) $jobId,
+                'cancel_ok' => '0',
+                'cancel_failed' => '0',
+                'cancel_blocked' => '1',
+            ], ['id' => (string) $jobId]);
+        }
+
+        return $this->redirect($request, $response, 'admin.messages.history.detail', [
+            'cancel' => (string) $jobId,
+            'cancel_ok' => (string) $result['cancelled'],
+            'cancel_failed' => (string) $result['failed'],
+        ], ['id' => (string) $jobId]);
     }
 
     /**
@@ -386,11 +429,42 @@ final class AdminMessageController
                 'failover' => ($input['failover'] ?? '') === '1',
                 'created_by' => $this->app->guestAcl()->identity()->displayName() ?? '',
                 'recipients' => $recipients,
+                'scheduled_at' => $this->scheduledAtForRequest((string) ($input['scheduled_at'] ?? '')),
             ],
             'skipped' => $skipped,
             'ineligible' => $ineligible,
             'missing' => $missing,
         ];
+    }
+
+    /**
+     * 발송 시각 입력(KST 벽시계)을 SendTime::parse() 가 요구하는 형태로 바꾼다. 이
+     * 화면의 다른 모든 시각(요청 시각 등)과 마찬가지로 관리자는 한국 표준시로 읽고
+     * 쓴다. 그런데 SendTime::parse() 는 받은 문자열을 이미 UTC로 본다 — 그 클래스의
+     * 계약이며, 입력 시점에는 어떤 오프셋도 적용하지 않는다(SendTime 문서 주석 참고).
+     * 그래서 KST→UTC 변환은 여기, 화면 입력이 Dispatch 로 넘어가기 직전 단 한 곳에서만
+     * 한다 — 틀리면 예약이 9시간 어긋난 시각에 나간다.
+     *
+     * 형식이 아예 다르면(파싱 실패) 원본을 그대로 돌려준다 — 여기서 따로 오류를 내지
+     * 않고, SendTime::parse() 가 같은 "형식이 올바르지 않습니다" 오류를 내게 둔다.
+     */
+    private function scheduledAtForRequest(string $raw): ?string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+        $normalized = str_contains($raw, 'T') ? $raw : preg_replace('/\s+/', 'T', $raw, 1);
+        foreach (['!Y-m-d\TH:i:s', '!Y-m-d\TH:i'] as $format) {
+            $dt = DateTimeImmutable::createFromFormat($format, $normalized, new DateTimeZone('Asia/Seoul'));
+            $errors = DateTimeImmutable::getLastErrors();
+            $clean = $errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0);
+            if ($dt !== false && $clean) {
+                return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s');
+            }
+        }
+
+        return $raw;
     }
 
     /**
@@ -438,6 +512,44 @@ final class AdminMessageController
         return $parts === [] ? $sentence : $sentence . ' ' . implode(' · ', $parts) . '.';
     }
 
+    /**
+     * 이력 상세에 보여줄 취소 결과 문장. cancel() 이 넘긴 숫자·깃발만으로 여기서
+     * 조립한다 — 클래스 주석의 원칙 그대로, 문장 자체를 쿼리로 받지 않는다.
+     *
+     * 부분 취소("2개 취소, 1개는 …")는 절대 "취소했습니다"로 뭉개지 않는다 — 아직 나갈
+     * 발송이 남아 있다는 사실이 이 기능 전체의 존재 이유다. 반환값의 'ok' 는 화면이
+     * 성공(초록)과 주의(노랑) 배지를 가르는 데만 쓴다 — 문장 자체는 이미 정확하다.
+     *
+     * @return array{ok:bool,message:string}|null
+     */
+    private function cancelNotice(array $query, int $jobId): ?array
+    {
+        if ($jobId <= 0 || self::countParam($query, 'cancel') !== $jobId) {
+            return null;
+        }
+        if (($query['cancel_blocked'] ?? '') === '1') {
+            return ['ok' => false, 'message' => '이미 처리되었거나 예약 상태가 아니어서 취소할 수 없습니다.'];
+        }
+        $ok = self::countParam($query, 'cancel_ok');
+        $failed = self::countParam($query, 'cancel_failed');
+        if ($ok > 0 && $failed === 0) {
+            return ['ok' => true, 'message' => '예약을 취소했습니다.'];
+        }
+        if ($ok === 0 && $failed === 0) {
+            return ['ok' => false, 'message' => '취소할 예약이 없습니다.'];
+        }
+        if ($ok === 0) {
+            return ['ok' => false, 'message' => sprintf(
+                '취소하지 못했습니다. %d개 모두 발송 5분 전을 지나 취소할 수 없었습니다. 예정대로 발송됩니다.', $failed
+            )];
+        }
+
+        return ['ok' => false, 'message' => sprintf(
+            '%d개 묶음 중 %d개 취소, %d개는 발송 5분 전을 지나 취소할 수 없었습니다. 남은 발송은 예정대로 나갑니다.',
+            $ok + $failed, $ok, $failed
+        )];
+    }
+
     /** 쿼리에서 0 이상의 정수만 읽는다. 숫자가 아니면 0 으로 본다. */
     private static function countParam(array $query, string $name): int
     {
@@ -456,6 +568,10 @@ final class AdminMessageController
     private function buildPreview(array $collected): array
     {
         $request = $collected['request'];
+        // 예약 시각도 실제 발송(Dispatch::send())과 같은 규칙(SendTime::parse())으로
+        // 먼저 검증한다 — 10분 안쪽·30일 밖 같은 거절은 발송 버튼을 눌러서야가 아니라
+        // 미리보기 단계에서 바로 알 수 있어야 한다.
+        $scheduledAt = SendTime::parse($request['scheduled_at'] ?? null);
         $recipients = $request['recipients'];
         $body = $request['channel'] === 'at' ? $this->templateBody($request['tpl_code']) : $request['body'];
 
@@ -469,6 +585,7 @@ final class AdminMessageController
             'missing' => $collected['missing'],
             'bytes' => $sample === null ? null : MessageText::byteLength($sample),
             'classify' => $sample === null ? null : MessageText::channelFor($sample),
+            'scheduled_at' => $scheduledAt,
         ];
     }
 

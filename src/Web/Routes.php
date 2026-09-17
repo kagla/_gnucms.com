@@ -138,6 +138,8 @@ final class Routes
             ->setName('admin.messages.history.refresh');
         $slim->get('/admin/messages/history/{id:[0-9]+}', [$msg, 'historyDetail'])
             ->setName('admin.messages.history.detail');
+        $slim->post('/admin/messages/history/{id:[0-9]+}/cancel', [$msg, 'cancel'])
+            ->setName('admin.messages.history.cancel');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
         $slim->post('/admin/content/trash/{id:[0-9]+}/restore', [$cms, 'restore'])->setName('admin.content.restore');

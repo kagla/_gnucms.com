@@ -31,7 +31,7 @@ final class AdminAligoController
     {
         $this->app->guestAcl()->assertGlobalAdmin();
         $query = $request->getQueryParams();
-        $notice = ($query['saved'] ?? '') === '1' ? '설정을 저장했습니다.' : null;
+        $notice = ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null;
 
         return $this->render($request, $response, null, [], null, null, [], $notice);
     }
@@ -83,13 +83,18 @@ final class AdminAligoController
         return $this->render($request, $response, null, [], null, null, $profiles);
     }
 
+    /**
+     * 채널을 끄면 이미 걸린 예약도 함께 취소된다(AligoService::setChannelEnabled()) —
+     * 부분 취소가 흔하므로(발송 5분 전이 지난 건은 알리고가 거절한다) 그 결과를 저장
+     * 안내에 숫자로 싣는다. 문장은 savedNotice() 가 조립한다.
+     */
     public function toggle(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
         try {
-            $this->app->aligo()->setChannelEnabled(
+            $result = $this->app->aligo()->setChannelEnabled(
                 (string) ($input['channel'] ?? ''), ($input['action'] ?? '') === 'enable'
             );
         } catch (DomainError $e) {
@@ -100,7 +105,48 @@ final class AdminAligoController
             return $this->render($request, $response->withStatus(422), null, $e->details(), null, null, []);
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', ['saved' => '1']);
+        $query = ['saved' => '1'];
+        if ($result['cancelled'] > 0 || $result['failed'] > 0) {
+            $query['cancel_ok'] = (string) $result['cancelled'];
+            $query['cancel_failed'] = (string) $result['failed'];
+        }
+
+        return $this->redirect($request, $response, 'admin.aligo', $query);
+    }
+
+    /**
+     * 저장 안내 문장. 채널을 끌 때 함께 취소된(또는 취소하지 못한) 예약이 있으면
+     * 그 숫자를 문장에 더한다 — cancel_ok·cancel_failed 는 toggle() 이 숫자로만 실어
+     * 넘긴 값이다(클래스 주석의 원칙: 문장은 쿼리로 받지 않고 여기서 만든다).
+     */
+    private function savedNotice(array $query): string
+    {
+        $ok = self::countParam($query, 'cancel_ok');
+        $failed = self::countParam($query, 'cancel_failed');
+        if ($ok === 0 && $failed === 0) {
+            return '설정을 저장했습니다.';
+        }
+        if ($failed === 0) {
+            return sprintf('설정을 저장했습니다. 예약된 발송 %d개를 함께 취소했습니다.', $ok);
+        }
+        if ($ok === 0) {
+            return sprintf(
+                '설정을 저장했습니다. 예약된 발송을 취소하려 했지만 %d개는 발송 5분 전을 지나 취소하지 못했습니다.', $failed
+            );
+        }
+
+        return sprintf(
+            '설정을 저장했습니다. 예약된 발송 %d개 중 %d개를 취소했고, %d개는 발송 5분 전을 지나 취소하지 못했습니다.',
+            $ok + $failed, $ok, $failed
+        );
+    }
+
+    /** 쿼리에서 0 이상의 정수만 읽는다. 숫자가 아니면 0 으로 본다. */
+    private static function countParam(array $query, string $name): int
+    {
+        $value = $query[$name] ?? null;
+
+        return is_scalar($value) && ctype_digit(trim((string) $value)) ? (int) $value : 0;
     }
 
     /**

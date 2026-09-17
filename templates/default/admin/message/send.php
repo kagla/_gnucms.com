@@ -61,6 +61,16 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
         </div>
       </div>
 
+      <div class="form-section">
+        <h2 class="form-section-title">발송 시각</h2>
+        <fieldset class="fieldset<?php if (array_key_exists('scheduled_at', $field_errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">예약 시각 (비워두면 즉시 발송됩니다)</legend>
+          <input class="input input-bordered" type="datetime-local" name="scheduled_at" value="<?= $this->e($values['scheduled_at'] ?? '') ?>">
+          <p class="fieldset-label">10분 뒤부터 30일 이내로 정할 수 있습니다.</p>
+          <?php if (array_key_exists('scheduled_at', $field_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($field_errors['scheduled_at']) ?></p><?php endif ?>
+        </fieldset>
+      </div>
+
       <div class="form-section" data-channel-only="at">
         <h2 class="form-section-title">알림톡 템플릿</h2>
         <fieldset class="fieldset<?php if (array_key_exists('tpl_code', $field_errors)): ?> is-invalid<?php endif ?>">
@@ -138,6 +148,13 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
         <div class="form-section">
           <h2 class="form-section-title">미리보기</h2>
           <div class="alert alert-info">
+            <p>
+              <?php if ($preview['scheduled_at'] !== null): ?>
+                <span class="badge badge-info badge-soft"><?= $this->date($preview['scheduled_at'], 'Y-m-d H:i') ?>에 발송 예정</span>
+              <?php else: ?>
+                <span class="badge badge-ghost badge-soft">지금 바로 발송</span>
+              <?php endif ?>
+            </p>
             <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?><?php if ($preview['ineligible'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['ineligible']) ?>명은 탈퇴하거나 차단된 회원이라 제외됩니다<?php endif ?><?php if ($preview['missing'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['missing']) ?>명은 회원을 찾을 수 없어 제외됩니다<?php endif ?></p>
             <?php if ($preview['sample'] !== null): ?>
               <p class="card-sub">첫 번째 수신자에게 나갈 본문<?php if ($preview['bytes'] !== null): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?><?php if ($variable_names !== [] && $preview['count'] > 1): ?> — 나머지 <?= $this->e($preview['count'] - 1) ?>명에게도 같은 변수값이 들어간 본문이 갑니다<?php endif ?></p>
