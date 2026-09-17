@@ -227,18 +227,24 @@ final class AdminMessageController
     public function history(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
-        $refreshError = null;
+        // 방금 누른 갱신이 실패했다면(아래 refresh()) 그 사실만 깃발로 넘어온다.
+        // 아래 조회가 이번에도 실패하면 구체적인 사유로 덮인다 — 재확인 주기(60초)
+        // 안이라 이번 방문에서는 아무것도 묻지 않고 지나갈 수 있기 때문에, 그때도
+        // "조금 전 실패했다"는 사실만은 남아야 한다. 문장은 여기서 만든다.
+        $refreshError = (($request->getQueryParams()['failed'] ?? '') === '1')
+            ? '결과 조회에 실패했습니다. 잠시 뒤 다시 시도해 주세요.'
+            : null;
         try {
             $this->app->aligo()->history->refresh();
             // refresh() 자체는 개별 조회 실패를 삼키고 다음 방문에 다시 시도한다.
             // 그 실패를 여기서도 버리면, API 키가 취소된 사이트의 관리자는 결과가
             // 천천히 "결과를 알 수 없음"으로 바뀌는 것만 볼 뿐 이유를 끝내 알 수 없다.
-            $refreshError = $this->app->aligo()->history->lastFailure();
+            $refreshError = $this->app->aligo()->history->lastFailure() ?? $refreshError;
         } catch (DomainError | TransportFailure $e) {
             // 조회에 실패해도 이력 목록은 보여준다. 다음 방문에 다시 시도한다.
             // 사유는 화면에 적는다 — DomainError·TransportFailure 메시지에는 API 키가
             // 실리지 않는다(원문 대신 ResultCodes 가 정리한 사유만 담긴다).
-            $refreshError = $e->getMessage();
+            $refreshError = $e instanceof DomainError ? $this->firstError($e) : $e->getMessage();
         }
         $page = max(1, (int) ($request->getQueryParams()['page'] ?? 1));
         $listing = $this->app->aligo()->history->jobs($page);
@@ -261,16 +267,23 @@ final class AdminMessageController
         $input = $this->input($request);
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
+        $failed = false;
         try {
             $this->app->aligo()->history->refresh();
+            $failed = $this->app->aligo()->history->lastFailure() !== null;
         } catch (DomainError | TransportFailure $e) {
-            // 갱신 실패도 조용히 넘어간다. 목록은 저장된 값으로 다시 그려진다.
+            // 갱신 실패로 화면이 깨지지는 않는다. 목록은 저장된 값으로 다시 그려진다.
+            $failed = true;
         }
         $page = max(1, (int) ($input['page'] ?? 1));
+        // 실패했다는 사실만 깃발로 넘긴다. 사유 문장을 URL 에 실어 보내면 그 자리가
+        // 공격자에게 열린다(클래스 주석 참고) — 목록 화면이 문장을 만든다.
+        $query = $page > 1 ? ['page' => (string) $page] : [];
+        if ($failed) {
+            $query['failed'] = '1';
+        }
 
-        return $this->redirect(
-            $request, $response, 'admin.messages.history', $page > 1 ? ['page' => $page] : []
-        );
+        return $this->redirect($request, $response, 'admin.messages.history', $query);
     }
 
     /** 작업 하나의 상세. 수신자별 결과를 전체 번호로 보여준다(목록과 달리 여기서만 전체를 보여준다). */

@@ -208,4 +208,28 @@ final class MessageHistoryTest extends WebTestCase
         self::assertStringContainsString('발송을 시작했습니다', $mine);
         self::assertStringNotContainsString('발송을 시작했습니다', $other);
     }
+
+    /**
+     * 손으로 누른 갱신이 실패하면 목록으로 돌아가며 그 사실을 알려야 한다. 돌아간
+     * 화면이 다시 조회하지는 않는다 — 방금 찍힌 재확인 표시(60초) 안이라 아무것도
+     * 묻지 않고 지나가므로, 실패했다는 사실이 깃발로 따라오지 않으면 조용히 사라진다.
+     * URL 에는 깃발만 싣고 문장은 서버가 만든다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailedManualRefreshSaysSoOnTheListItReturnsTo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seed($app);
+
+        $response = $this->post($app, '/admin/messages/history/refresh', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('1', $query['failed'] ?? null);
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['failed' => '1']));
+        self::assertStringContainsString('결과 조회에 실패했습니다', $html);
+    }
 }
