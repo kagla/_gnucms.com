@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Web;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\App;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
+use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -54,6 +58,53 @@ final class MessageTemplatesTest extends WebTestCase
 
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('승인', $this->body($response));
+    }
+
+    /**
+     * 화면의 "다시 가져오기" 버튼(=/admin/messages/templates/fetch)이 실제로 예약을
+     * 취소하는지 확인한다. AdminMessageController::fetchTemplates() 가
+     * AligoService::importTemplates() 가 아니라 예전처럼 Templates::fetch() 를 직접
+     * 부르는 채로 남아 있으면, 이 테스트는 스위치(사본이 꺼지는 것)는 그대로 일어나도
+     * 작업이 여전히 'scheduled'로 남아 실패한다 — 관리자가 템플릿을 다시 가져오는 유일한
+     * 통로가 새 조율 경로를 실제로 타는지는 이 경로로만 검증할 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testRefetchingThroughTheScreenCancelsScheduleOfATemplateThatLostApproval(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = new FakeAligoTransport();
+        $app->setAligo(new AligoService($app->db(), $transport,
+            new SecretCipher('web-test-secret-that-is-long-enough')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('at', true);
+
+        $transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '본문',
+            'status' => 'A', 'inspStatus' => 'APR']]]));
+        $app->aligo()->templates->fetch();
+        $app->aligo()->templates->setEnabled('T1', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $transport->queue(200, (string) json_encode(['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
+        $jobId = $app->aligo()->send(['channel' => 'at', 'tpl_code' => 'T1', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        // 화면에서 다시 가져오면 T1 은 승인을 잃은 채(status=S)로 온다.
+        $transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '본문',
+            'status' => 'S', 'inspStatus' => 'APR']]]));
+        $transport->queue(200, '{"code":0}');
+
+        $response = $this->post($app, '/admin/messages/templates/fetch',
+            ['csrf_token' => $_SESSION['csrf_token']]);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame(0, (int) $app->aligo()->templates->find('T1')['enabled'], '승인을 잃었으므로 꺼져 있어야 한다');
+
+        $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
     }
 
     #[DataProvider('connectionProvider')]

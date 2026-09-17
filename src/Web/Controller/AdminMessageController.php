@@ -59,7 +59,7 @@ final class AdminMessageController
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
         try {
-            $counts = $this->app->aligo()->templates->fetch();
+            $counts = $this->app->aligo()->importTemplates();
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
