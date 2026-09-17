@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Db;
 
+use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
 use GnuCms\Tests\Support\DatabaseTestCase;
@@ -92,6 +93,48 @@ final class AligoSchemaTest extends DatabaseTestCase
         $recipient = $db->selectOne('SELECT id FROM ' . $db->table('message_recipients') . ' WHERE id = ?',
             [(int) $recipientId]);
         self::assertNotNull($recipient, 'message_recipients 의 기존 행이 지워지면 안 된다');
+    }
+
+    /**
+     * 대체문자 결과 대기열은 이력 화면을 열 때마다 fallback_status·smid 로 훑는다.
+     * 알림톡 대기열과 달리 인덱스가 없어 매번 표 전체를 읽고 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testFreshInstallIndexesTheFallbackQueue(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+
+        self::assertTrue($this->hasIndex($db, $config, 'ix_message_recipients_fallback'));
+    }
+
+    /** 이미 표가 있는 설치에도 인덱스만 따로 생겨야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testUpgradingAddsTheFallbackIndexToAnExistingTable(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->execute('DROP INDEX ' . $db->index('ix_message_recipients_fallback')
+            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_recipients')));
+        self::assertFalse($this->hasIndex($db, $config, 'ix_message_recipients_fallback'));
+
+        (new Schema($db))->migrateAligoMessaging();
+
+        self::assertTrue($this->hasIndex($db, $config, 'ix_message_recipients_fallback'));
+    }
+
+    private function hasIndex(Connection $db, array $config, string $logicalName): bool
+    {
+        $name = $db->prefix() . $logicalName;
+        if (str_starts_with($config['dsn'], 'sqlite:')) {
+            return $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+                [$name]) !== null;
+        }
+        foreach ($db->select('SHOW INDEX FROM ' . $db->table('message_recipients')) as $row) {
+            if ((string) ($row['Key_name'] ?? '') === $name) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function testSchemaVersionIsTwentyThree(): void

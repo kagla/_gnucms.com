@@ -61,7 +61,15 @@ final class PhoneNumber
         return $digits;
     }
 
-    /** 이력 목록용. 가운데만 가리고 앞뒤는 남겨 누구인지 구분할 수 있게 한다. */
+    /**
+     * 가운데만 가리고 앞뒤는 남겨 누구인지 구분할 수 있게 한다.
+     *
+     * 쓰는 곳은 관리자 회원 목록이다(`docs/superpowers/plans/2026-09-17-aligo-2-member-phone.md`
+     * 의 회원 휴대폰번호 작업에서 호출한다). 이력 **목록**은 작업 단위라 수신번호를
+     * 아예 싣지 않으므로 여기서 가릴 것이 없고, 이력 **상세**는 전체 번호를 그대로
+     * 보여준다 — 둘 다 의도한 선택이다. 이 함수가 이력 화면에서 안 보인다고 해서
+     * 죽은 코드가 아니다.
+     */
     public static function mask(string $digits): string
     {
         $formatted = self::format($digits);

@@ -30,8 +30,8 @@ final class Schema
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
         'ux_write_rate_limits',
-        'ix_message_recipients_job', 'ix_message_recipients_mid', 'ux_alimtalk_templates_code',
-        'ix_message_jobs_created',
+        'ix_message_recipients_job', 'ix_message_recipients_mid', 'ix_message_recipients_fallback',
+        'ux_alimtalk_templates_code', 'ix_message_jobs_created',
     ];
 
     /** @var Connection */
@@ -329,6 +329,9 @@ final class Schema
             'CREATE INDEX ix_message_jobs_created ON message_jobs (created_at, id)',
             'CREATE INDEX ix_message_recipients_job ON message_recipients (job_id, id)',
             'CREATE INDEX ix_message_recipients_mid ON message_recipients (mid, status)',
+            // 대체문자 결과 대기열. 이력 화면을 열 때마다 fallback_status 와 smid 로
+            // 훑으므로 알림톡 대기열(mid, status)과 똑같이 인덱스가 필요하다.
+            'CREATE INDEX ix_message_recipients_fallback ON message_recipients (fallback_status, smid)',
             'CREATE UNIQUE INDEX ux_alimtalk_templates_code ON alimtalk_templates (tpl_code)',
         ];
     }

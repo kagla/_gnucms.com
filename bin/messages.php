@@ -15,6 +15,9 @@ declare(strict_types=1);
  *   php bin/messages.php refresh 50               최대 50건 갱신
  *   php bin/messages.php refresh 50 /경로/config.php  다른 설정 파일을 쓴다
  *
+ * 건수는 이번 실행에 부를 알리고 조회 횟수의 상한이다. 알림톡 결과 대기열과 대체문자
+ * 결과 대기열이 이 상한을 나눠 쓴다 — 두 대기열을 합쳐 그 수를 넘지 않는다.
+ *
  * 여러 번 돌려도 안전하다. 이미 결과가 잡힌 건은 다시 조회하지 않는다.
  */
 
@@ -30,7 +33,8 @@ if (PHP_SAPI !== 'cli') {
 $command = $argv[1] ?? '';
 if ($command !== 'refresh') {
     fwrite(STDERR, "사용법: php bin/messages.php refresh [건수] [/경로/config.php]\n"
-        . "발송 결과를 알리고에 물어 갱신합니다. 관리자가 이력 화면을 열 때도 갱신되므로\n"
+        . "발송 결과를 알리고에 물어 갱신합니다. 건수는 알림톡 결과와 대체문자 결과를\n"
+        . "합친 조회 횟수의 상한입니다(기본 20). 관리자가 이력 화면을 열 때도 갱신되므로\n"
         . "cron 없이 동작하며, 이 CLI는 cron을 쓸 수 있는 환경을 위한 선택 사항입니다.\n");
     exit(1);
 }
