@@ -36,4 +36,16 @@ final class VariablesTest extends TestCase
             self::assertStringContainsString('주문번호', $e->details()['vars']);
         }
     }
+
+    public function testRefusesBlankPlaceholdersWithoutWarning(): void
+    {
+        // 공백 전용 플레이스홀더는 silent hole을 방지하기 위해 거절해야 한다.
+        // 이는 PHP warning 없이 정상 예외로 처리되어야 한다.
+        try {
+            Variables::apply('안내 #{   } 문구입니다', []);
+            self::fail('공백만 있는 플레이스홀더는 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('빈 변수 마커', $e->details()['vars']);
+        }
+    }
 }

@@ -51,6 +51,15 @@ final class Variables
                 '값이 비어 있는 변수가 있습니다: ' . implode(', ', $missing)]);
         }
 
+        // 공백 전용 플레이스홀더(#{   }, #{}) 감지
+        preg_match_all(self::PATTERN, $body, $matches);
+        foreach ($matches[1] as $name) {
+            if (trim($name) === '') {
+                throw DomainError::validation(['vars' =>
+                    '본문에 빈 변수 마커가 있습니다. 템플릿 텍스트를 확인하세요.']);
+            }
+        }
+
         return (string) preg_replace_callback(
             self::PATTERN,
             static fn (array $m): string => (string) $values[trim($m[1])],
