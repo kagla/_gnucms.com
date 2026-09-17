@@ -11,6 +11,7 @@ use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\DatabaseTestCase;
 use GnuCms\Tests\Support\FakeAligoTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionMethod;
 
 final class AligoServiceTest extends DatabaseTestCase
 {
@@ -306,5 +307,58 @@ final class AligoServiceTest extends DatabaseTestCase
         // 승인을 유지한 T2 의 예약은 손대지 않는다.
         $t2Job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$t2JobId]);
         self::assertSame('scheduled', $t2Job['status']);
+    }
+
+    /**
+     * 취소 대상 목록을 만든 시점(scheduledJobIdsForChannel() 의 SELECT)과 실제로
+     * Dispatch::cancel() 을 부르는 시점 사이에는 틈이 있다 — 다른 관리자가 열어 둔 이력
+     * 화면의 History::refresh() 가 그 사이 한 작업을 먼저 끝냈거나, 끄기 버튼이 두 번
+     * 눌려 겹친 두 요청의 목록이 같은 작업을 함께 보고 있었을 수 있다. 그 작업은
+     * Dispatch::cancel() 의 가드절에서 거부되어 DomainError 를 던지는데, 그 예외 하나
+     * 때문에 배치의 나머지 작업이 통째로 시도되지 못하면(그리고 그 사실이 호출부에
+     * 남지 않으면) 스위치는 꺼졌는데 취소는 부분적으로만 시도된 채 아무도 모르게 된다.
+     *
+     * cancelJobs() 는 private 이므로, 두 작업이 든 목록을 직접 만들어 리플렉션으로 부른다
+     * — 첫 작업의 상태를 미리 'scheduled' 가 아닌 값으로 바꿔 두면, "목록을 만들 때는
+     * scheduled 였는데 취소를 시도할 때는 아니다"라는 경쟁 상황을 한 번의 동기 호출
+     * 안에서 그대로 재현할 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testOneJobRejectedByTheGuardClauseDoesNotStopTheRestOfTheBatch(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600);
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $staleJobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01011111111']]]);
+        $transport->queue(200, '{"result_code":1,"msg_id":"M2","success_cnt":1,"error_cnt":0}');
+        $healthyJobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01022222222']]]);
+
+        // 이 작업은 더는 'scheduled'가 아니다 — Dispatch::cancel() 이 가드절에서 거부한다.
+        $db->update('message_jobs', ['status' => 'sent'], 'id = :id', ['id' => $staleJobId]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+
+        $method = new ReflectionMethod(AligoService::class, 'cancelJobs');
+        $method->setAccessible(true);
+        $result = $method->invoke($service, [$staleJobId, $healthyJobId]);
+
+        self::assertSame(1, $result['cancelled']);
+        self::assertSame(1, $result['failed']);
+        self::assertNotSame([], $result['reasons']);
+        self::assertStringContainsString((string) $staleJobId, implode(' ', $result['reasons']),
+            '거부된 작업이 어느 것인지 이유에 남아야 한다');
+
+        // 거부된 작업 뒤에 있던 작업도 시도되어 실제로 취소됐다 — 앞선 실패가 뒤를 막지 않는다.
+        $healthyJob = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs')
+            . ' WHERE id = ?', [$healthyJobId]);
+        self::assertSame('cancelled', $healthyJob['status']);
     }
 }

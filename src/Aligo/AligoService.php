@@ -135,6 +135,16 @@ final class AligoService
      * 나머지 작업의 취소 시도를 막지 않는다 — Dispatch::cancel() 이 mid 하나의 실패를
      * 삼키지 않는 것과 같은 이유다.
      *
+     * Dispatch::cancel() 은 그 작업이 더는 'scheduled'가 아니면(존재하지 않거나 이미
+     * 끝났거나) 가드절 DomainError 를 던진다. scheduledJobIdsForChannel()·
+     * scheduledJobIdsForTemplates() 가 목록을 만든 시점과 여기서 실제로 취소를 시도하는
+     * 시점 사이에는 틈이 있다 — 다른 관리자가 열어 둔 이력 화면의 History::refresh() 가
+     * 그 사이 이 작업을 먼저 끝냈거나, 끄기 버튼이 두 번 눌려 겹친 두 요청의 목록이
+     * 같은 작업을 함께 보고 있었을 수 있다. 이 예외를 여기서 잡지 않으면 작업 하나
+     * 때문에 뒤에 남은 작업은 통째로 시도되지도 못한 채 호출부에는 평범한 422 하나만
+     * 올라가고, 무엇이 취소를 시도조차 못 했는지는 아무 데도 남지 않는다 — 그래서
+     * mid 하나의 실패와 똑같이 실패로 세고 이유를 남긴 뒤 다음 작업으로 넘어간다.
+     *
      * @param list<int> $jobIds
      * @return array{cancelled:int,failed:int,reasons:list<string>}
      */
@@ -144,7 +154,13 @@ final class AligoService
         $failed = 0;
         $reasons = [];
         foreach ($jobIds as $jobId) {
-            $result = $this->dispatch->cancel($jobId);
+            try {
+                $result = $this->dispatch->cancel($jobId);
+            } catch (DomainError $e) {
+                $failed++;
+                $reasons[] = '작업 #' . $jobId . ': ' . (string) ($e->details()['job'] ?? $e->getMessage());
+                continue;
+            }
             $cancelled += $result['cancelled'];
             $failed += $result['failed'];
             array_push($reasons, ...$result['reasons']);
