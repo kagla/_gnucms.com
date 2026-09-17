@@ -144,4 +144,28 @@ final class AlimtalkApiTest extends DatabaseTestCase
         self::assertIsArray($result);
         self::assertEmpty($result);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testCancelSendsTheMidToTheCancelPath(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":0}');
+
+        $api->cancel('M77');
+
+        $request = $this->transport->requests[0];
+        self::assertStringContainsString('/akv10/cancel/', $request['url']);
+        self::assertSame('M77', $request['fields']['mid']);
+        self::assertSame('KEY', $request['fields']['apikey']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCancelTooLateBecomesAReadableError(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"code":-804,"message":"too late"}');
+
+        $this->expectException(DomainError::class);
+        $api->cancel('M77');
+    }
 }

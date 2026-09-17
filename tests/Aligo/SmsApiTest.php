@@ -181,4 +181,28 @@ final class SmsApiTest extends DatabaseTestCase
         // msg_1 should be converted to EUC-KR
         self::assertSame(mb_convert_encoding('알림', 'EUC-KR', 'UTF-8'), $fields['msg_1']);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testCancelSendsTheMidToTheCancelPath(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+
+        $api->cancel('M77');
+
+        $request = $this->transport->requests[0];
+        self::assertStringContainsString('/cancel/', $request['url']);
+        self::assertSame('M77', $request['fields']['mid']);
+        self::assertSame('KEY', $request['fields']['key']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCancelTooLateBecomesAReadableError(array $config): void
+    {
+        $api = $this->api($config);
+        $this->transport->queue(200, '{"result_code":-804,"message":"too late"}');
+
+        $this->expectException(DomainError::class);
+        $api->cancel('M77');
+    }
 }

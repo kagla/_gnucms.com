@@ -54,6 +54,12 @@ final class AlimtalkApi
         return is_array($list) ? $list : [];
     }
 
+    /** 예약 발송 취소. 알리고는 발송 5분 전까지만 받아 준다. */
+    public function cancel(string $mid): void
+    {
+        $this->call('/akv10/cancel/', ['mid' => $mid]);
+    }
+
     private function call(string $path, array $fields): array
     {
         $account = $this->settings->runtime();
