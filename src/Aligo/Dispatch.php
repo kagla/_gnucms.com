@@ -59,6 +59,7 @@ final class Dispatch
 
         [$body, $tplCode] = $this->resolveBody($channel, $request);
         $title = trim((string) ($request['title'] ?? '')) ?: null;
+        $failover = $channel === 'at' && !empty($request['failover']);
 
         // 변수를 먼저 채운 뒤에 분류·길이를 검사한다. 템플릿 상태로는 90바이트 이하라도
         // 이름 같은 변수를 채우면 쉽게 넘어간다. msg_type 을 명시해서 보내기 때문에,
@@ -76,6 +77,16 @@ final class Dispatch
             foreach ($prepared as $one) {
                 MessageText::assertFits($one['body'], $title);
             }
+        } elseif ($failover) {
+            // 알림톡 본문 자체는 UTF-8 그대로 나가 EUC-KR 제약을 받지 않지만, 실패했을 때
+            // 대신 나가는 대체문자(fmessage_N)는 문자 API와 똑같이 EUC-KR 로 나간다. 여기서
+            // 걸러 두지 않으면 이모지 같은 글자가 깨진 채로 대체문자에 실려 나간다. 템플릿
+            // 원문이 아니라 변수 치환이 끝난 수신자별 본문을 검사한다 — 실제로 나갈 글자는
+            // 변수값에 들어 있을 수 있고 원문에는 없을 수 있기 때문이다. 제목은 대체문자에
+            // 싣지 않으므로 검사하지 않는다.
+            foreach ($prepared as $one) {
+                MessageText::assertFits($one['body'], null);
+            }
         }
 
         $jobId = (int) $this->db->insert('message_jobs', [
@@ -85,7 +96,7 @@ final class Dispatch
             'sender' => $account['sender'],
             'title' => $stored === 'lms' ? $title : null,
             'body' => $body,
-            'failover' => !empty($request['failover']) && $channel === 'at' ? 1 : 0,
+            'failover' => $failover ? 1 : 0,
             'event_key' => $request['event_key'] ?? null,
             'created_by' => $request['created_by'] ?? null,
             'total' => count($prepared),
@@ -103,7 +114,7 @@ final class Dispatch
                 'user_id' => $one['user_id'],
                 'body' => $one['body'],
                 'status' => 'queued',
-                'fallback_body' => !empty($request['failover']) && $channel === 'at' ? $one['body'] : null,
+                'fallback_body' => $failover ? $one['body'] : null,
                 'requested_at' => Clock::now(),
             ]);
         }

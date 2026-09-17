@@ -206,6 +206,66 @@ final class DispatchTest extends DatabaseTestCase
             . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId])['failover']);
     }
 
+    /**
+     * 알림톡 본문 자체는 UTF-8 이라 이모지를 그대로 보낼 수 있지만, 실패하면 그 본문이
+     * 그대로 대체문자(fmessage_N)로 나가고 대체문자는 문자 API와 같은 EUC-KR 제약을 받는다.
+     * 이모지는 템플릿 원문이 아니라 변수값으로만 들어간다 — 원문만 검사했다면 걸러지지
+     * 않았을 경우를 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAlimtalkWithFailoverRefusesABodyEucKrCannotCarry(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('at', true);
+        $this->transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
+            'status' => 'A', 'inspStatus' => 'APR']]]));
+        $this->templates->fetch();
+        $this->templates->setEnabled('T1', true);
+
+        try {
+            $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1', 'failover' => true,
+                'recipients' => [['phone' => '01012345678', 'vars' => ['이름' => '🎉동']]]]);
+            self::fail('대체문자로 나갈 본문에 EUC-KR 로 옮길 수 없는 글자가 있으면 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('🎉', $e->details()['body']);
+        }
+        self::assertSame(0, (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM '
+            . $this->db->table('message_jobs'))['c']);
+        // 템플릿 원문(변수 치환 전)에는 이모지가 없다 — 검사가 원문이 아니라 치환된
+        // 수신자별 본문을 보고 있다는 증거다.
+        self::assertStringNotContainsString('🎉', (string) $this->templates->find('T1')['content']);
+        // 템플릿 가져오기(fetch) 요청 하나만 있고, 실제 발송 호출은 없어야 한다.
+        self::assertCount(1, $this->transport->requests);
+    }
+
+    /**
+     * 같은 이모지라도 대체발송을 켜지 않았다면 알림톡 본문 자체는 EUC-KR 제약을 받지
+     * 않으므로 그대로 나가야 한다 — 위 거절이 과도하게 넓지 않은지 함께 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAlimtalkWithoutFailoverSendsABodyEucKrCannotCarryUnchanged(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('at', true);
+        $this->transport->queue(200, (string) json_encode(['code' => 0, 'list' => [[
+            'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
+            'status' => 'A', 'inspStatus' => 'APR']]]));
+        $this->templates->fetch();
+        $this->templates->setEnabled('T1', true);
+        $this->transport->queue(200, (string) json_encode(
+            ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
+
+        $jobId = $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1',
+            'recipients' => [['phone' => '01012345678', 'vars' => ['이름' => '🎉동']]]]);
+
+        $fields = $this->transport->requests[1]['fields'];
+        self::assertSame('🎉동님 안녕하세요', $fields['message_1']);
+        self::assertArrayNotHasKey('fmessage_1', $fields);
+        self::assertSame(0, (int) $this->db->selectOne('SELECT failover FROM '
+            . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId])['failover']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testAlimtalkRefusesATemplateThatIsNotTurnedOn(array $config): void
     {
