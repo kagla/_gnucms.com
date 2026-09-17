@@ -154,7 +154,7 @@ final class AdminMessageController
 
         $recipients = [];
         $skipped = 0;
-        $withdrawn = 0;
+        $ineligible = 0;
         foreach ((array) ($input['members'] ?? []) as $userId) {
             $row = $this->app->db()->selectOne('SELECT id, display_name, phone, status FROM '
                 . $this->app->db()->table('users') . ' WHERE id = ?', [(string) $userId]);
@@ -162,11 +162,13 @@ final class AdminMessageController
                 $skipped++;
                 continue;
             }
-            // 탈퇴 회원은 번호가 남아 있어도(탈퇴 처리는 번호를 지우지 않는다) 고를 수 없다.
-            // "번호 없음"과 다른 사유이므로 같은 집계에 섞지 않는다 — 관리자가 어느 쪽인지
-            // 구분해서 볼 수 있어야 한다.
-            if ((string) $row['status'] === 'withdrawn') {
-                $withdrawn++;
+            // 탈퇴·차단 회원은 번호가 남아 있어도(탈퇴 처리는 번호를 지우지 않는다) 고를 수
+            // 없다 — CommentService 가 명시하는 원칙과 같다: "차단된 회원은 없는 회원과
+            // 같게 다룬다", 이 화면 밖의 모든 회원용 게이트도 status === 'active' 만 통과
+            // 시킨다. "번호 없음"과 다른 사유이므로 같은 집계에 섞지 않는다 — 관리자가
+            // 어느 쪽인지 구분해서 볼 수 있어야 한다.
+            if ((string) $row['status'] !== 'active') {
+                $ineligible++;
                 continue;
             }
             if (($row['phone'] ?? '') === '') {
@@ -194,7 +196,7 @@ final class AdminMessageController
                 'recipients' => $recipients,
             ],
             'skipped' => $skipped,
-            'withdrawn' => $withdrawn,
+            'ineligible' => $ineligible,
         ];
     }
 
@@ -217,7 +219,7 @@ final class AdminMessageController
             'sample' => $sample,
             'count' => count($recipients),
             'skipped' => $collected['skipped'],
-            'withdrawn' => $collected['withdrawn'],
+            'ineligible' => $collected['ineligible'],
             'bytes' => $sample === null ? null : MessageText::byteLength($sample),
             'classify' => $sample === null ? null : MessageText::channelFor($sample),
         ];
@@ -245,7 +247,13 @@ final class AdminMessageController
         return Variables::names($body);
     }
 
-    /** 입력에 담긴 회원 ID 각각의 이름·번호. 검색어를 다시 치지 않아도 "선택됨" 표시를 유지한다. */
+    /**
+     * 입력에 담긴 회원 ID 각각의 이름·번호. 검색어를 다시 치지 않아도 "선택됨" 표시를
+     * 유지한다. 검색 결과와 같은 이유로 활성 회원만 보여준다 — 체크한 뒤 검증 오류로
+     * 다시 그릴 때까지 그 사이에 차단되거나 탈퇴했을 수도 있고, 그런 회원은 이 목록에도
+     * 더는 남지 않아야 한다. 걸러진 회원은 사라지는 대신 미리보기의 "보낼 수 없는 회원"
+     * 집계에 잡힌다.
+     */
     private function selectedMembers(array $ids): array
     {
         if ($ids === []) {
@@ -253,15 +261,20 @@ final class AdminMessageController
         }
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $rows = $this->app->db()->select('SELECT id, display_name, phone FROM '
-            . $this->app->db()->table('users') . ' WHERE id IN (' . $placeholders . ') ORDER BY display_name', $ids);
+            . $this->app->db()->table('users')
+            . ' WHERE id IN (' . $placeholders . ') AND status = ? ORDER BY display_name',
+            [...$ids, 'active']);
 
         return array_map([$this, 'withPhoneDisplay'], $rows);
     }
 
     /**
      * 이름·이메일로 회원을 찾는다. 이미 선택된 회원은 "선택된 회원" 목록에 있으므로 여기
-     * 또 보여주지 않는다. 탈퇴 회원은 여기서부터 제외한다 — 탈퇴 처리로 이름·이메일이
-     * 익명화될 뿐 번호는 지워지지 않으므로, 걸러 두지 않으면 검색으로 다시 찾아 고를 수 있다.
+     * 또 보여주지 않는다. 활성 회원만 보여준다 — CommentService 의 원칙("차단된 회원은
+     * 없는 회원과 같게 다룬다")과 같게, 로그인·글쓰기·댓글 등 이 코드베이스의 모든
+     * 회원용 게이트가 요구하는 status === 'active' 를 여기서도 그대로 따른다. 탈퇴
+     * 처리는 이름·이메일을 익명화할 뿐 번호는 지우지 않으므로, 걸러 두지 않으면 검색으로
+     * 다시 찾아 고를 수 있다.
      */
     private function searchMembers(string $q, array $excludeIds): array
     {
@@ -271,9 +284,9 @@ final class AdminMessageController
         $needle = '%' . mb_strtolower($q) . '%';
         $rows = $this->app->db()->select('SELECT id, display_name, phone, email FROM '
             . $this->app->db()->table('users')
-            . ' WHERE (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?) AND status <> ?'
+            . ' WHERE (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?) AND status = ?'
             . ' ORDER BY id DESC LIMIT 20',
-            [$needle, $needle, 'withdrawn']);
+            [$needle, $needle, 'active']);
         $rows = array_values(array_filter(
             $rows,
             static fn (array $row): bool => !in_array((string) $row['id'], $excludeIds, true)
