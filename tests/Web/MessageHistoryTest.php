@@ -488,6 +488,23 @@ final class MessageHistoryTest extends WebTestCase
     }
 
     /**
+     * 그 작업의 표 한 줄만 잘라 온다. 화면 전체를 상대로 라벨을 물으면 거르기 <select>
+     * 가 모든 이벤트 라벨을 적어 두고 있어 표의 칸을 통째로 지워도 통과한다 — 실제로
+     * 그렇게 통과했고, 그래서 줄 단위로 묻는다.
+     */
+    private static function jobRow(string $html, int $jobId): string
+    {
+        $at = strpos($html, '/admin/messages/history/' . $jobId . '"');
+        self::assertNotFalse($at, '작업 ' . $jobId . ' 의 줄이 목록에 없습니다.');
+        $start = strrpos(substr($html, 0, $at), '<tr');
+        self::assertNotFalse($start);
+        $end = strpos($html, '</tr>', $at);
+        self::assertNotFalse($end);
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /**
      * message_jobs.event_key 는 알림이 보낼 때마다 적히는데 여태 어느 화면도 보여주지
      * 않았다. 알림 한 통이 작업 하나를 만들기 때문에, 이 값이 보이지 않으면 비밀번호
      * 재설정과 댓글 알림과 관리자의 일괄 발송이 목록에서 서로 구별되지 않는다.
@@ -496,13 +513,15 @@ final class MessageHistoryTest extends WebTestCase
     public function testTheListNamesTheNotificationThatProducedEachJob(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
-        $this->seedWithEventKeys($app);
+        $ids = $this->seedWithEventKeys($app);
 
         $html = $this->body($this->get($app, '/admin/messages/history'));
 
-        self::assertStringContainsString('비밀번호 재설정', $html);
-        self::assertStringContainsString('새 댓글·답글', $html);
-        self::assertStringContainsString('관리자 수동 발송', $html);
+        self::assertStringContainsString('비밀번호 재설정', self::jobRow($html, $ids['reset']));
+        self::assertStringContainsString('새 댓글·답글', self::jobRow($html, $ids['comment']));
+        self::assertStringContainsString('관리자 수동 발송', self::jobRow($html, $ids['manual']));
+        // 같은 줄에 다른 알림의 이름이 섞이지 않는다 — 라벨을 줄마다 다시 찾는지 본다.
+        self::assertStringNotContainsString('새 댓글·답글', self::jobRow($html, $ids['reset']));
     }
 
     /** 거르기 목록 자체가 아니라 표의 칸이 그 사실을 말하는지. 목록 밖 어디에서도 나오지 않는 문구다. */
