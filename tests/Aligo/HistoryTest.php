@@ -62,9 +62,10 @@ final class HistoryTest extends DatabaseTestCase
      * 알리고가 접수는 했다) 작업은 'scheduled'이고 scheduled_at 이 박혀 있다. 실제 발송은
      * 알리고 쪽에서 scheduledAt 이 돼야 일어난다 — 그 전에는 결과를 물어도 소용없다.
      */
-    private function seedScheduled(string $channel, string $mid, string $scheduledAt, ?string $requestedAt = null): int
+    private function seedScheduled(string $channel, string $mid, string $scheduledAt,
+        ?string $requestedAt = null, array $phones = ['01012345678']): int
     {
-        $jobId = $this->seed($channel, $mid, $requestedAt ?? Clock::now());
+        $jobId = $this->seed($channel, $mid, $requestedAt ?? Clock::now(), $phones);
         $this->db->update('message_jobs', ['status' => 'scheduled', 'scheduled_at' => $scheduledAt],
             'id = :id', ['id' => $jobId]);
 
@@ -411,6 +412,35 @@ final class HistoryTest extends DatabaseTestCase
             'job_id = :j', ['j' => $jobId]);
 
         self::assertSame(1, $this->history->pendingCount());
+    }
+
+    /**
+     * 아직 발송 시각이 오지 않은 예약은 대기 수에 들어가면 안 된다. 접수 직후부터
+     * 수신자는 'accepted'지만 알리고는 그 시각이 오기 전엔 이 mid 를 모른다 — 세면
+     * 화면이 "결과를 기다리는 중인 발송이 3건 있습니다"라 말하고 갱신 버튼을 내주지만,
+     * 그 버튼은 최대 30일 동안 알리고를 한 번도 부르지 못한다(같은 조건으로 조회
+     * 대상에서 빠져 있기 때문이다). 설정 화면의 배지도 같은 값을 쓴다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testPendingCountIgnoresAScheduleWhoseSendTimeHasNotCome(array $config): void
+    {
+        $this->boot($config);
+        $future = gmdate('Y-m-d H:i:s', Clock::timestamp() + 5 * 86400);
+        $this->seedScheduled('sms', 'M1', $future, null, ['01011112222', '01033334444', '01055556666']);
+
+        self::assertSame(0, $this->history->pendingCount(), '닷새 뒤로 잡힌 예약은 기다리는 중이 아니다');
+        self::assertSame(0, $this->history->refresh(), '같은 조건으로 조회 대상에서도 빠진다');
+    }
+
+    /** 반대로 발송 시각이 지난 예약은 다시 보통 발송과 같다 — 기다릴 것이 실제로 생겼다. */
+    #[DataProvider('connectionProvider')]
+    public function testPendingCountStillCountsAScheduleWhoseSendTimeHasPassed(array $config): void
+    {
+        $this->boot($config);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        $this->seedScheduled('sms', 'M1', $past, null, ['01011112222', '01033334444']);
+
+        self::assertSame(2, $this->history->pendingCount());
     }
 
     /**

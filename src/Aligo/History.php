@@ -18,6 +18,16 @@ final class History
     public const GIVE_UP_DAYS = 7;
     private const BATCH = 5;
 
+    /**
+     * 아직 발송 시각이 오지 않은 예약을 걸러내는 조건. 알리고는 scheduled_at 이 되기
+     * 전에는 그 mid 에 대해 아무것도 모르므로, 그 건은 물어봐야 소용없고(조회 예산만
+     * 쓴다) 결과를 기다리는 중이라고 셀 수도 없다(기다릴 것이 아직 시작되지도 않았다).
+     * 조회 두 곳과 대기 수를 세는 곳이 모두 이 한 조건을 쓴다 — 셋이 어긋나면 화면이
+     * "결과를 기다리는 중 N건"이라 말하면서 갱신 버튼은 아무 것도 부르지 않게 된다.
+     * $sql 에 이어 붙이고 마지막 파라미터로 Clock::now() 를 준다. 작업 표의 별칭은 j 다.
+     */
+    private const DUE_ONLY = ' AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)';
+
     private Connection $db;
     private AlimtalkApi $alimtalk;
     private SmsApi $sms;
@@ -87,13 +97,13 @@ final class History
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
         // 예약 발송은 접수(booked) 시점에 이미 수신자 행이 'accepted'로 찍히지만, 알리고는
         // scheduled_at 이 되기 전에는 이 mid 에 대해 아무것도 모른다 — status 만 보고 고르면
-        // 아직 나가지도 않은 건에 조회 예산(하루 다섯 번)을 쓰게 된다. j.scheduled_at 이
-        // NULL(즉시 발송)이거나 이미 지났을 때만 후보로 삼는다.
+        // 아직 나가지도 않은 건에 조회 예산(화면을 한 번 열 때 다섯 번)을 쓰게 된다.
+        // j.scheduled_at 이 NULL(즉시 발송)이거나 이미 지났을 때만 후보로 삼는다.
         $rows = $this->db->select(
             'SELECT r.mid AS mid, j.channel AS channel FROM ' . $this->db->table('message_recipients') . ' r'
             . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
             . ' WHERE r.status = ? AND r.mid IS NOT NULL AND (r.checked_at IS NULL OR r.checked_at < ?)'
-            . ' AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)'
+            . self::DUE_ONLY
             . ' GROUP BY r.mid, j.channel ORDER BY MIN(r.id) LIMIT ' . max(1, $limit),
             ['accepted', $cutoff, Clock::now()]
         );
@@ -141,12 +151,12 @@ final class History
         $cutoff = gmdate('Y-m-d H:i:s', Clock::timestamp() - self::RECHECK_SECONDS);
         // 대체문자는 원 알림톡 결과가 들어온 뒤에야 생기므로 이 시점엔 scheduled_at 은
         // 이미 지나 있을 수밖에 없다 — 그래도 조건을 refreshPrimary() 와 똑같이 맞춰
-        // 둔다. 판단 기준이 한 곳(이 조건)에만 있어야 나중에 둘이 어긋나지 않는다.
+        // 둔다. 판단 기준이 한 곳(self::DUE_ONLY)에만 있어야 어긋나지 않는다.
         $rows = $this->db->select(
             'SELECT r.smid AS smid FROM ' . $this->db->table('message_recipients') . ' r'
             . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
             . ' WHERE r.fallback_status = ? AND r.smid IS NOT NULL AND (r.checked_at IS NULL OR r.checked_at < ?)'
-            . ' AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)'
+            . self::DUE_ONLY
             . ' GROUP BY r.smid ORDER BY MIN(r.id) LIMIT ' . max(1, $limit),
             ['accepted', $cutoff, Clock::now()]
         );
@@ -378,15 +388,25 @@ final class History
 
     /**
      * 아직 결과를 기다리는 수신자 수. 이력 화면의 "결과를 기다리는 중" 안내와 갱신
-     * 버튼이 이 값으로 나타나고 사라진다. 대체문자 대기열(fallback_status)도 함께
-     * 세야 한다 — 알림톡 결과가 다 잡힌 뒤 대체문자 결과만 남은 동안에도 갱신할 일이
-     * 남아 있는데, status 만 세면 그 사이 안내와 버튼이 통째로 사라진다.
+     * 버튼이 이 값으로 나타나고 사라진다(설정 화면의 배지도 AligoService::status() 를
+     * 거쳐 같은 값을 쓴다). 대체문자 대기열(fallback_status)도 함께 세야 한다 —
+     * 알림톡 결과가 다 잡힌 뒤 대체문자 결과만 남은 동안에도 갱신할 일이 남아 있는데,
+     * status 만 세면 그 사이 안내와 버튼이 통째로 사라진다.
+     *
+     * 발송 시각이 아직 오지 않은 예약은 세지 않는다(self::DUE_ONLY — 두 조회가 쓰는
+     * 것과 같은 조건이다). 예약은 접수 직후부터 수신자가 'accepted'라 조건 없이 세면
+     * 5일 뒤로 잡아 둔 예약의 수신자까지 "결과를 기다리는 중"에 들어간다 — 화면은
+     * 그 숫자와 함께 갱신 버튼을 내주지만, 그 버튼은 발송 시각이 올 때까지(최대 30일)
+     * 알리고를 단 한 번도 부르지 않는다. 설계 문서 §5-1 이 그대로 금지하는 거짓말이다:
+     * 알리고가 접수만 하고 결과가 없는 것이 정상인 상태를 §5 의 "대기 중"에 섞지 않는다.
      */
     public function pendingCount(): int
     {
         return (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM '
-            . $this->db->table('message_recipients')
-            . ' WHERE status = ? OR fallback_status = ?', ['accepted', 'accepted'])['c'];
+            . $this->db->table('message_recipients') . ' r'
+            . ' JOIN ' . $this->db->table('message_jobs') . ' j ON j.id = r.job_id'
+            . ' WHERE (r.status = ? OR r.fallback_status = ?)'
+            . self::DUE_ONLY, ['accepted', 'accepted', Clock::now()])['c'];
     }
 
     public function jobs(int $page = 1, int $perPage = 20): array
