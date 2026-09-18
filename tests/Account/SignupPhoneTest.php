@@ -14,6 +14,7 @@ use GnuCms\Cms\CmsService;
 use GnuCms\Cms\ConsentUseRepository;
 use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\HtmlSanitizer;
+use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\DatabaseTestCase;
@@ -22,14 +23,24 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /** 가입 화면의 signup_phone 정책(off/optional/required)이 실제로 번호를 받고 저장하는지. */
 final class SignupPhoneTest extends DatabaseTestCase
 {
+    /**
+     * off 와 optional 에 *같은* 번호를 넣어 결과를 맞대 본다. off 만 보고 null 을
+     * 확인하면, 기능을 통째로 들어내도(어차피 아무도 안 쓰니 늘 null) 테스트가
+     * 그대로 통과해 버린다 — optional 쪽이 실제로 저장된다는 것까지 같은 테스트
+     * 안에서 확인해야 이 테스트가 무언가를 놓쳤을 때 실패할 수 있다.
+     */
     #[DataProvider('connectionProvider')]
     public function testPhoneIsIgnoredWhenTheSiteDoesNotAskForIt(array $config): void
     {
-        [$service, $db] = $this->boot($config, 'off');
-        $service->register($this->signup(['phone' => '010-1234-5678']));
+        $input = $this->signup(['phone' => '010-1234-5678']);
 
-        self::assertNull($db->selectOne('SELECT phone FROM ' . $db->table('users')
-            . ' ORDER BY id DESC')['phone']);
+        [$offService, $offDb] = $this->boot($config, 'off');
+        $offService->register($input);
+        self::assertNull($this->lastPhone($offDb));
+
+        [$optionalService, $optionalDb] = $this->boot($config, 'optional');
+        $optionalService->register($input);
+        self::assertSame('01012345678', $this->lastPhone($optionalDb));
     }
 
     #[DataProvider('connectionProvider')]
@@ -38,18 +49,30 @@ final class SignupPhoneTest extends DatabaseTestCase
         [$service, $db] = $this->boot($config, 'optional');
         $service->register($this->signup(['phone' => '010-1234-5678']));
 
-        self::assertSame('01012345678', $db->selectOne('SELECT phone FROM ' . $db->table('users')
-            . ' ORDER BY id DESC')['phone']);
+        self::assertSame('01012345678', $this->lastPhone($db));
     }
 
+    /**
+     * optional 의 "빈 값 허용"과 required 의 "빈 값 거절"을 한 테스트 안에서 맞대
+     * 본다. optional 쪽만 보고 null 을 확인하면, 기능을 통째로 들어내도(아무 검증도
+     * 안 하니 늘 통과) 테스트가 그대로 통과해 버린다.
+     */
     #[DataProvider('connectionProvider')]
     public function testOptionalPhoneMayBeLeftBlank(array $config): void
     {
-        [$service, $db] = $this->boot($config, 'optional');
-        $service->register($this->signup(['phone' => '']));
+        $input = $this->signup(['phone' => '']);
 
-        self::assertNull($db->selectOne('SELECT phone FROM ' . $db->table('users')
-            . ' ORDER BY id DESC')['phone']);
+        [$optionalService, $optionalDb] = $this->boot($config, 'optional');
+        $optionalService->register($input);
+        self::assertNull($this->lastPhone($optionalDb));
+
+        [$requiredService] = $this->boot($config, 'required');
+        try {
+            $requiredService->register($input);
+            self::fail('required 정책에서는 빈 번호를 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('phone', $e->details());
+        }
     }
 
     #[DataProvider('connectionProvider')]
@@ -91,6 +114,12 @@ final class SignupPhoneTest extends DatabaseTestCase
         );
 
         return [$service, $db];
+    }
+
+    /** 가장 최근에 만든 회원의 phone 칸. */
+    private function lastPhone(Connection $db): ?string
+    {
+        return $db->selectOne('SELECT phone FROM ' . $db->table('users') . ' ORDER BY id DESC')['phone'];
     }
 
     /** register() 가 요구하는 이메일·비밀번호·표시이름 동의 입력을 채운다. 첫 가입이라 약관 동의는 필요 없다. */

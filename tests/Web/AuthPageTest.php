@@ -256,4 +256,42 @@ final class AuthPageTest extends WebTestCase
         self::assertStringContainsString('이메일을 확인해', $this->body($resent));
     }
 
+    /**
+     * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. phone[]=x 처럼 배열로 오면
+     * is_scalar 가드 없이 (string) 캐스팅하는 순간 PHP 경고(Array to string conversion)가
+     * 뜨고 화면에도 value="Array" 가 그대로 남는다 — 단위 테스트만으로는 이 경로를
+     * 지나가지 않아 놓치기 쉽다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testRegisterRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $this->get($app, '/register');
+
+        $arrayResponse = $this->post($app, '/register', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
+            'phone' => ['x'],
+        ]);
+        self::assertSame(422, $arrayResponse->getStatusCode());
+        $arrayBody = $this->body($arrayResponse);
+        self::assertStringNotContainsString('value="Array"', $arrayBody);
+        self::assertStringContainsString('휴대폰번호를 입력해 주세요.', $arrayBody);
+        self::assertNull($app->users()->findByEmail('member@example.com'));
+
+        // 형식이 잘못된 번호(required)는 거절하되, 입력값은 이스케이프해서 그대로 되돌려준다.
+        $maliciousPhone = '010-12" onmouseover="x';
+        $badResponse = $this->post($app, '/register', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member2@example.com',
+            'password' => 'member-password-123', 'password_confirmation' => 'member-password-123',
+            'phone' => $maliciousPhone,
+        ]);
+        self::assertSame(422, $badResponse->getStatusCode());
+        $badBody = $this->body($badResponse);
+        $escaped = htmlspecialchars($maliciousPhone, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        self::assertStringContainsString('value="' . $escaped . '"', $badBody);
+        self::assertStringNotContainsString('onmouseover="x"', $badBody);
+        self::assertNull($app->users()->findByEmail('member2@example.com'));
+    }
 }
