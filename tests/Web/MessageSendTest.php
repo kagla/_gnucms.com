@@ -127,6 +127,37 @@ final class MessageSendTest extends WebTestCase
         $this->assertLoginRedirect($this->get($app, '/admin/messages/send'), '/admin/messages/send');
     }
 
+    /**
+     * 스펙 §7: 발송 화면의 회원 선택이 관리자 회원 목록과 같은 번호 검색을 쓴다.
+     * 고객의 번호를 들고 있는 운영자가 이 화면에서 바로 그 사람을 고를 수 있어야
+     * 한다 — 회원관리로 가서 이름을 알아낸 뒤 돌아와 다시 검색하게 두면 안 된다.
+     * 검색어는 검색창에 그대로 되비쳐지므로, 번호가 아니라 '이름'이 결과에 나왔는지로
+     * 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheMemberPickerFindsAMemberByPhoneNumber(array $dbConfig): void
+    {
+        $app = $this->ready($dbConfig);
+        $this->member($app, 'phone-pick@example.com', '번호로찾는회원', '01012345678');
+
+        self::assertStringContainsString('번호로찾는회원',
+            $this->body($this->get($app, '/admin/messages/send', ['q' => '01012345678'])));
+        self::assertStringContainsString('번호로찾는회원',
+            $this->body($this->get($app, '/admin/messages/send', ['q' => '010-1234-5678'])));
+    }
+
+    /** 번호로 찾을 수 있게 됐어도 차단된 회원은 여전히 나오면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testThePickerDoesNotFindABlockedMemberByNumber(array $dbConfig): void
+    {
+        $app = $this->ready($dbConfig);
+        $id = $this->member($app, 'blocked-phone@example.com', '차단된번호회원', '01077778888');
+        $app->users()->setStatus((int) $id, 'blocked');
+
+        self::assertStringNotContainsString('차단된번호회원',
+            $this->body($this->get($app, '/admin/messages/send', ['q' => '01077778888'])));
+    }
+
     #[DataProvider('connectionProvider')]
     public function testWithdrawnMembersDoNotAppearInSearchResults(array $dbConfig): void
     {

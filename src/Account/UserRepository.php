@@ -265,6 +265,11 @@ final class UserRepository
         });
     }
 
+    /**
+     * 관리자 회원 관리 목록. 차단·탈퇴 회원도 일부러 포함한다 — 관리자가 손댈 수
+     * 있어야 하는 사람들이라 여기서 감추면 찾을 방법이 없어진다. 발송 화면의 회원
+     * 고르기(searchActive)는 정반대로 활성 회원만 본다.
+     */
     public function listForAdmin(string $query = '', int $limit = 100): array
     {
         $limit = max(1, min(200, $limit));
@@ -272,24 +277,59 @@ final class UserRepository
             . ' FROM ' . $this->db->table('users');
         $params = [];
         if ($query !== '') {
-            $needle = '%' . mb_strtolower($query) . '%';
-            $conditions = ['LOWER(email) LIKE ?', 'LOWER(display_name) LIKE ?'];
-            $params = [$needle, $needle];
-
-            // 번호는 숫자만 저장하므로 검색어에서도 숫자만 뽑아 비교한다. 숫자가
-            // 하나도 없으면(이름 검색 등) 조건 자체를 붙이지 않는다 — 안 그러면
-            // `phone LIKE '%%'` 가 번호를 가진 회원을 모두 끌고 온다.
-            $digits = PhoneNumber::digits($query);
-            if ($digits !== '') {
-                $conditions[] = 'phone LIKE ?';
-                $params[] = '%' . $digits . '%';
-            }
-
-            $sql .= ' WHERE (' . implode(' OR ', $conditions) . ')';
+            [$match, $params] = $this->searchMatch($query);
+            $sql .= ' WHERE ' . $match;
         }
         $sql .= ' ORDER BY id DESC LIMIT ' . $limit;
 
         return $this->db->select($sql, $params);
+    }
+
+    /**
+     * 발송 화면의 회원 고르기. 활성 회원만 돌려준다 — CommentService 의 원칙("차단된
+     * 회원은 없는 회원과 같게 다룬다")을 따르는, 회원 관리 목록과는 일부러 반대인
+     * 규칙이다. 두 화면이 같이 쓰는 것은 "무엇과 일치하는가"(searchMatch)뿐이고
+     * "누구를 보여 주는가"는 각자 정한다.
+     */
+    public function searchActive(string $query, int $limit = 20): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+        [$match, $params] = $this->searchMatch($query);
+        $limit = max(1, min(100, $limit));
+
+        return $this->db->select(
+            'SELECT id, display_name, phone, email FROM ' . $this->db->table('users')
+            . ' WHERE ' . $match . ' AND status = ?'
+            . ' ORDER BY id DESC LIMIT ' . $limit,
+            [...$params, 'active']
+        );
+    }
+
+    /**
+     * 이름·이메일·번호 검색 조건 한 벌. 상태 조건은 붙이지 않는다 — 부르는 쪽이
+     * 각자 정한다(listForAdmin 은 전원, searchActive 는 활성 회원만).
+     *
+     * @return array{0: string, 1: array<int, string>} 괄호로 묶은 조건과 바인딩 값
+     */
+    private function searchMatch(string $query): array
+    {
+        $needle = '%' . mb_strtolower($query) . '%';
+        $conditions = ['LOWER(email) LIKE ?', 'LOWER(display_name) LIKE ?'];
+        $params = [$needle, $needle];
+
+        // 번호는 숫자만 저장하므로 검색어에서도 숫자만 뽑아 비교한다. 숫자가
+        // 하나도 없으면(이름 검색 등) 조건 자체를 붙이지 않는다 — 안 그러면
+        // `phone LIKE '%%'` 가 번호를 가진 회원을 모두 끌고 온다.
+        $digits = PhoneNumber::digits($query);
+        if ($digits !== '') {
+            $conditions[] = 'phone LIKE ?';
+            $params[] = '%' . $digits . '%';
+        }
+
+        return ['(' . implode(' OR ', $conditions) . ')', $params];
     }
 
     public function countAll(): int

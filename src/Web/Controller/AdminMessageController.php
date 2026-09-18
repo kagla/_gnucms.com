@@ -697,26 +697,20 @@ final class AdminMessageController
     }
 
     /**
-     * 이름·이메일로 회원을 찾는다. 이미 선택된 회원은 "선택된 회원" 목록에 있으므로 여기
-     * 또 보여주지 않는다. 활성 회원만 보여준다 — CommentService 의 원칙("차단된 회원은
-     * 없는 회원과 같게 다룬다")과 같게, 로그인·글쓰기·댓글 등 이 코드베이스의 모든
-     * 회원용 게이트가 요구하는 status === 'active' 를 여기서도 그대로 따른다. 탈퇴
-     * 처리는 이름·이메일을 익명화할 뿐 번호는 지우지 않으므로, 걸러 두지 않으면 검색으로
-     * 다시 찾아 고를 수 있다.
+     * 이름·이메일·휴대폰번호로 회원을 찾는다. 관리자 회원 목록과 같은 검색 조건을
+     * UserRepository::searchActive() 에서 함께 쓴다 — 번호를 들고 있는 운영자가 그
+     * 번호로 바로 고를 수 있어야 하고(스펙 §7), 번호 일치 규칙을 두 곳에 베껴 두면
+     * 한쪽만 고쳐지기 때문이다. 대신 "누구를 보여 주는가"는 공유하지 않는다:
+     * searchActive() 는 활성 회원만 돌려주고, 회원 관리 목록(listForAdmin)은 차단·탈퇴
+     * 회원까지 일부러 보여 준다. 발송 화면이 활성 회원만 보는 것은 CommentService 의
+     * 원칙("차단된 회원은 없는 회원과 같게 다룬다")을 따르는 것이다.
+     *
+     * 이미 선택된 회원은 "선택된 회원" 목록에 있으므로 여기 또 보여주지 않는다.
      */
     private function searchMembers(string $q, array $excludeIds): array
     {
-        if ($q === '') {
-            return [];
-        }
-        $needle = '%' . mb_strtolower($q) . '%';
-        $rows = $this->app->db()->select('SELECT id, display_name, phone, email FROM '
-            . $this->app->db()->table('users')
-            . ' WHERE (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?) AND status = ?'
-            . ' ORDER BY id DESC LIMIT 20',
-            [$needle, $needle, 'active']);
         $rows = array_values(array_filter(
-            $rows,
+            $this->app->users()->searchActive($q),
             static fn (array $row): bool => !in_array((string) $row['id'], $excludeIds, true)
         ));
 
