@@ -115,7 +115,7 @@ final class AuthController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            $values = ['email' => $input['email'] ?? ''];
+            $values = ['email' => $input['email'] ?? '', 'phone' => $input['phone'] ?? ''];
             foreach ($this->app->cmsService()->consentDocuments('signup') as $doc) {
                 $values['agree_' . $doc['id']] = isset($input['agree_' . $doc['id']]);
             }

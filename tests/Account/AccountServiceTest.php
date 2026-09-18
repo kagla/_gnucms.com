@@ -162,11 +162,15 @@ final class AccountServiceTest extends DatabaseTestCase
     public function testVerificationMailUsesConfiguredSiteName(array $config): void
     {
         [$service, $mailer, , , $cms, $ids] = $this->service($config);
+        // register() 가 내부에서 들고 있는 CmsService 는 설정을 한 번 읽으면 캐시한다.
+        // 여기서 쓰는 $cms 는 그 캐시를 모르는 별도의 CmsRepository 라 첫 가입 뒤에
+        // 값을 바꾸면 그 가입에서 이미 채워진 캐시와 어긋난다 — 그래서 아무 가입도
+        // 하기 전에 미리 바꿔 둔다.
+        $cms->saveSettings(['site_name' => '우리 커뮤니티']);
         $service->register([
             'email' => 'owner@example.com', 'password' => 'safe-password-123',
             'password_confirmation' => 'safe-password-123',
         ]);
-        $cms->saveSettings(['site_name' => '우리 커뮤니티']);
 
         $service->register([
             'email' => 'member@example.com', 'password' => 'member-password-123',

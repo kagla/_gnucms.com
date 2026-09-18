@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
@@ -69,6 +70,12 @@ final class AccountService
         }
         $v->check();
 
+        // 번호를 받을지는 사이트 설정이 정한다. 본인확인은 하지 않고 형식만 본다.
+        // Validator 가 모은 오류를 먼저 한꺼번에 던진 뒤에 본다 — Aligo\Settings::save()
+        // 가 발신번호를 다루는 방식과 같다. 앞에 둘 경우, 이메일·비밀번호가 함께
+        // 잘못됐을 때 번호 오류만 보이고 나머지는 다음 제출까지 묻힌다.
+        $phone = $this->phoneFromInput($input);
+
         $existing = $this->users->findByEmail($email);
         if ($existing !== null) {
             if (!(bool) $existing['email_verified']) {
@@ -84,7 +91,8 @@ final class AccountService
             $email,
             password_hash($password, PASSWORD_DEFAULT),
             $this->displayNameFromEmail($email),
-            $trace?->ip
+            $trace?->ip,
+            $phone
         );
 
         $user = $this->users->findById($id);
@@ -359,6 +367,35 @@ final class AccountService
     private function siteName(): string
     {
         return (string) $this->cms->settings()['site_name'];
+    }
+
+    /** 가입·프로필 공통. 설정이 off 면 입력을 무시하고, required 면 빈 값을 거절한다. */
+    private function phoneFromInput(array $input): ?string
+    {
+        $policy = $this->signupPhonePolicy();
+        if ($policy === 'off') {
+            return null;
+        }
+        // requiredString() 등 Validator 의 다른 헬퍼와 같은 이유로 스칼라만 받는다 —
+        // 배열이 오면(예: phone[]=x) (string) 캐스팅이 경고를 낸다.
+        $given = isset($input['phone']) && is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
+        if ($given === '') {
+            if ($policy === 'required') {
+                throw DomainError::validation(['phone' => '휴대폰번호를 입력해 주세요.']);
+            }
+
+            return null;
+        }
+
+        return PhoneNumber::normalize($given);
+    }
+
+    /** signup_phone 설정값. CmsService 가 이미 세 값으로 정규화하지만, 한 번 더 확인한다. */
+    private function signupPhonePolicy(): string
+    {
+        $policy = (string) ($this->cms->settings()['signup_phone'] ?? 'off');
+
+        return in_array($policy, ['off', 'optional', 'required'], true) ? $policy : 'off';
     }
 
     private function displayNameFromEmail(string $email): string

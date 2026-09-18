@@ -127,9 +127,10 @@ final class UserRepository
         return mb_substr($base, 0, 100 - 13) . bin2hex(random_bytes(6));
     }
 
-    public function createRegistered(string $email, string $passwordHash, string $displayName, ?string $registeredIp = null): int
+    public function createRegistered(string $email, string $passwordHash, string $displayName,
+        ?string $registeredIp = null, ?string $phone = null): int
     {
-        return $this->db->transaction(function () use ($email, $passwordHash, $displayName, $registeredIp): int {
+        return $this->db->transaction(function () use ($email, $passwordHash, $displayName, $registeredIp, $phone): int {
             $isFirst = $this->db->execute(
                 'UPDATE ' . $this->db->table('site_settings') . ' SET setting_value = ?, updated_at = ?'
                 . ' WHERE setting_key = ? AND setting_value = ?',
@@ -137,7 +138,7 @@ final class UserRepository
             ) === 1;
 
             $id = $this->create($email, $passwordHash, $this->uniqueDisplayName($displayName), $isFirst);
-            $this->db->update('users', ['registered_ip' => IpAddress::normalize($registeredIp)],
+            $this->db->update('users', ['registered_ip' => IpAddress::normalize($registeredIp), 'phone' => $phone],
                 'id = :id', ['id' => $id]);
             if ($isFirst) {
                 $this->verifyEmail($id);
