@@ -340,4 +340,45 @@ final class NotifySettingsTest extends DatabaseTestCase
         self::assertNull($values['password_reset']['template']);
         self::assertSame('T1', $values['password_reset']['alimtalk_tpl_code']);
     }
+
+    /**
+     * save() 는 채널을 끌 때 그 채널의 매핑을 지우지 않는다 — 다시 켤 때 다시 고르지
+     * 않아도 되게 하려는 의도된 동작이다. 하지만 그래서 channelsFor() 는 "꺼졌다"고
+     * 답하는데 templateFor() 는 여전히 멀쩡한 tpl_code 를 내준다면, isOn() 을 먼저
+     * 확인하지 않는 어떤 호출자든 꺼진 채널을 켜진 것처럼 믿게 된다. 둘은 같은 답을
+     * 해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTemplateForIsNullWhenAlimtalkIsOffEvenThoughTheMappingRemainsStored(array $config): void
+    {
+        $settings = $this->boot($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        self::assertNotNull($settings->templateFor('password_reset'));
+
+        // 알림톡만 끄고 저장한다 — 입력에 tpl_code·var_map 이 없어도 SettingsRepository
+        // 는 기존 값을 지우지 않으므로 T1 매핑은 그대로 DB 에 남는다.
+        $settings->save('password_reset', ['mail' => '1']);
+
+        self::assertSame(['mail'], $settings->channelsFor('password_reset'));
+        self::assertFalse($settings->isOn('password_reset', 'alimtalk'));
+        self::assertNull($settings->templateFor('password_reset'));
+    }
+
+    /** smsBody() 도 같은 함정이 있다 — 문자를 끄면 본문은 저장소에 남지만 더는
+     *  내주지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testSmsBodyIsEmptyWhenSmsIsOffEvenThoughTheBodyRemainsStored(array $config): void
+    {
+        $settings = $this->boot($config);
+        $settings->save('password_reset', ['sms' => '1',
+            'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
+        self::assertNotSame('', $settings->smsBody('password_reset'));
+
+        $settings->save('password_reset', ['mail' => '1']);
+
+        self::assertSame(['mail'], $settings->channelsFor('password_reset'));
+        self::assertFalse($settings->isOn('password_reset', 'sms'));
+        self::assertSame('', $settings->smsBody('password_reset'));
+    }
 }

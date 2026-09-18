@@ -33,6 +33,15 @@ use GnuCms\Error\DomainError;
  * templateFor() 는 null 을 돌려준다 — 관리자가 켰다고 저장한 값과 지금 실제로 쓸 수
  * 있는 값이 다를 수 있다는 뜻을 formValues() 의 alimtalk_tpl_code(원본, 검증 안 함)로
  * 화면에 남긴다.
+ *
+ * **채널이 꺼져 있으면 그 채널의 내용도 안 내준다.** save() 는 채널을 끌 때 그 채널의
+ * tpl_code·var_map·sms_body 를 지우지 않는다 — 관리자가 알림톡·문자를 다시 켤 때 매핑과
+ * 본문을 다시 만들지 않아도 되게 하려는 의도된 동작이다. 하지만 그래서 templateFor()·
+ * smsBody() 를 channelsFor()/isOn() 과 따로 물으면 "꺼진 채널의 멀쩡한 설정"이 나올 수
+ * 있다 — 부르는 쪽이 isOn() 을 먼저 확인하지 않으면 꺼진 채널을 켜진 것처럼 믿게 된다.
+ * 그래서 templateFor() 는 isOn($event,'alimtalk') 을, smsBody() 는 isOn($event,'sms') 를
+ * 먼저 확인하고, 꺼져 있으면 저장된 값이 무엇이든 null·''을 돌려준다. 저장소의 값은
+ * 그대로 남아 있으므로 다시 켜면 바로 돌아온다.
  */
 final class NotifySettings
 {
@@ -90,10 +99,18 @@ final class NotifySettings
         return in_array($channel, $this->channelsFor($event), true);
     }
 
-    /** @return array{tpl_code:string,var_map:array}|null */
+    /**
+     * 알림톡이 꺼져 있으면 매핑이 아무리 멀쩡해도 null 이다 — channelsFor()·isOn() 이
+     * "꺼졌다"고 답하는데 이 메서드만 tpl_code 를 내주면, 부르는 쪽이 굳이 isOn() 을
+     * 먼저 물어보지 않는 한 "쓸 수 있다"고 믿어 버린다. 저장된 매핑 자체는 save() 가
+     * 지우지 않는다(다시 켤 때 다시 고르지 않아도 되게) — 여기서는 그 값을 안 내줄
+     * 뿐이다.
+     *
+     * @return array{tpl_code:string,var_map:array}|null
+     */
     public function templateFor(string $event): ?array
     {
-        if (!Events::exists($event)) {
+        if (!Events::exists($event) || !$this->isOn($event, 'alimtalk')) {
             return null;
         }
 
@@ -133,9 +150,11 @@ final class NotifySettings
         return ['tpl_code' => $code, 'var_map' => $map];
     }
 
+    /** 같은 이유로 문자도 꺼져 있으면 본문을 내주지 않는다 — 저장된 본문 자체는
+     *  save() 가 지우지 않는다. */
     public function smsBody(string $event): string
     {
-        if (!Events::exists($event)) {
+        if (!Events::exists($event) || !$this->isOn($event, 'sms')) {
             return '';
         }
 
