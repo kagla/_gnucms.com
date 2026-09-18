@@ -713,6 +713,52 @@ final class NotifierTest extends WebTestCase
         self::assertSame('7', $db->selectOne('SELECT * FROM ' . $db->table('notifications'))['user_id']);
     }
 
+    /**
+     * canReach() 는 켠 채널에게 "이 모양의 사람에게 갈 수 있느냐"를 묻는다. 하나라도
+     * 그렇다고 하면 참이다 — 전부 그래야 참인 것이 아니다. AND 로 바뀌면 메일은 멀쩡히
+     * 나가는데 화면은 "보낼 수 없습니다"라고 말하게 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCanReachIsTrueWhenAnySingleChannelCanReach(array $dbConfig): void
+    {
+        $notifier = $this->notifier($dbConfig,
+            [$this->channel('mail'), $this->channel('sms', false)], ['mail', 'sms']);
+
+        self::assertTrue($notifier->canReach('welcome', $this->to()));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCanReachIsFalseWhenNoChannelCanReach(array $dbConfig): void
+    {
+        $notifier = $this->notifier($dbConfig,
+            [$this->channel('mail', false), $this->channel('sms', false)], ['mail', 'sms']);
+
+        self::assertFalse($notifier->canReach('welcome', $this->to()));
+    }
+
+    /**
+     * 답을 못 한 채널은 "못 간다"로 치지 않는다. 문자·알림톡은 DB 와 알리고 설정을 읽으며
+     * 답하므로 여기서 터질 수 있는데, 그때 "못 간다"고 단정하면 DB 가 한 번 흔들린 사이
+     * 가입이 통째로 막힌다. 모르면 된다고 보고 넘어가되, 실제 발송에서 다시 터지면 그때는
+     * notify() 가 시끄럽게 실패한다 — 조용히 갇히는 쪽만 막으면 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAChannelThatCannotAnswerCountsAsMightReach(array $dbConfig): void
+    {
+        $notifier = $this->notifier($dbConfig, [$this->brokenChannel('sms')], ['sms']);
+
+        self::assertTrue($notifier->canReach('welcome', $this->to()));
+    }
+
+    /** 켠 채널이 하나도 없으면 물어볼 것도 없다. */
+    #[DataProvider('connectionProvider')]
+    public function testCanReachIsFalseWhenNothingIsOn(array $dbConfig): void
+    {
+        $notifier = $this->notifier($dbConfig, [$this->channel('mail')], [], 'welcome');
+
+        self::assertFalse($notifier->canReach('welcome', $this->to()));
+    }
+
     /** 메일 전송기·알리고를 바꾸면 이미 조립된 알림 발송기도 다시 만든다 — 그러지 않으면
      *  시험이 가짜로 바꿔 둔 뒤에도 진짜 전송기가 알림을 내보낸다. */
     #[DataProvider('connectionProvider')]
