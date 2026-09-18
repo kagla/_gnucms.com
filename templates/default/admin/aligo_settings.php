@@ -7,7 +7,7 @@
 <section class="card settings-card">
   <div class="card-body">
     <h1 class="card-title"><?= $this->icon('bell', 19) ?> 알림톡·문자 설정</h1>
-    <p class="card-sub">카카오 알림톡과 문자(SMS·LMS)를 보낼 알리고(Aligo) 계정을 연결합니다. 칸 이름 옆 괄호는 알리고 화면·문서에서 쓰는 이름입니다.</p>
+    <p class="card-sub">카카오 알림톡과 문자(SMS·LMS)를 보낼 알리고(Aligo) 계정을 연결합니다. 알림톡과 문자는 알리고 안에서도 따로 신청하는 별개의 서비스라, 아래 칸을 어느 채널에 쓰이는지로 묶어 두었습니다.</p>
 
     <div class="status-badges">
       <span class="badge <?= $status['configured'] ? 'badge-success badge-soft' : 'badge-ghost' ?>"><?= $status['configured'] ? '계정 연결됨' : '계정 연결 안 됨' ?></span>
@@ -39,13 +39,13 @@
         <p class="fieldset-label">알림톡과 문자(SMS·LMS)가 함께 쓰는 값입니다. 여기가 비면 두 채널 모두 보낼 수 없습니다.</p>
         <div class="grid-2">
           <fieldset class="fieldset<?php if (array_key_exists('user_id', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">알리고 사용자 ID (user_id)</legend>
+            <legend class="fieldset-legend">알리고 사용자 ID</legend>
             <input class="input input-bordered input-block" type="text" name="user_id" value="<?= $this->e($values['user_id'] ?? '') ?>" maxlength="60" required>
             <?php if (array_key_exists('user_id', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['user_id']) ?></p><?php endif ?>
             <p class="fieldset-label">알리고 로그인 아이디입니다. 알림톡·문자 양쪽 인증에 함께 씁니다.</p>
           </fieldset>
           <fieldset class="fieldset<?php if (array_key_exists('api_key', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">API 키 (API Key)</legend>
+            <legend class="fieldset-legend">API 키</legend>
             <input class="input input-bordered input-block" type="password" name="api_key" value="" autocomplete="new-password" placeholder="<?= ($values['api_key_set'] ?? false) ? '저장됨' : 'API 키 입력' ?>" maxlength="200">
             <?php if ($values['api_key_set'] ?? false): ?>
               <label class="label toggle-row fieldset-label"><input type="checkbox" name="api_key_delete" value="1"> 저장된 API 키 삭제</label>
@@ -56,7 +56,7 @@
         </div>
         <div class="grid-2">
           <fieldset class="fieldset<?php if (array_key_exists('sender', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">발신번호 (sender)</legend>
+            <legend class="fieldset-legend">발신번호</legend>
             <input class="input input-bordered input-block" type="text" name="sender" value="<?= $this->e($values['sender'] ?? '') ?>" maxlength="20" required>
             <?php if (array_key_exists('sender', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['sender']) ?></p><?php endif ?>
             <p class="fieldset-label">알리고에 사전 등록한 발신번호와 같아야 합니다. 알림톡·문자 모두 이 번호로 나갑니다.</p>
