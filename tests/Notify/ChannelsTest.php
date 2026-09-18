@@ -397,11 +397,6 @@ final class ChannelsTest extends DatabaseTestCase
             '댓글 외의 알림은 알림함에 넣지 않는다');
     }
 
-    /**
-     * 알림함에는 두 종류가 있고 회원에게 다르게 읽힌다 — 내 글에 달린 댓글과 내 댓글에
-     * 달린 답글. comment_new 이벤트는 하나뿐이므로 종류는 채널 문맥으로 들어온다.
-     * 채널이 한 종류로 뭉개면 지금 있는 기능이 조용히 퇴화한다.
-     */
     /** 댓글번호는 없을 수 있다 — 그 칸은 NULL 을 받는다. */
     #[DataProvider('connectionProvider')]
     public function testInboxAcceptsANotificationWithoutACommentId(array $config): void
@@ -417,6 +412,11 @@ final class ChannelsTest extends DatabaseTestCase
         self::assertNull($row['comment_id']);
     }
 
+    /**
+     * 알림함에는 두 종류가 있고 회원에게 다르게 읽힌다 — 내 글에 달린 댓글과 내 댓글에
+     * 달린 답글. comment_new 이벤트는 하나뿐이므로 종류는 채널 문맥으로 들어온다.
+     * 채널이 한 종류로 뭉개면 지금 있는 기능이 조용히 퇴화한다.
+     */
     #[DataProvider('connectionProvider')]
     public function testInboxRecordsTheKindItIsGiven(array $config): void
     {
