@@ -85,8 +85,8 @@ final class AdminAligoController
 
     /**
      * 채널을 끄면 이미 걸린 예약도 함께 취소된다(AligoService::setChannelEnabled()) —
-     * 부분 취소가 흔하므로(발송 5분 전이 지난 건은 알리고가 거절한다) 그 결과를 저장
-     * 안내에 숫자로 싣는다. 문장은 savedNotice() 가 조립한다.
+     * 부분 취소는 흔하므로 그 결과를 저장 안내에 숫자로 싣는다. 문장은 savedNotice()
+     * 가 조립한다.
      */
     public function toggle(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -118,6 +118,14 @@ final class AdminAligoController
      * 저장 안내 문장. 채널을 끌 때 함께 취소된(또는 취소하지 못한) 예약이 있으면
      * 그 숫자를 문장에 더한다 — cancel_ok·cancel_failed 는 toggle() 이 숫자로만 실어
      * 넘긴 값이다(클래스 주석의 원칙: 문장은 쿼리로 받지 않고 여기서 만든다).
+     *
+     * 취소하지 못한 이유는 말하지 않는다. 예전에는 "발송 5분 전을 지나"라고 단정했지만
+     * 그건 알 수 없는 사실이다 — 알리고에 닿지 못했거나 키가 취소됐거나 IP 가 등록돼
+     * 있지 않아도 똑같이 실패하고, 알림톡은 시한 초과인지 가려낼 코드조차 없다
+     * (Dispatch::cancel() 참고). 틀린 사유는 침묵보다 나쁘다: 시한이 지났다는 말은
+     * 다시 시도하지 말라는 지시인데, 다시 시도하면 취소됐을 건에도 그렇게 말하게 된다.
+     * 그래서 결과(몇 개가 남았는지)만 말하고, 사유는 그 사유가 실제로 적혀 있는 이력
+     * 상세로 보낸다.
      */
     private function savedNotice(array $query): string
     {
@@ -131,12 +139,14 @@ final class AdminAligoController
         }
         if ($ok === 0) {
             return sprintf(
-                '설정을 저장했습니다. 예약된 발송을 취소하려 했지만 %d개는 발송 5분 전을 지나 취소하지 못했습니다.', $failed
+                '설정을 저장했습니다. 예약된 발송 %d개는 취소하지 못해 예정대로 나갑니다.'
+                . ' 사유는 이력 화면의 작업 상세에 적혀 있고, 거기서 다시 취소할 수 있습니다.', $failed
             );
         }
 
         return sprintf(
-            '설정을 저장했습니다. 예약된 발송 %d개 중 %d개를 취소했고, %d개는 발송 5분 전을 지나 취소하지 못했습니다.',
+            '설정을 저장했습니다. 예약된 발송 %d개 중 %d개를 취소했고, %d개는 취소하지 못해 예정대로 나갑니다.'
+            . ' 사유는 이력 화면의 작업 상세에 적혀 있고, 거기서 다시 취소할 수 있습니다.',
             $ok + $failed, $ok, $failed
         );
     }

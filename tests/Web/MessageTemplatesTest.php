@@ -122,10 +122,11 @@ final class MessageTemplatesTest extends WebTestCase
     }
 
     /**
-     * FIX 2: 취소가 일부만 성공하면(500명이 넘는 작업처럼 mid 가 여러 개면 일부 묶음은
-     * 발송 5분 전을 지나 취소가 거절될 수 있다) 그 사실이 "취소했습니다"로 뭉개지지
-     * 않고 몇 개가 남았는지 그대로 문장에 남아야 한다 — 부분 실패를 성공 문장으로
-     * 매끈하게 다듬으면 안 된다는 것이 이 기능 전체의 요구사항이다.
+     * 취소가 일부만 성공하면(500명이 넘는 작업처럼 mid 가 여러 개면 일부 묶음은 취소가
+     * 거절될 수 있다) 그 사실이 "취소했습니다"로 뭉개지지 않고 몇 개가 남았는지 그대로
+     * 문장에 남아야 한다 — 부분 실패를 성공 문장으로 매끈하게 다듬으면 안 된다는 것이
+     * 이 기능 전체의 요구사항이다. 다만 왜 남았는지는 단정하지 않는다: 이 화면은 그
+     * 사유를 알지 못하고, 사유가 실제로 적혀 있는 곳은 이력 상세다.
      */
     #[DataProvider('connectionProvider')]
     public function testTheTemplateTabNoticeStillShowsAPartialCancellationNotAsASuccess(array $dbConfig): void
@@ -136,10 +137,13 @@ final class MessageTemplatesTest extends WebTestCase
             ['imported' => '0', 'updated' => '1', 'disabled' => '1', 'cancel_ok' => '1', 'cancel_failed' => '1']));
 
         self::assertStringContainsString(
-            '승인을 잃은 템플릿에 걸린 예약 2개 중 1개를 취소했고, 1개는 발송 5분 전을 지나 취소하지 못했습니다', $html
+            '승인을 잃은 템플릿에 걸린 예약 2개 중 1개를 취소했고, 1개는 취소하지 못해 예정대로 나갑니다', $html
         );
         // "취소했습니다"만 있고 실패를 뭉개는 문장은 나오면 안 된다.
         self::assertStringNotContainsString('승인을 잃어 예약돼 있던 발송', $html);
+        // 이 화면은 취소가 왜 실패했는지 알지 못한다 — 지어내지 않고 이력 상세로 보낸다.
+        self::assertStringNotContainsString('발송 5분 전을 지나', $html);
+        self::assertStringContainsString('사유는 이력 화면의 작업 상세에 적혀 있고', $html);
     }
 
     #[DataProvider('connectionProvider')]

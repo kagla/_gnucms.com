@@ -332,9 +332,10 @@ final class MessageHistoryTest extends WebTestCase
     }
 
     /**
-     * 취소는 두 묶음 중 하나만 성공할 수 있다(발송 5분 전이 지난 묶음은 알리고가
-     * 거절한다). 화면은 "취소했습니다"로 뭉개지 않고 성공·실패 개수를 그대로 보여줘야
-     * 한다 — 아직 나갈 발송이 남아 있다는 사실을 관리자가 놓치면 안 된다.
+     * 취소는 두 묶음 중 하나만 성공할 수 있다. 화면은 "취소했습니다"로 뭉개지 않고
+     * 성공·실패 개수를 그대로 보여줘야 한다 — 아직 나갈 발송이 남아 있다는 사실을
+     * 관리자가 놓치면 안 된다. 왜 실패했는지는 문장이 단정하지 않는다(아래
+     * testACancellationFailureThatIsNotTheCutoffIsNotBlamedOnTheCutoff 참고).
      */
     #[DataProvider('connectionProvider')]
     public function testCancellingFromTheScreenReportsPartialFailure(array $dbConfig): void
@@ -358,13 +359,56 @@ final class MessageHistoryTest extends WebTestCase
 
         $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId, $query));
         self::assertStringContainsString('1개 취소', $html);
-        self::assertStringContainsString('1개는 발송 5분 전을 지나 취소할 수 없었습니다', $html);
+        self::assertStringContainsString('1개는 취소하지 못했습니다', $html);
         // 부분 취소를 "전부 취소했습니다"처럼 보여주면 안 된다.
         self::assertStringNotContainsString('예약을 취소했습니다.', $html);
+        // 이번 실패는 실제로 시한 초과(-804)였지만, 그건 수신자 행의 "사유" 칸이
+        // 말한다 — 안내 문장은 원인을 단정하지 않는다.
+        self::assertStringContainsString('발송 5분 전까지만 취소할 수 있습니다', $html,
+            '실제로 받은 사유는 그 묶음의 수신자 행에 그대로 남아야 한다');
 
         $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
             . ' WHERE id = ?', [$jobId]);
         self::assertSame('scheduled', $job['status'], '남은 묶음이 아직 나갈 것이므로 취소됐다고 적으면 안 된다');
+    }
+
+    /**
+     * 취소가 거절되는 이유는 시한 초과만이 아니다 — 알리고에 닿지 못했을 수도, 서버
+     * IP 가 등록돼 있지 않을 수도 있다. 예전에는 어느 쪽이든 "발송 5분 전을 지나
+     * 취소할 수 없었습니다. 예정대로 발송됩니다."라고 단정해, 다시 눌렀으면 멈출 수
+     * 있었을 발송을 두고 관리자에게 다시 시도하지 말라고 말했다. 화면은 이제 결과만
+     * 말하고, 실제 사유는 그 묶음의 수신자 행에 적혀 상세 표의 "사유" 칸에 보인다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testACancellationFailureThatIsNotTheCutoffIsNotBlamedOnTheCutoff(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $scheduled = $this->seedScheduled($app);
+
+        // -201: 등록되지 않은 IP. 시한과는 아무 상관이 없고, 고치면 다시 취소할 수 있다.
+        $transport->queue(200, '{"result_code":-201,"message":"not registered"}');
+
+        $response = $this->post($app, '/admin/messages/history/' . $scheduled['id'] . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('0', $query['cancel_ok']);
+        self::assertSame('1', $query['cancel_failed']);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id'], $query));
+        self::assertStringContainsString('취소하지 못했습니다', $html);
+        self::assertStringNotContainsString('발송 5분 전을 지나', $html, '알 수 없는 사유를 지어내면 안 된다');
+        self::assertStringContainsString('등록되지 않은 IP에서 요청했습니다', $html,
+            '실제 사유는 수신자 행의 "사유" 칸에 그대로 있어야 한다');
+
+        $row = $app->db()->selectOne('SELECT rslt_message FROM ' . $app->db()->table('message_recipients')
+            . ' WHERE job_id = ?', [$scheduled['id']]);
+        self::assertStringContainsString('취소하지 못했습니다', (string) $row['rslt_message']);
+        self::assertStringContainsString('등록되지 않은 IP', (string) $row['rslt_message']);
     }
 
     /**
