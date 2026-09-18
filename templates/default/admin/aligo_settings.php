@@ -7,7 +7,7 @@
 <section class="card settings-card">
   <div class="card-body">
     <h1 class="card-title"><?= $this->icon('bell', 19) ?> 알림톡·문자 설정</h1>
-    <p class="card-sub">카카오 알림톡과 문자(SMS·LMS)를 보낼 알리고(Aligo) 계정을 연결합니다.</p>
+    <p class="card-sub">카카오 알림톡과 문자(SMS·LMS)를 보낼 알리고(Aligo) 계정을 연결합니다. 칸 이름 옆 괄호는 알리고 화면·문서에서 쓰는 이름입니다.</p>
 
     <div class="status-badges">
       <span class="badge <?= $status['configured'] ? 'badge-success badge-soft' : 'badge-ghost' ?>"><?= $status['configured'] ? '계정 연결됨' : '계정 연결 안 됨' ?></span>
@@ -21,35 +21,45 @@
     <?php if ($notice !== null): ?><div class="alert <?= $notice['ok'] ? 'alert-success' : 'alert-warning' ?>"><span aria-hidden="true"><?= $this->icon($notice['ok'] ? 'check-circle' : 'warning', 18) ?></span><span><?= $this->e($notice['message']) ?></span></div><?php endif ?>
     <?php if ($error !== null): ?><div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?></span></div><?php endif ?>
 
+    <?php
+      // 발신프로필 조회는 설정 저장과 다른 주소로 보내는 별개의 폼이다. 폼은 폼 안에
+      // 넣을 수 없으므로 알맹이 없는 폼을 여기 두고, 버튼은 아래 "알림톡" 칸 안에서
+      // form= 로 이 폼을 가리킨다 — 그래야 발신프로필키와 그 칸을 채워 주는 버튼이
+      // 한자리에 모인다. 버튼 위치는 바뀌어도 보내는 곳은 예전 그대로다.
+    ?>
+    <form method="post" action="<?= $this->url('admin.aligo.profiles') ?>" id="aligo-profile-lookup" hidden>
+      <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+    </form>
+
     <form method="post" action="<?= $this->url('admin.aligo') ?>">
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
 
       <div class="form-section">
-        <h2 class="form-section-title">계정</h2>
+        <h2 class="form-section-title">공통 · 알리고 계정</h2>
+        <p class="fieldset-label">알림톡과 문자(SMS·LMS)가 함께 쓰는 값입니다. 여기가 비면 두 채널 모두 보낼 수 없습니다.</p>
         <div class="grid-2">
           <fieldset class="fieldset<?php if (array_key_exists('user_id', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">알리고 사용자 ID</legend>
+            <legend class="fieldset-legend">알리고 사용자 ID (user_id)</legend>
             <input class="input input-bordered input-block" type="text" name="user_id" value="<?= $this->e($values['user_id'] ?? '') ?>" maxlength="60" required>
             <?php if (array_key_exists('user_id', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['user_id']) ?></p><?php endif ?>
+            <p class="fieldset-label">알리고 로그인 아이디입니다. 알림톡·문자 양쪽 인증에 함께 씁니다.</p>
           </fieldset>
           <fieldset class="fieldset<?php if (array_key_exists('api_key', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">API 키</legend>
+            <legend class="fieldset-legend">API 키 (API Key)</legend>
             <input class="input input-bordered input-block" type="password" name="api_key" value="" autocomplete="new-password" placeholder="<?= ($values['api_key_set'] ?? false) ? '저장됨' : 'API 키 입력' ?>" maxlength="200">
             <?php if ($values['api_key_set'] ?? false): ?>
               <label class="label toggle-row fieldset-label"><input type="checkbox" name="api_key_delete" value="1"> 저장된 API 키 삭제</label>
             <?php endif ?>
             <?php if (array_key_exists('api_key', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['api_key']) ?></p><?php endif ?>
-            <p class="fieldset-label">보안상 저장된 키는 다시 보여주지 않습니다. 바꿀 때만 새 값을 입력하세요.</p>
+            <p class="fieldset-label">문자(SMS·LMS) 발송에 쓰고, 아래 "알림톡 전용 API 키"가 비어 있으면 알림톡에도 같은 키를 씁니다. 보안상 저장된 키는 다시 보여주지 않으니 바꿀 때만 새 값을 입력하세요. 비워 두면 기존 키를 그대로 둡니다.</p>
           </fieldset>
         </div>
         <div class="grid-2">
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">알림톡 전용 API 키 (선택)</legend>
-            <input class="input input-bordered input-block" type="password" name="alimtalk_api_key" value="" autocomplete="new-password" placeholder="<?= ($values['alimtalk_api_key_set'] ?? false) ? '저장됨' : '비워두면 위 API 키를 함께 씁니다' ?>" maxlength="200">
-            <?php if ($values['alimtalk_api_key_set'] ?? false): ?>
-              <label class="label toggle-row fieldset-label"><input type="checkbox" name="alimtalk_api_key_delete" value="1"> 저장된 알림톡 키 삭제</label>
-            <?php endif ?>
-            <p class="fieldset-label">알림톡만 별도 키를 쓰는 계정일 때만 입력하세요. 비워두면 API 키를 그대로 씁니다.</p>
+          <fieldset class="fieldset<?php if (array_key_exists('sender', $errors)): ?> is-invalid<?php endif ?>">
+            <legend class="fieldset-legend">발신번호 (sender)</legend>
+            <input class="input input-bordered input-block" type="text" name="sender" value="<?= $this->e($values['sender'] ?? '') ?>" maxlength="20" required>
+            <?php if (array_key_exists('sender', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['sender']) ?></p><?php endif ?>
+            <p class="fieldset-label">알리고에 사전 등록한 발신번호와 같아야 합니다. 알림톡·문자 모두 이 번호로 나갑니다.</p>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">테스트 모드</legend>
@@ -57,30 +67,63 @@
               <input class="toggle" type="checkbox" name="test_mode" value="1"<?= ($values['test_mode'] ?? false) ? ' checked' : '' ?>>
               <span>알리고 API는 호출하되 실제로 발송하지 않습니다</span>
             </label>
+            <p class="fieldset-label">알림톡·문자 모두에 적용됩니다. 켜 두면 과금도 실제 발송도 없고, 이력에는 테스트로 남습니다.</p>
           </fieldset>
         </div>
       </div>
 
       <div class="form-section">
-        <h2 class="form-section-title">발신 정보</h2>
+        <h2 class="form-section-title">알림톡 (카카오)</h2>
+        <p class="fieldset-label">카카오 알림톡에만 쓰는 값입니다. 문자 발송에는 영향을 주지 않습니다.</p>
         <div class="grid-2">
-          <fieldset class="fieldset<?php if (array_key_exists('sender', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">발신번호</legend>
-            <input class="input input-bordered input-block" type="text" name="sender" value="<?= $this->e($values['sender'] ?? '') ?>" maxlength="20" required>
-            <?php if (array_key_exists('sender', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['sender']) ?></p><?php endif ?>
-            <p class="fieldset-label">알리고에 사전 등록된 발신번호와 같아야 합니다.</p>
-          </fieldset>
           <fieldset class="fieldset<?php if (array_key_exists('senderkey', $errors)): ?> is-invalid<?php endif ?>">
-            <legend class="fieldset-legend">발신프로필키 (카카오채널)</legend>
+            <legend class="fieldset-legend">발신프로필키 (Senderkey)</legend>
             <input class="input input-bordered input-block" type="text" id="aligo-senderkey" name="senderkey" value="<?= $this->e($values['senderkey'] ?? '') ?>" maxlength="64">
             <?php if (array_key_exists('senderkey', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['senderkey']) ?></p><?php endif ?>
-            <p class="fieldset-label">아래 "채널 불러오기"로 목록에서 고르거나 직접 입력하세요.</p>
+            <p class="fieldset-label">알리고가 <strong>Senderkey</strong>라고 부르는, 카카오채널 하나를 가리키는 값입니다. 아래 "채널 불러오기"로 고르거나 직접 입력하세요. 비어 있으면 알림톡 템플릿을 불러올 수도 보낼 수도 없습니다.</p>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">알림톡 전용 API 키 (선택)</legend>
+            <input class="input input-bordered input-block" type="password" name="alimtalk_api_key" value="" autocomplete="new-password" placeholder="<?= ($values['alimtalk_api_key_set'] ?? false) ? '저장됨' : '비워두면 위 API 키를 함께 씁니다' ?>" maxlength="200">
+            <?php if ($values['alimtalk_api_key_set'] ?? false): ?>
+              <label class="label toggle-row fieldset-label"><input type="checkbox" name="alimtalk_api_key_delete" value="1"> 저장된 알림톡 키 삭제</label>
+            <?php endif ?>
+            <p class="fieldset-label">발신프로필키(Senderkey)가 <em>아닙니다</em> — 알림톡 API 인증에 쓰는 키(apikey)로, 위 "API 키"와 같은 자리의 값입니다. 알림톡만 별도 키를 발급받은 계정에서만 입력하세요. 비워 두면 위 API 키를 그대로 씁니다.</p>
           </fieldset>
         </div>
         <fieldset class="fieldset">
-          <legend class="fieldset-legend">채널명 (선택)</legend>
+          <legend class="fieldset-legend">카카오채널명 (선택)</legend>
           <input class="input input-bordered input-block" type="text" id="aligo-channel-name" name="channel_name" value="<?= $this->e($values['channel_name'] ?? '') ?>" maxlength="60" placeholder="예: @상점">
+          <p class="fieldset-label">어느 채널을 연결했는지 이 화면에서 알아보기 위한 이름입니다. 발송에는 쓰이지 않으므로 비워 두어도 됩니다.</p>
         </fieldset>
+
+        <div class="profile-lookup">
+          <button class="btn btn-outline" type="submit" form="aligo-profile-lookup"><?= $this->icon('search', 15) ?> 채널 불러오기</button>
+          <p class="fieldset-label">알리고에 등록된 카카오채널 목록을 불러와 발신프로필키를 고를 수 있습니다.</p>
+
+          <?php if ($profiles !== []): ?>
+          <fieldset class="fieldset profile-list">
+            <legend class="fieldset-legend">알리고에 등록된 카카오채널</legend>
+            <?php foreach ($profiles as $profile): ?>
+              <?php
+                $senderKey = (string) ($profile['senderKey'] ?? '');
+                $name = (string) ($profile['name'] ?? '');
+                $profileStatus = (string) ($profile['status'] ?? '');
+              ?>
+              <label class="label toggle-row">
+                <input type="radio" name="profile_pick" value="<?= $this->e($senderKey) ?>" data-senderkey="<?= $this->e($senderKey) ?>" data-name="<?= $this->e($name) ?>"<?= ((string) ($values['senderkey'] ?? '')) === $senderKey ? ' checked' : '' ?>>
+                <span><?= $this->e($name) ?> · <?= $this->e($senderKey) ?> <span class="badge badge-sm badge-soft">상태 <?= $this->e($profileStatus) ?></span></span>
+              </label>
+            <?php endforeach ?>
+            <p class="fieldset-label">고르면 위 "발신프로필키"·"카카오채널명" 칸에 채워집니다. 저장하려면 "설정 저장"을 다시 눌러 주세요.</p>
+          </fieldset>
+          <?php endif ?>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h2 class="form-section-title">문자 (SMS·LMS)</h2>
+        <p class="fieldset-label">문자는 위 "공통 · 알리고 계정"의 값만으로 나갑니다 — 여기서 따로 입력할 값은 없습니다. 발신번호와 API 키가 곧 문자 설정입니다. 실제로 보내려면 아래 "채널별 발송 허용"에서 문자 발송을 켜 주세요.</p>
       </div>
 
       <div class="card-actions form-actions">
@@ -90,33 +133,8 @@
     </form>
 
     <div class="form-section">
-      <h2 class="form-section-title">발신프로필 조회</h2>
-      <form method="post" action="<?= $this->url('admin.aligo.profiles') ?>">
-        <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-        <button class="btn btn-outline" type="submit"><?= $this->icon('search', 15) ?> 채널 불러오기</button>
-      </form>
-
-      <?php if ($profiles !== []): ?>
-      <fieldset class="fieldset profile-list">
-        <legend class="fieldset-legend">알리고에 등록된 카카오채널</legend>
-        <?php foreach ($profiles as $profile): ?>
-          <?php
-            $senderKey = (string) ($profile['senderKey'] ?? '');
-            $name = (string) ($profile['name'] ?? '');
-            $profileStatus = (string) ($profile['status'] ?? '');
-          ?>
-          <label class="label toggle-row">
-            <input type="radio" name="profile_pick" value="<?= $this->e($senderKey) ?>" data-senderkey="<?= $this->e($senderKey) ?>" data-name="<?= $this->e($name) ?>"<?= ((string) ($values['senderkey'] ?? '')) === $senderKey ? ' checked' : '' ?>>
-            <span><?= $this->e($name) ?> · <?= $this->e($senderKey) ?> <span class="badge badge-sm badge-soft">상태 <?= $this->e($profileStatus) ?></span></span>
-          </label>
-        <?php endforeach ?>
-        <p class="fieldset-label">고르면 위 "발신프로필키"·"채널명" 칸에 채워집니다. 저장하려면 "설정 저장"을 다시 눌러 주세요.</p>
-      </fieldset>
-      <?php endif ?>
-    </div>
-
-    <div class="form-section">
       <h2 class="form-section-title">연결 확인</h2>
+      <p class="fieldset-label">저장한 값으로 알림톡·문자 잔여 건수를 한 번에 조회합니다. 두 채널은 알리고 안에서도 따로 신청하므로 한쪽만 실패할 수 있습니다.</p>
       <form method="post" action="<?= $this->url('admin.aligo.verify') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <button class="btn btn-outline" type="submit"><?= $this->icon('shield', 15) ?> 연결 확인</button>
