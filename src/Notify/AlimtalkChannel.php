@@ -33,6 +33,19 @@ final class AlimtalkChannel implements ChannelInterface
         return 'alimtalk';
     }
 
+    /**
+     * 네 가지를 모두 만족해야 보낼 수 있다: 받을 번호가 있고, 이 알림이 전화로 보낼 수
+     * 있는 것이고, 관리자가 고른 승인 템플릿이 지금도 살아 있고, 알리고 알림톡 발송이 켜져 있다.
+     *
+     * **Events::phoneCapable() 은 일부러 남긴 죽은 가지다.** NotifySettings 가 이미
+     * 전화 불가 이벤트에서 전화 채널을 걸러 내므로(channelsFor()), 이 검사를 지워도
+     * 스위트는 초록이다 — **어떤 테스트도 이 줄을 죽일 수 없다.** 그래도 두는 이유는
+     * R107 과 같다: 읽는 쪽이 저장된 설정을 믿는 대신 카탈로그에서 스스로 한 번 더
+     * 확인한다. 이메일로만 확인되는 수신자(email_verify 같은)에게 문자가 나가는 것은
+     * 되돌릴 수 없는 종류의 사고이고, 그것을 막는 층이 하나뿐인 편보다 둘인 편이 낫다.
+     * 지우려는 사람에게: 이 줄이 테스트로 보호되지 않는다는 사실은 결함이 아니라
+     * 위 문단이 설명하는 의도다.
+     */
     public function available(string $event, Recipient $to): bool
     {
         return $to->phone !== null

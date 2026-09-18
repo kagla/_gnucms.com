@@ -463,7 +463,16 @@ final class ChannelsTest extends DatabaseTestCase
             '모르는 종류' => ['_kind' => 'shout'] + $full,
             '글번호 없음' => array_diff_key($full, ['_post_id' => null]),
             '글번호가 숫자가 아님' => ['_post_id' => '3번'] + $full,
+            '글번호가 배열' => ['_post_id' => ['3']] + $full,
+            '글번호가 참' => ['_post_id' => true] + $full,
+            '글번호가 0' => ['_post_id' => '0'] + $full,
+            '글번호 앞자리가 0' => ['_post_id' => '03'] + $full,
             '댓글번호가 숫자가 아님' => ['_comment_id' => '9번'] + $full,
+            // 이 한 줄이 이번 라운드의 결함이다: 배열로 온 댓글번호가 "안 왔다"로 읽혀
+            // comment_id 가 NULL 인 행이 조용히 쌓였다. 같은 칸의 '9번'은 거절되는데도.
+            '댓글번호가 배열' => ['_comment_id' => ['9']] + $full,
+            '댓글번호가 0' => ['_comment_id' => '0'] + $full,
+            '종류가 배열' => ['_kind' => ['comment']] + $full,
         ] as $why => $vars) {
             self::assertSame(['inbox'], array_keys($this->refusal(
                 fn () => $channel->send('comment_new', $to, $vars))), $why);

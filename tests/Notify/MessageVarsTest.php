@@ -59,7 +59,43 @@ final class MessageVarsTest extends TestCase
         self::assertNull(MessageVars::context($vars, 'comment_id'));
         // 접두사 없이 같은 이름을 넣어도 문맥으로 읽지 않는다.
         self::assertNull(MessageVars::context(['post_id' => 7], 'post_id'));
-        self::assertNull(MessageVars::context(['_post_id' => ['7']], 'post_id'));
+    }
+
+    /**
+     * **없는 것과 망가진 것은 다른 사실이다.** 둘을 같은 null 로 접으면, "없어도
+     * 되는" 값을 읽는 쪽(알림함의 댓글번호)이 배열 하나를 "안 왔구나"로 읽고 조용히
+     * NULL 을 적는다 — 실제로 그렇게 새어 나갔다. 그래서 문맥을 읽는 두 메서드 모두
+     * 세 가지로 답한다: null(없음) · false(있는데 쓸 수 없음) · 값.
+     */
+    public function testContextTellsAbsentApartFromUnusable(): void
+    {
+        self::assertNull(MessageVars::context([], 'post_id'), '없음');
+        self::assertFalse(MessageVars::context(['_post_id' => ['7']], 'post_id'), '배열');
+        self::assertFalse(MessageVars::context(['_post_id' => null], 'post_id'),
+            '키는 있는데 값이 null 이면 "쓸 수 없음"이다 — 문맥 키를 넣었다는 것 자체가 뜻이 있다');
+        self::assertSame('7', MessageVars::context(['_post_id' => '7'], 'post_id'));
+    }
+
+    /**
+     * 글번호·댓글번호가 무엇이어야 하는지는 여기서 한 번만 정한다. 1 이상의 정수를
+     * 가리키는 값(정수 자체이거나, 앞자리 0 없는 숫자 문자열)만 번호다. 0·'03'·'9번'·
+     * true·배열은 전부 "있는데 쓸 수 없음"이고, 어떤 PHP 타입으로 왔는지에 따라
+     * 답이 달라지지 않는다.
+     */
+    public function testContextIdAcceptsOnlyARealRowNumber(): void
+    {
+        self::assertNull(MessageVars::contextId([], 'post_id'), '없음');
+        self::assertSame(7, MessageVars::contextId(['_post_id' => 7], 'post_id'));
+        self::assertSame(7, MessageVars::contextId(['_post_id' => '7'], 'post_id'));
+
+        foreach ([
+            '문자열 0' => '0', '숫자 0' => 0, '앞자리 0' => '03', '음수' => -1, '음수 문자열' => '-3',
+            '숫자가 아님' => '9번', '빈 문자열' => '', '공백' => ' 3 ', '참' => true,
+            '거짓' => false, '실수' => 3.5, '정수 같은 실수' => 3.0, '배열' => ['3'],
+            'null' => null,
+        ] as $why => $value) {
+            self::assertFalse(MessageVars::contextId(['_post_id' => $value], 'post_id'), (string) $why);
+        }
     }
 
     /** 카탈로그 이름과 문맥 접두사는 부딪히지 않는다 — 한글 이름에는 밑줄이 없다. */

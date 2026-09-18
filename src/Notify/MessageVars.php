@@ -51,12 +51,58 @@ final class MessageVars
 
     /**
      * 채널만 읽는 문맥 값 하나. $name 은 접두사를 뺀 이름('post_id')으로 준다.
-     * 없거나 스칼라가 아니면 null — 부르는 쪽이 "없다"를 한 가지 모양으로만 보게 한다.
+     *
+     * **없는 것과 망가진 것을 같은 값으로 접지 않는다.**
+     *   null  — 그런 키가 아예 없다.
+     *   false — 키는 있는데 쓸 수 없는 값이다(배열·객체·null 등).
+     *   문자열 — 쓸 수 있는 값.
+     *
+     * 처음에는 둘 다 null 이었는데, 그것이 곧바로 결함이 됐다: 알림함의 댓글번호는
+     * "없어도 되는" 값이라 부르는 쪽이 null 을 정상으로 받아들이고, 그래서 배열로 온
+     * 망가진 번호가 "안 왔다"로 읽혀 comment_id 가 NULL 인 행이 조용히 쌓였다. 값을
+     * 읽는 쪽마다 그 함정을 피해 가게 하는 대신, 여기서 두 사실을 갈라 놓는다 — 앞으로
+     * 문맥을 읽는 채널이 늘어도 같은 함정을 물려받지 않는다.
+     *
+     * @return string|false|null
      */
-    public static function context(array $vars, string $name): ?string
+    public static function context(array $vars, string $name): string|false|null
     {
-        $value = $vars[self::CONTEXT_PREFIX . $name] ?? null;
+        $key = self::CONTEXT_PREFIX . $name;
+        if (!array_key_exists($key, $vars)) {
+            return null;
+        }
 
-        return is_scalar($value) ? (string) $value : null;
+        return is_scalar($vars[$key]) ? (string) $vars[$key] : false;
+    }
+
+    /**
+     * 문맥으로 온 행 번호(글번호·댓글번호) 하나. **무엇이 번호인지는 이 메서드가 한 번만
+     * 정한다** — posts·comments 의 기본키는 1 부터 올라가는 정수이므로, 번호란 1 이상의
+     * 정수이거나 앞자리 0 없는 숫자 문자열뿐이다. 0·'03'·'9번'·true·3.0·배열은 모두
+     * "있는데 쓸 수 없음"이다: 어떤 것도 실제 행을 가리키지 못하고, 그런 값으로 알림을
+     * 적으면 눌러도 열리지 않는 알림이 남는다.
+     *
+     * 판단을 값의 PHP 타입보다 앞에 두는 것이 핵심이다. (string) 으로 먼저 캐스팅해
+     * 검사하면 true 가 '1'(=1번 글)이 되고 배열은 경고와 함께 뭉개진다 — 같은 "잘못된
+     * 번호"가 어떤 타입으로 왔느냐에 따라 다른 결말을 맞는다. 그래서 원래 값을 그대로
+     * 본다.
+     *
+     * @return int|false|null null=없음, false=있는데 번호가 아님, int=번호
+     */
+    public static function contextId(array $vars, string $name): int|false|null
+    {
+        $key = self::CONTEXT_PREFIX . $name;
+        if (!array_key_exists($key, $vars)) {
+            return null;
+        }
+        $value = $vars[$key];
+        if (is_int($value)) {
+            return $value >= 1 ? $value : false;
+        }
+        if (is_string($value) && preg_match('/^[1-9][0-9]*$/', $value) === 1) {
+            return (int) $value;
+        }
+
+        return false;
     }
 }

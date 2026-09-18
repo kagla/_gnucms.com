@@ -66,14 +66,19 @@ final class InboxChannel implements ChannelInterface
         }
 
         $kind = MessageVars::context($vars, 'kind');
-        $postId = MessageVars::context($vars, 'post_id');
-        // 댓글번호는 없어도 된다(그 칸은 NULL 을 받는다). 다만 들어왔는데 숫자가 아니면
-        // 조용히 버리지 않는다 — 잘못 넘어온 값을 없던 것처럼 다루면 알림을 눌러도
-        // 댓글 자리로 가지 못하는 이유가 어디에도 남지 않는다.
-        $commentId = MessageVars::context($vars, 'comment_id');
+        $postId = MessageVars::contextId($vars, 'post_id');
+        $commentId = MessageVars::contextId($vars, 'comment_id');
+
+        // 세 칸의 요구가 저마다 다르지만, "잘못 왔다"는 어느 칸에서든 똑같이 거절이다.
+        //   종류    — 아는 둘 중 하나여야 한다. 없거나(null) 쓸 수 없으면(false) 둘 다 거절.
+        //   글번호  — 반드시 있어야 하고 진짜 번호여야 한다(is_int 가 null·false 를 함께 막는다).
+        //   댓글번호 — **없어도 된다**(글 전체에 대한 알림). 하지만 왔는데 번호가 아니면
+        //             거절한다 — 없는 것과 망가진 것은 다른 사실이고, 망가진 것을 NULL 로
+        //             적으면 "댓글 없는 알림"과 구별되지 않은 채 조용히 남는다.
+        //             MessageVars 가 그 둘을 null·false 로 갈라 주기에 여기서 물어볼 수 있다.
         if (!in_array($kind, [NotificationService::KIND_COMMENT, NotificationService::KIND_REPLY], true)
-            || $postId === null || !ctype_digit($postId)
-            || ($commentId !== null && !ctype_digit($commentId))) {
+            || !is_int($postId)
+            || $commentId === false) {
             throw DomainError::validation(['inbox' =>
                 '알림함에 적을 값이 모자라거나 잘못됐습니다(종류·글번호·댓글번호).']);
         }
@@ -82,8 +87,8 @@ final class InboxChannel implements ChannelInterface
         ($this->notifications)()->recordInbox(
             (string) $to->userId,
             $kind,
-            (int) $postId,
-            $commentId === null ? null : (int) $commentId,
+            $postId,
+            $commentId,
             $values['작성자'] ?? '',
             $values['글제목'] ?? ''
         );
