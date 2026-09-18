@@ -52,6 +52,13 @@ use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Maintenance\BackupManager;
 use GnuCms\Aligo\AligoService;
 use GnuCms\Aligo\StreamTransport;
+use GnuCms\Notify\AlimtalkChannel;
+use GnuCms\Notify\InboxChannel;
+use GnuCms\Notify\MailChannel;
+use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\SettingsRepository as NotifySettingsRepository;
+use GnuCms\Notify\SmsChannel;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -149,6 +156,10 @@ final class App
     private ?BackupManager $backupManager = null;
 
     private ?AligoService $aligoService = null;
+
+    private ?NotifySettings $notifySettings = null;
+
+    private ?Notifier $notifier = null;
 
     private ?string $configFile;
 
@@ -481,6 +492,7 @@ final class App
         $this->mailer = $mailer;
         $this->accountService = null;
         $this->socialAuthService = null;
+        $this->notifier = null;
     }
 
     public function socialAuthService(): SocialAuthService
@@ -559,6 +571,11 @@ final class App
     public function setAligo(AligoService $service): void
     {
         $this->aligoService = $service;
+        // 알림 설정과 알림 발송기는 이 서비스(와 그 템플릿 사본)를 쥔 채 조립된다.
+        // 끊어 주지 않으면 가짜로 바꾼 뒤에도 알림은 진짜 알리고로 나간다 —
+        // setMailer() 가 accountService 를 끊는 것과 같은 이유다.
+        $this->notifySettings = null;
+        $this->notifier = null;
     }
 
     public function aligo(): AligoService
@@ -572,6 +589,48 @@ final class App
         }
 
         return $this->aligoService;
+    }
+
+    /**
+     * 이벤트마다 어느 채널을 켤지 저장한 설정. 알림 발송기와 관리자 설정 화면이 같은
+     * 사본을 본다 — 채널 둘(알림톡·문자)이 이 객체에게 본문·템플릿을 묻기 때문이다.
+     */
+    public function notifySettings(): NotifySettings
+    {
+        if ($this->notifySettings === null) {
+            $this->notifySettings = new NotifySettings(
+                new NotifySettingsRepository($this->db()),
+                $this->aligo()->templates
+            );
+        }
+
+        return $this->notifySettings;
+    }
+
+    /**
+     * 코어 알림의 유일한 출구.
+     *
+     * **알림함 채널만 callable 을 받는 이유.** 이 게터는 다른 게터들과 같이 new 가 끝난
+     * **뒤에** 메모이즈한다($this->notifier 대입은 맨 마지막이다). 그래서 조립 도중에
+     * notificationService() 를 만들면, 언젠가 그 서비스가 알림을 보내게 되는 순간
+     * (알림함에 적는 김에 메일도 보내는 식) 그 게터가 다시 notifier() 를 부르고, 아직
+     * null 인 메모이즈를 지나 무한 재귀가 된다. 발송 시점에야 서비스를 만들면 notifier()
+     * 가 먼저 끝나 메모이즈되므로 그 고리가 닫히지 않는다. postService() 의
+     * setAttachmentResolver() 가 같은 이유로 쓰는 같은 해법이다.
+     */
+    public function notifier(): Notifier
+    {
+        if ($this->notifier === null) {
+            $settings = $this->notifySettings();
+            $this->notifier = new Notifier($settings, [
+                new MailChannel($this->mailer()),
+                new AlimtalkChannel($this->aligo(), $settings),
+                new SmsChannel($this->aligo(), $settings),
+                new InboxChannel(fn (): NotificationService => $this->notificationService()),
+            ]);
+        }
+
+        return $this->notifier;
     }
 
     public function sendMailTest(): void

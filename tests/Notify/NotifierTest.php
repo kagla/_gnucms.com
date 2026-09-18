@@ -4,18 +4,28 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Notify;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\Aligo\AlimtalkApi;
 use GnuCms\Aligo\Settings as AligoSettings;
 use GnuCms\Aligo\SettingsRepository as AligoSettingsRepository;
 use GnuCms\Aligo\Templates;
+use GnuCms\App;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\ChannelInterface;
+use GnuCms\Notify\InboxChannel;
+use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\Notifier;
 use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\SettingsRepository;
+use GnuCms\Notify\SmsChannel;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\NotificationRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Service\NotificationService;
+use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -324,7 +334,7 @@ final class NotifierTest extends WebTestCase
         $settings = $this->settings($this->freshDatabase($dbConfig));
 
         $this->expectException(DomainError::class);
-        /** @phpstan-ignore-next-line 배열은 타입이 없다 — 그래서 여기서 막는다 */
+        // 배열에는 타입이 없다 — 그래서 채널 아닌 것이 여기까지 올 수 있고, 여기서 막는다.
         new Notifier($settings, ['mail']);
     }
 
@@ -362,5 +372,114 @@ final class NotifierTest extends WebTestCase
             ->notify('welcome', $this->to(), ['이름' => '홍', '_post_id' => 3]);
 
         self::assertSame(['이름' => '홍', '_post_id' => 3], $spy->vars);
+    }
+
+    // ---------------------------------------------------------------- App 배선
+
+    #[DataProvider('connectionProvider')]
+    public function testAppWiresAllFourChannelsOnce(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $notifier = $app->notifier();
+        $keys = array_keys((new \ReflectionProperty(Notifier::class, 'channels'))->getValue($notifier));
+        sort($keys);
+
+        self::assertSame(['alimtalk', 'inbox', 'mail', 'sms'], $keys);
+        self::assertSame($notifier, $app->notifier(), '요청마다 한 번만 조립한다');
+    }
+
+    /**
+     * App 의 게터는 new 가 끝난 **뒤에** 메모이즈한다. notifier() 가 조립 도중에
+     * notificationService() 를 만들면, 그 서비스가 알림을 보내게 되는 날(5단계) 그
+     * 게터가 다시 notifier() 를 불러 무한 재귀가 된다. 그래서 알림함 채널은 서비스가
+     * 아니라 그것을 돌려줄 callable 을 쥔다 — 이 시험은 조립이 끝난 뒤에도 알림함
+     * 서비스가 아직 만들어지지 않았음을 못박는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testBuildingTheNotifierDoesNotBuildTheNotificationService(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->notifier();
+
+        self::assertNull((new \ReflectionProperty(App::class, 'notificationService'))->getValue($app),
+            '알림함 서비스를 조립 중에 만들면 5단계에서 무한 재귀가 된다');
+    }
+
+    /**
+     * 그리고 그 날이 오면 실제로 어떻게 되는지를 여기서 미리 돌려 본다. App 과 같은
+     * 모양(지연 + new 뒤 메모이즈)의 작은 컨테이너를 만들되, 이번에는 알림함 서비스가
+     * 알림 발송기를 필요로 하게 한다. 재귀가 생기면 스택이 터져 스위트 전체가 죽으므로
+     * 컨테이너가 재진입을 먼저 잡아 시험 실패로 바꾼다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheInboxWiringSurvivesAServiceThatNeedsTheNotifier(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $settings = $this->settings($db);
+        $container = new class ($db, $settings) {
+            public ?Notifier $notifier = null;
+            public ?NotificationService $service = null;
+            private bool $building = false;
+
+            public function __construct(private Connection $db, private NotifySettings $settings)
+            {
+            }
+
+            public function notifier(): Notifier
+            {
+                if ($this->notifier === null) {
+                    if ($this->building) {
+                        throw new \RuntimeException('notifier() 가 조립 도중 자기 자신을 다시 요구했습니다');
+                    }
+                    $this->building = true;
+                    $notifier = new Notifier($this->settings, [
+                        new InboxChannel(fn (): NotificationService => $this->service()),
+                    ]);
+                    $this->notifier = $notifier;
+                    $this->building = false;
+                }
+
+                return $this->notifier;
+            }
+
+            public function service(): NotificationService
+            {
+                if ($this->service === null) {
+                    // 5단계의 모습: 알림함을 쓰는 서비스가 알림 발송기도 쓴다.
+                    $this->notifier();
+                    $this->service = new NotificationService(new NotificationRepository($this->db),
+                        new PostRepository($this->db), new CommentRepository($this->db));
+                }
+
+                return $this->service;
+            }
+        };
+
+        $container->notifier()->notify('comment_new', Recipient::forUser(['id' => '7', 'display_name' => '홍']),
+            ['글제목' => '첫 글', '작성자' => '김철수',
+                '_kind' => NotificationService::KIND_COMMENT, '_post_id' => '3']);
+
+        self::assertSame('7', $db->selectOne('SELECT * FROM ' . $db->table('notifications'))['user_id']);
+    }
+
+    /** 메일 전송기·알리고를 바꾸면 이미 조립된 알림 발송기도 다시 만든다 — 그러지 않으면
+     *  시험이 가짜로 바꿔 둔 뒤에도 진짜 전송기가 알림을 내보낸다. */
+    #[DataProvider('connectionProvider')]
+    public function testReplacingTheMailerOrAligoRebuildsTheNotifier(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->notifier();
+
+        $mailer = new CollectingMailer();
+        $app->setMailer($mailer);
+        $channels = (new \ReflectionProperty(Notifier::class, 'channels'))->getValue($app->notifier());
+        self::assertSame($mailer,
+            (new \ReflectionProperty(MailChannel::class, 'mailer'))->getValue($channels['mail']));
+
+        $aligo = new AligoService($app->db(), new FakeAligoTransport(), new SecretCipher('x'));
+        $app->setAligo($aligo);
+        $channels = (new \ReflectionProperty(Notifier::class, 'channels'))->getValue($app->notifier());
+        self::assertSame($aligo,
+            (new \ReflectionProperty(SmsChannel::class, 'aligo'))->getValue($channels['sms']));
     }
 }
