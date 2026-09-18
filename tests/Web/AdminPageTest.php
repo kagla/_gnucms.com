@@ -1071,6 +1071,14 @@ final class AdminPageTest extends WebTestCase
             'no-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '번호없음회원', false
         );
         $app->users()->verifyEmail($noPhoneMemberId);
+        // 형식을 맞출 수 없는 값이 저장돼 있을 수 있다(예전 데이터·외부 이관). 가리지
+        // 못한다고 해서 원본을 그대로 보여 주면, 가려 보여 주는 것이 존재 이유인 이
+        // 목록이 열리는 쪽으로 실패한다.
+        $oddPhoneMemberId = $app->users()->create(
+            'odd-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '이상한번호회원', false
+        );
+        $app->users()->verifyEmail($oddPhoneMemberId);
+        $app->users()->updatePhone($oddPhoneMemberId, '0101234');
 
         $this->get($app, '/login');
         $this->post($app, '/login', [
@@ -1083,6 +1091,7 @@ final class AdminPageTest extends WebTestCase
         self::assertStringNotContainsString('01012345678', $list);
         self::assertStringNotContainsString('010-1234-5678', $list, '목록은 전체 번호를 그대로 보여주면 안 된다');
         self::assertStringContainsString('<span class="muted">—</span>', $list, '번호가 없는 회원은 대시로 표시해야 한다');
+        self::assertStringNotContainsString('0101234', $list, '가리지 못하는 값은 아예 보여주지 않아야 한다');
 
         // 하이픈을 넣어 검색해도 숫자만 뽑아 비교하므로 걸린다.
         $searched = $this->body($this->get($app, '/admin/members', ['q' => '010-1234-5678']));

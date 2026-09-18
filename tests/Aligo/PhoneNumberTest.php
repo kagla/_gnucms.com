@@ -32,6 +32,19 @@ final class PhoneNumberTest extends TestCase
         self::assertSame('010-****-5678', PhoneNumber::mask('01012345678'));
     }
 
+    /**
+     * 가리는 것이 유일한 일인 함수는 못 가릴 때 열리는 쪽으로 실패하면 안 된다.
+     * 형식을 맞추지 못한 값(잘린 번호·외국 번호 등)을 그대로 돌려주면, 번호를
+     * 가려 보여 주는 것이 존재 이유인 관리자 회원 목록이 그 번호를 통째로 보여 준다.
+     */
+    public function testMaskingHidesAValueItCannotFormat(): void
+    {
+        self::assertSame('*******', PhoneNumber::mask('0101234'));
+        self::assertStringNotContainsString('1234', PhoneNumber::mask('0101234'));
+        self::assertStringNotContainsString('12345678', PhoneNumber::mask('821012345678'));
+        self::assertSame('', PhoneNumber::mask(''), '번호가 없으면 별도 남기지 않는다');
+    }
+
     public function testSenderAcceptsLandlineAndRepresentativeNumbers(): void
     {
         self::assertSame('0212345678', PhoneNumber::normalizeSender('02-1234-5678'));

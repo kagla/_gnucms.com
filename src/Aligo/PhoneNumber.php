@@ -75,7 +75,10 @@ final class PhoneNumber
         $formatted = self::format($digits);
         $parts = explode('-', $formatted);
         if (count($parts) !== 3) {
-            return $formatted;
+            // 형식을 못 맞춘 값(잘린 번호·외국 번호 등)은 가릴 자리를 고를 수 없다.
+            // 그렇다고 원본을 그대로 돌려주면 가리는 것이 유일한 일인 함수가 열리는
+            // 쪽으로 실패한다 — 못 가리면 아예 보여주지 않고 전부 별로 덮는다.
+            return str_repeat('*', mb_strlen($formatted));
         }
 
         return $parts[0] . '-' . str_repeat('*', strlen($parts[1])) . '-' . $parts[2];
