@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Db\Connection;
 use GnuCms\Support\Clock;
 use GnuCms\Support\IpAddress;
@@ -259,13 +260,24 @@ final class UserRepository
     public function listForAdmin(string $query = '', int $limit = 100): array
     {
         $limit = max(1, min(200, $limit));
-        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, avatar_file, created_at'
+        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, avatar_file, phone, created_at'
             . ' FROM ' . $this->db->table('users');
         $params = [];
         if ($query !== '') {
-            $sql .= ' WHERE LOWER(email) LIKE ? OR LOWER(display_name) LIKE ?';
             $needle = '%' . mb_strtolower($query) . '%';
+            $conditions = ['LOWER(email) LIKE ?', 'LOWER(display_name) LIKE ?'];
             $params = [$needle, $needle];
+
+            // 번호는 숫자만 저장하므로 검색어에서도 숫자만 뽑아 비교한다. 숫자가
+            // 하나도 없으면(이름 검색 등) 조건 자체를 붙이지 않는다 — 안 그러면
+            // `phone LIKE '%%'` 가 번호를 가진 회원을 모두 끌고 온다.
+            $digits = PhoneNumber::digits($query);
+            if ($digits !== '') {
+                $conditions[] = 'phone LIKE ?';
+                $params[] = '%' . $digits . '%';
+            }
+
+            $sql .= ' WHERE (' . implode(' OR ', $conditions) . ')';
         }
         $sql .= ' ORDER BY id DESC LIMIT ' . $limit;
 

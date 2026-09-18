@@ -1042,4 +1042,67 @@ final class AdminPageTest extends WebTestCase
         );
     }
 
+    /**
+     * 회원 목록은 번호를 가린 채 보여준다(전체 번호는 회원 수정 화면에서만 보인다) — 목록은
+     * 훑어보는 화면이고 수정은 의도한 행위이기 때문이다. 하이픈을 넣어 검색해도 저장된
+     * 숫자만 번호와 걸린다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminMembersListSearchesByPhoneAndShowsItMasked(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $phoneMemberId = $app->users()->create(
+            'phone-member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '전화회원', false
+        );
+        $app->users()->verifyEmail($phoneMemberId);
+        $app->users()->updatePhone($phoneMemberId, '01012345678');
+        $otherPhoneMemberId = $app->users()->create(
+            'other-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '다른전화회원', false
+        );
+        $app->users()->verifyEmail($otherPhoneMemberId);
+        $app->users()->updatePhone($otherPhoneMemberId, '01099998888');
+        $noPhoneMemberId = $app->users()->create(
+            'no-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '번호없음회원', false
+        );
+        $app->users()->verifyEmail($noPhoneMemberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        // 목록은 저장된 번호를 가려서 보여준다. 가운데만 가리고, 번호가 없으면 대시로 표시한다.
+        $list = $this->body($this->get($app, '/admin/members'));
+        self::assertStringContainsString('010-****-5678', $list, '목록은 번호를 가려서 보여줘야 한다');
+        self::assertStringNotContainsString('01012345678', $list);
+        self::assertStringNotContainsString('010-1234-5678', $list, '목록은 전체 번호를 그대로 보여주면 안 된다');
+        self::assertStringContainsString('<span class="muted">—</span>', $list, '번호가 없는 회원은 대시로 표시해야 한다');
+
+        // 하이픈을 넣어 검색해도 숫자만 뽑아 비교하므로 걸린다.
+        $searched = $this->body($this->get($app, '/admin/members', ['q' => '010-1234-5678']));
+        self::assertStringContainsString('전화회원', $searched);
+        self::assertStringNotContainsString('다른전화회원', $searched);
+        self::assertStringNotContainsString('번호없음회원', $searched);
+
+        // 일부 자릿수만 넣어도 걸린다.
+        $partial = $this->body($this->get($app, '/admin/members', ['q' => '1234']));
+        self::assertStringContainsString('전화회원', $partial);
+        self::assertStringNotContainsString('다른전화회원', $partial);
+
+        // 숫자가 없는 검색어는 이름/이메일만 보고, 번호를 가진 회원을 모두 끌고 오면 안 된다.
+        $byName = $this->body($this->get($app, '/admin/members', ['q' => '없는이름']));
+        self::assertStringContainsString('조건에 맞는 회원이 없습니다', $byName);
+
+        // 검색어가 배열(q[]=x)로 와도 검색창을 안전하게 다시 채워야 한다 — 이 branch가
+        // AuthController::register() 와 관리자 회원 수정에서 두 번 냈던 결함과 같은 자리다.
+        $arrayQuery = $this->get($app, '/admin/members', ['q' => ['x']]);
+        self::assertSame(200, $arrayQuery->getStatusCode());
+        self::assertStringNotContainsString('value="Array"', $this->body($arrayQuery));
+    }
+
 }

@@ -18,10 +18,10 @@
 <section class="card">
   <div class="table-wrap">
     <table class="table table-zebra">
-      <thead><tr><th>회원</th><th>가입일</th><th>상태</th><th class="right">관리</th></tr></thead>
+      <thead><tr><th>회원</th><th>휴대폰번호</th><th>가입일</th><th>상태</th><th class="right">관리</th></tr></thead>
       <tbody>
       <?php if ($members === []): ?>
-        <tr class="table-empty"><td colspan="4">조건에 맞는 회원이 없습니다.</td></tr>
+        <tr class="table-empty"><td colspan="5">조건에 맞는 회원이 없습니다.</td></tr>
       <?php else: foreach ($members as $member): ?>
         <tr>
           <td data-label="회원">
@@ -35,6 +35,7 @@
               </div>
             </div>
           </td>
+          <td data-label="휴대폰번호"><?= !is_scalar($member['phone']) || (string) $member['phone'] === '' ? '<span class="muted">—</span>' : $this->e(\GnuCms\Aligo\PhoneNumber::mask((string) $member['phone'])) ?></td>
           <td data-label="가입일"><?= $this->date($member['created_at'], 'Y.m.d') ?></td>
           <?php $status_label = $member['status'] === 'active' ? '활성' : ($member['status'] === 'withdrawn' ? '탈퇴' : '차단'); ?>
           <td data-label="상태"><span class="badge badge-sm <?= $member['status'] === 'active' ? 'badge-success' : ($member['status'] === 'withdrawn' ? 'badge-ghost' : 'badge-error') ?> badge-soft"><?= $status_label ?></span></td>
