@@ -20,6 +20,19 @@ use GnuCms\Error\DomainError;
  * 자연히 빠진다). save() 만 예외다 — 알 수 없는 이벤트를 새로 저장하려는 시도는 거절한다.
  * 저장소에 남은 낡은 값은 읽지 않을 뿐 지우지도 않는다: 지우는 것은 이 클래스의 책임이
  * 아니고, 같은 키가 나중에 카탈로그로 돌아오면(드문 일이지만) 그 값이 다시 뜻을 갖는다.
+ *
+ * **저장된 값은 약속이 아니다.** save() 가 알림톡 템플릿을 검증하는 것은 저장하는
+ * 그 순간뿐이다. 그 뒤 Templates::fetch() 가(카카오 승인이 풀리거나 목록에서 사라져)
+ * 조용히 그 템플릿을 disable 하거나 내용을 바꿀 수 있다 — 관리자가 아무것도 다시
+ * 손대지 않아도 저장된 tpl_code 가 더는 쓸 수 없는 것을 가리키게 된다. 그래서
+ * channelsFor()·isOn()·templateFor() 는 저장된 alimtalk 설정을 그대로 믿지 않고, 읽을
+ * 때마다 Templates::find() 로 그 템플릿이 지금도 존재·enabled 이고 지금의 본문 변수를
+ * 저장된 var_map 이 빠짐없이 덮는지 다시 확인한다(validTemplate()). 셋 중 하나라도
+ * 이 재확인을 건너뛰면 나머지와 어긋난 답을 하게 되므로, 셋 다 같은 private 메서드
+ * 하나로 판단을 모은다. 템플릿이 죽으면 channelsFor() 는 alimtalk 를 빼고,
+ * templateFor() 는 null 을 돌려준다 — 관리자가 켰다고 저장한 값과 지금 실제로 쓸 수
+ * 있는 값이 다를 수 있다는 뜻을 formValues() 의 alimtalk_tpl_code(원본, 검증 안 함)로
+ * 화면에 남긴다.
  */
 final class NotifySettings
 {
@@ -65,6 +78,9 @@ final class NotifySettings
         if (!Events::phoneCapable($event)) {
             $on = array_diff($on, self::PHONE_CHANNELS);
         }
+        if (in_array('alimtalk', $on, true) && $this->validTemplate($event, $stored) === null) {
+            $on = array_diff($on, ['alimtalk']);
+        }
 
         return array_values(array_intersect(self::CHANNELS, $on));
     }
@@ -81,14 +97,40 @@ final class NotifySettings
             return null;
         }
 
-        $stored = $this->repository->all();
+        return $this->validTemplate($event, $this->repository->all());
+    }
+
+    /**
+     * 저장된 tpl_code 가 지금도 실제로 보낼 수 있는 템플릿을 가리키는지 다시 확인한다.
+     * find() 가 못 찾거나(삭제됨) enabled 가 아니거나(승인·정상을 잃음), 그 사이 알리고
+     * 쪽에서 본문이 바뀌어 저장된 var_map 이 지금의 변수를 다 덮지 못하면 전부 "쓸 수
+     * 없음"이다 — save() 가 저장할 때 검증한 것과 정확히 같은 기준을, 읽을 때 지금의
+     * Templates 사본을 대상으로 다시 적용할 뿐이다.
+     *
+     * @return array{tpl_code:string,var_map:array}|null
+     */
+    private function validTemplate(string $event, array $stored): ?array
+    {
         $code = (string) ($stored[$event . '.tpl_code'] ?? '');
         if ($code === '') {
             return null;
         }
-        $map = json_decode((string) ($stored[$event . '.var_map'] ?? '[]'), true);
+        $template = $this->templates->find($code);
+        if ($template === null || (int) $template['enabled'] !== 1) {
+            return null;
+        }
 
-        return ['tpl_code' => $code, 'var_map' => is_array($map) ? $map : []];
+        $map = json_decode((string) ($stored[$event . '.var_map'] ?? '[]'), true);
+        $map = is_array($map) ? $map : [];
+        $allowed = Events::variables($event);
+        foreach (Variables::names((string) $template['content']) as $name) {
+            $core = $map[$name] ?? null;
+            if (!is_string($core) || $core === '' || !in_array($core, $allowed, true)) {
+                return null;
+            }
+        }
+
+        return ['tpl_code' => $code, 'var_map' => $map];
     }
 
     public function smsBody(string $event): string
@@ -183,6 +225,7 @@ final class NotifySettings
 
     public function formValues(): array
     {
+        $stored = $this->repository->all();
         $values = [];
         foreach (Events::ALL as $key => $event) {
             $values[$key] = [
@@ -192,6 +235,11 @@ final class NotifySettings
                 'channels' => $this->channelsFor($key),
                 'template' => $this->templateFor($key),
                 'sms_body' => $this->smsBody($key),
+                // 검증을 거치지 않은 원본 tpl_code. template 이 null 인데 이 값이 비어
+                // 있지 않다면, 관리자가 골라 둔 템플릿이 그 사이 못 쓰게 된 것이다 —
+                // 화면이 "알림톡이 꺼졌습니다"가 아니라 "고르신 템플릿(OOO)을 더는 쓸 수
+                // 없습니다"라고 진짜 이유를 말할 수 있게 남겨 둔다.
+                'alimtalk_tpl_code' => (string) ($stored[$key . '.tpl_code'] ?? ''),
             ];
         }
 

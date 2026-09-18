@@ -43,6 +43,21 @@ final class NotifySettingsTest extends DatabaseTestCase
         return new NotifySettings($repository, $templates);
     }
 
+    /** boot() 과 같지만 alimtalk_templates 를 직접 건드릴 수 있게 Connection·Templates 도
+     *  함께 돌려준다 — save() 뒤에 템플릿이 "운영 중에" 죽는 상황(승인 취소, 삭제, 본문
+     *  변경)을 재현하는 데 쓴다. */
+    private function bootWithTemplateAccess(array $config): array
+    {
+        $db = $this->freshDatabase($config);
+        $aligo = new AligoSettings(new AligoSettingsRepository($db), new SecretCipher('s'));
+        $templates = new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo);
+        $db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1', 'name' => '재설정',
+            'content' => '#{고객명}님 #{주소} 에서 재설정하세요', 'status' => 'A', 'insp_status' => 'APR',
+            'enabled' => 1, 'fetched_at' => '2026-09-17 10:00:00']);
+
+        return [new NotifySettings(new SettingsRepository($db), $templates), $db, $templates];
+    }
+
     #[DataProvider('connectionProvider')]
     public function testMailIsTheOnlyChannelOnByDefault(array $config): void
     {
@@ -246,5 +261,83 @@ final class NotifySettingsTest extends DatabaseTestCase
         self::assertSame(['inbox'], $values['comment_new']['channels']);
         self::assertNull($values['comment_new']['template']);
         self::assertSame('', $values['comment_new']['sms_body']);
+        self::assertSame('T1', $values['password_reset']['alimtalk_tpl_code']);
+        self::assertSame('', $values['comment_new']['alimtalk_tpl_code']);
+    }
+
+    /**
+     * save() 는 저장하는 순간에만 템플릿을 검증한다. 그 뒤 Templates::fetch() 가 카카오
+     * 승인을 잃은 템플릿을 disable 할 수 있는데(Templates.php 자체 docblock에 적힌
+     * 정상 동작이다), 관리자는 아무것도 다시 하지 않는다 — 그래도 채널·읽기 쪽 셋 다
+     * "더는 못 쓴다"는 같은 답을 해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testChannelsForDropsAlimtalkWhenItsTemplateIsDisabledLater(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        self::assertContains('alimtalk', $settings->channelsFor('password_reset'));
+
+        $templates->setEnabled('T1', false);
+
+        self::assertNotContains('alimtalk', $settings->channelsFor('password_reset'));
+        self::assertFalse($settings->isOn('password_reset', 'alimtalk'));
+        self::assertNull($settings->templateFor('password_reset'));
+    }
+
+    /** 템플릿 사본 자체가 알리고 목록에서 사라져 Templates::fetch() 가 그 행을 지우는
+     *  경우도 같다 — find() 가 null 을 돌려주는 것만 다르다. */
+    #[DataProvider('connectionProvider')]
+    public function testChannelsForDropsAlimtalkWhenItsTemplateRowIsGone(array $config): void
+    {
+        [$settings, $db] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+
+        $db->delete('alimtalk_templates', 'tpl_code = :code', ['code' => 'T1']);
+
+        self::assertNotContains('alimtalk', $settings->channelsFor('password_reset'));
+        self::assertNull($settings->templateFor('password_reset'));
+    }
+
+    /**
+     * Templates::fetch() 는 enabled 를 건드리지 않고도 본문(content)을 알리고 쪽 최신
+     * 값으로 갱신할 수 있다. 새 변수가 본문에 추가되면, 저장해 둔 var_map 은 그 변수를
+     * 모른 채로 남아 매핑이 다시 불완전해진다 — enabled 검사만으로는 이 경우를 잡지
+     * 못하므로 본문 변수 전체를 다시 대조해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testChannelsForDropsAlimtalkWhenTemplateContentGainsAnUnmappedVariable(array $config): void
+    {
+        [$settings, $db] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        self::assertContains('alimtalk', $settings->channelsFor('password_reset'));
+
+        $db->update('alimtalk_templates',
+            ['content' => '#{고객명}님 #{주소} #{유효시간} 뒤 만료, 재설정하세요'],
+            'tpl_code = :code', ['code' => 'T1']);
+
+        self::assertNotContains('alimtalk', $settings->channelsFor('password_reset'));
+        self::assertNull($settings->templateFor('password_reset'));
+    }
+
+    /** 채널이 꺼진 진짜 이유(템플릿이 죽었다)를 화면이 말할 수 있어야 한다 — template
+     *  이 null 이어도 원본 tpl_code 는 alimtalk_tpl_code 로 남아 있어야 "알림톡이
+     *  꺼졌습니다"가 아니라 "템플릿 T1을 더는 쓸 수 없습니다"라고 말할 수 있다. */
+    #[DataProvider('connectionProvider')]
+    public function testFormValuesKeepsTheDeadTemplateCodeForTheScreenToExplain(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+
+        $templates->setEnabled('T1', false);
+        $values = $settings->formValues();
+
+        self::assertNotContains('alimtalk', $values['password_reset']['channels']);
+        self::assertNull($values['password_reset']['template']);
+        self::assertSame('T1', $values['password_reset']['alimtalk_tpl_code']);
     }
 }
