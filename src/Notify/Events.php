@@ -14,17 +14,17 @@ final class Events
         'password_reset' => ['label' => '비밀번호 재설정',
             'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => true],
         'password_changed' => ['label' => '비밀번호 변경 안내',
-            'vars' => ['사이트명', '이름', '일시'], 'phone' => true],
+            'vars' => ['사이트명', '이름', '일시', '링크'], 'phone' => true],
         'welcome' => ['label' => '가입 완료 안내',
             'vars' => ['사이트명', '이름'], 'phone' => true],
         'comment_new' => ['label' => '새 댓글·답글',
             'vars' => ['사이트명', '이름', '글제목', '작성자', '링크'], 'phone' => true],
         'email_verify' => ['label' => '이메일 인증',
-            'vars' => ['사이트명', '이름', '링크'], 'phone' => false],
+            'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => false],
         'signup_attempt' => ['label' => '가입 시도 안내',
             'vars' => ['사이트명', '링크'], 'phone' => false],
         'social_email_verify' => ['label' => '소셜 로그인 이메일 확인',
-            'vars' => ['사이트명', '링크'], 'phone' => false],
+            'vars' => ['사이트명', '링크', '유효시간'], 'phone' => false],
     ];
 
     public static function exists(string $key): bool

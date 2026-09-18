@@ -26,16 +26,33 @@ final class Recipient
     public static function forUser(array $user): self
     {
         return new self(
-            self::orNull((string) ($user['email'] ?? '')),
-            self::orNull((string) ($user['phone'] ?? '')),
-            self::orNull((string) ($user['id'] ?? '')),
-            (string) ($user['display_name'] ?? '')
+            self::scalarOrNull($user['email'] ?? null),
+            self::scalarOrNull($user['phone'] ?? null),
+            self::scalarOrNull($user['id'] ?? null),
+            self::scalarString($user['display_name'] ?? '')
         );
     }
 
     public static function forEmail(string $email, string $name = ''): self
     {
         return new self(self::orNull($email), null, null, $name);
+    }
+
+    /**
+     * $user 는 호출자가 만든 배열이라 칸 값이 배열일 수 있다(phone[]=x 가 넘어오면
+     * array_merge() 가 그 배열을 그대로 얹는 것과 같은 모양). 이미
+     * AccountController·AdminController·AccountService 세 곳에서 겪은 결함이라, 이
+     * 값 객체도 (string) 캐스팅 전에 반드시 스칼라인지 본다 — 스칼라가 아니면 값이
+     * 없는 것으로 접어 둔다(캐스팅해서 "Array" 라는 문자열을 만들지 않는다).
+     */
+    private static function scalarOrNull(mixed $value): ?string
+    {
+        return is_scalar($value) ? self::orNull((string) $value) : null;
+    }
+
+    private static function scalarString(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
     }
 
     private static function orNull(string $value): ?string
