@@ -43,8 +43,10 @@ final class AlimtalkChannel implements ChannelInterface
 
     public function send(string $event, Recipient $to, array $vars): void
     {
-        $template = $this->available($event, $to) ? $this->settings->templateFor($event) : null;
-        if ($template === null) {
+        // available() 이 답이고, null 검사는 그 뒤 타입을 위해 남긴다(available() 이
+        // 참이면 템플릿은 반드시 있다).
+        $template = $this->settings->templateFor($event);
+        if ($template === null || !$this->available($event, $to)) {
             throw DomainError::validation(['alimtalk' => '알림톡으로 보낼 수 없는 알림입니다.']);
         }
 
@@ -55,6 +57,14 @@ final class AlimtalkChannel implements ChannelInterface
         $values = MessageVars::forBody($event, $vars);
         $mapped = [];
         foreach ($template['var_map'] as $templateName => $coreName) {
+            // 저장된 매핑은 약속이 아니다. templateFor() 는 템플릿 본문에 실제로 쓰인
+            // 변수만 검사하므로, 손으로 고친 값이나 옛 버전이 남긴 값이 그 밖의 칸에
+            // 문자열 아닌 것을 들고 있을 수 있다 — 그대로 배열 첨자로 쓰면 TypeError 로
+            // 터진다. 건너뛰면 그 변수는 빈 채로 남고, 그것이 진짜 템플릿 변수였다면
+            // Variables::apply() 가 발송 전에 거절한다.
+            if (!is_string($coreName)) {
+                continue;
+            }
             $mapped[(string) $templateName] = $values[$coreName] ?? '';
         }
 

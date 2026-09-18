@@ -10,8 +10,8 @@ use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\AlimtalkChannel;
 use GnuCms\Notify\MailChannel;
-use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\InboxChannel;
+use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\SettingsRepository;
 use GnuCms\Notify\SmsChannel;
@@ -35,6 +35,56 @@ use PHPUnit\Framework\Attributes\DataProvider;
  */
 final class ChannelsTest extends DatabaseTestCase
 {
+    private AligoService $aligo;
+    private NotifySettings $notify;
+    private Connection $db;
+    private FakeAligoTransport $transport;
+
+    /** 알리고 계정은 저장돼 있고 승인 템플릿 T1 이 하나 있는 상태에서 시작한다. */
+    private function boot(array $config): void
+    {
+        $this->db = $this->freshDatabase($config);
+        $this->transport = new FakeAligoTransport();
+        $this->aligo = new AligoService($this->db, $this->transport, new SecretCipher('s'));
+        $this->aligo->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $this->db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1',
+            'name' => '재설정', 'content' => '#{고객명}님 #{주소} 에서 재설정하세요',
+            'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
+            'fetched_at' => '2026-09-17 10:00:00']);
+        // 알림 설정은 알리고와 같은 Templates 사본을 본다 — 템플릿이 죽으면 둘 다 안다.
+        $this->notify = new NotifySettings(new SettingsRepository($this->db), $this->aligo->templates);
+    }
+
+    private function member(string $phone = '01012345678'): Recipient
+    {
+        return Recipient::forUser(['id' => '1', 'display_name' => '홍길동',
+            'email' => 'a@example.com', 'phone' => $phone]);
+    }
+
+    private function jobs(): array
+    {
+        return $this->db->select('SELECT * FROM ' . $this->db->table('message_jobs') . ' ORDER BY id');
+    }
+
+    /** $send 가 반드시 DomainError 를 던져야 하고, 그 details 를 돌려준다. */
+    private function refusal(callable $send): array
+    {
+        try {
+            $send();
+        } catch (DomainError $e) {
+            return $e->details();
+        }
+
+        self::fail('보낼 수 없는 상태인데 거절하지 않았습니다');
+    }
+
+    private function notificationService(): NotificationService
+    {
+        return new NotificationService(new NotificationRepository($this->db),
+            new PostRepository($this->db), new CommentRepository($this->db));
+    }
+
     public function testMailIsUnavailableWithoutAnAddress(): void
     {
         $channel = new MailChannel(new CollectingMailer());
@@ -69,38 +119,6 @@ final class ChannelsTest extends DatabaseTestCase
         self::assertSame(['mail'], array_keys($this->refusal(fn () => $channel->send(
             'password_reset', Recipient::forUser(['id' => '1', 'display_name' => '홍']), []))));
         self::assertSame([], $mailer->messages, '빈 주소로 메일을 내보내지 않는다');
-    }
-
-    private AligoService $aligo;
-    private NotifySettings $notify;
-    private Connection $db;
-    private FakeAligoTransport $transport;
-
-    /** 알리고 계정은 저장돼 있고 승인 템플릿 T1 이 하나 있는 상태에서 시작한다. */
-    private function boot(array $config): void
-    {
-        $this->db = $this->freshDatabase($config);
-        $this->transport = new FakeAligoTransport();
-        $this->aligo = new AligoService($this->db, $this->transport, new SecretCipher('s'));
-        $this->aligo->settings->save(['user_id' => 'shop', 'api_key' => 'K',
-            'sender' => '0212345678', 'senderkey' => 'SK1']);
-        $this->db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1',
-            'name' => '재설정', 'content' => '#{고객명}님 #{주소} 에서 재설정하세요',
-            'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
-            'fetched_at' => '2026-09-17 10:00:00']);
-        // 알림 설정은 알리고와 같은 Templates 사본을 본다 — 템플릿이 죽으면 둘 다 안다.
-        $this->notify = new NotifySettings(new SettingsRepository($this->db), $this->aligo->templates);
-    }
-
-    private function member(string $phone = '01012345678'): Recipient
-    {
-        return Recipient::forUser(['id' => '1', 'display_name' => '홍길동',
-            'email' => 'a@example.com', 'phone' => $phone]);
-    }
-
-    private function jobs(): array
-    {
-        return $this->db->select('SELECT * FROM ' . $this->db->table('message_jobs') . ' ORDER BY id');
     }
 
     #[DataProvider('connectionProvider')]
@@ -280,6 +298,32 @@ final class ChannelsTest extends DatabaseTestCase
     }
 
     /**
+     * 저장된 매핑에 템플릿 본문과 무관한 칸이 섞여 있어도(손으로 고친 DB, 옛 버전의
+     * 흔적) 발송은 멀쩡해야 한다 — templateFor() 는 템플릿에 실제로 쓰인 변수만
+     * 검사하므로 그 밖의 칸은 무엇이든 들어 있을 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStoredMapWithJunkEntriesStillSends(array $config): void
+    {
+        $this->boot($config);
+        $this->aligo->settings->setEnabled('at', true);
+        (new SettingsRepository($this->db))->save([
+            'password_reset.configured' => '1', 'password_reset.alimtalk' => '1',
+            'password_reset.tpl_code' => 'T1',
+            'password_reset.var_map' => (string) json_encode(
+                ['고객명' => '이름', '주소' => '링크', '옛변수' => ['이름']], JSON_UNESCAPED_UNICODE),
+        ]);
+        $this->transport->queue(200, (string) json_encode(
+            ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
+
+        (new AlimtalkChannel($this->aligo, $this->notify))->send('password_reset', $this->member(),
+            ['이름' => '홍길동', '링크' => 'https://example.com/r']);
+
+        $row = $this->db->selectOne('SELECT body FROM ' . $this->db->table('message_recipients'));
+        self::assertSame('홍길동님 https://example.com/r 에서 재설정하세요', $row['body']);
+    }
+
+    /**
      * available() 이 거절할 상태에서 send() 를 부르면 아무것도 보내지 않고 거절한다.
      *
      * 알리고 엔진도 결국은 거절하지만(번호가 없으면 수신자 없음, 스위치가 꺼져 있으면
@@ -318,18 +362,6 @@ final class ChannelsTest extends DatabaseTestCase
 
         self::assertSame([], $this->jobs());
         self::assertSame([], $this->transport->requests);
-    }
-
-    /** $send 가 반드시 DomainError 를 던져야 하고, 그 details 를 돌려준다. */
-    private function refusal(callable $send): array
-    {
-        try {
-            $send();
-        } catch (DomainError $e) {
-            return $e->details();
-        }
-
-        self::fail('보낼 수 없는 상태인데 거절하지 않았습니다');
     }
 
     /**
@@ -438,11 +470,5 @@ final class ChannelsTest extends DatabaseTestCase
         self::assertSame(['inbox'], array_keys($this->refusal(fn () => $channel->send('password_reset',
             Recipient::forUser(['id' => '7', 'display_name' => '홍길동']), $vars))));
         self::assertSame([], $this->db->select('SELECT id FROM ' . $this->db->table('notifications')));
-    }
-
-    private function notificationService(): NotificationService
-    {
-        return new NotificationService(new NotificationRepository($this->db),
-            new PostRepository($this->db), new CommentRepository($this->db));
     }
 }

@@ -48,7 +48,6 @@ final class SmsChannel implements ChannelInterface
 
     public function send(string $event, Recipient $to, array $vars): void
     {
-
         if (!$this->available($event, $to)) {
             throw DomainError::validation(['sms' => '문자로 보낼 수 없는 알림입니다.']);
         }
