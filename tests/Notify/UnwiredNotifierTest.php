@@ -75,6 +75,8 @@ final class UnwiredNotifierTest extends TestCase
         self::assertCount(1, $this->logged);
         self::assertStringContainsString('Owner\\C', $this->logged[0]);
         self::assertStringContainsString('배선되지 않았습니다', $this->logged[0]);
+        // 진단은 이 서비스가 **실제로 할 일**을 말해야 한다. 이쪽은 메일로는 보낸다.
+        self::assertStringContainsString('기본값(메일)으로만 보냅니다', $this->logged[0]);
     }
 
     /** 발송마다 되풀이하지 않는다 — 같은 사실을 반복해 적으면 읽어야 할 다른 줄을 덮는다. */
@@ -106,5 +108,8 @@ final class UnwiredNotifierTest extends TestCase
         self::assertFalse($sent);
         self::assertCount(1, $this->logged);
         self::assertStringContainsString('Owner\\G', $this->logged[0]);
+        // 메일러가 없으니 메일로도 안 나간다. 틀린 진단은 읽는 사람을 없는 문제로 보낸다.
+        self::assertStringContainsString('아무 데도 나가지 않습니다', $this->logged[0]);
+        self::assertStringNotContainsString('기본값(메일)으로만 보냅니다', $this->logged[0]);
     }
 }
