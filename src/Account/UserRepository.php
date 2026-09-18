@@ -250,6 +250,14 @@ final class UserRepository
                 'session_epoch' => (int) $user['session_epoch'] + 1,
                 'avatar_file' => null,
                 'avatar_source' => null,
+                // 번호도 함께 지운다. 탈퇴는 이 시스템이 개인정보를 놓아주겠다고
+                // 약속하는 유일한 순간인데, 번호만 남기면 가장 연락하기 쉬운 값이
+                // 남는다. 관리자 회원 수정은 탈퇴 회원을 거부하므로(AdminService),
+                // 여기서 지우지 않으면 DB 를 직접 건드리는 것 말고는 지울 방법이
+                // 없다. 이미 발송된 건의 수신번호는 message_recipients 가 따로
+                // 들고 있고, 발송 화면·수신자 확인은 모두 활성 회원만 보므로
+                // 지워도 잃는 것이 없다.
+                'phone' => null,
                 'withdrawn_ip' => IpAddress::normalize($clientIp),
                 'withdrawn_at' => $now,
                 'updated_at' => $now,

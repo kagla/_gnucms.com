@@ -105,6 +105,7 @@ final class AccountPageTest extends WebTestCase
             'author_id' => (string) $id, 'author_name' => '떠날회원', 'author_ip' => '198.51.100.21',
         ]);
         $app->loginEvents()->record($id, 'leave@example.com', 'password', 'success', '198.51.100.22', 'Test');
+        $app->users()->updatePhone($id, '01044445555');
 
         $this->get($app, '/login');
         $this->post($app, '/login', [
@@ -134,6 +135,11 @@ final class AccountPageTest extends WebTestCase
         self::assertNotNull($old['withdrawn_at']);
         self::assertNull($old['password_hash']);
         self::assertNotSame('leave@example.com', $old['email']);
+        // 번호는 가장 연락하기 쉬운 값이다. 이름·이메일·비밀번호를 익명화하면서 번호만
+        // 남기면, 관리자 회원 수정은 탈퇴 회원을 거부하므로 DB 를 직접 건드리는 것
+        // 말고는 지울 방법이 없다 — 검색으로는 여전히 찾힌다.
+        self::assertNull($old['phone'], '탈퇴하면 번호도 함께 지워져야 한다');
+        self::assertSame([], $app->users()->listForAdmin('010-4444-5555'), '지워졌으니 번호로 찾히지도 않아야 한다');
         self::assertSame(0, $app->identities()->countForUser($id));
         self::assertSame('탈퇴한 회원', $app->posts()->find($postId)['author_name']);
         self::assertNull($app->posts()->find($postId)['author_ip']);

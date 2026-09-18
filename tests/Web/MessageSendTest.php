@@ -148,8 +148,8 @@ final class MessageSendTest extends WebTestCase
     public function testWithdrawnMemberIdPostedDirectlyProducesNoRecipient(array $dbConfig): void
     {
         $app = $this->ready($dbConfig);
-        // 탈퇴 처리는 번호를 지우지 않으므로, "번호가 없어 제외"와 뒤섞이지 않게
-        // 번호가 있는 채로 탈퇴시킨다 — 탈퇴 자체가 제외 사유여야 한다.
+        // 번호가 있는 회원을 탈퇴시킨다. 탈퇴는 번호까지 지우지만, 그 전에 상태로
+        // 먼저 걸러지므로 제외 사유는 "번호 없음"이 아니라 탈퇴여야 한다.
         $id = $this->member($app, 'gone@example.com', '탈퇴예정', '01099998888');
         $app->users()->withdraw((int) $id, null);
 
