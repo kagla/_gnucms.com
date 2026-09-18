@@ -4,13 +4,21 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Notify;
 
+use GnuCms\Account\ConsentRepository;
+use GnuCms\Account\UserRepository;
 use GnuCms\Aligo\AligoService;
+use GnuCms\Cms\CmsRepository;
+use GnuCms\Cms\CmsService;
+use GnuCms\Cms\ConsentUseRepository;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\AlimtalkChannel;
 use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\InboxChannel;
+use GnuCms\Notify\Notifier;
 use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\SettingsRepository;
@@ -79,10 +87,21 @@ final class ChannelsTest extends DatabaseTestCase
         self::fail('보낼 수 없는 상태인데 거절하지 않았습니다');
     }
 
+    /**
+     * 알림함 채널이 뒤에 두는 서비스. 이 시험이 지나는 길은 recordInbox() 뿐이라
+     * 발송 쪽 배선(발송기·회원·설정·주소)은 쓰이지 않는다 — 발송기는 불리면 곧바로
+     * 터지게 해 두어, 알림함 채널이 발송기를 되짚지 않는다는 사실까지 함께 지킨다.
+     */
     private function notificationService(): NotificationService
     {
         return new NotificationService(new NotificationRepository($this->db),
-            new PostRepository($this->db), new CommentRepository($this->db));
+            new PostRepository($this->db), new CommentRepository($this->db),
+            new UserRepository($this->db),
+            new CmsService(new CmsRepository($this->db), new HtmlSanitizer(),
+                new ContentImageService(sys_get_temp_dir() . '/' . GNUCMS_ID . '-inbox-channel-test'),
+                new ConsentUseRepository($this->db), new ConsentRepository($this->db)),
+            'https://example.test',
+            static fn (): Notifier => self::fail('알림함 채널은 발송기를 되짚지 않는다'));
     }
 
     public function testMailIsUnavailableWithoutAnAddress(): void

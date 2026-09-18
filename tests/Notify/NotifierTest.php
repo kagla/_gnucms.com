@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Notify;
 
+use GnuCms\Account\ConsentRepository;
+use GnuCms\Account\UserRepository;
 use GnuCms\Aligo\AligoService;
 use GnuCms\Aligo\AlimtalkApi;
 use GnuCms\Aligo\Settings as AligoSettings;
 use GnuCms\Aligo\SettingsRepository as AligoSettingsRepository;
 use GnuCms\Aligo\Templates;
 use GnuCms\App;
+use GnuCms\Cms\CmsRepository;
+use GnuCms\Cms\CmsService;
+use GnuCms\Cms\ConsentUseRepository;
+use GnuCms\Cms\ContentImageService;
+use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
@@ -696,10 +703,19 @@ final class NotifierTest extends WebTestCase
             public function service(): NotificationService
             {
                 if ($this->service === null) {
-                    // 5단계의 모습: 알림함을 쓰는 서비스가 알림 발송기도 쓴다.
+                    // 이제 실제 모습이다: 알림함을 쓰는 서비스가 댓글 알림을 내보내느라
+                    // 발송기도 쓴다. 발송기는 만들어진 채로가 아니라 지연 callable 로
+                    // 받는다(App 과 같은 배선). 여기서 조립 도중에 곧바로 한 번 더
+                    // 요구해 보는 것은, 그렇게 해도 고리가 닫히지 않는지까지 보려는 것이다.
                     $this->notifier();
                     $this->service = new NotificationService(new NotificationRepository($this->db),
-                        new PostRepository($this->db), new CommentRepository($this->db));
+                        new PostRepository($this->db), new CommentRepository($this->db),
+                        new UserRepository($this->db),
+                        new CmsService(new CmsRepository($this->db), new HtmlSanitizer(),
+                            new ContentImageService(sys_get_temp_dir() . '/' . GNUCMS_ID . '-notifier-test'),
+                            new ConsentUseRepository($this->db), new ConsentRepository($this->db)),
+                        'https://example.test',
+                        fn (): Notifier => $this->notifier());
                 }
 
                 return $this->service;

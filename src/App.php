@@ -267,7 +267,15 @@ final class App
             $this->notificationService = new NotificationService(
                 $this->notifications(),
                 $this->posts(),
-                $this->comments()
+                $this->comments(),
+                $this->users(),
+                $this->cmsService(),
+                (string) $this->config('app.url', GNUCMS_URL),
+                // 발송기는 만들어진 채로 넘기지 않는다 — 알림함 채널이 이 서비스를
+                // 지연해서 받는 것과 같은 고리를 반대쪽에서 막고(notifier() 주석),
+                // setMailer()·setAligo() 가 발송기를 끊어도 이 서비스만 옛 사본을
+                // 들고 남지 않게 한다.
+                fn (): Notifier => $this->notifier()
             );
         }
 
