@@ -391,6 +391,50 @@ final class NotifySettingsTest extends DatabaseTestCase
     }
 
     /**
+     * 화면은 "지금 쓸 수 있는가"(channels·template·sms_body)만으로는 어긋난 상태의 이유를
+     * 말할 수 없다. 알림톡을 켜 두었는데 템플릿이 죽은 것과, 관리자가 알림톡을 그냥 꺼
+     * 둔 것은 둘 다 template===null 이라 구별되지 않는다 — 구별하지 못하면 화면이 멀쩡한
+     * 템플릿을 죽었다고 말하게 된다. 그래서 저장 원본을 함께 내준다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testFormValuesAlsoCarriesTheRawStoredSettingsSoTheScreenCanExplainItself(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'sms' => '1',
+            'sms_body' => '#{사이트명} 링크는 #{링크}', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+
+        $templates->setEnabled('T1', false);
+        $dead = $settings->formValues()['password_reset'];
+        self::assertNull($dead['template']);
+        // 켜 두었다는 사실은 남는다 — 이것이 "템플릿이 죽었다"와 "그냥 껐다"를 가른다.
+        self::assertTrue($dead['alimtalk_on']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $dead['alimtalk_var_map']);
+
+        // 채널을 모두 끈다. 저장소의 본문과 매핑은 save() 가 지우지 않는다.
+        $settings->save('password_reset', ['mail' => '1']);
+        $off = $settings->formValues()['password_reset'];
+        self::assertFalse($off['alimtalk_on']);
+        self::assertSame('', $off['sms_body']);
+        self::assertSame('#{사이트명} 링크는 #{링크}', $off['sms_body_stored']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $off['alimtalk_var_map']);
+    }
+
+    /** 손으로 고쳐 넣은 var_map 이 JSON 이 아니거나 문자열 아닌 값을 담고 있어도, 원본을
+     *  내주는 자리가 그걸 그대로 화면의 배열 첨자로 흘리지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testRawVarMapSurvivesBrokenStoredValues(array $config): void
+    {
+        [$settings, $db] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['mail' => '1']);
+        $db->insert('site_settings', ['setting_key' => 'notify.password_reset.var_map',
+            'setting_value' => '{"고객명": ["배열"], "주소": "링크"}', 'updated_at' => '2026-09-17 10:00:00']);
+
+        self::assertSame(['주소' => '링크'],
+            $settings->formValues()['password_reset']['alimtalk_var_map']);
+    }
+
+    /**
      * save() 는 채널을 끌 때 그 채널의 매핑을 지우지 않는다 — 다시 켤 때 다시 고르지
      * 않아도 되게 하려는 의도된 동작이다. 하지만 그래서 channelsFor() 는 "꺼졌다"고
      * 답하는데 templateFor() 는 여전히 멀쩡한 tpl_code 를 내준다면, isOn() 을 먼저
