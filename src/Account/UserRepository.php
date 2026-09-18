@@ -66,11 +66,14 @@ final class UserRepository
         );
     }
 
+    /** 칸 목록은 findById() 와 같아야 한다 — 두 곳에서 온 회원 행이 같은 자리
+     *  (Notify\Recipient::forUser() 가 읽는 phone 이 그렇다)로 흘러 들어가는데, 어느
+     *  길로 왔느냐에 따라 값이 있고 없고가 갈리면 알아채기 어려운 결함이 된다. */
     public function findByEmail(string $email): ?array
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
