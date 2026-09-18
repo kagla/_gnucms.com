@@ -390,6 +390,57 @@ final class AccountPageTest extends WebTestCase
     }
 
     /**
+     * 위 시나리오의 HTTP 단. 정책이 off 인 동안 번호 칸은 disabled 로 그려지고(그래서
+     * 브라우저가 POST 에 싣지 않는다), 관리자가 정책을 선택으로 바꾼 뒤 그 화면에서
+     * 이름만 고쳐 저장하면 번호 칸 없는 제출이 서버에 닿는다. 그것이 "지워라"로
+     * 읽히면 안 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAProfileSaveWithNoPhoneFieldKeepsTheStoredNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $app->users()->updatePhone($id, '01012345678');
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        // off 화면의 번호 칸은 disabled 다 — 브라우저는 이 칸을 제출하지 않는다.
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $this->body($this->get($app, '/account')), $tag);
+        self::assertStringContainsString('disabled', $tag[0]);
+
+        // 관리자가 정책을 선택으로 바꾼다. CmsService 는 설정을 메모리에 캐시하므로
+        // 리포지토리를 직접 건드리면 이 요청이 여전히 off 를 보고, 그러면 이 테스트는
+        // 확인하려던 것을 확인하지 않게 된다 — 캐시를 비우는 공개 API 로 바꾼다.
+        $app->cmsService()->saveWritingSettings(
+            new Acl(Identity::user('1', '관리자', true)),
+            [
+                'guest_write_enabled' => '0',
+                'post_min_chars' => '0', 'comment_min_chars' => '0',
+                'post_rate_interval' => '30', 'post_rate_10m' => '5', 'post_rate_day' => '20',
+                'comment_rate_interval' => '5', 'comment_rate_10m' => '20', 'comment_rate_day' => '100',
+                'attach_max_mb' => '5', 'attach_limit' => '5',
+                'signup_phone' => 'optional',
+            ]
+        );
+        // 정책이 실제로 바뀐 화면인지 확인한다 — 칸이 더는 잠겨 있지 않아야 한다.
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $this->body($this->get($app, '/account')), $live);
+        self::assertStringNotContainsString('disabled', $live[0], '정책이 바뀐 것이 이 요청에 보여야 한다');
+        $saved = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+        ]);
+
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($id)['phone'],
+            '번호 칸이 없는 제출은 지우라는 뜻이 아니다');
+        self::assertSame('나야', $app->users()->findById($id)['display_name']);
+    }
+
+    /**
      * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. AuthController::register() 가
      * phone[]=x 를 is_scalar 가드 없이 (string) 캐스팅해 경고를 냈던 것과 같은 결함이
      * 여기서도 날 수 있다 — 같은 방식으로 값을 되돌리는 화면이기 때문이다.

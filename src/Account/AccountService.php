@@ -404,6 +404,15 @@ final class AccountService
         if ($policy === 'off') {
             return ['write' => false, 'phone' => null];
         }
+        // "빈 칸을 보냈다"(지우라는 뜻)와 "칸 자체를 안 보냈다"는 다르다. 이 화면에는
+        // 실제로 칸이 빠지는 경로가 있다: 정책이 off 인 동안 번호 칸은 disabled 로
+        // 그려지고(저장된 번호를 보여 주되 고칠 수는 없게), 브라우저는 disabled 인
+        // 칸을 POST 에 싣지 않는다. 그 화면을 열어 둔 회원이 있는 사이 관리자가
+        // 정책을 선택으로 바꾸면, 이름만 고친 저장 한 번이 번호를 조용히 지운다.
+        // 안 보낸 칸은 건드리지 않는다 — AdminService::phoneFromAdminInput() 과 같다.
+        if (!array_key_exists('phone', $input)) {
+            return ['write' => false, 'phone' => null];
+        }
         $stored = $stored === null || trim($stored) === '' ? null : trim($stored);
         $given = self::submittedPhone($input);
         if ($given === '') {

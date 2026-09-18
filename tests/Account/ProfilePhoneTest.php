@@ -118,6 +118,31 @@ final class ProfilePhoneTest extends DatabaseTestCase
     }
 
     /**
+     * 칸 자체가 빠진 제출은 "지워라"가 아니다. 이 화면에는 실제로 그런 경로가 있다:
+     * 정책이 off 인 동안 번호 칸은 disabled 로 그려지고 브라우저는 disabled 인 칸을
+     * POST 에 싣지 않으므로, 그 화면을 열어 둔 사이 관리자가 정책을 선택으로 바꾸면
+     * 이름만 고친 저장 한 번이 번호를 지운다. R71 트랩이 마지막으로 남아 있던 경로다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASaveWithNoPhoneFieldAtAllLeavesTheStoredNumberAlone(array $config): void
+    {
+        [$service, $db, $userId] = $this->bootWithMember($config, 'optional');
+        $service->updateProfile($userId, $this->profile(['phone' => '010-1234-5678']));
+
+        $input = $this->profile(['display_name' => '새이름']);
+        unset($input['phone']);
+        $service->updateProfile($userId, $input);
+
+        self::assertSame('01012345678', $this->phoneOf($db, $userId), '안 보낸 칸은 건드리지 않는다');
+        self::assertSame('새이름', $db->selectOne('SELECT display_name FROM '
+            . $db->table('users') . ' WHERE id = ?', [$userId])['display_name']);
+
+        // 빈 칸을 보낸 것은 여전히 "지워라"다 — 회원이 번호를 없애는 방법이 그것뿐이다.
+        $service->updateProfile($userId, $this->profile(['phone' => '']));
+        self::assertNull($this->phoneOf($db, $userId));
+    }
+
+    /**
      * 저장된 번호가 휴대폰 형식이 아니면(예전 데이터·외부 이관) 화면은 그 값을 미리
      * 채워 보여 준다. 그대로 다시 제출한 것까지 거절하면, 그 번호 때문에 이름조차
      * 바꿀 수 없게 된다 — 막고 있는 값을 고치려는 사람까지 막는 셈이다.
