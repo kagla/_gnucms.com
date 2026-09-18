@@ -608,6 +608,43 @@ final class HistoryTest extends DatabaseTestCase
             '발송 시각이 지나 실제 결과가 들어오면 예약 상태에서 벗어나야 한다');
     }
 
+    /**
+     * 일부만 취소된 작업이 발송 시각을 지나 남은 묶음의 결과를 받으면, 그 줄은 네
+     * 숫자가 모두 맞아떨어져야 한다. 취소 통이 없던 판에서는 수신자 2명이 산수에서
+     * 통째로 사라져 "총 4 · 성공 2 · 실패 0 · 성공" 으로 보였다 — 취소가 있었다는
+     * 흔적조차 없고, 배지는 전원이 받았다고 말한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAPartlyCancelledJobCountsTheCancelledRecipientsAndIsNotASuccess(array $config): void
+    {
+        $this->boot($config);
+        $past = gmdate('Y-m-d H:i:s', Clock::timestamp() - 3600);
+        // 묶음 둘: M1 은 취소됐고, M2 는 취소하지 못해 예정대로 나갔다.
+        $jobId = $this->seedScheduled('sms', 'M1', $past, null, ['01011110001', '01011110002']);
+        foreach (['01011110003', '01011110004'] as $phone) {
+            $this->db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M2', 'phone' => $phone,
+                'body' => '본문', 'status' => 'accepted', 'requested_at' => $past, 'sent_at' => $past]);
+        }
+        $this->db->update('message_jobs', ['total' => 4], 'id = :id', ['id' => $jobId]);
+        $this->db->update('message_recipients', ['status' => 'cancelled'],
+            'job_id = :j AND mid = :mid', ['j' => $jobId, 'mid' => 'M1']);
+
+        $this->transport->queue(200, (string) json_encode(['result_code' => 1, 'list' => [
+            ['mdid' => 'D1', 'receiver' => '01011110003', 'sms_state' => '전송성공'],
+            ['mdid' => 'D2', 'receiver' => '01011110004', 'sms_state' => '전송성공'],
+        ]]));
+
+        $this->history->refresh();
+
+        $job = $this->job($jobId);
+        self::assertSame(4, (int) $job['total']);
+        self::assertSame(2, (int) $job['success']);
+        self::assertSame(0, (int) $job['failure']);
+        self::assertSame(2, (int) $job['cancelled'], '멈춘 2명이 산수에서 사라지면 안 된다');
+        self::assertSame('partial', $job['status'],
+            '2명은 멈췄으므로 이 작업은 "성공"(전원이 받았다)이 아니다');
+    }
+
     /** 같은 이유로, 예약 시각이 아직 오지 않은 작업도 집계로 흔들리면 안 된다. */
     #[DataProvider('connectionProvider')]
     public function testRecomputeJobLeavesAFutureScheduledJobAlone(array $config): void

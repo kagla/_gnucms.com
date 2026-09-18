@@ -14,7 +14,9 @@ $jobStatusLabels = [
     'sending' => ['label' => '결과를 기다리는 중', 'class' => 'badge-ghost'],
     'sent'    => ['label' => '성공', 'class' => 'badge-success'],
     'failed'  => ['label' => '실패', 'class' => 'badge-error'],
-    'partial' => ['label' => '일부 실패', 'class' => 'badge-warning'],
+    // 일부만 나갔다 — 확인된 실패가 있거나, 관리자가 일부를 취소했거나, 둘 다다.
+    // "일부 실패"라 부르면 실패 0 · 취소 2 인 줄이 제 배지와 모순된다(JobStatus 참고).
+    'partial' => ['label' => '일부만 발송', 'class' => 'badge-warning'],
     // 7일이 지나도 결과를 알아내지 못해 조회를 포기한 건이 남은 작업. 성공이라고도
     // 실패라고도 말하지 않는다 — 실패로 적으면 관리자가 다시 보내 중복 발송이 된다.
     'unknown' => ['label' => '결과를 알 수 없음', 'class' => 'badge-warning'],
@@ -56,10 +58,10 @@ $pageUrl = function (int $p) {
 
     <div class="table-wrap">
       <table class="table table-zebra">
-        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
+        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th class="right">취소</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
         <tbody>
         <?php if ($listing['items'] === []): ?>
-          <tr class="table-empty"><td colspan="10">아직 보낸 작업이 없습니다.</td></tr>
+          <tr class="table-empty"><td colspan="11">아직 보낸 작업이 없습니다.</td></tr>
         <?php else: foreach ($listing['items'] as $row): ?>
           <?php $statusInfo = $jobStatusLabels[$row['status']] ?? ['label' => (string) $row['status'], 'class' => 'badge-ghost']; ?>
           <tr>
@@ -70,6 +72,8 @@ $pageUrl = function (int $p) {
             <td data-label="총" class="right"><?= $this->e($row['total']) ?></td>
             <td data-label="성공" class="right"><?= $this->e($row['success']) ?></td>
             <td data-label="실패" class="right"><?= $this->e($row['failure']) ?></td>
+            <?php // 관리자가 멈춰 아무에게도 가지 않은 수신자 수. 총 = 성공 + 실패 + 취소 + 대기·불명확. ?>
+            <td data-label="취소" class="right"><?= $this->e($row['cancelled']) ?></td>
             <td data-label="상태"><span class="badge badge-sm <?= $this->e($statusInfo['class']) ?> badge-soft"><?= $this->e($statusInfo['label']) ?></span></td>
             <td data-label="테스트"><?php if ((int) $row['test_mode'] === 1): ?><span class="badge badge-sm badge-warning badge-soft">테스트</span><?php else: ?>-<?php endif ?></td>
             <td data-label="관리" class="right"><a class="btn btn-outline btn-sm" href="<?= $this->url('admin.messages.history.detail', ['id' => $row['id']]) ?>">상세</a></td>

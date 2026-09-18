@@ -49,10 +49,21 @@ final class AligoService
         return $this->dispatch->send($request);
     }
 
-    /** 예약된 작업 취소. Dispatch::cancel() 로 그대로 넘긴다 — 같은 문을 쓴다. */
+    /**
+     * 예약된 작업 취소. Dispatch::cancel() 로 그대로 넘긴다 — 같은 문을 쓴다.
+     *
+     * 취소한 뒤에는 작업 집계를 다시 세게 한다. 취소는 결과 조회를 거치지 않고 수신자
+     * 행을 바꾸는 유일한 경로라, 여기서 세지 않으면 화면의 총·성공·실패 숫자에 취소가
+     * 영영 나타나지 않는다 — 전원 취소된 502명짜리 작업이 접수 건수를 그대로 쥔 채
+     * "성공 502 · 취소됨"으로 남는다. Dispatch 가 History 를 직접 알게 하는 대신
+     * (Settings·Templates 와 같은 이유로) 모든 조각을 쥔 이 클래스가 조율한다.
+     */
     public function cancel(int $jobId): array
     {
-        return $this->dispatch->cancel($jobId);
+        $result = $this->dispatch->cancel($jobId);
+        $this->history->recompute($jobId);
+
+        return $result;
     }
 
     /**
@@ -155,7 +166,8 @@ final class AligoService
         $reasons = [];
         foreach ($jobIds as $jobId) {
             try {
-                $result = $this->dispatch->cancel($jobId);
+                // 화면에서 누르는 취소와 같은 문을 쓴다 — 집계를 다시 세는 것까지 같다.
+                $result = $this->cancel($jobId);
             } catch (DomainError $e) {
                 $failed++;
                 $reasons[] = '작업 #' . $jobId . ': ' . (string) ($e->details()['job'] ?? $e->getMessage());

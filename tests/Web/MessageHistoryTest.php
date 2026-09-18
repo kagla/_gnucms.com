@@ -183,7 +183,7 @@ final class MessageHistoryTest extends WebTestCase
             'badge-ghost badge-soft">결과를 기다리는 중</span>',
             'badge-success badge-soft">성공</span>',
             'badge-error badge-soft">실패</span>',
-            'badge-warning badge-soft">일부 실패</span>',
+            'badge-warning badge-soft">일부만 발송</span>',
             'badge-warning badge-soft">결과를 알 수 없음</span>',
         ] as $badgeMarkup) {
             self::assertSame(1, substr_count($html, $badgeMarkup), $badgeMarkup . ' 배지 개수');
@@ -409,6 +409,39 @@ final class MessageHistoryTest extends WebTestCase
             . ' WHERE job_id = ?', [$scheduled['id']]);
         self::assertStringContainsString('취소하지 못했습니다', (string) $row['rslt_message']);
         self::assertStringContainsString('등록되지 않은 IP', (string) $row['rslt_message']);
+    }
+
+    /**
+     * 취소한 뒤의 이력 한 줄은 스스로 모순되면 안 된다. 예전에는 취소가 숫자에 전혀
+     * 나타나지 않아, 접수 건수를 그대로 쥔 채 "성공 1 · 실패 0 · 취소됨" 으로 남았다 —
+     * 아무에게도 가지 않았는데 1건 성공이라고 적힌 줄이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testACancelledJobsRowCountsTheCancellationInsteadOfClaimingSuccess(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $scheduled = $this->seedScheduled($app);
+        // 접수 직후의 모양: 알리고가 1건을 접수했다고 적혀 있다.
+        $app->db()->update('message_jobs', ['success' => 1], 'id = :id', ['id' => $scheduled['id']]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $response = $this->post($app, '/admin/messages/history/' . $scheduled['id'] . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+        self::assertStringContainsString('<td data-label="성공" class="right">0</td>', $html,
+            '아무에게도 가지 않았으므로 성공은 0 이다');
+        self::assertStringContainsString('<td data-label="취소" class="right">1</td>', $html,
+            '멈춘 1명은 취소 칸에 그대로 보여야 한다');
+        self::assertStringContainsString('badge-ghost badge-soft">취소됨</span>', $html);
+
+        $detail = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id']));
+        self::assertStringContainsString('총 · 성공 · 실패 · 취소', $detail);
+        self::assertStringContainsString('1 · 0 · 0 · 1', $detail);
     }
 
     /**

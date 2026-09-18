@@ -61,7 +61,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '24';
+    public const VERSION = '25';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -262,6 +262,10 @@ final class Schema
         $datetime = $this->db->dialect()->typeMap()['{DATETIME}'];
         $this->addColumnIfMissing('message_jobs', 'scheduled_at', $datetime . ' NULL');
         $this->addColumnIfMissing('message_jobs', 'cancelled_at', $datetime . ' NULL');
+        // 취소된 수신자 수. total = success + failure + cancelled + (대기·불명확) 이
+        // 맞아떨어져야 이력 한 줄이 스스로 모순되지 않는다 — 취소가 숫자에 전혀
+        // 나타나지 않던 판에서는 전원 취소된 작업이 "성공 502"로 보였다.
+        $this->addColumnIfMissing('message_jobs', 'cancelled', 'INTEGER NOT NULL DEFAULT 0');
 
         foreach ($this->aligoStatements() as $sql) {
             // 표가 이미 있으면 건너뛴다. 세 표가 한 번에 생기지 않은 설치도 있을 수 있다.
@@ -295,6 +299,7 @@ final class Schema
                 total        INTEGER      NOT NULL DEFAULT 0,
                 success      INTEGER      NOT NULL DEFAULT 0,
                 failure      INTEGER      NOT NULL DEFAULT 0,
+                cancelled    INTEGER      NOT NULL DEFAULT 0,
                 status       VARCHAR(12)  NOT NULL,
                 test_mode    SMALLINT     NOT NULL DEFAULT 0,
                 scheduled_at {DATETIME}   NULL,

@@ -12,7 +12,8 @@ $jobStatusLabels = [
     'sending' => ['label' => '결과를 기다리는 중', 'class' => 'badge-ghost'],
     'sent'    => ['label' => '성공', 'class' => 'badge-success'],
     'failed'  => ['label' => '실패', 'class' => 'badge-error'],
-    'partial' => ['label' => '일부 실패', 'class' => 'badge-warning'],
+    // history.php 와 같은 라벨을 쓴다 — 실패만이 아니라 취소로도 "일부만" 이 된다.
+    'partial' => ['label' => '일부만 발송', 'class' => 'badge-warning'],
     // 7일이 지나도 결과를 알아내지 못해 조회를 포기한 건이 남은 작업. 성공이라고도
     // 실패라고도 말하지 않는다 — 실패로 적으면 관리자가 다시 보내 중복 발송이 된다.
     'unknown' => ['label' => '결과를 알 수 없음', 'class' => 'badge-warning'],
@@ -78,7 +79,7 @@ $fmtDate = function ($v) {
       <div><dt>종료 시각</dt><dd><?= $fmtDate($job['finished_at']) ?></dd></div>
       <div><dt>발신번호</dt><dd><?= $this->e($job['sender_display']) ?></dd></div>
       <div><dt>템플릿</dt><dd><?= $job['template_label'] !== null ? $this->e($job['template_label']) : '-' ?></dd></div>
-      <div><dt>총 · 성공 · 실패</dt><dd><?= $this->e($job['total']) ?> · <?= $this->e($job['success']) ?> · <?= $this->e($job['failure']) ?></dd></div>
+      <div><dt>총 · 성공 · 실패 · 취소</dt><dd><?= $this->e($job['total']) ?> · <?= $this->e($job['success']) ?> · <?= $this->e($job['failure']) ?> · <?= $this->e($job['cancelled']) ?></dd></div>
       <?php if ((string) $job['created_by'] !== ''): ?><div><dt>보낸 사람</dt><dd><?= $this->e($job['created_by']) ?></dd></div><?php endif ?>
     </dl>
 

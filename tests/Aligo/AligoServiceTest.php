@@ -253,6 +253,52 @@ final class AligoServiceTest extends DatabaseTestCase
     }
 
     /**
+     * 전원 취소된 작업의 숫자. 접수 직후의 success 는 "알리고가 몇 건을 접수했나"이지
+     * "몇 명이 받았나"가 아니다 — 취소하고 나면 그 502건은 아무에게도 가지 않는다.
+     * 취소가 집계에 전혀 나타나지 않던 판에서는 이 작업이 이력에 "총 502 · 성공 502 ·
+     * 실패 0 · 취소됨"으로 남았다: 아무도 받지 않은 발송을 502건 성공했다고 적는 줄이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFullyCancelledJobStopsClaimingTheBookedCountAsSuccesses(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        // 502명 — Dispatch 의 500명 단위 분할로 묶음(mid)이 둘 생긴다.
+        $recipients = [];
+        for ($i = 0; $i < 502; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) (11110000 + $i), 8, '0', STR_PAD_LEFT)];
+        }
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":500,"error_cnt":0}');
+        $transport->queue(200, '{"result_code":1,"msg_id":"M2","success_cnt":2,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '예약 발송', 'scheduled_at' => $at,
+            'recipients' => $recipients]);
+
+        $booked = $db->selectOne('SELECT success FROM ' . $db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame(502, (int) $booked['success'], '접수 직후에는 접수 건수를 적는다');
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $result = $service->cancel($jobId);
+
+        self::assertSame(2, $result['cancelled'], '묶음 둘 다 취소된다');
+        self::assertSame(0, $result['failed']);
+
+        $job = $db->selectOne('SELECT * FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+        self::assertSame(502, (int) $job['total']);
+        self::assertSame(0, (int) $job['success'], '아무에게도 가지 않았다 — 성공은 0 이다');
+        self::assertSame(0, (int) $job['failure']);
+        self::assertSame(502, (int) $job['cancelled'], '502명은 사라지지 않고 취소 칸에 그대로 있어야 한다');
+    }
+
+    /**
      * 템플릿을 다시 가져와 승인을 잃은 사본을 발견하면, 그 템플릿으로 걸린 예약도 함께
      * 취소 요청되어야 한다. 승인을 그대로 유지한 다른 템플릿의 예약은 손대지 않는다 —
      * 그것까지 취소되면 이 테스트의 앞부분만 보는 검증으로는 걸러지지 않으므로 함께 확인한다.

@@ -256,24 +256,38 @@ final class History
     }
 
     /**
-     * 작업의 success·failure·status 를 수신자 행에서 다시 센다. Dispatch 가 접수 직후에
-     * 적은 값은 "알리고가 몇 건을 접수했나"였고, 결과가 들어오기 시작하면 "몇 명에게
-     * 실제로 갔나"로 바뀌어야 한다. 이걸 하지 않으면 전원이 차단으로 실패한 작업이
-     * 목록에서는 "상태 성공 · 성공 500 · 실패 0" 으로 보이고 상세에서는 500건 실패가
-     * 나열되는, 같은 화면이 스스로 모순되는 이력이 된다.
+     * 작업 하나의 집계를 수신자 행에서 다시 센다. 취소처럼 결과 조회를 거치지 않고
+     * 수신자 행을 바꾸는 일이 일어난 뒤에 호출부(AligoService)가 부른다 — 결과가
+     * 들어오는 경로는 apply()·applyFallback() 이 알아서 부른다.
+     */
+    public function recompute(int $jobId): void
+    {
+        $this->recomputeJob($jobId);
+    }
+
+    /**
+     * 작업의 success·failure·cancelled·status 를 수신자 행에서 다시 센다. Dispatch 가
+     * 접수 직후에 적은 값은 "알리고가 몇 건을 접수했나"였고, 결과가 들어오기 시작하면
+     * "몇 명에게 실제로 갔나"로 바뀌어야 한다. 이걸 하지 않으면 전원이 차단으로 실패한
+     * 작업이 목록에서는 "상태 성공 · 성공 500 · 실패 0" 으로 보이고 상세에서는 500건
+     * 실패가 나열되는, 같은 화면이 스스로 모순되는 이력이 된다.
      *
      * 대체발송을 켠 알림톡은 fallback_status 가 최종 답이다 — 알림톡이 실패해도
      * 대체문자가 도착했으면 그 사람은 메시지를 받았다. 그래서 COALESCE 로 대체발송
-     * 결과를 먼저 본다. 각 상태가 무엇으로 집계되는지는 JobStatus 에 적어 뒀다.
+     * 결과를 먼저 본다. 각 상태가 무엇으로 집계되는지는 JobStatus 에 적어 뒀다 —
+     * 취소된 수신자가 작업 수준에서 무엇을 뜻하는지도 그 한 곳에 적혀 있다.
      *
-     * 'scheduled'·'cancelled'는 이 집계에서 나오는 값이 아니다(JobStatus 독백 참고) —
-     * 수신자를 세어서 아는 사실이 아니라 호출부가 이미 정한 작업 자체의 사실이다.
-     * 그래서 집계를 손대기 전에 먼저 걸러야 한다: 취소는 관리자가 멈췄다는 사실이므로
-     * 뒤늦게 도착한 결과(취소에 실패한 mid 가 나중에 응답을 줄 수 있다)가 있어도 절대
-     * 뒤집지 않는다. 예약은 발송 시각이 오기 전까지만 그렇다 — 접수(booked) 직후부터
-     * 수신자는 이미 'accepted'라 그 사이 집계만 보면 'sending'으로 보이겠지만, 알리고는
-     * 그 시각이 오기 전엔 아무것도 하지 않았으므로 작업은 여전히 예약일 뿐이다. 시각이
-     * 지나면(더는 여기 걸리지 않으면) 보통 작업처럼 집계를 따라 상태가 넘어간다.
+     * 숫자는 언제나 다시 센다. 상태만 두 경우에 그대로 둔다:
+     *   - 취소: 관리자가 멈췄다는 사실이므로 뒤늦게 도착한 결과(취소에 실패한 mid 가
+     *     나중에 응답을 줄 수 있다)가 있어도 절대 뒤집지 않는다.
+     *   - 예약: 발송 시각이 오기 전까지만 그렇다. 접수(booked) 직후부터 수신자는 이미
+     *     'accepted'라 그 사이 집계만 보면 'sending'으로 보이겠지만, 알리고는 그 시각이
+     *     오기 전엔 아무것도 하지 않았으므로 작업은 여전히 예약일 뿐이다. 시각이 지나면
+     *     보통 작업처럼 집계를 따라 상태가 넘어간다.
+     * 예전에는 이 두 경우에 숫자까지 멈춰 세웠는데, 그러면 전원 취소된 502명짜리
+     * 작업이 접수 건수를 그대로 쥔 채 "총 502 · 성공 502 · 실패 0 · 취소됨"으로 남는다 —
+     * 아무에게도 가지 않았는데 502건 성공이라고 적힌 화면이다. 상태를 지키는 것과
+     * 숫자를 멈추는 것은 다른 일이다.
      */
     private function recomputeJob(int $jobId): void
     {
@@ -281,12 +295,6 @@ final class History
             . $this->db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
         if ($job === null) {
             // 작업 자체가 없으면(있을 수 없지만 방어적으로) 셀 것이 없다.
-            return;
-        }
-        if ($job['status'] === 'cancelled') {
-            return;
-        }
-        if ($job['status'] === 'scheduled' && $job['scheduled_at'] !== null && $job['scheduled_at'] > Clock::now()) {
             return;
         }
 
@@ -297,6 +305,7 @@ final class History
             . ' SUM(CASE WHEN ' . $effective . " = 'failed' THEN 1 ELSE 0 END) AS f,"
             . ' SUM(CASE WHEN ' . $effective . " IN ('queued', 'accepted') THEN 1 ELSE 0 END) AS p,"
             . ' SUM(CASE WHEN ' . $effective . " = 'unknown' THEN 1 ELSE 0 END) AS u,"
+            . ' SUM(CASE WHEN ' . $effective . " = 'cancelled' THEN 1 ELSE 0 END) AS x,"
             . ' COUNT(*) AS c FROM ' . $this->db->table('message_recipients') . ' WHERE job_id = ?',
             [$jobId]
         );
@@ -309,8 +318,12 @@ final class History
         $fields = [
             'success' => (int) $tally['s'],
             'failure' => (int) $tally['f'],
-            'status' => JobStatus::of((int) $tally['s'], (int) $tally['f'], $pending, (int) $tally['u']),
+            'cancelled' => (int) $tally['x'],
         ];
+        if (!$this->statusIsAlreadyDecided($job)) {
+            $fields['status'] = JobStatus::of((int) $tally['s'], (int) $tally['f'], $pending,
+                (int) $tally['u'], (int) $tally['x']);
+        }
         if ($pending === 0 && ($job['finished_at'] ?? null) === null) {
             // 더 기다릴 수신자가 없으면 그때가 이 작업이 끝난 시각이다. 이미 적혀 있으면
             // 그대로 둔다 — 늦게 온 결과가 종료 시각을 계속 뒤로 미루면 안 된다.
@@ -318,6 +331,17 @@ final class History
         }
 
         $this->db->update('message_jobs', $fields, 'id = :id', ['id' => $jobId]);
+    }
+
+    /** 집계가 상태를 정하면 안 되는 작업인지. 이유는 recomputeJob() 문서 주석에 있다. */
+    private function statusIsAlreadyDecided(array $job): bool
+    {
+        if ($job['status'] === 'cancelled') {
+            return true;
+        }
+
+        return $job['status'] === 'scheduled'
+            && $job['scheduled_at'] !== null && $job['scheduled_at'] > Clock::now();
     }
 
     /**
