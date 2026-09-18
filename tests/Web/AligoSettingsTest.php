@@ -103,6 +103,40 @@ final class AligoSettingsTest extends WebTestCase
         self::assertSame('cancelled', $job['status']);
     }
 
+    /**
+     * 취소하지 못한 예약이 남았다는 안내에 초록 체크가 붙으면, 문장을 끝까지 읽지 않은
+     * 관리자는 다 끝난 줄 안다 — 이 기능이 낼 수 있는 가장 잘못된 신호다. 문장만이
+     * 아니라 배지(색과 아이콘)까지 주의로 올라가야 하므로 마크업을 직접 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailedCancellationIsNotPaintedGreen(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/aligo',
+            ['saved' => '1', 'cancel_ok' => '1', 'cancel_failed' => '1']));
+
+        self::assertStringContainsString('1개는 취소하지 못해 예정대로 나갑니다', $html);
+        self::assertStringContainsString('<div class="alert alert-warning">', $html);
+        self::assertStringNotContainsString('<div class="alert alert-success">', $html);
+        // 알 수 없는 사유를 지어내지도 않는다.
+        self::assertStringNotContainsString('발송 5분 전을 지나', $html);
+    }
+
+    /** 반대로 전부 취소된 평범한 저장은 그대로 성공이다 — 늘 주의로 칠하면 주의가 무의미해진다. */
+    #[DataProvider('connectionProvider')]
+    public function testASavedNoticeWithNothingLeftBehindStaysASuccess(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/aligo',
+            ['saved' => '1', 'cancel_ok' => '2', 'cancel_failed' => '0']));
+
+        self::assertStringContainsString('예약된 발송 2개를 함께 취소했습니다', $html);
+        self::assertStringContainsString('<div class="alert alert-success">', $html);
+        self::assertStringNotContainsString('<div class="alert alert-warning">', $html);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testGuestCannotOpenTheSettings(array $dbConfig): void
     {

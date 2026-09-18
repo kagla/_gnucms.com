@@ -115,9 +115,14 @@ final class AdminAligoController
     }
 
     /**
-     * 저장 안내 문장. 채널을 끌 때 함께 취소된(또는 취소하지 못한) 예약이 있으면
-     * 그 숫자를 문장에 더한다 — cancel_ok·cancel_failed 는 toggle() 이 숫자로만 실어
-     * 넘긴 값이다(클래스 주석의 원칙: 문장은 쿼리로 받지 않고 여기서 만든다).
+     * 저장 안내. 채널을 끌 때 함께 취소된(또는 취소하지 못한) 예약이 있으면 그 숫자를
+     * 문장에 더한다 — cancel_ok·cancel_failed 는 toggle() 이 숫자로만 실어 넘긴
+     * 값이다(클래스 주석의 원칙: 문장은 쿼리로 받지 않고 여기서 만든다).
+     *
+     * 문장만이 아니라 'ok'(성공인가)도 함께 돌려준다. 화면이 이 값으로 초록 체크와
+     * 노랑 주의를 가른다 — 취소하지 못한 예약이 남았다는 문장 위에 초록 체크가 붙으면,
+     * 문장을 끝까지 읽지 않은 관리자는 다 끝난 줄 안다. 이 기능이 낼 수 있는 가장
+     * 잘못된 신호다. AdminMessageController::cancelNotice() 와 같은 모양을 쓴다.
      *
      * 취소하지 못한 이유는 말하지 않는다. 예전에는 "발송 5분 전을 지나"라고 단정했지만
      * 그건 알 수 없는 사실이다 — 알리고에 닿지 못했거나 키가 취소됐거나 IP 가 등록돼
@@ -127,28 +132,30 @@ final class AdminAligoController
      * 그래서 결과(몇 개가 남았는지)만 말하고, 사유는 그 사유가 실제로 적혀 있는 이력
      * 상세로 보낸다.
      */
-    private function savedNotice(array $query): string
+    private function savedNotice(array $query): array
     {
         $ok = self::countParam($query, 'cancel_ok');
         $failed = self::countParam($query, 'cancel_failed');
         if ($ok === 0 && $failed === 0) {
-            return '설정을 저장했습니다.';
+            return ['ok' => true, 'message' => '설정을 저장했습니다.'];
         }
         if ($failed === 0) {
-            return sprintf('설정을 저장했습니다. 예약된 발송 %d개를 함께 취소했습니다.', $ok);
+            return ['ok' => true, 'message' => sprintf(
+                '설정을 저장했습니다. 예약된 발송 %d개를 함께 취소했습니다.', $ok
+            )];
         }
         if ($ok === 0) {
-            return sprintf(
+            return ['ok' => false, 'message' => sprintf(
                 '설정을 저장했습니다. 예약된 발송 %d개는 취소하지 못해 예정대로 나갑니다.'
                 . ' 사유는 이력 화면의 작업 상세에 적혀 있고, 거기서 다시 취소할 수 있습니다.', $failed
-            );
+            )];
         }
 
-        return sprintf(
+        return ['ok' => false, 'message' => sprintf(
             '설정을 저장했습니다. 예약된 발송 %d개 중 %d개를 취소했고, %d개는 취소하지 못해 예정대로 나갑니다.'
             . ' 사유는 이력 화면의 작업 상세에 적혀 있고, 거기서 다시 취소할 수 있습니다.',
             $ok + $failed, $ok, $failed
-        );
+        )];
     }
 
     /** 쿼리에서 0 이상의 정수만 읽는다. 숫자가 아니면 0 으로 본다. */
@@ -183,7 +190,7 @@ final class AdminAligoController
 
     private function render(ServerRequestInterface $request, ResponseInterface $response,
         ?array $values, array $errors, ?string $error, ?array $verified, array $profiles,
-        ?string $notice = null): ResponseInterface
+        ?array $notice = null): ResponseInterface
     {
         $values ??= $this->app->aligo()->settings->formValues();
         // 발신번호는 언제나 하이픈 붙은 표시용 형태로 보여준다. PhoneNumber::format() 은

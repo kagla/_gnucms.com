@@ -21,7 +21,8 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
       </form>
     </div>
 
-    <?php if ($notice !== null): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div><?php endif ?>
+    <?php // aligo_settings.php 와 같은 규칙 — 부분 취소 안내는 성공이 아니라 주의로 보여준다. ?>
+    <?php if ($notice !== null): ?><div class="alert <?= $notice['ok'] ? 'alert-success' : 'alert-warning' ?>"><span aria-hidden="true"><?= $this->icon($notice['ok'] ? 'check-circle' : 'warning', 18) ?></span><span><?= $this->e($notice['message']) ?></span></div><?php endif ?>
     <?php if ($error !== null): ?><div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?></span></div><?php endif ?>
 
     <div class="table-wrap">

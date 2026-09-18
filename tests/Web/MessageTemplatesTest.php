@@ -144,6 +144,10 @@ final class MessageTemplatesTest extends WebTestCase
         // 이 화면은 취소가 왜 실패했는지 알지 못한다 — 지어내지 않고 이력 상세로 보낸다.
         self::assertStringNotContainsString('발송 5분 전을 지나', $html);
         self::assertStringContainsString('사유는 이력 화면의 작업 상세에 적혀 있고', $html);
+        // 문장만이 아니라 배지도 주의여야 한다. 예전에는 이 안내가 초록 체크를 달고
+        // 나와, 문장을 끝까지 읽지 않은 관리자는 다 끝난 줄 알았다.
+        self::assertStringContainsString('<div class="alert alert-warning">', $html);
+        self::assertStringNotContainsString('<div class="alert alert-success">', $html);
     }
 
     #[DataProvider('connectionProvider')]
@@ -171,6 +175,9 @@ final class MessageTemplatesTest extends WebTestCase
 
         self::assertStringContainsString('가져오기 3건, 갱신 1건, 사용 중지 0건', $composed);
         self::assertStringNotContainsString('계정이 만료되었습니다', $injected);
+        // 취소가 실패하지 않은 평범한 가져오기는 그대로 성공으로 보여준다 — 늘 주의로
+        // 칠하면 주의가 무의미해진다.
+        self::assertStringContainsString('<div class="alert alert-success">', $composed);
     }
 
     /** 숫자가 아닌 값이 들어와도 문장은 숫자 자리에 0 만 넣는다 — 글자가 새어 들어오지 않는다. */

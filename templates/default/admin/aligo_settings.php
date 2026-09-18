@@ -17,7 +17,8 @@
       <?php if ($status['pending'] > 0): ?><span class="badge badge-info badge-soft"><?= $this->e($status['pending']) ?>건 대기 중</span><?php endif ?>
     </div>
 
-    <?php if ($notice !== null): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div><?php endif ?>
+    <?php // 취소하지 못한 예약이 남았다는 안내에 초록 체크를 붙이면 안 된다 — 'ok' 가 그것을 가른다. ?>
+    <?php if ($notice !== null): ?><div class="alert <?= $notice['ok'] ? 'alert-success' : 'alert-warning' ?>"><span aria-hidden="true"><?= $this->icon($notice['ok'] ? 'check-circle' : 'warning', 18) ?></span><span><?= $this->e($notice['message']) ?></span></div><?php endif ?>
     <?php if ($error !== null): ?><div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?></span></div><?php endif ?>
 
     <form method="post" action="<?= $this->url('admin.aligo') ?>">

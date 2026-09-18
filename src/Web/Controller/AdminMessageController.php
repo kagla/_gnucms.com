@@ -477,20 +477,28 @@ final class AdminMessageController
     }
 
     /**
-     * 템플릿 탭 안내 문장. 가져오기 결과를 숫자로만 받아 문장은 여기서 만든다 —
-     * 문장 자체를 쿼리로 받으면 공격자가 만든 URL 이 시스템 알림처럼 보이게 된다.
+     * 템플릿 탭 안내. 가져오기 결과를 숫자로만 받아 문장은 여기서 만든다 — 문장 자체를
+     * 쿼리로 받으면 공격자가 만든 URL 이 시스템 알림처럼 보이게 된다.
+     *
+     * 문장과 함께 'ok'(성공인가)를 돌려준다. 화면은 이 값으로 초록 체크와 노랑 주의를
+     * 가른다 — "취소하지 못해 예정대로 나갑니다" 위에 초록 체크가 붙으면 관리자는
+     * 문장을 끝까지 읽기 전에 다 끝난 줄 안다. cancelNotice() 와 같은 모양이다.
+     *
+     * @return array{ok:bool,message:string}|null
      */
-    private function templatesNotice(array $query): ?string
+    private function templatesNotice(array $query): ?array
     {
         if (!isset($query['imported'])) {
             return null;
         }
 
-        return sprintf('가져오기 %d건, 갱신 %d건, 사용 중지 %d건',
+        $message = sprintf('가져오기 %d건, 갱신 %d건, 사용 중지 %d건',
             self::countParam($query, 'imported'),
             self::countParam($query, 'updated'),
             self::countParam($query, 'disabled'))
             . $this->templateCancellationSentence($query);
+
+        return ['ok' => self::countParam($query, 'cancel_failed') === 0, 'message' => $message];
     }
 
     /**
@@ -757,8 +765,9 @@ final class AdminMessageController
         return $details === [] ? $e->getMessage() : (string) reset($details);
     }
 
+    /** @param array{ok:bool,message:string}|null $notice */
     private function render(ServerRequestInterface $request, ResponseInterface $response,
-        ?string $error, ?string $notice = null): ResponseInterface
+        ?string $error, ?array $notice = null): ResponseInterface
     {
         return View::fromRequest($request)->render($response, 'admin/message/templates', [
             'copies' => $this->app->aligo()->templates->all(),
