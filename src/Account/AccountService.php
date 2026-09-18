@@ -8,6 +8,10 @@ use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
+use GnuCms\Notify\MailChannel;
+use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\Recipient;
 use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
 use GnuCms\Auth\PasswordThrottle;
@@ -23,10 +27,22 @@ final class AccountService
     private ConsentRepository $consents;
 
     private ?PasswordThrottle $throttle = null;
+    private ?Notifier $notifier = null;
 
     public function setPasswordThrottle(PasswordThrottle $throttle): void
     {
         $this->throttle = $throttle;
+    }
+
+    /**
+     * 알림 발송기. 생성자가 아니라 세터로 받는다 — 이 클래스는 App 말고도 여러 곳에서
+     * 직접 조립되고(시험이 특히 그렇다), 그 자리마다 발송기 한 벌(설정 저장소 + 채널 넷
+     * + 알리고 사본)을 만들게 하면 계정 조립이 알림 전체 배선을 끌고 들어온다.
+     * setPasswordThrottle() 과 같은 이유의 같은 방식이다.
+     */
+    public function setNotifier(Notifier $notifier): void
+    {
+        $this->notifier = $notifier;
     }
 
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
@@ -81,8 +97,10 @@ final class AccountService
             if (!(bool) $existing['email_verified']) {
                 $this->sendVerification($existing);
             } else {
-                $this->mailer->send($email, '[' . $this->siteName() . '] 가입 시도 안내',
-                    "이미 가입된 계정입니다.\n\n로그인: {$this->appUrl}/login");
+                $this->notify('signup_attempt', Recipient::forUser($existing), [
+                    '사이트명' => $this->siteName(),
+                    '링크' => $this->appUrl . '/login',
+                ]);
             }
             return $this->publicUser($existing, false);
         }
@@ -104,6 +122,12 @@ final class AccountService
         }
         if (!(bool) $user['email_verified']) {
             $this->sendVerification($user);
+        } else {
+            // 이미 인증된 채로 만들어진 사람(첫 관리자)은 인증 토큰을 쓸 일이 없다 —
+            // 그 사람에게는 가입이 끝나는 순간이 여기뿐이라 환영 알림도 여기서 보낸다.
+            // 인증을 거치는 사람은 verifyEmail() 이 보낸다. 가입 여부를 가르는 조건은
+            // 바로 위 줄이 인증 메일을 보낼지 가르는 조건과 같은 것 하나뿐이다.
+            $this->sendWelcome($user);
         }
 
         return $this->publicUser($user, true);
@@ -150,9 +174,20 @@ final class AccountService
         return $this->publicUser($user);
     }
 
+    /**
+     * 사람이 인증 링크를 실제로 눌러 토큰을 쓴 자리. 환영 알림이 여기 있는 이유는
+     * 이 자리뿐이기 때문이다 — UserRepository::verifyEmail() 에 두면 설치(Installer),
+     * 첫 관리자 생성(createRegistered() 의 열린 트랜잭션 안), 소셜 계정 연결
+     * (LinkingService)에서도 같이 나간다.
+     */
     public function verifyEmail(string $token): void
     {
-        $this->users->verifyEmail($this->tokens->consume($token, TokenService::VERIFY_EMAIL));
+        $userId = $this->tokens->consume($token, TokenService::VERIFY_EMAIL);
+        $this->users->verifyEmail($userId);
+        $user = $this->users->findById($userId);
+        if ($user !== null) {
+            $this->sendWelcome($user);
+        }
     }
 
     public function resendVerification(string $email): void
@@ -171,8 +206,12 @@ final class AccountService
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
         $url = $this->appUrl . '/reset-password?token=' . rawurlencode($token);
-        $this->mailer->send((string) $user['email'], '[' . $this->siteName() . '] 비밀번호 재설정',
-            "아래 링크에서 비밀번호를 다시 설정해 주세요.\n\n{$url}\n\n이 링크는 1시간 동안 유효합니다.");
+        $this->notify('password_reset', Recipient::forUser($user), [
+            '사이트명' => $this->siteName(),
+            '이름' => (string) $user['display_name'],
+            '링크' => $url,
+            '유효시간' => '1시간',
+        ]);
     }
 
     public function resetPassword(array $input): void
@@ -328,12 +367,17 @@ final class AccountService
             return false;
         }
         try {
-            $this->mailer->send((string) $user['email'], '[' . $this->siteName() . '] 비밀번호가 변경되었습니다',
-                "회원님의 비밀번호가 방금 변경되었습니다.\n\n본인이 바꾼 것이 아니라면 아래에서 즉시 비밀번호를 다시 설정하세요.\n\n"
-                . "{$this->appUrl}/forgot-password\n\n변경 시각: " . Clock::now() . ' (UTC)');
+            $this->notify('password_changed', Recipient::forUser($user), [
+                '사이트명' => $this->siteName(),
+                '이름' => (string) $user['display_name'],
+                // 시간대 표기를 본문이 아니라 값이 들고 간다 — 같은 값이 문자·알림톡으로
+                // 나갈 때 시각만 덩그러니 남으면 어느 시간대인지 알 수 없다.
+                '일시' => Clock::now() . ' (UTC)',
+                '링크' => $this->appUrl . '/forgot-password',
+            ]);
             return true;
         } catch (\Throwable $e) {
-            error_log('[' . GNUCMS_ID . '] 비밀번호 변경 알림 메일 실패: ' . $e->getMessage());
+            error_log('[' . GNUCMS_ID . '] 비밀번호 변경 알림 실패: ' . $e->getMessage());
             return false;
         }
     }
@@ -365,9 +409,54 @@ final class AccountService
     {
         $token = $this->tokens->issue((int) $user['id'], TokenService::VERIFY_EMAIL);
         $url = $this->appUrl . '/verify-email?token=' . rawurlencode($token);
-        $siteName = $this->siteName();
-        $this->mailer->send((string) $user['email'], '[' . $siteName . '] 이메일 인증',
-            "{$siteName} 가입을 완료하려면 아래 링크를 열어 주세요.\n\n{$url}\n\n이 링크는 24시간 동안 유효합니다.");
+        $this->notify('email_verify', Recipient::forUser($user), [
+            '사이트명' => $this->siteName(),
+            '이름' => (string) $user['display_name'],
+            '링크' => $url,
+            '유효시간' => '24시간',
+        ]);
+    }
+
+    /**
+     * 가입이 끝났다고 알린다. 코어에 없던 알림이라 기본 설정은 채널을 하나도 켜 두지
+     * 않는다(NotifySettings::DEFAULTS) — 관리자가 켜기 전에는 아무 데도 나가지 않는다.
+     *
+     * 실패를 삼키는 것은 notifyPasswordChanged() 와 같은 이유다: 여기 닿았다는 것은
+     * 회원 행도 인증 표시도 이미 커밋됐다는 뜻이고, 새로 들인 알림 한 통이 실패했다고
+     * 이미 끝난 가입·인증을 실패로 보여 주면 안 된다.
+     */
+    private function sendWelcome(array $user): void
+    {
+        try {
+            $this->notify('welcome', Recipient::forUser($user), [
+                '사이트명' => $this->siteName(),
+                '이름' => (string) $user['display_name'],
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[' . GNUCMS_ID . '] 가입 완료 안내 실패: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 알림 하나를 내보낸다. 제목·본문은 여기서 만들지 않는다 — 어느 길로 가든 문구는
+     * Notify\MailBodies 한 곳에서 나오므로 메일 글자가 갈라질 수 없다.
+     *
+     * **발송기가 없는 조립.** setNotifier() 를 거치지 않고 만들어진 이 서비스도 계속
+     * 동작해야 한다(App 밖에서 직접 조립하는 자리가 있다). 그때는 설정을 읽을 저장소가
+     * 없으므로 "설정하기 전의 동작", 곧 NotifySettings 의 기본값만 따라 메일 한 통을
+     * 보낸다 — Notifier 를 들이기 전 이 클래스가 하던 일과 정확히 같다. 기본값이 채널을
+     * 켜 두지 않은 알림(welcome)은 이 길에서도 나가지 않는다.
+     */
+    private function notify(string $event, Recipient $to, array $vars): void
+    {
+        if ($this->notifier !== null) {
+            $this->notifier->notify($event, $to, $vars);
+
+            return;
+        }
+        if (in_array('mail', NotifySettings::defaultChannels($event), true)) {
+            (new MailChannel($this->mailer))->send($event, $to, $vars);
+        }
     }
 
     /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */

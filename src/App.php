@@ -440,6 +440,11 @@ final class App
                 $this->consents()
             );
             $this->accountService->setPasswordThrottle($this->passwordThrottle());
+            // 발송기는 new 가 끝난 **뒤에** 끼운다. 이 게터는 그 대입이 끝난 자리에서만
+            // 메모이즈되므로, 언젠가 notifier() 쪽 조립이 계정 서비스를 되짚더라도
+            // 반쯤 만들어진 것을 받을지언정 무한 재귀로 가지는 않는다. 위의
+            // setPasswordThrottle() 과 같은 이유의 같은 차례다.
+            $this->accountService->setNotifier($this->notifier());
         }
 
         return $this->accountService;
@@ -509,6 +514,7 @@ final class App
                 (string) $this->config('app.url', GNUCMS_URL),
                 $this->cmsService()
             );
+            $this->socialAuthService->setNotifier($this->notifier());
         }
         return $this->socialAuthService;
     }
@@ -576,6 +582,10 @@ final class App
         // setMailer() 가 accountService 를 끊는 것과 같은 이유다.
         $this->notifySettings = null;
         $this->notifier = null;
+        // 발송기를 끊었으면 그 발송기를 이미 받아 쥔 서비스도 함께 끊어야 한다.
+        // 그러지 않으면 두 서비스만 옛 발송기(=진짜 알리고)를 계속 들고 있다.
+        $this->accountService = null;
+        $this->socialAuthService = null;
     }
 
     public function aligo(): AligoService

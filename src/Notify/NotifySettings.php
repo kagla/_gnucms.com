@@ -68,6 +68,18 @@ final class NotifySettings
         $this->templates = $templates;
     }
 
+    /**
+     * 저장소를 읽을 수 없는 자리에서 "설정하기 전의 동작"만 묻는 통로. 알림 발송기가
+     * 배선되지 않은 채 조립된 서비스(AccountService::notify() 주석)가 쓴다 — 그 자리가
+     * DEFAULTS 를 다시 적으면 기본값이 두 군데로 갈라진다.
+     *
+     * @return list<string>
+     */
+    public static function defaultChannels(string $event): array
+    {
+        return self::DEFAULTS[$event] ?? [];
+    }
+
     /** @return list<string> */
     public function channelsFor(string $event): array
     {

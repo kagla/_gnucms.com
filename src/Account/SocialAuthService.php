@@ -7,6 +7,10 @@ namespace GnuCms\Account;
 use GnuCms\Cms\CmsService;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
+use GnuCms\Notify\MailChannel;
+use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\Recipient;
 use GnuCms\Oauth\ProviderRegistry;
 use GnuCms\Oauth\SocialProfile;
 
@@ -17,6 +21,13 @@ final class SocialAuthService
     private MailerInterface $mailer;
     private string $appUrl;
     private ?CmsService $cms;
+    private ?Notifier $notifier = null;
+
+    /** AccountService::setNotifier() 와 같은 이유의 같은 배선이다. */
+    public function setNotifier(Notifier $notifier): void
+    {
+        $this->notifier = $notifier;
+    }
 
     public function __construct(ProviderRegistry $providers, LinkingService $linking, MailerInterface $mailer,
         string $appUrl, ?CmsService $cms = null)
@@ -52,10 +63,28 @@ final class SocialAuthService
             throw DomainError::validation(['email' => '올바른 이메일 주소를 입력해 주세요.']);
         }
         $url = $this->appUrl . '/auth/complete?token=' . rawurlencode($token);
-        $this->mailer->send($email, '[' . $this->siteName() . '] 소셜 로그인 이메일 확인',
-            "소셜 로그인을 완료하려면 아래 링크를 열어 주세요.\n\n{$url}\n\n이 링크는 30분 동안 유효합니다.");
+        // 아직 회원 행이 없다. 받는 사람은 방금 적어 낸 이 주소 하나로만 확인된다 —
+        // 이 알림이 전화 채널을 쓸 수 없는(Events 의 phone=false) 이유이기도 하다.
+        $this->notify('social_email_verify', Recipient::forEmail($email, $profile->name), [
+            '사이트명' => $this->siteName(),
+            '링크' => $url,
+            '유효시간' => '30분',
+        ]);
 
         return $email;
+    }
+
+    /** AccountService::notify() 와 같은 이유의 같은 코드다 — 그쪽 주석이 이 둘을 설명한다. */
+    private function notify(string $event, Recipient $to, array $vars): void
+    {
+        if ($this->notifier !== null) {
+            $this->notifier->notify($event, $to, $vars);
+
+            return;
+        }
+        if (in_array('mail', NotifySettings::defaultChannels($event), true)) {
+            (new MailChannel($this->mailer))->send($event, $to, $vars);
+        }
     }
 
     /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */
