@@ -12,7 +12,9 @@ use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\ChannelInterface;
 use GnuCms\Notify\Events;
 use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
+use GnuCms\Notify\SettingsRepository;
 use GnuCms\Oauth\SocialProfile;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\FakeAligoTransport;
@@ -282,7 +284,9 @@ final class NotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($config);
         $app->accountService()->register($this->owner());
         $agreements = $this->publishLegalPages($app);
-        $app->notifySettings()->save('email_verify', $this->channels(['inbox']));
+        // save() 는 이제 이 조합을 거절한다. 그래도 옛 행이나 손으로 고친 DB 로는 이
+        // 상태에 닿을 수 있고, 그때 지켜 주는 것은 검증이 아니라 channelsFor() 의 필터다.
+        $this->forceChannels($app, 'email_verify', ['inbox']);
         $before = $app->users()->countAll();
 
         try {
@@ -305,8 +309,8 @@ final class NotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($config);
         $id = $this->unverifiedMember($app);
         $this->get($app, '/login');
-        $app->notifySettings()->save('email_verify', $this->channels(['inbox']));
-        $app->notifySettings()->save('password_reset', $this->channels(['inbox']));
+        $this->forceChannels($app, 'email_verify', ['inbox']);
+        $this->forceChannels($app, 'password_reset', ['inbox']);
 
         $verify = $this->body($this->post($app, '/verify-email/resend',
             ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
@@ -328,7 +332,7 @@ final class NotificationRoutingTest extends WebTestCase
         $id = $this->unverifiedMember($app);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
-        $app->notifySettings()->save('password_reset', $this->channels(['mail', 'inbox']));
+        $this->forceChannels($app, 'password_reset', ['mail', 'inbox']);
 
         self::assertStringContainsString('재설정 링크를 보냈어요', $this->body($this->post($app,
             '/forgot-password', ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com'])));
@@ -357,12 +361,31 @@ final class NotificationRoutingTest extends WebTestCase
             ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com'])));
     }
 
+    /**
+     * 채널이 켜져 있어도 그 채널이 지금 쓸 수 있는 상태가 아니면 아무 데도 가지 않는다.
+     * 문자를 켜 두고 알리고 계정을 연결하지 않은 사이트가 그렇다 — 설정만 보는 답은
+     * "보낼 수 있다"이고, 채널에게 물은 답은 "못 보낸다"이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetScreenSaysSoWhenTheOnlyChannelIsNotUsableYet(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->notifySettings()->save('password_reset', ['mail' => '0', 'alimtalk' => '0',
+            'sms' => '1', 'inbox' => '0', 'sms_body' => '#{이름}님 #{링크} 에서 다시 설정해 주세요']);
+        $this->get($app, '/login');
+
+        $body = $this->body($this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']));
+        self::assertStringContainsString('보낼 수 없습니다', $body);
+        self::assertStringNotContainsString('재설정 링크를 보냈어요', $body);
+    }
+
     /** 소셜 확인 메일도 마찬가지다 — 닿지 않는 채널만 켜져 있으면 거절한다. */
     #[DataProvider('connectionProvider')]
     public function testTheSocialConfirmationIsRefusedWhenTheOnlyChannelCannotReach(array $config): void
     {
         $app = $this->makeApp($config);
-        $app->notifySettings()->save('social_email_verify', $this->channels(['inbox']));
+        $this->forceChannels($app, 'social_email_verify', ['inbox']);
 
         try {
             $app->socialAuthService()->sendPendingEmail(
@@ -448,7 +471,7 @@ final class NotificationRoutingTest extends WebTestCase
             // 바뀌었으므로(닿지 않는다), 더 정확해진 답이 계정 존재를 흘리기 시작하지
             // 않았는지 다시 확인해야 한다.
             foreach ([['mail'], [], ['inbox'], ['mail', 'inbox']] as $on) {
-                $app->notifySettings()->save($event, $this->channels($on));
+                $this->forceChannels($app, $event, $on);
                 $known = $this->body($this->post($app, $path,
                     ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
                 $unknown = $this->body($this->post($app, $path,
@@ -756,6 +779,20 @@ final class NotificationRoutingTest extends WebTestCase
                 ($this->record)($event, $to, $vars);
             }
         };
+    }
+
+    /**
+     * save() 가 거절하는 조합을 저장소에 직접 심는다 — 이 검증이 생기기 전에 저장된 행,
+     * 또는 DB 를 손으로 고친 행이 정확히 이 모양이다. 그런 행이 남아 있어도 알림이
+     * 엉뚱한 곳으로 가지 않는다는 것을 보는 시험들이 이 통로로 온다.
+     */
+    private function forceChannels(App $app, string $event, array $on): void
+    {
+        $raw = [$event . '.configured' => '1'];
+        foreach (NotifySettings::CHANNELS as $channel) {
+            $raw[$event . '.' . $channel] = in_array($channel, $on, true) ? '1' : '0';
+        }
+        (new SettingsRepository($app->db()))->save($raw);
     }
 
     /** 이 이벤트의 메일만 켠다. 기본값이 꺼 둔 알림(welcome)을 시험에서 켜는 통로다. */

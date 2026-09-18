@@ -31,9 +31,6 @@ use GnuCms\Service\NotificationService;
  */
 final class InboxChannel implements ChannelInterface
 {
-    /** 알림함에 쌓는 유일한 알림. 나머지는 알림함에 넣지 않는다. */
-    private const EVENT = 'comment_new';
-
     /** @var callable(): NotificationService */
     private $notifications;
 
@@ -49,6 +46,10 @@ final class InboxChannel implements ChannelInterface
     }
 
     /**
+     * 알림함에 쌓을 수 있는 알림이 무엇인지는 카탈로그(Events 의 inbox)가 정한다. 여기에
+     * 이벤트 이름을 따로 적어 두면 설정이 켤 수 있는 것과 채널이 받는 것이 어긋날 수
+     * 있다 — 문자·알림톡이 Events::phoneCapable() 을 다시 확인하는 것과 같은 자리다.
+     *
      * 알림함은 회원의 것이다 — 손님은 쌓아 둘 곳이 없다. 문맥(_kind 등)이 갖춰졌는지는
      * 여기서 보지 않는다: 문맥이 빠진 것은 "이 수신자에게 전할 수단이 없다"가 아니라
      * 부르는 쪽의 결함이고, 건너뛰기로 감추면 알림함만 조용히 비어 간다. 그 경우는
@@ -56,7 +57,7 @@ final class InboxChannel implements ChannelInterface
      */
     public function available(string $event, Recipient $to): bool
     {
-        return $to->userId !== null && $event === self::EVENT;
+        return $to->userId !== null && Events::inboxCapable($event);
     }
 
     public function send(string $event, Recipient $to, array $vars): void

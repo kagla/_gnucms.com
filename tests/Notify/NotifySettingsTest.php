@@ -120,6 +120,55 @@ final class NotifySettingsTest extends DatabaseTestCase
         $settings->save('email_verify', ['sms' => '1', 'sms_body' => '#{링크}']);
     }
 
+    /** 켤 수 없는 칸은 저장 때 거절한다 — 전화 채널과 같은 자리, 같은 모양이다. */
+    #[DataProvider('connectionProvider')]
+    public function testEventsThatCannotUseTheInboxRefuseThatChannel(array $config): void
+    {
+        $settings = $this->boot($config);
+
+        foreach (['password_reset', 'password_changed', 'welcome', 'email_verify',
+            'signup_attempt', 'social_email_verify'] as $event) {
+            try {
+                $settings->save($event, ['inbox' => '1']);
+                self::fail($event . ' 는 알림함에 쌓을 수 없어야 한다');
+            } catch (DomainError $e) {
+                self::assertArrayHasKey('inbox', $e->details(), $event);
+            }
+        }
+
+        $settings->save('comment_new', ['inbox' => '1']);
+        self::assertSame(['inbox'], $settings->channelsFor('comment_new'));
+    }
+
+    /**
+     * 이 검증이 생기기 전에 저장된 행(또는 DB 를 직접 고친 행)은 그대로 남아 있다. 읽는
+     * 쪽이 걸러 주지 않으면 그 사이트는 "알림함이 켜져 있다"는 답만 참인 채로, 인증 링크가
+     * 아무 데도 가지 않는 상태로 계속 돈다 — 지켜 주는 것은 검증이 아니라 이 필터다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStoredInboxRowIsIgnoredWhereTheInboxCannotBeUsed(array $config): void
+    {
+        $settings = $this->bootWithRawStorage($config, [
+            'email_verify.configured' => '1', 'email_verify.mail' => '0',
+            'email_verify.inbox' => '1', 'email_verify.sms' => '0', 'email_verify.alimtalk' => '0',
+        ]);
+
+        self::assertSame([], $settings->channelsFor('email_verify'));
+        self::assertFalse($settings->isOn('email_verify', 'inbox'));
+        self::assertSame([], $settings->formValues()['email_verify']['channels']);
+    }
+
+    /** 화면이 켤 수 없는 칸을 꺼진 채로 그릴 수 있어야 한다 — 저장 때만 거절하는 것은 늦다. */
+    #[DataProvider('connectionProvider')]
+    public function testFormValuesSayWhichEventsCanUseTheInbox(array $config): void
+    {
+        $values = $this->boot($config)->formValues();
+
+        self::assertTrue($values['comment_new']['inbox']);
+        self::assertFalse($values['email_verify']['inbox']);
+        self::assertFalse($values['welcome']['inbox']);
+    }
+
     /**
      * 템플릿 변수를 존재하지 않는 코어 변수로 매핑한 것도 "매핑 안 됨"과 같은 취급이다 —
      * 가리키는 곳이 없는 매핑은 매핑이 없는 것과 실제로 다를 바가 없다.

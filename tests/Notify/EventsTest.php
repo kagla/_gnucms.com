@@ -28,6 +28,28 @@ final class EventsTest extends TestCase
         }
     }
 
+    /**
+     * 알림함은 로그인해야 열린다. 로그인하지 못하는 사람에게 가는 알림(인증·재설정·
+     * 소셜 확인·가입 시도)은 영영 여기 들어와서는 안 되고, 로그인할 수 있는 사람에게 가는
+     * 둘(welcome·password_changed)도 InboxChannel 이 적을 줄 알기 전까지는 아니다.
+     */
+    public function testOnlyCommentsCanGoToTheInbox(): void
+    {
+        self::assertTrue(Events::inboxCapable('comment_new'));
+        foreach (['password_reset', 'password_changed', 'welcome', 'email_verify',
+            'signup_attempt', 'social_email_verify'] as $key) {
+            self::assertFalse(Events::inboxCapable($key), $key);
+        }
+    }
+
+    /** 로그인하지 못하는 사람에게 가는 알림은 카탈로그가 어떻게 바뀌어도 알림함에 넣지 않는다. */
+    public function testNotificationsForPeopleWhoCannotLogInStayOutOfTheInbox(): void
+    {
+        foreach (['email_verify', 'password_reset', 'social_email_verify', 'signup_attempt'] as $key) {
+            self::assertFalse(Events::inboxCapable($key), $key . ' 는 로그인 못 하는 사람에게 간다');
+        }
+    }
+
     public function testEveryEventDeclaresItsVariables(): void
     {
         foreach (Events::ALL as $key => $event) {

@@ -49,7 +49,7 @@ final class NotifySettings
 
     /** 전화 채널(알림톡·문자)에 속한 채널 키. Events::phoneCapable() 이 거짓인 이벤트에는
      *  이 채널들을 절대 켤 수 없다 — save() 는 거절하고, channelsFor() 는 저장소에 무엇이
-     *  남아 있든 걸러낸다. */
+     *  남아 있든 걸러낸다. 알림함도 Events::inboxCapable() 로 똑같이 다룬다. */
     private const PHONE_CHANNELS = ['alimtalk', 'sms'];
 
     /** 설정하기 전의 동작. 지금 코어가 하는 일을 그대로 둔다. */
@@ -98,6 +98,12 @@ final class NotifySettings
         // save() 가 이미 막아 두었더라도, 읽는 쪽이 스스로를 지키는 편이 안전하다.
         if (!Events::phoneCapable($event)) {
             $on = array_diff($on, self::PHONE_CHANNELS);
+        }
+        // 알림함도 같은 이유로 같은 자리에서 한 번 더 거른다. save() 가 막기 전에 저장된
+        // 값이나 DB 를 직접 고쳐 넣은 값이 남아 있을 수 있는데, 그 값을 그대로 믿으면
+        // "켜져 있다"는 답만 참이고 알림은 영영 아무 데도 가지 않는다.
+        if (!Events::inboxCapable($event)) {
+            $on = array_diff($on, ['inbox']);
         }
         if (in_array('alimtalk', $on, true) && $this->validTemplate($event, $stored) === null) {
             $on = array_diff($on, ['alimtalk']);
@@ -187,6 +193,11 @@ final class NotifySettings
                 throw DomainError::validation([$channel =>
                     '이 알림은 이메일로만 보낼 수 있습니다. 받는 사람이 이메일로만 확인됩니다.']);
             }
+            if ($on && $channel === 'inbox' && !Events::inboxCapable($event)) {
+                throw DomainError::validation([$channel =>
+                    '이 알림은 사이트 안 알림함에 쌓을 수 없습니다. 알림함은 로그인한 회원이 읽는 곳이라'
+                    . ' 지금은 새 댓글·답글 알림만 받습니다.']);
+            }
             $saved[$event . '.' . $channel] = $on ? '1' : '0';
         }
 
@@ -263,6 +274,9 @@ final class NotifySettings
                 'label' => $event['label'],
                 'vars' => $event['vars'],
                 'phone' => $event['phone'],
+                // 화면이 켤 수 없는 칸을 꺼진 채로 그릴 수 있게 함께 내준다. 켤 수 없는
+                // 칸을 멀쩡히 보여 주고 저장할 때만 거절하는 것은 같은 결함의 다른 모습이다.
+                'inbox' => $event['inbox'],
                 'channels' => $this->channelsFor($key),
                 'template' => $this->templateFor($key),
                 'sms_body' => $this->smsBody($key),
