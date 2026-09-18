@@ -67,19 +67,23 @@ final class InboxChannel implements ChannelInterface
 
         $kind = MessageVars::context($vars, 'kind');
         $postId = MessageVars::context($vars, 'post_id');
-        if (!in_array($kind, [NotificationService::KIND_COMMENT, NotificationService::KIND_REPLY], true)
-            || $postId === null || !ctype_digit($postId)) {
-            throw DomainError::validation(['inbox' =>
-                '알림함에 적을 값이 모자랍니다(종류·글번호).']);
-        }
+        // 댓글번호는 없어도 된다(그 칸은 NULL 을 받는다). 다만 들어왔는데 숫자가 아니면
+        // 조용히 버리지 않는다 — 잘못 넘어온 값을 없던 것처럼 다루면 알림을 눌러도
+        // 댓글 자리로 가지 못하는 이유가 어디에도 남지 않는다.
         $commentId = MessageVars::context($vars, 'comment_id');
+        if (!in_array($kind, [NotificationService::KIND_COMMENT, NotificationService::KIND_REPLY], true)
+            || $postId === null || !ctype_digit($postId)
+            || ($commentId !== null && !ctype_digit($commentId))) {
+            throw DomainError::validation(['inbox' =>
+                '알림함에 적을 값이 모자라거나 잘못됐습니다(종류·글번호·댓글번호).']);
+        }
         $values = MessageVars::forBody($event, $vars);
 
         ($this->notifications)()->recordInbox(
             (string) $to->userId,
             $kind,
             (int) $postId,
-            $commentId !== null && ctype_digit($commentId) ? (int) $commentId : null,
+            $commentId === null ? null : (int) $commentId,
             $values['작성자'] ?? '',
             $values['글제목'] ?? ''
         );

@@ -402,6 +402,21 @@ final class ChannelsTest extends DatabaseTestCase
      * 달린 답글. comment_new 이벤트는 하나뿐이므로 종류는 채널 문맥으로 들어온다.
      * 채널이 한 종류로 뭉개면 지금 있는 기능이 조용히 퇴화한다.
      */
+    /** 댓글번호는 없을 수 있다 — 그 칸은 NULL 을 받는다. */
+    #[DataProvider('connectionProvider')]
+    public function testInboxAcceptsANotificationWithoutACommentId(array $config): void
+    {
+        $this->boot($config);
+        $channel = new InboxChannel(fn (): NotificationService => $this->notificationService());
+
+        $channel->send('comment_new', Recipient::forUser(['id' => '7', 'display_name' => '홍길동']),
+            ['글제목' => '첫 글', '작성자' => '김철수',
+                '_kind' => NotificationService::KIND_COMMENT, '_post_id' => '3']);
+
+        $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('notifications'));
+        self::assertNull($row['comment_id']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testInboxRecordsTheKindItIsGiven(array $config): void
     {
@@ -448,6 +463,7 @@ final class ChannelsTest extends DatabaseTestCase
             '모르는 종류' => ['_kind' => 'shout'] + $full,
             '글번호 없음' => array_diff_key($full, ['_post_id' => null]),
             '글번호가 숫자가 아님' => ['_post_id' => '3번'] + $full,
+            '댓글번호가 숫자가 아님' => ['_comment_id' => '9번'] + $full,
         ] as $why => $vars) {
             self::assertSame(['inbox'], array_keys($this->refusal(
                 fn () => $channel->send('comment_new', $to, $vars))), $why);
