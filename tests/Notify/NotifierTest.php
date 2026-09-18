@@ -98,6 +98,31 @@ final class NotifierTest extends WebTestCase
         };
     }
 
+    /** available() 조차 답하지 못하는 채널(설정을 읽다 DB 가 끊긴 문자 채널 같은). */
+    private function brokenChannel(string $key): ChannelInterface
+    {
+        return new class ($key) implements ChannelInterface {
+            public function __construct(private string $k)
+            {
+            }
+
+            public function key(): string
+            {
+                return $this->k;
+            }
+
+            public function available(string $event, Recipient $to): bool
+            {
+                throw new \RuntimeException('available 가 터졌다');
+            }
+
+            public function send(string $event, Recipient $to, array $vars): void
+            {
+                throw new \LogicException('여기까지 오면 안 된다');
+            }
+        };
+    }
+
     /**
      * Notifier 는 진짜 NotifySettings 를 받는다. 여기서는 DB 를 한 벌 만들고 원하는
      * 채널만 켜 둔다. 승인 템플릿 T1 을 같이 심어 두는 것은 alimtalk 를 켤 수 있게
@@ -196,6 +221,28 @@ final class NotifierTest extends WebTestCase
         $this->notifier($dbConfig, [$mail, $sms], ['mail', 'sms'])->notify('welcome', $this->to(), []);
 
         self::assertSame(1, $sms->calls, '실패한 채널을 다시 부르면 두 번 발송이 된다');
+    }
+
+    /** 문자·알림톡은 "보낼 수 있느냐"에 답하려고 DB 와 알리고 설정을 읽는다 — 그 질문에
+     *  답하다 터지는 것도 그 채널만의 실패다. 메일은 그대로 나가야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testAChannelThatCannotEvenAnswerAvailableDoesNotStopTheOthers(array $dbConfig): void
+    {
+        $mail = $this->channel('mail');
+        $this->notifier($dbConfig, [$mail, $this->brokenChannel('sms')], ['mail', 'sms'])
+            ->notify('welcome', $this->to(), []);
+
+        self::assertSame(['welcome'], $mail->sent);
+        self::assertStringContainsString('available 가 터졌다', $this->loggedText());
+    }
+
+    /** 그 채널 하나뿐이었다면 아무 데도 못 간 것이다 — 조용히 넘어가면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testAChannelThatCannotAnswerAvailableCountsAsAFailure(array $dbConfig): void
+    {
+        $this->expectException(DomainError::class);
+        $this->notifier($dbConfig, [$this->brokenChannel('sms')], ['sms'])
+            ->notify('welcome', $this->to(), []);
     }
 
     #[DataProvider('connectionProvider')]

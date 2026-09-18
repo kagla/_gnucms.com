@@ -15,7 +15,8 @@ use GnuCms\Error\DomainError;
  *   건너뛰기 — 채널은 있는데 지금 이 수신자에게 전할 수단이 없다(번호 없는 회원의 문자,
  *              손님의 알림함). available() 이 거짓인 경우다. 실패가 아니다: 번호가 없다는
  *              이유로 메일까지 막히면 안 된다.
- *   실패    — 보낼 수 있다고 해 놓고 send() 가 예외를 던졌다. 이 채널만 실패한 것이고,
+ *   실패    — 보낼 수 있다고 해 놓고 send() 가 예외를 던졌다(available() 이 답하다가 터진
+ *              것도 같다 — 못 보낸다고 답한 것이 아니라 답을 못 한 것이다). 이 채널만 실패한 것이고,
  *              나머지 채널은 그대로 계속 간다(비밀번호 재설정은 문자가 죽어도 메일로 가야
  *              한다). 원문은 로그에 남긴다.
  *   설정    — 관리자가 이 알림의 채널을 하나도 켜 두지 않았다. 사고가 아니라 설정이므로
@@ -104,7 +105,6 @@ final class Notifier
             return;
         }
 
-        $attempted = 0;
         $delivered = 0;
         $failures = [];
 
@@ -113,18 +113,17 @@ final class Notifier
             if ($channel === null) {
                 // 켜 두었는데 채널 객체가 없다. 설정이 아니라 조립의 결함이므로 건너뛰기가
                 // 아니라 실패로 센다 — 이것 하나만 켜져 있었다면 예외로 드러난다.
-                $attempted++;
                 $failures[] = $key . ': 이 앱에 배선되지 않은 채널입니다';
                 continue;
             }
-            // 보낼 수 있는지는 채널에게 먼저 묻는다. send() 안의 거절은 마지막 방어선이지
-            // 이 자리의 관문이 아니다.
-            if (!$channel->available($event, $to)) {
-                continue;
-            }
-
-            $attempted++;
             try {
+                // 보낼 수 있는지는 채널에게 먼저 묻는다. send() 안의 거절은 마지막 방어선이지
+                // 이 자리의 관문이 아니다. available() 도 try 안에 있다 — 문자·알림톡은 그
+                // 질문에 답하려고 DB 와 알리고 설정을 읽으므로 여기서도 터질 수 있고, 그때
+                // 예외가 그대로 올라가면 가두려던 실패가 메일까지 데려간다.
+                if (!$channel->available($event, $to)) {
+                    continue;
+                }
                 $channel->send($event, $to, $vars);
                 $delivered++;
             } catch (\Throwable $e) {
@@ -135,16 +134,18 @@ final class Notifier
         foreach ($failures as $failure) {
             ($this->log)('알림 ' . $event . ' 발송 실패 — ' . $failure);
         }
+        if ($delivered > 0) {
+            return;
+        }
 
-        if ($attempted > 0 && $delivered === 0) {
+        if ($failures !== []) {
             // 원문은 로그에만 남긴다. 이 예외의 문구는 화면에 그대로 나가므로, 알리고
             // 응답이나 DB 오류를 거기에 실어 보내지 않는다.
             throw DomainError::serviceUnavailable(
                 '알림을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.');
         }
-        if ($attempted === 0) {
-            ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
-                . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
-        }
+        // 실패도 없는데 한 통도 못 보냈다 = 켠 채널이 전부 건너뛰기였다.
+        ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
+            . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
     }
 }
