@@ -146,7 +146,8 @@ final class AuthController
             $this->storeSession($user);
             return $this->redirectTo($request, $response, 'admin.index');
         }
-        return View::fromRequest($request)->render($response, 'auth/check_email');
+        return View::fromRequest($request)->render($response, 'auth/check_email',
+            ['deliverable' => $this->app->accountService()->canNotify('email_verify')]);
     }
 
     private function assertAnyRegistrationEnabled(): void
@@ -204,7 +205,8 @@ final class AuthController
                 'return_url' => $returnUrl,
             ]);
         }
-        return View::fromRequest($request)->render($response, 'auth/check_email');
+        return View::fromRequest($request)->render($response, 'auth/check_email',
+            ['deliverable' => $this->app->accountService()->canNotify('email_verify')]);
     }
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -228,7 +230,10 @@ final class AuthController
                 'errors' => $e->details(), 'values' => ['email' => $email],
             ]);
         }
-        return View::fromRequest($request)->render($response, 'auth/reset_sent');
+        // "당신에게 보냈다"가 아니라 "이 사이트가 지금 보낼 수 있다"만 말한다. 앞의
+        // 것을 말하면 이 화면이 가입 여부를 묻는 도구가 된다(AccountService::canNotify).
+        return View::fromRequest($request)->render($response, 'auth/reset_sent',
+            ['deliverable' => $this->app->accountService()->canNotify('password_reset')]);
     }
 
     public function resetForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

@@ -124,6 +124,21 @@ final class Notifier
             : \Closure::fromCallable($log);
     }
 
+    /**
+     * 이 알림을 보낼 채널이 하나라도 켜져 있는가. **보낼 수 있다는 약속이 아니다** —
+     * 켜진 채널이 지금 이 수신자에게 쓸 수 있는지도, 발송이 성공할지도 여기서는 모른다.
+     *
+     * 그런데도 이 질문이 따로 필요한 이유는 하나다: 수신자마다 달라지지 않는 사실이라
+     * 화면에 그대로 옮겨도 계정의 존재를 흘리지 않는다. 비밀번호 재설정·인증 링크
+     * 화면은 "그 주소로 보냈는가"를 절대 말할 수 없지만(없는 계정과 있는 계정의 화면이
+     * 달라지는 순간 그것이 계정 목록이 된다), "이 사이트가 지금 이 알림을 보낼 수
+     * 있는가"는 누구에게나 같은 답이라 말해도 된다.
+     */
+    public function isEnabled(string $event): bool
+    {
+        return $this->settings->channelsFor($event) !== [];
+    }
+
     /** @return bool 한 채널이라도 실제로 나갔는가. 실패(전부 실패)는 예외로 나간다. */
     public function notify(string $event, Recipient $to, array $vars): bool
     {

@@ -7,6 +7,7 @@ namespace GnuCms\Tests\Account;
 use GnuCms\Account\AccountService;
 use GnuCms\Aligo\AligoService;
 use GnuCms\App;
+use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\ChannelInterface;
 use GnuCms\Notify\Events;
@@ -225,14 +226,174 @@ final class NotificationRoutingTest extends WebTestCase
         $app->users()->verifyEmail($id);
 
         $app->accountService()->requestPasswordReset('member@example.com');
-        $app->socialAuthService()->sendPendingEmail(
-            new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
-            'social@example.com',
-            'pending-token'
-        );
+        try {
+            $app->socialAuthService()->sendPendingEmail(
+                new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
+                'social@example.com',
+                'pending-token'
+            );
+            self::fail('확인 메일을 보낼 수 없으면 거절해야 한다');
+        } catch (DomainError $e) {
+            // 조용히 돌아가면 부르는 쪽이 "메일함을 확인해 주세요" 화면을 그린다.
+            self::assertArrayHasKey('email', $e->details());
+        }
 
         self::assertSame([], $mailer->messages);
     }
+
+    /**
+     * 인증 링크를 보낼 수 없으면 가입 자체를 받지 않는다. 받아 두면 그 사람은 로그인도
+     * 인증도 못 하는 자리에 갇히고, 화면 문구만 바꿔서는 그 자리를 벗어날 수 없다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASignupIsRefusedWhenTheVerificationLinkCannotBeSent(array $config): void
+    {
+        $app = $this->boot($config);
+        $app->accountService()->register($this->owner());
+        $agreements = $this->publishLegalPages($app);
+        $app->notifySettings()->save('email_verify', $this->channels([]));
+        $before = $app->users()->countAll();
+
+        try {
+            $app->accountService()->register($agreements + [
+                'email' => 'member@example.com', 'password' => 'member-password-123',
+                'password_confirmation' => 'member-password-123',
+            ]);
+            self::fail('인증 링크를 못 보내면 가입을 받아서는 안 된다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('가입을 끝낼 수 없습니다', $e->getMessage());
+        }
+
+        self::assertSame($before, $app->users()->countAll(), '미인증 회원 행이 남아서는 안 된다');
+        self::assertNull($app->users()->findByEmail('member@example.com'));
+    }
+
+    /** 첫 사람은 인증을 기다리지 않는다. 여기서 막으면 설정을 고칠 관리자가 생기지 못한다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheFirstOwnerCanStillRegisterWithNoVerificationChannel(array $config): void
+    {
+        $app = $this->boot($config);
+        $app->notifySettings()->save('email_verify', $this->channels([]));
+
+        $owner = $app->accountService()->register($this->owner());
+
+        self::assertTrue($owner['email_verified']);
+        self::assertTrue($owner['is_admin']);
+    }
+
+    /** 다시 보내기 화면도 "보냈어요"라고 말해서는 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheVerificationScreenSaysSoWhenNoLinkCanBeSent(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->unverifiedMember($app);
+        $this->get($app, '/login');
+
+        $sent = $this->body($this->post($app, '/verify-email/resend',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('인증 링크를 보냈어요', $sent);
+
+        $app->notifySettings()->save('email_verify', $this->channels([]));
+        $none = $this->body($this->post($app, '/verify-email/resend',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('인증 링크를 보낼 수 없습니다', $none);
+        self::assertStringNotContainsString('인증 링크를 보냈어요', $none);
+    }
+
+    /** 재설정 화면도 마찬가지다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetScreenSaysSoWhenNoLinkCanBeSent(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+
+        $sent = $this->body($this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('재설정 링크를 보냈어요', $sent);
+
+        $app->notifySettings()->save('password_reset', $this->channels([]));
+        $none = $this->body($this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('보낼 수 없습니다', $none);
+        self::assertStringNotContainsString('재설정 링크를 보냈어요', $none);
+    }
+
+    /**
+     * 두 화면이 말하는 것은 "이 사이트가 보낼 수 있는가"뿐이라, 가입된 주소와 아닌 주소의
+     * 화면이 한 글자도 다르지 않아야 한다. 달라지는 순간 그 화면이 계정 목록이 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testNeitherScreenTellsWhetherTheAccountExists(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+
+        foreach ([['password_reset', '/forgot-password'], ['email_verify', '/verify-email/resend']] as [$event, $path]) {
+            foreach ([['mail'], []] as $on) {
+                $app->notifySettings()->save($event, $this->channels($on));
+                $known = $this->body($this->post($app, $path,
+                    ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+                $unknown = $this->body($this->post($app, $path,
+                    ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']));
+                self::assertSame($known, $unknown, $path . ' 화면이 계정 존재를 흘린다');
+            }
+        }
+    }
+
+    /** 사람이 갇혔다는 사실은 사이트 주인만 고칠 수 있다. 로그에 남는지 본다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheOperatorIsToldWhenALinkReachedNobody(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->notifySettings()->save('email_verify', $this->channels([]));
+
+        $logged = $this->captureErrorLog(function () use ($app): void {
+            $app->accountService()->resendVerification('member@example.com');
+        });
+
+        self::assertStringContainsString('아무 데도 나가지 않았습니다', $logged);
+        self::assertStringContainsString('#' . $id, $logged);
+        self::assertStringNotContainsString('member@example.com', $logged, '주소는 로그에 적지 않는다');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testTheOperatorIsToldWhenAResetLinkReachedNobody(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $app->notifySettings()->save('password_reset', $this->channels([]));
+
+        $logged = $this->captureErrorLog(function () use ($app): void {
+            $app->accountService()->requestPasswordReset('member@example.com');
+        });
+
+        self::assertStringContainsString('비밀번호를 되찾을 수 없습니다', $logged);
+    }
+
+    /** error_log() 를 파일로 돌려 그 사이에 적힌 줄을 돌려준다. */
+    private function captureErrorLog(callable $run): string
+    {
+        $file = sys_get_temp_dir() . '/' . GNUCMS_ID . '-notify-log-' . getmypid() . '.log';
+        @unlink($file);
+        $previous = (string) ini_get('error_log');
+        ini_set('error_log', $file);
+        try {
+            $run();
+        } finally {
+            ini_set('error_log', $previous);
+        }
+        $written = is_file($file) ? (string) file_get_contents($file) : '';
+        @unlink($file);
+
+        return $written;
+    }
+
 
     /** 알리고를 바꾸면 발송기가 새로 만들어진다. 그 발송기를 쥔 두 서비스도 함께 새로 만들어야 한다. */
     #[DataProvider('connectionProvider')]

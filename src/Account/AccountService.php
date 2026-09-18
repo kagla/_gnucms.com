@@ -9,6 +9,7 @@ use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\UnwiredNotifier;
 use GnuCms\Support\Clock;
@@ -60,6 +61,21 @@ final class AccountService
         $this->notifier = $notifier;
     }
 
+    /**
+     * 이 사이트가 지금 이 알림을 보낼 수 있는가(켜 둔 채널이 하나라도 있는가).
+     *
+     * **화면이 물어도 되는 유일한 질문이다.** 인증 링크·재설정 링크 화면은 "당신에게
+     * 보냈는가"를 말할 수 없다 — 없는 계정과 있는 계정의 화면이 달라지는 순간 그 화면이
+     * 계정 목록이 된다. 이 질문의 답은 누구에게나 같으므로 그대로 옮겨도 아무것도
+     * 흘리지 않는다. Notifier::isEnabled() 주석에 같은 이야기가 있다.
+     */
+    public function canNotify(string $event): bool
+    {
+        return $this->notifier !== null
+            ? $this->notifier->isEnabled($event)
+            : in_array('mail', NotifySettings::defaultChannels($event), true);
+    }
+
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
         CmsService $cms, ConsentRepository $consents)
     {
@@ -88,7 +104,8 @@ final class AccountService
 
         // 첫 사람(사이트 소유자)은 약관을 만들기 전이라 동의를 받지 않는다.
         $consents = [];
-        if ($this->users->countAll() > 0) {
+        $existingUsers = $this->users->countAll();
+        if ($existingUsers > 0) {
             // 필수 두 개가 공개돼 있는지 먼저 확인한다. 없으면 가입 자체를 받지 않는다.
             $this->cms->legalDocuments();
             $consents = $this->cms->consentDocuments('signup');
@@ -101,6 +118,22 @@ final class AccountService
         }
         $v->check();
 
+        // 인증 링크를 보낼 수 없는 사이트는 가입을 받지 않는다.
+        //
+        // 받으면 어떻게 되는지가 이 판단의 전부다: 회원 행은 만들어지는데 인증 링크는
+        // 아무 데도 안 가고, 이 코드베이스는 인증 전에는 로그인을 막으므로, 그 사람은
+        // 자기 계정 밖에 갇힌 채 "메일함을 확인하세요"라는 화면만 본다. 문구만 바꿔서는
+        // 그 자리를 벗어날 수 없다 — 그래서 문 앞에서 돌려보낸다. 남는 찌꺼기(미인증
+        // 회원 행·동의 기록)도 없고, 관리자가 채널을 다시 켜면 그대로 가입할 수 있다.
+        //
+        // 첫 사람은 빼놓는다. 그 사람은 인증 없이 만들어지므로(createRegistered) 링크를
+        // 기다리지 않고, 여기서 막으면 알림 설정을 고칠 관리자 자체가 생기지 못한다.
+        if ($existingUsers > 0 && !$this->canNotify('email_verify')) {
+            throw DomainError::serviceUnavailable(
+                '지금은 회원가입을 받을 수 없습니다. 인증 링크를 보낼 수 없어 가입을 끝낼 수 없습니다.'
+                . ' 사이트 관리자에게 문의해 주세요.');
+        }
+
         // 번호를 받을지는 사이트 설정이 정한다. 본인확인은 하지 않고 형식만 본다.
         // Validator 가 모은 오류를 먼저 한꺼번에 던진 뒤에 본다 — Aligo\Settings::save()
         // 가 발신번호를 다루는 방식과 같다. 앞에 둘 경우, 이메일·비밀번호가 함께
@@ -112,6 +145,9 @@ final class AccountService
             if (!(bool) $existing['email_verified']) {
                 $this->sendVerification($existing);
             } else {
+                // 나갔는지는 화면에 옮기지 않는다 — 이 분기의 화면은 진짜 가입과 한
+                // 글자도 달라서는 안 된다(달라지면 "이 주소가 가입돼 있는가"를 묻는
+                // 도구가 된다). 이 알림이 못 나가도 그 사람은 이미 로그인할 수 있다.
                 $this->notify('signup_attempt', Recipient::forUser($existing), [
                     '사이트명' => $this->siteName(),
                     '링크' => $this->appUrl . '/login',
@@ -221,12 +257,20 @@ final class AccountService
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
         $url = $this->appUrl . '/reset-password?token=' . rawurlencode($token);
-        $this->notify('password_reset', Recipient::forUser($user), [
+        $sent = $this->notify('password_reset', Recipient::forUser($user), [
             '사이트명' => $this->siteName(),
             '이름' => (string) $user['display_name'],
             '링크' => $url,
             '유효시간' => '1시간',
         ]);
+        if (!$sent) {
+            // 화면에는 이 사실을 옮기지 않는다. 이 메서드는 없는 계정에도 조용히 돌아가야
+            // 하므로(그래야 화면이 계정 목록이 되지 않는다), "이 사람에게는 못 보냈다"를
+            // 화면에 말하는 순간 계정이 있다는 뜻이 된다. 화면은 대신 canNotify() 로
+            // 누구에게나 같은 사실만 말한다. 운영자에게는 여기서 알린다.
+            error_log('[' . GNUCMS_ID . '] 비밀번호 재설정 링크가 아무 데도 나가지 않았습니다'
+                . ' — 회원 #' . (int) $user['id'] . ' 는 지금 비밀번호를 되찾을 수 없습니다.');
+        }
     }
 
     public function resetPassword(array $input): void
@@ -431,12 +475,20 @@ final class AccountService
     {
         $token = $this->tokens->issue((int) $user['id'], TokenService::VERIFY_EMAIL);
         $url = $this->appUrl . '/verify-email?token=' . rawurlencode($token);
-        $this->notify('email_verify', Recipient::forUser($user), [
+        $sent = $this->notify('email_verify', Recipient::forUser($user), [
             '사이트명' => $this->siteName(),
             '이름' => (string) $user['display_name'],
             '링크' => $url,
             '유효시간' => '24시간',
         ]);
+        if (!$sent) {
+            // 이 회원은 인증을 끝낼 길이 없다 — 화면은 canNotify() 로 사실대로 말하지만,
+            // 고칠 수 있는 사람은 사이트 주인뿐이라 로그에도 남긴다. Notifier 는 켠 채널이
+            // 아예 없는 경우에는 아무 줄도 적지 않으므로(그쪽은 사고가 아니라 설정이다)
+            // 이 자리에서 적어야 한다. 주소는 적지 않는다 — 회원 번호면 충분하다.
+            error_log('[' . GNUCMS_ID . '] 이메일 인증 링크가 아무 데도 나가지 않았습니다'
+                . ' — 회원 #' . (int) $user['id'] . ' 는 지금 가입을 끝낼 수 없습니다.');
+        }
     }
 
     /**
@@ -450,6 +502,8 @@ final class AccountService
     private function sendWelcome(array $user): void
     {
         try {
+            // 나갔는지 묻지 않는다. 기본값이 "채널 없음"이라 대개 안 나가는 것이 정상이고,
+            // 못 나가도 그 사람이 못 하게 되는 일이 없다 — 화면에 옮길 것이 없다.
             $this->notify('welcome', Recipient::forUser($user), [
                 '사이트명' => $this->siteName(),
                 '이름' => (string) $user['display_name'],

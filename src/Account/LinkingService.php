@@ -151,6 +151,8 @@ final class LinkingService
                 '사이트명' => (string) $this->cms->settings()['site_name'],
                 '이름' => (string) $user['display_name'],
             ];
+            // 나갔는지 묻지 않는다. AccountService::sendWelcome() 과 같은 이유다 —
+            // 기본값이 "채널 없음"이고, 못 나가도 이 사람이 못 하게 되는 일이 없다.
             // 이 서비스는 메일러를 쥐고 있지 않다. 발송기가 없으면 보낼 길이 없고,
             // UnwiredNotifier 가 그 사실을 운영자 로그에 한 줄 남긴다.
             $this->notifier !== null
