@@ -26,6 +26,12 @@ use GnuCms\Error\DomainError;
  * 나갔는지 모르는 채로 끊기는 일이 흔하고, 그때 한 번 더 보내면 진짜 전화기로 두 통이
  * 간다. 다시 보낼지는 사람이 정한다.
  *
+ * **무엇이 나갔는지는 돌려준다.** notify() 는 한 채널이라도 실제로 나갔으면 true 를,
+ * 아무 데도 가지 않았으면 false 를 돌려준다(켠 채널이 없거나, 켠 채널이 전부 건너뛰기였거나).
+ * 실패는 여전히 예외다. 부르는 쪽이 화면에 "보냈습니다"라고 적어도 되는지를 이 값 하나로
+ * 판단할 수 있어야 하기 때문이다 — "불러 봤다"를 "갔다"로 그리는 것이 이 저장소가 반복해서
+ * 만들어 온 결함이다. 돌려받은 값을 안 쓰는 호출부는 지금까지와 똑같이 동작한다.
+ *
  * **아무 데도 못 갔으면 소리를 낸다.** 시도한 채널이 있는데 한 곳도 성공하지 못하면
  * 예외를 올린다 — 아무 데도 안 갔는데 화면이 "보냈습니다"라고 말하면 안 되기 때문이다.
  * 시도할 수 있는 채널이 처음부터 없었던 경우(켜 두었지만 전부 건너뛰기)는 예외 대신
@@ -118,7 +124,8 @@ final class Notifier
             : \Closure::fromCallable($log);
     }
 
-    public function notify(string $event, Recipient $to, array $vars): void
+    /** @return bool 한 채널이라도 실제로 나갔는가. 실패(전부 실패)는 예외로 나간다. */
+    public function notify(string $event, Recipient $to, array $vars): bool
     {
         // 카탈로그에 없는 이벤트는 호출부의 오타이거나 지워진 이벤트를 부르는 코드다.
         // channelsFor() 는 그런 이벤트에 빈 목록을 돌려주므로, 여기서 막지 않으면
@@ -129,7 +136,7 @@ final class Notifier
 
         $wanted = $this->settings->channelsFor($event);
         if ($wanted === []) {
-            return;
+            return false;
         }
 
         $delivered = 0;
@@ -164,7 +171,7 @@ final class Notifier
         }
 
         if ($delivered > 0) {
-            return;
+            return true;
         }
 
         if ($failed > 0) {
@@ -181,6 +188,8 @@ final class Notifier
         // 실패도 없는데 한 통도 못 보냈다 = 켠 채널이 전부 건너뛰기였다.
         ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
             . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
+
+        return false;
     }
 
     private function recordFailure(string $event, string $reason): void

@@ -7,10 +7,9 @@ namespace GnuCms\Account;
 use GnuCms\Cms\CmsService;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
-use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\Notifier;
-use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
+use GnuCms\Notify\UnwiredNotifier;
 use GnuCms\Oauth\ProviderRegistry;
 use GnuCms\Oauth\SocialProfile;
 
@@ -75,16 +74,11 @@ final class SocialAuthService
     }
 
     /** AccountService::notify() 와 같은 이유의 같은 코드다 — 그쪽 주석이 이 둘을 설명한다. */
-    private function notify(string $event, Recipient $to, array $vars): void
+    private function notify(string $event, Recipient $to, array $vars): bool
     {
-        if ($this->notifier !== null) {
-            $this->notifier->notify($event, $to, $vars);
-
-            return;
-        }
-        if (in_array('mail', NotifySettings::defaultChannels($event), true)) {
-            (new MailChannel($this->mailer))->send($event, $to, $vars);
-        }
+        return $this->notifier !== null
+            ? $this->notifier->notify($event, $to, $vars)
+            : (new UnwiredNotifier($this->mailer, self::class))->notify($event, $to, $vars);
     }
 
     /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */
