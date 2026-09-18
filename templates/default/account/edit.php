@@ -25,6 +25,23 @@
           <input class="input input-bordered input-block" type="text" name="display_name" minlength="2" pattern="[가-힣A-Za-z0-9]+" title="한글·영문·숫자만, 공백 없이" value="<?= $this->e($values['display_name']) ?>" maxlength="100" required>
           <?php if (array_key_exists('display_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['display_name']) ?></p><?php endif ?>
         </fieldset>
+        <?php
+          // 배열(phone[]=x)이 넘어오면 (string) 캐스팅이 경고를 낸다 — 스칼라만 쓴다.
+          $phoneValue = is_scalar($values['phone'] ?? null) ? (string) $values['phone'] : '';
+          $phoneOff = ($site['signup_phone'] ?? 'off') === 'off';
+        ?>
+        <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">알림톡·문자 수신 번호</span></legend>
+          <input class="input input-bordered input-block" type="tel" name="phone" inputmode="numeric" autocomplete="tel"
+                 value="<?= $this->e($phoneValue === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneValue)) ?>"
+                 placeholder="010-1234-5678"<?php if ($phoneOff): ?> disabled<?php endif ?>>
+          <?php if ($phoneOff): ?>
+          <p class="fieldset-label">번호 수집이 꺼져 있어 여기서는 바꿀 수 없습니다. 이미 저장된 번호는 계속 쓰입니다.</p>
+          <?php else: ?>
+          <p class="fieldset-label">비워 두고 저장하면 번호가 지워집니다.</p>
+          <?php endif ?>
+          <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
+        </fieldset>
         <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
           <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">JPG, PNG, WebP · 2MB 이하</span></legend>
           <?php if (!empty($values['avatar_file'])): ?><div class="profile-image-preview"><img src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="현재 프로필 이미지"><label><input class="checkbox checkbox-sm" type="checkbox" name="remove_profile_image" value="1"> 현재 이미지 삭제</label></div><?php endif ?>

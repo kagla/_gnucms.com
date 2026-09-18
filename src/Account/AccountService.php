@@ -244,7 +244,14 @@ final class AccountService
             }
         }
         $v->check();
+        // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
+        // register() 와 같은 이유로 $v->check() 뒤에 본다 — 표시 이름·비밀번호 오류가
+        // 함께 있을 때 번호 오류만 보이고 나머지가 다음 제출까지 묻히지 않게 한다.
+        $phone = $this->phoneForEdit($input);
         $this->users->updateDisplayName($userId, $displayName);
+        if ($phone['write']) {
+            $this->users->updatePhone($userId, $phone['phone']);
+        }
         if ($password !== '') {
             $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
         }
@@ -367,6 +374,28 @@ final class AccountService
     private function siteName(): string
     {
         return (string) $this->cms->settings()['site_name'];
+    }
+
+    /**
+     * 회원정보 수정·관리자 회원 수정 공용. AdminService 도 이 메서드로 정책을 묻는다 —
+     * signup_phone 의 세 값 분기를 두 곳에 나눠 베끼지 않으려는 것이다.
+     *
+     * 가입용 phoneFromInput() 과 정책은 같지만 off 의 뜻이 다르다: 가입은 아직 아무
+     * 것도 저장돼 있지 않으니 off 에서 null 을 돌려줘도 안전하지만, 수정 화면에서
+     * 그 null 을 그대로 썼다가는 관리자가 설정을 끄는 순간 모든 회원의 저장된
+     * 번호가 다음 프로필 저장마다 조용히 지워진다. 그래서 off 는 "쓸지 여부" 자체를
+     * false 로 돌려 칸을 아예 건드리지 않게 한다 — 이미 있는 번호는 화면에서 고칠
+     * 수 없을 뿐, 지워지지 않고 알림톡·문자 발송에 계속 쓰인다.
+     *
+     * @return array{write: bool, phone: ?string}
+     */
+    public function phoneForEdit(array $input): array
+    {
+        if ($this->signupPhonePolicy() === 'off') {
+            return ['write' => false, 'phone' => null];
+        }
+
+        return ['write' => true, 'phone' => $this->phoneFromInput($input)];
     }
 
     /** 가입·프로필 공통. 설정이 off 면 입력을 무시하고, required 면 빈 값을 거절한다. */

@@ -255,4 +255,67 @@ final class AccountPageTest extends WebTestCase
         }
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testMemberSetsAndClearsTheirPhoneNumberFromTheProfileScreen(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/account'));
+        self::assertStringContainsString('name="phone"', $form);
+
+        $saved = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야', 'phone' => '010-1234-5678',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($id)['phone']);
+        self::assertStringContainsString(
+            'value="010-1234-5678"',
+            $this->body($this->get($app, '/account')),
+            '저장된 번호는 하이픈을 넣어 보여줘야 한다'
+        );
+
+        $cleared = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야', 'phone' => '',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode(), $this->body($cleared));
+        self::assertNull($app->users()->findById($id)['phone']);
+    }
+
+    /**
+     * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. AuthController::register() 가
+     * phone[]=x 를 is_scalar 가드 없이 (string) 캐스팅해 경고를 냈던 것과 같은 결함이
+     * 여기서도 날 수 있다 — 같은 방식으로 값을 되돌리는 화면이기 때문이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAccountUpdateRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        // 표시 이름을 비워 검증을 실패시키면서, 번호는 배열로 보낸다.
+        $response = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+            'phone' => ['x'],
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringNotContainsString('value="Array"', $body);
+        self::assertNull($app->users()->findById($id)['phone']);
+    }
 }

@@ -878,4 +878,82 @@ final class AdminPageTest extends WebTestCase
         self::assertFalse($app->turnstile()->isEnabled());
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testAdminSetsAndClearsAMembersPhoneNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('name="phone"', $form);
+
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '010-1234-5678',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($memberId)['phone']);
+        self::assertStringContainsString(
+            'value="010-1234-5678"',
+            $this->body($this->get($app, '/admin/members/' . $memberId . '/edit')),
+            '저장된 번호는 하이픈을 넣어 보여줘야 한다'
+        );
+
+        $cleared = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode(), $this->body($cleared));
+        self::assertNull($app->users()->findById($memberId)['phone']);
+    }
+
+    /**
+     * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. AuthController::register() 가
+     * phone[]=x 를 is_scalar 가드 없이 (string) 캐스팅해 경고를 냈던 것과 같은 결함이
+     * 관리자 회원 수정 화면에서도 날 수 있다 — array_merge($member, $input) 이
+     * $input 의 배열을 그대로 얹기 때문이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testMemberUpdateRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        // 이메일을 비워 검증을 실패시키면서, 번호는 배열로 보낸다.
+        $response = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => '', 'display_name' => 'member', 'status' => 'active',
+            'phone' => ['x'],
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringNotContainsString('value="Array"', $body);
+        self::assertNull($app->users()->findById($memberId)['phone']);
+    }
+
 }

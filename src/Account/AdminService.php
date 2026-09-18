@@ -15,12 +15,20 @@ final class AdminService
     private Connection $db;
     private UserRepository $users;
     private BoardService $boards;
+    private AccountService $accountService;
 
-    public function __construct(Connection $db, UserRepository $users, BoardService $boards)
+    /**
+     * signup_phone 세 값 분기(off/optional/required)를 여기서 다시 베끼지 않고
+     * AccountService::phoneForEdit() 를 그대로 빌려 쓴다 — 회원정보 수정 화면과
+     * 관리자 회원 수정 화면이 같은 정책을 따라야 하는데, 두 곳에 같은 분기를
+     * 복사하면 둘 중 하나만 고치고 잊는 사고가 난다.
+     */
+    public function __construct(Connection $db, UserRepository $users, BoardService $boards, AccountService $accountService)
     {
         $this->db = $db;
         $this->users = $users;
         $this->boards = $boards;
+        $this->accountService = $accountService;
     }
 
     public function dashboard(Acl $acl): array
@@ -122,7 +130,13 @@ final class AdminService
             }
         }
         $v->check();
+        // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
+        // AccountService::updateProfile() 과 같은 이유로 $v->check() 뒤에 본다.
+        $phone = $this->accountService->phoneForEdit($input);
         $this->users->updateForAdmin($id, $email, $displayName, $status);
+        if ($phone['write']) {
+            $this->users->updatePhone($id, $phone['phone']);
+        }
         if ($password !== '') {
             // 비밀번호가 바뀌면 다른 기기의 세션은 끊긴다(session_epoch 증가).
             $this->users->updatePassword($id, password_hash($password, PASSWORD_DEFAULT));

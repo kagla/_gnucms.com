@@ -166,12 +166,11 @@ final class AdminController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            return $this->renderMemberForm(
-                $request,
-                $response->withStatus(422),
-                array_merge($member, $input),
-                $e->details()
-            );
+            // phone[]=x 처럼 배열로 오면 array_merge() 가 그 배열을 그대로 $values['phone']
+            // 에 얹고, 템플릿의 (string) 캐스팅이 경고를 낸다 — 늘 스칼라만 되돌린다.
+            $values = array_merge($member, $input);
+            $values['phone'] = isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '';
+            return $this->renderMemberForm($request, $response->withStatus(422), $values, $e->details());
         } catch (\Throwable $e) {
             $this->app->avatars()->delete($newAvatar);
             throw $e;
