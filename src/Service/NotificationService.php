@@ -83,15 +83,30 @@ final class NotificationService
                 continue;
             }
 
-            $this->notifications->create([
-                'user_id'    => (string) $userId,
-                'kind'       => $kind,
-                'post_id'    => $postId,
-                'comment_id' => $commentId,
-                'actor_name' => $actor,
-                'subject'    => $subject,
-            ]);
+            $this->recordInbox((string) $userId, $kind, $postId, $commentId, $actor, $subject);
         }
+    }
+
+    /**
+     * 알림함에 한 줄 적는다. notifyComment() 안에 있던 insert 를 그대로 뗀 것이다.
+     *
+     * 따로 뗀 이유는 Notify\InboxChannel 이 이것만 부르게 하기 위해서다. 채널이
+     * notifyComment() 를 부르면 서로를 돌아 부르게 된다 — 알림함 채널이
+     * NotificationService 를, NotificationService 가 다시 Notifier 를(그 안에 알림함
+     * 채널이 들어 있다) 부르는 고리다. 이 메서드는 표에 적기만 하므로 그 고리가 생기지
+     * 않는다.
+     */
+    public function recordInbox(string $userId, string $kind, int $postId, ?int $commentId,
+        string $actorName, string $subject): void
+    {
+        $this->notifications->create([
+            'user_id'    => $userId,
+            'kind'       => $kind,
+            'post_id'    => $postId,
+            'comment_id' => $commentId,
+            'actor_name' => $actorName,
+            'subject'    => $subject,
+        ]);
     }
 
     public function unreadCount(Acl $acl): int

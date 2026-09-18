@@ -11,9 +11,14 @@ use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\AlimtalkChannel;
 use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\InboxChannel;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\SettingsRepository;
 use GnuCms\Notify\SmsChannel;
+use GnuCms\Repository\CommentRepository;
+use GnuCms\Repository\NotificationRepository;
+use GnuCms\Repository\PostRepository;
+use GnuCms\Service\NotificationService;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\DatabaseTestCase;
 use GnuCms\Tests\Support\FakeAligoTransport;
@@ -325,5 +330,119 @@ final class ChannelsTest extends DatabaseTestCase
         }
 
         self::fail('보낼 수 없는 상태인데 거절하지 않았습니다');
+    }
+
+    /**
+     * 알림함 서비스는 **부를 때** 만든다. App 의 게터들은 생성자 주입 + 지연 메모이즈라,
+     * notifier() 가 InboxChannel 을 만드는 도중에 notificationService() 를 부르면 아직
+     * 메모이즈되지 않은 notifier() 로 되돌아가 무한 재귀가 된다. 그래서 채널은 만들어진
+     * 서비스가 아니라 그것을 돌려줄 callable 을 쥔다 — 이 테스트는 그 규칙을 못박는다:
+     * 채널을 만들 때도, available() 을 물을 때도 서비스를 만들면 안 된다.
+     */
+    public function testTheInboxServiceIsResolvedOnlyWhenSomethingIsSent(): void
+    {
+        $resolved = 0;
+        $channel = new InboxChannel(function () use (&$resolved): NotificationService {
+            $resolved++;
+            self::fail('알림함 서비스를 너무 일찍 만들었습니다');
+        });
+
+        self::assertSame('inbox', $channel->key());
+        self::assertTrue($channel->available('comment_new',
+            Recipient::forUser(['id' => '7', 'display_name' => '홍길동'])));
+        self::assertSame(0, $resolved);
+    }
+
+    public function testInboxIsOnlyForMembersAndOnlyForComments(): void
+    {
+        $channel = new InboxChannel(fn (): NotificationService => self::fail('부를 일이 없습니다'));
+        $member = Recipient::forUser(['id' => '7', 'display_name' => '홍길동']);
+        $guest = Recipient::forEmail('a@example.com', '손님');
+
+        self::assertTrue($channel->available('comment_new', $member));
+        self::assertFalse($channel->available('comment_new', $guest), '손님은 알림함이 없다');
+        self::assertFalse($channel->available('password_reset', $member),
+            '댓글 외의 알림은 알림함에 넣지 않는다');
+    }
+
+    /**
+     * 알림함에는 두 종류가 있고 회원에게 다르게 읽힌다 — 내 글에 달린 댓글과 내 댓글에
+     * 달린 답글. comment_new 이벤트는 하나뿐이므로 종류는 채널 문맥으로 들어온다.
+     * 채널이 한 종류로 뭉개면 지금 있는 기능이 조용히 퇴화한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testInboxRecordsTheKindItIsGiven(array $config): void
+    {
+        $this->boot($config);
+        $channel = new InboxChannel(fn (): NotificationService => $this->notificationService());
+
+        $channel->send('comment_new', Recipient::forUser(['id' => '7', 'display_name' => '홍길동']),
+            ['사이트명' => '우리 커뮤니티', '이름' => '홍길동', '글제목' => '첫 글', '작성자' => '김철수',
+                '링크' => 'https://example.com/p/3', '_kind' => NotificationService::KIND_REPLY,
+                '_post_id' => '3', '_comment_id' => '9']);
+        $channel->send('comment_new', Recipient::forUser(['id' => '8', 'display_name' => '이영희']),
+            ['사이트명' => '우리 커뮤니티', '이름' => '이영희', '글제목' => '첫 글', '작성자' => '김철수',
+                '링크' => 'https://example.com/p/3', '_kind' => NotificationService::KIND_COMMENT,
+                '_post_id' => '3', '_comment_id' => '9']);
+
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('notifications') . ' ORDER BY id');
+        self::assertCount(2, $rows);
+        self::assertSame(NotificationService::KIND_REPLY, $rows[0]['kind']);
+        self::assertSame('7', (string) $rows[0]['user_id']);
+        self::assertSame(3, (int) $rows[0]['post_id']);
+        self::assertSame(9, (int) $rows[0]['comment_id']);
+        self::assertSame('김철수', $rows[0]['actor_name']);
+        self::assertSame('첫 글', $rows[0]['subject']);
+        self::assertSame(NotificationService::KIND_COMMENT, $rows[1]['kind']);
+    }
+
+    /**
+     * 알림함에 필요한 값(종류·글번호)은 카탈로그 변수가 아니라 문맥이라 서명이 실어
+     * 나르지 않는다. 그래서 빠질 수 있고, 빠지면 **시끄럽게** 거절한다 — 종류를 마음대로
+     * 하나 골라 적으면 회원이 보는 문구가 틀리고, 글번호 없이 적으면 열리지 않는 알림이
+     * 쌓인다. 건너뛰기(available() 이 false)와 달리 이것은 부르는 쪽의 결함이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testInboxRefusesIncompleteContextInsteadOfGuessing(array $config): void
+    {
+        $this->boot($config);
+        $channel = new InboxChannel(fn (): NotificationService => $this->notificationService());
+        $to = Recipient::forUser(['id' => '7', 'display_name' => '홍길동']);
+        $full = ['글제목' => '첫 글', '작성자' => '김철수',
+            '_kind' => NotificationService::KIND_COMMENT, '_post_id' => '3', '_comment_id' => '9'];
+
+        foreach ([
+            '종류 없음' => array_diff_key($full, ['_kind' => null]),
+            '모르는 종류' => ['_kind' => 'shout'] + $full,
+            '글번호 없음' => array_diff_key($full, ['_post_id' => null]),
+            '글번호가 숫자가 아님' => ['_post_id' => '3번'] + $full,
+        ] as $why => $vars) {
+            self::assertSame(['inbox'], array_keys($this->refusal(
+                fn () => $channel->send('comment_new', $to, $vars))), $why);
+        }
+
+        self::assertSame([], $this->db->select('SELECT id FROM ' . $this->db->table('notifications')));
+    }
+
+    /** 댓글이 아닌 알림이나 손님에게는 send() 도 거절한다 — available() 과 같은 답이다. */
+    #[DataProvider('connectionProvider')]
+    public function testInboxRefusesToSendWhatAvailableWouldHaveSkipped(array $config): void
+    {
+        $this->boot($config);
+        $channel = new InboxChannel(fn (): NotificationService => $this->notificationService());
+        $vars = ['글제목' => '첫 글', '작성자' => '김철수',
+            '_kind' => NotificationService::KIND_COMMENT, '_post_id' => '3', '_comment_id' => '9'];
+
+        self::assertSame(['inbox'], array_keys($this->refusal(fn () => $channel->send('comment_new',
+            Recipient::forEmail('a@example.com', '손님'), $vars))));
+        self::assertSame(['inbox'], array_keys($this->refusal(fn () => $channel->send('password_reset',
+            Recipient::forUser(['id' => '7', 'display_name' => '홍길동']), $vars))));
+        self::assertSame([], $this->db->select('SELECT id FROM ' . $this->db->table('notifications')));
+    }
+
+    private function notificationService(): NotificationService
+    {
+        return new NotificationService(new NotificationRepository($this->db),
+            new PostRepository($this->db), new CommentRepository($this->db));
     }
 }

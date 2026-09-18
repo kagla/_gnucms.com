@@ -30,6 +30,33 @@ final class NotificationTest extends WebTestCase
         self::assertStringContainsString('내 글에 댓글을 달았습니다', $body);
     }
 
+    /**
+     * 알림함의 두 종류는 회원에게 다르게 읽힌다 — 내 글에 달린 댓글과 내 댓글에 달린
+     * 답글. 계획 3 은 이 둘을 comment_new 이벤트 하나로 모으므로, 지금 눈에 보이는
+     * 이 차이를 여기서 못박아 둔다. 이 테스트가 없으면 두 종류를 하나로 뭉개도
+     * 스위트가 알아채지 못한다(확인함: kind 를 'comment' 로 고정해도 나머지 알림함
+     * 테스트는 모두 통과한다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testReplyToMyCommentReadsDifferentlyFromCommentOnMyPost(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $postId = $this->seedPostByLoggedInMember($app);
+        $this->post($app, '/posts/' . $postId . '/comments', [
+            'csrf_token' => $_SESSION['csrf_token'] ?? '',
+            'content'    => '내가 단 댓글',
+        ]);
+        $commentId = (int) $app->db()->selectOne('SELECT MAX(id) AS id FROM '
+            . $app->db()->q('comments'))['id'];
+
+        $this->replyAsGuest($app, $postId, $commentId, '손님이 남긴 답글');
+
+        $body = $this->body($this->get($app, '/notifications'));
+        self::assertStringContainsString('내 댓글에 답글을 달았습니다', $body);
+        self::assertStringNotContainsString('내 글에 댓글을 달았습니다', $body,
+            '내 댓글에 달린 답글은 내 글에 달린 댓글과 다르게 읽혀야 한다');
+    }
+
     /** 내가 쓴 댓글로 나에게 알림이 오면 안 된다. */
     #[DataProvider('connectionProvider')]
     public function testMyOwnCommentDoesNotNotifyMe(array $dbConfig): void
@@ -159,6 +186,20 @@ final class NotificationTest extends WebTestCase
             'csrf_token'  => $_SESSION['csrf_token'] ?? '',
             'author_name' => '손님',
             'password'    => 'guest-pass-1',
+            'content'     => $content,
+        ]);
+        $this->loginAs($app, 'writer@example.com', '글쓴이');
+    }
+
+    private function replyAsGuest(App $app, int $postId, int $parentId, string $content): void
+    {
+        $this->logout($app);
+        $this->get($app, '/posts/' . $postId);
+        $this->post($app, '/posts/' . $postId . '/comments', [
+            'csrf_token'  => $_SESSION['csrf_token'] ?? '',
+            'author_name' => '손님',
+            'password'    => 'guest-pass-1',
+            'parent_id'   => (string) $parentId,
             'content'     => $content,
         ]);
         $this->loginAs($app, 'writer@example.com', '글쓴이');
