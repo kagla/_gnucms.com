@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Service;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\App;
 use GnuCms\Mail\MailerInterface;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Notify\Notifier;
+use GnuCms\Service\NotificationService;
 use GnuCms\Tests\Support\CollectingMailer;
+use GnuCms\Tests\Support\FakeAligoTransport;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -18,19 +23,30 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * "둘이 서로를 어떻게 건드리지 않는가"다 — 종류가 섞이지 않는지, 한 사람의 실패가
  * 다른 사람을 삼키지 않는지, 한 사람이 두 자격을 겸해도 한 번만 가는지.
  *
- * 채널은 흉내 내지 않고 진짜 메일 채널로 확인한다. 알림함만 보면 "이벤트로 나갔는지"와
- * "예전처럼 표에 적었는지"를 구별할 수 없기 때문이다 — 메일은 오직 발송기를 거쳐야만
- * 나간다.
+ * 채널은 흉내 내지 않고 **진짜 채널**로 확인한다. 알림함만 보면 "이벤트로 나갔는지"와
+ * "예전처럼 표에 적었는지"를 구별할 수 없기 때문이다 — 메일·문자·알림톡은 오직 발송기를
+ * 거쳐야만 나간다. 특히 전화 채널 둘은 **돈이 들고 되돌릴 수 없는** 발송이라, 번호가
+ * 수신자까지 제대로 실려 가는지를 여기서 못박는다(5단계에서 `findByEmail()` 에 phone 이
+ * 빠져 문자 재설정이 영영 조용히 아무것도 안 하던 결함이 바로 한 칸 옆이다).
+ *
+ * **번호가 서로 달라야 한다.** 글번호·댓글번호·회원번호를 우연히 같은 값으로 만들어 두면
+ * 그 둘을 맞바꿔도 어떤 단언도 구별하지 못한다(글 1번·댓글 1번이 정확히 그랬다). 그래서
+ * 모든 시험이 spaceOutIds() 로 번호를 벌려 놓고 시작하고, 이름도 마찬가지로 받는 사람
+ * (이름)과 댓글 쓴 사람(작성자)을 절대 같은 문자열로 두지 않는다.
  */
 final class CommentNotificationRoutingTest extends WebTestCase
 {
     private const SITE = '우리 커뮤니티';
     private const URL = 'https://example.test';
+    /** 글쓴이·부모 댓글 작성자·댓글 쓴 사람은 서로 다른 이름이어야 구별이 된다. */
+    private const WRITER = '글쓴이';
+    private const REPLIED = '댓글쓴이';
+    private const ACTOR = '지나가던손님';
 
     /**
-     * 글쓴이에게 가는 알림 한 통에 글·댓글·사이트가 모두 실려 나간다. 이 다섯 값은
-     * 카탈로그(Events::variables)가 선언한 것이고, 관리자가 문자 본문이나 알림톡 변수에
-     * 이어 붙일 수 있는 값이라 하나라도 비면 그 자리에 빈칸이 나간다.
+     * 글쓴이에게 가는 알림 한 통에 글·댓글·사이트가 모두 실려 나간다. 본문을 통째로
+     * 비교하는 이유는 값이 "있는지"가 아니라 **제자리에 있는지**를 보기 위해서다 —
+     * 이름과 작성자를 맞바꿔도 두 이름이 본문 어딘가에 있기는 하다.
      */
     #[DataProvider('connectionProvider')]
     public function testTheCommentEventCarriesThePostAndSiteVariables(array $dbConfig): void
@@ -39,28 +55,29 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $mailer = $this->collectMail($app);
         $this->saveSiteSettings($app, ['site_name' => self::SITE]);
         $this->turnOn($app, ['mail']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '알림이 붙을 글');
-        $commentId = $this->seedComment($app, $postId, null, '손님', null);
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
 
         $app->notificationService()->notifyComment($postId, $commentId);
 
         self::assertCount(1, $mailer->messages);
         self::assertSame('writer@example.com', $mailer->messages[0]['to']);
         self::assertSame('[' . self::SITE . '] 새 댓글이 달렸습니다', $mailer->messages[0]['subject']);
-        $body = $mailer->messages[0]['body'];
-        self::assertStringContainsString('글쓴이님', $body, '이름');
-        self::assertStringContainsString('손님님', $body, '작성자');
-        self::assertStringContainsString('알림이 붙을 글', $body, '글제목');
-        self::assertStringContainsString(self::URL . '/posts/' . $postId . '#comment-' . $commentId, $body, '링크');
+        self::assertSame(
+            self::WRITER . '님, ' . self::ACTOR . "님이 「알림이 붙을 글」 글에 댓글을 남겼습니다.\n\n"
+            . self::URL . '/posts/' . $postId . '#comment-' . $commentId,
+            $mailer->messages[0]['body']
+        );
     }
 
     /**
      * 받을 사람이 둘이면 알림도 둘이다. 그리고 **둘의 종류가 다르다** — 부모 댓글
      * 작성자에게는 "내 댓글에 답글", 글쓴이에게는 "내 글에 댓글". 이벤트는 comment_new
      * 하나뿐이라 이 구분은 채널 문맥(_kind)으로만 건너가고, 한쪽으로 뭉개면 회원의
-     * 알림함 문구가 통째로 틀린다.
+     * 알림함 문구가 통째로 틀린다. 글번호·댓글번호도 그 문맥으로 건너가므로 함께 본다.
      */
     #[DataProvider('connectionProvider')]
     public function testEachTargetGetsItsOwnNotificationWithItsOwnKind(array $dbConfig): void
@@ -68,18 +85,15 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
         $this->turnOn($app, ['mail', 'inbox']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
-        $replied = $this->seedMember($app, 'replied@example.com', '댓글쓴이');
-        $postId = $this->seedPost($app, $writer, '두 사람이 받을 글');
-        $parentId = $this->seedComment($app, $postId, $replied, '댓글쓴이', null);
-        $replyId = $this->seedComment($app, $postId, null, '손님', $parentId);
+        [$writer, $replied, $postId, , $replyId] = $this->seedReplyThread($app);
 
         $app->notificationService()->notifyComment($postId, $replyId);
 
         self::assertSame([
-            [$replied, 'reply'],
-            [$writer, 'comment'],
+            [$replied, 'reply', $postId, $replyId],
+            [$writer, 'comment', $postId, $replyId],
         ], $this->inbox($app), '부모 댓글 작성자는 답글로, 글쓴이는 댓글로 읽는다');
         self::assertSame(['replied@example.com', 'writer@example.com'],
             array_column($mailer->messages, 'to'), '사람마다 한 통씩 나간다');
@@ -91,22 +105,88 @@ final class CommentNotificationRoutingTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $mailer = $this->collectMail($app);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '알림이 붙을 글');
-        $commentId = $this->seedComment($app, $postId, null, '손님', null);
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
 
         $app->notificationService()->notifyComment($postId, $commentId);
 
-        self::assertSame([[$writer, 'comment']], $this->inbox($app));
+        self::assertSame([[$writer, 'comment', $postId, $commentId]], $this->inbox($app));
         self::assertSame([], $mailer->messages, '켜지 않은 채널로는 나가지 않는다');
+    }
+
+    /**
+     * 사람마다 **자기 번호로** 문자 한 통. 돈이 들고 되돌릴 수 없는 발송이라, 번호가
+     * 수신자까지 실려 가는지(Recipient::forUser 의 phone), 본문이 사람마다 자기 이름으로
+     * 채워지는지, 관리자 발송 내역에 사람마다 한 건씩 남는지를 모두 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEveryTargetGetsATextMessageAtTheirOwnNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $transport = $this->bootAligo($app);
+        $app->aligo()->settings->setEnabled('sms', true);
+        $this->turnOn($app, ['sms'], ['sms_body' => '#{이름}님 「#{글제목}」 #{링크}']);
+        $this->spaceOutIds($app);
+
+        [$writer, $replied, $postId, , $replyId] = $this->seedReplyThread($app);
+        $app->users()->updatePhone((int) $writer, '01011112222');
+        $app->users()->updatePhone((int) $replied, '01033334444');
+        $transport->queue(200, $this->smsOk());
+        $transport->queue(200, $this->smsOk());
+
+        $app->notificationService()->notifyComment($postId, $replyId);
+
+        self::assertSame(['sms', 'sms'], array_column($this->jobs($app), 'channel'),
+            '사람마다 한 건씩 남는다 — 한 건에 둘을 묶으면 본문이 한쪽 이름으로 고정된다');
+        $link = self::URL . '/posts/' . $postId . '#comment-' . $replyId;
+        self::assertSame([
+            ['01033334444', self::REPLIED . '님 「두 사람이 받을 글」 ' . $link, $replied],
+            ['01011112222', self::WRITER . '님 「두 사람이 받을 글」 ' . $link, $writer],
+        ], $this->recipients($app), '번호·본문·회원번호가 사람마다 제 것이어야 한다');
+        self::assertSame(['01033334444', '01011112222'], [
+            $transport->requests[0]['fields']['rec_1'],
+            $transport->requests[1]['fields']['rec_1'],
+        ], '알리고로 실제로 나간 번호');
+    }
+
+    /** 알림톡도 같은 길이다 — 승인 템플릿의 변수에 코어 값을 이어 사람마다 한 건씩 나간다. */
+    #[DataProvider('connectionProvider')]
+    public function testEveryTargetGetsAnAlimtalkAtTheirOwnNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $transport = $this->bootAligo($app);
+        $app->aligo()->settings->setEnabled('at', true);
+        $app->db()->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1',
+            'name' => '새 댓글', 'content' => '#{고객명}님 #{제목} 에 새 댓글이 있습니다',
+            'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
+            'fetched_at' => '2026-09-17 10:00:00']);
+        $this->turnOn($app, ['alimtalk'],
+            ['tpl_code' => 'T1', 'var_map' => ['고객명' => '이름', '제목' => '글제목']]);
+        $this->spaceOutIds($app);
+
+        [$writer, $replied, $postId, , $replyId] = $this->seedReplyThread($app);
+        $app->users()->updatePhone((int) $writer, '01011112222');
+        $app->users()->updatePhone((int) $replied, '01033334444');
+        $transport->queue(200, $this->alimtalkOk());
+        $transport->queue(200, $this->alimtalkOk());
+
+        $app->notificationService()->notifyComment($postId, $replyId);
+
+        self::assertSame(['at', 'at'], array_column($this->jobs($app), 'channel'));
+        self::assertSame([
+            ['01033334444', self::REPLIED . '님 두 사람이 받을 글 에 새 댓글이 있습니다', $replied],
+            ['01011112222', self::WRITER . '님 두 사람이 받을 글 에 새 댓글이 있습니다', $writer],
+        ], $this->recipients($app));
     }
 
     /**
      * 한 사람에게 실패해도 다른 사람은 받는다. 채널이 하나뿐인 상태에서 그 하나가
      * 터지면 Notifier 는 예외를 올리는데(아무 데도 못 갔다는 뜻이다), 그것이 그대로
      * 올라가면 뒤 사람은 부르지도 못하고 댓글 등록 화면이 오류가 된다 — 댓글은 이미
-     * 저장된 뒤라 사람은 같은 댓글을 한 번 더 쓴다.
+     * 저장된 뒤라 사람은 같은 댓글을 한 번 더 쓴다. 실패는 조용히 사라지지도 않는다.
      */
     #[DataProvider('connectionProvider')]
     public function testATargetThatFailsDoesNotSilenceTheOther(array $dbConfig): void
@@ -127,18 +207,51 @@ final class CommentNotificationRoutingTest extends WebTestCase
         };
         $app->setMailer($mailer);
         $this->turnOn($app, ['mail']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
-        $replied = $this->seedMember($app, 'replied@example.com', '댓글쓴이');
-        $postId = $this->seedPost($app, $writer, '두 사람이 받을 글');
-        $parentId = $this->seedComment($app, $postId, $replied, '댓글쓴이', null);
-        $replyId = $this->seedComment($app, $postId, null, '손님', $parentId);
+        [, , $postId, , $replyId] = $this->seedReplyThread($app);
+        $logged = [];
 
         // 먼저 불리는 쪽(부모 댓글 작성자)이 실패한다.
-        $app->notificationService()->notifyComment($postId, $replyId);
+        $this->serviceLogging($app, $logged)->notifyComment($postId, $replyId);
 
         self::assertSame(['writer@example.com'], array_column($mailer->messages, 'to'),
             '앞사람이 실패해도 뒷사람에게는 간다');
+        self::assertCount(1, $logged);
+        self::assertStringContainsString('보내지 못했습니다', $logged[0]);
+    }
+
+    /**
+     * 받을 사람이 있었는데 한 사람도 부르지 못하면 그 사실을 적는다. 조용히 끝내면
+     * 운영자에게는 "알림이 안 온다"는 사실만 남고 이유가 없다. 반대로 받을 사람이
+     * 처음부터 없었던 평범한 경우(비회원 글에 비회원 댓글)에는 적지 않는다 — 그 줄이
+     * 늘 찍히면 진짜 이유를 적은 줄을 덮는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testItSaysSoWhenEveryTargetWasDropped(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $this->collectMail($app);
+        $this->turnOn($app, ['mail', 'inbox']);
+        $this->spaceOutIds($app);
+
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
+        $postId = $this->seedPost($app, $writer, '차단된 회원의 글');
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
+        $app->users()->setStatus((int) $writer, 'blocked');
+        $logged = [];
+        $service = $this->serviceLogging($app, $logged);
+
+        $service->notifyComment($postId, $commentId);
+
+        self::assertCount(1, $logged);
+        self::assertStringContainsString('활성 회원이 아니어서', $logged[0]);
+
+        // 비회원이 쓴 글에 비회원이 단 댓글 — 받을 사람이 처음부터 없다.
+        $guestPostId = $this->seedPost($app, null, '손님이 쓴 글');
+        $service->notifyComment($guestPostId, $this->seedComment($app, $guestPostId, null, self::ACTOR, null));
+
+        self::assertCount(1, $logged, '받을 사람이 없던 평범한 경우는 적지 않는다');
     }
 
     /**
@@ -152,10 +265,11 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $this->collectMail($app);
         $this->turnOn($app, ['mail']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '알림이 붙을 글');
-        $commentId = $this->seedComment($app, $postId, null, '손님', null);
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
         // 서비스를 먼저 만들어 두고, 그 뒤에 메일러를 갈아 끼운다.
         $service = $app->notificationService();
         $later = $this->collectMail($app);
@@ -177,12 +291,9 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
         $this->turnOn($app, ['mail', 'inbox']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
-        $replied = $this->seedMember($app, 'replied@example.com', '댓글쓴이');
-        $postId = $this->seedPost($app, $writer, '두 사람이 받을 글');
-        $parentId = $this->seedComment($app, $postId, $replied, '댓글쓴이', null);
-        $replyId = $this->seedComment($app, $postId, null, '손님', $parentId);
+        [$writer, $replied, $postId, , $replyId] = $this->seedReplyThread($app);
         $app->users()->setStatus((int) $writer, 'blocked');
         $app->users()->withdraw((int) $replied, null);
 
@@ -203,10 +314,11 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
         $this->turnOn($app, []);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '알림이 붙을 글');
-        $commentId = $this->seedComment($app, $postId, null, '손님', null);
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
 
         $app->notificationService()->notifyComment($postId, $commentId);
 
@@ -221,15 +333,16 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
         $this->turnOn($app, ['mail', 'inbox']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '내 글에 내가 단 댓글');
-        $parentId = $this->seedComment($app, $postId, $writer, '글쓴이', null);
-        $replyId = $this->seedComment($app, $postId, null, '손님', $parentId);
+        $parentId = $this->seedComment($app, $postId, $writer, self::WRITER, null);
+        $replyId = $this->seedComment($app, $postId, null, self::ACTOR, $parentId);
 
         $app->notificationService()->notifyComment($postId, $replyId);
 
-        self::assertSame([[$writer, 'reply']], $this->inbox($app));
+        self::assertSame([[$writer, 'reply', $postId, $replyId]], $this->inbox($app));
         self::assertCount(1, $mailer->messages);
     }
 
@@ -240,10 +353,11 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
         $this->turnOn($app, ['mail', 'inbox']);
+        $this->spaceOutIds($app);
 
-        $writer = $this->seedMember($app, 'writer@example.com', '글쓴이');
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
         $postId = $this->seedPost($app, $writer, '내 글에 내가 단 댓글');
-        $commentId = $this->seedComment($app, $postId, $writer, '글쓴이', null);
+        $commentId = $this->seedComment($app, $postId, $writer, self::WRITER, null);
 
         $app->notificationService()->notifyComment($postId, $commentId);
 
@@ -252,13 +366,36 @@ final class CommentNotificationRoutingTest extends WebTestCase
     }
 
     /** 이 알림으로 켤 채널. 관리자 화면이 저장하는 그 길로 저장한다. */
-    private function turnOn(App $app, array $channels): void
+    private function turnOn(App $app, array $channels, array $extra = []): void
     {
         $input = ['mail' => '0', 'alimtalk' => '0', 'sms' => '0', 'inbox' => '0'];
         foreach ($channels as $channel) {
             $input[$channel] = '1';
         }
-        $app->notifySettings()->save('comment_new', $input);
+        $app->notifySettings()->save('comment_new', $input + $extra);
+    }
+
+    /** 가짜 전송기를 문 알리고 한 벌. 계정은 저장돼 있고 채널 스위치는 아직 꺼져 있다. */
+    private function bootAligo(App $app): FakeAligoTransport
+    {
+        $transport = new FakeAligoTransport();
+        // setAligo() 는 알림 설정과 발송기를 함께 끊으므로 채널 설정보다 먼저 와야 한다.
+        $app->setAligo(new AligoService($app->db(), $transport, new SecretCipher('s')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+
+        return $transport;
+    }
+
+    private function smsOk(): string
+    {
+        return (string) json_encode(
+            ['result_code' => 1, 'msg_id' => 'M1', 'success_cnt' => 1, 'error_cnt' => 0]);
+    }
+
+    private function alimtalkOk(): string
+    {
+        return (string) json_encode(['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]);
     }
 
     private function collectMail(App $app): CollectingMailer
@@ -269,16 +406,82 @@ final class CommentNotificationRoutingTest extends WebTestCase
         return $mailer;
     }
 
-    /** @return list<array{0:string,1:string}> 알림함에 쌓인 순서대로 [회원 번호, 종류] */
+    /**
+     * App 이 만드는 것과 **같은 조립**에 로그 받는 곳만 바꿔 끼운 서비스. 로그는 이
+     * 서비스가 조용히 끝내는 두 경우(사람별 실패, 전원 제외)에 운영자가 받는 유일한
+     * 진단이라, 그것이 실제로 적히는지 보려면 받아 볼 자리가 있어야 한다.
+     */
+    private function serviceLogging(App $app, array &$lines): NotificationService
+    {
+        return new NotificationService($app->notifications(), $app->posts(), $app->comments(),
+            $app->users(), $app->cmsService(), self::URL, fn (): Notifier => $app->notifier(),
+            function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            });
+    }
+
+    /**
+     * 글쓴이·부모 댓글 작성자·손님의 답글까지 한 벌.
+     *
+     * @return array{0:string,1:string,2:int,3:int,4:int} [글쓴이, 부모 댓글 작성자, 글번호, 부모 댓글번호, 답글번호]
+     */
+    private function seedReplyThread(App $app): array
+    {
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
+        $replied = $this->seedMember($app, 'replied@example.com', self::REPLIED);
+        $postId = $this->seedPost($app, $writer, '두 사람이 받을 글');
+        $parentId = $this->seedComment($app, $postId, $replied, self::REPLIED, null);
+        $replyId = $this->seedComment($app, $postId, null, self::ACTOR, $parentId);
+
+        return [$writer, $replied, $postId, $parentId, $replyId];
+    }
+
+    /**
+     * 글번호·댓글번호·회원번호가 서로 다른 값이 되게 미끼 행을 먼저 만든다.
+     *
+     * 이것이 없으면 첫 글도 1번, 첫 댓글도 1번, 첫 회원도 1번이라 셋을 맞바꿔도 어떤
+     * 단언도 구별하지 못한다 — 글번호와 댓글번호를 맞바꾸는 변이가 스위트 전체를 통과한
+     * 것이 정확히 그 때문이었다. 미끼는 다른 글에 달아 두므로 시험 대상의 알림에는
+     * 끼어들지 않는다.
+     */
+    private function spaceOutIds(App $app): void
+    {
+        $postId = 0;
+        for ($i = 0; $i < 3; $i++) {
+            $postId = $this->seedPost($app, null, '자리를 벌리는 글 ' . $i);
+        }
+        for ($i = 0; $i < 7; $i++) {
+            $this->seedComment($app, $postId, null, '자리를 벌리는 손님', null);
+        }
+    }
+
+    /** @return list<array{0:string,1:string,2:int,3:?int}> 쌓인 순서대로 [회원, 종류, 글번호, 댓글번호] */
     private function inbox(App $app): array
     {
-        $rows = $app->db()->select('SELECT user_id, kind FROM ' . $app->db()->q('notifications')
-            . ' ORDER BY id');
+        $rows = $app->db()->select('SELECT user_id, kind, post_id, comment_id FROM '
+            . $app->db()->q('notifications') . ' ORDER BY id');
 
-        return array_map(
-            static fn (array $row): array => [(string) $row['user_id'], (string) $row['kind']],
-            $rows
-        );
+        return array_map(static fn (array $row): array => [
+            (string) $row['user_id'], (string) $row['kind'],
+            (int) $row['post_id'], $row['comment_id'] === null ? null : (int) $row['comment_id'],
+        ], $rows);
+    }
+
+    private function jobs(App $app): array
+    {
+        return $app->db()->select('SELECT * FROM ' . $app->db()->q('message_jobs') . ' ORDER BY id');
+    }
+
+    /** @return list<array{0:string,1:string,2:?string}> 발송 순서대로 [번호, 본문, 회원번호] */
+    private function recipients(App $app): array
+    {
+        $rows = $app->db()->select('SELECT phone, body, user_id FROM '
+            . $app->db()->q('message_recipients') . ' ORDER BY id');
+
+        return array_map(static fn (array $row): array => [
+            (string) $row['phone'], (string) $row['body'],
+            $row['user_id'] === null ? null : (string) $row['user_id'],
+        ], $rows);
     }
 
     private function seedMember(App $app, string $email, string $name): string
@@ -287,14 +490,15 @@ final class CommentNotificationRoutingTest extends WebTestCase
             password_hash('member-password-1', PASSWORD_DEFAULT), $name, false);
     }
 
-    private function seedPost(App $app, string $authorId, string $title): int
+    /** $authorId 가 null 이면 손님이 쓴 글이다. */
+    private function seedPost(App $app, ?string $authorId, string $title): int
     {
         return $app->posts()->create([
             'board_id'    => $this->boardId($app),
             'title'       => $title,
             'content'     => '본문입니다.',
             'author_id'   => $authorId,
-            'author_name' => '글쓴이',
+            'author_name' => $authorId === null ? '손님' : self::WRITER,
         ]);
     }
 

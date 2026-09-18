@@ -83,13 +83,16 @@ final class NotificationTest extends WebTestCase
         $this->commentAsGuest($app, $postId, '보러 오세요');
 
         $id = $this->firstNotificationId($app, $postId);
+        $commentId = (int) $app->db()->selectOne('SELECT MAX(id) AS id FROM '
+            . $app->db()->q('comments'))['id'];
         $response = $this->get($app, '/notifications/' . $id);
 
         self::assertSame(303, $response->getStatusCode());
-        self::assertMatchesRegularExpression(
-            '#^/posts/' . $postId . '\#comment-[0-9]+$#',
-            $response->getHeaderLine('Location')
-        );
+        // 글번호와 댓글번호를 정확히 비교한다. 둘 다 1번이던 시절에는 서로 맞바꿔도
+        // 이 단언이 통과했다 — 같은 값으로 만들어 둔 픽스처는 두 값을 구별하지 못한다.
+        self::assertNotSame($postId, $commentId, '두 번호가 같으면 이 시험은 아무것도 구별하지 못한다');
+        self::assertSame('/posts/' . $postId . '#comment-' . $commentId,
+            $response->getHeaderLine('Location'));
         self::assertStringNotContainsString('bell-dot', $this->body($this->get($app, '/notifications')));
     }
 
@@ -214,9 +217,13 @@ final class NotificationTest extends WebTestCase
     /** 로그인한 회원이 글 하나를 남긴 상태를 만든다. 세션은 그대로 로그인 상태로 둔다. */
     private function seedPostByLoggedInMember(App $app): int
     {
-        $app->boardService()->create($this->adminAcl(), [
+        $board = $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유게시판', 'perm_comment' => 'guest',
         ]);
+        // 글번호가 댓글번호와 겹치지 않게 미끼 글을 하나 먼저 둔다. 첫 글도 1번, 첫
+        // 댓글도 1번이면 알림이 가리키는 두 번호를 맞바꿔도 아무 단언도 알아채지 못한다.
+        $app->posts()->create(['board_id' => (int) $board['id'], 'title' => '자리를 벌리는 글',
+            'content' => '본문입니다.', 'author_name' => '손님']);
         $this->loginAs($app, 'writer@example.com', '글쓴이');
 
         $this->get($app, '/boards/free/new');

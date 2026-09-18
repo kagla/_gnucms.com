@@ -47,6 +47,9 @@ final class NotificationService
     /** @var \Closure(): Notifier */
     private \Closure $notifier;
 
+    /** @var \Closure(string): void */
+    private \Closure $log;
+
     /**
      * @param callable(): Notifier $notifier 발송 시점에 부른다 — 쥐고 있지 않는다.
      *
@@ -58,6 +61,9 @@ final class NotificationService
      *   교체 — App::setMailer()·setAligo() 는 발송기를 끊어 다시 만들게 한다. 이 서비스가
      *          옛 사본을 쥐고 있으면 그 교체가 여기만 비껴가, 시험이 가짜로 바꿔 둔
      *          메일러·알리고 대신 진짜가 쓰인다. 발송 시점에 물으면 언제나 지금의 것이다.
+     *
+     * @param (callable(string): void)|null $log 기본은 PHP 오류 로그. 시험이 바꿔 낀다
+     *   (Notifier·UnwiredNotifier 와 같은 자리, 같은 이유).
      */
     public function __construct(
         NotificationRepository $notifications,
@@ -66,7 +72,8 @@ final class NotificationService
         UserRepository $users,
         CmsService $cms,
         string $appUrl,
-        callable $notifier
+        callable $notifier,
+        ?callable $log = null
     ) {
         $this->notifications = $notifications;
         $this->posts = $posts;
@@ -75,6 +82,11 @@ final class NotificationService
         $this->cms = $cms;
         $this->appUrl = rtrim($appUrl, '/');
         $this->notifier = \Closure::fromCallable($notifier);
+        $this->log = $log === null
+            ? static function (string $line): void {
+                error_log('[' . GNUCMS_ID . '] ' . $line);
+            }
+            : \Closure::fromCallable($log);
     }
 
     /**
@@ -111,6 +123,7 @@ final class NotificationService
         // 알림함이 알림을 눌렀을 때 보내는 곳과 같은 자리다(NotificationController::open).
         $link = $this->appUrl . '/posts/' . $postId . '#comment-' . $commentId;
 
+        $tried = 0;
         foreach ($targets as $userId => $kind) {
             $user = $this->users->findById((int) $userId);
             // 차단·탈퇴 회원은 없는 회원과 같게 다룬다 — 이 저장소의 원칙이다
@@ -121,6 +134,7 @@ final class NotificationService
             if ($user === null || (string) $user['status'] !== 'active') {
                 continue;
             }
+            $tried++;
             try {
                 ($this->notifier)()->notify('comment_new', Recipient::forUser($user), [
                     '사이트명' => $siteName,
@@ -138,9 +152,20 @@ final class NotificationService
             } catch (\Throwable $e) {
                 // 사람 하나에서 멈추지 않는다. 이 자리에서 바로 적는다 — 뒤 사람을
                 // 보내다 프로세스가 죽으면 모아 둔 기록은 함께 사라진다(Notifier 와 같은 이유).
-                error_log('[' . GNUCMS_ID . '] 댓글 알림(글 ' . $postId . ')을 보내지 못했습니다 — '
+                ($this->log)('댓글 알림(글 ' . $postId . ')을 보내지 못했습니다 — '
                     . get_class($e) . ': ' . $e->getMessage());
             }
+        }
+
+        if ($tried === 0) {
+            // 받을 사람은 있었는데 한 사람도 부르지 못했다 = 전부 활성 회원이 아니다.
+            // 사고가 아니라 규칙이므로 조용히 끝내되, 아무 줄도 남기지 않으면 운영자에게는
+            // "알림이 안 온다"는 사실만 남고 이유가 없다 — Notifier 가 "켠 채널 중 지금
+            // 보낼 수 있는 것이 없다"고 적는 자리와 같은 이유의 같은 한 줄이다.
+            // 받을 사람이 처음부터 없었던 경우(비회원 글에 비회원 댓글)는 여기까지 오지
+            // 않는다. 그건 평범한 일이라 적을 것이 없다.
+            ($this->log)('댓글 알림(글 ' . $postId . ') — 받을 사람이 모두 활성 회원이 아니어서'
+                . ' 아무 데도 나가지 않았습니다');
         }
     }
 
