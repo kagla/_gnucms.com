@@ -744,6 +744,52 @@ final class DispatchTest extends DatabaseTestCase
         self::assertSame('accepted', $rows[501]['status']);
     }
 
+    /**
+     * 취소에 실패한 묶음의 사유는 그 수신자 행에 남는다(이력 상세의 "사유" 칸이 보여준다).
+     * 그런데 관리자가 다시 취소를 눌러 이번에는 성공하면 그 문장은 더는 참이 아니다 —
+     * 지우지 않으면 상태는 '취소됨'인데 사유는 "취소하지 못했습니다"라고 말하는 행이
+     * 영원히 남는다. 이 행은 더는 결과 조회를 타지 않으므로(History::apply() 는
+     * 'accepted' 행만 건드린다) 아무도 대신 정리해 주지 않는다. 그래서 상태만이 아니라
+     * 사유가 사라졌다는 것까지 확인한다 — 상태만 보면 이 시험은 아무것도 증명하지 못한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASuccessfulRetryClearsTheEarlierCancellationFailureReason(array $config): void
+    {
+        $this->boot($config);
+        $this->settings->setEnabled('sms', true);
+        $jobId = $this->bookScheduledJobOfFiveHundredTwo();
+
+        // 첫 시도: 500명 묶음은 취소되고 2명 묶음은 실패한다.
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $this->transport->queue(200, '{"result_code":-201,"message":"not registered"}');
+        $this->dispatch->cancel($jobId);
+
+        $failedRow = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? ORDER BY id DESC', [$jobId]);
+        self::assertStringContainsString('취소하지 못했습니다', (string) $failedRow['rslt_message'],
+            '첫 시도의 실패 사유는 그 행에 남아야 한다');
+
+        // 두 번째 시도: 남은 묶음만 다시 부르고, 이번에는 성공한다.
+        $requestsBeforeRetry = count($this->transport->requests);
+        $this->transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $result = $this->dispatch->cancel($jobId);
+
+        self::assertSame(1, $result['cancelled'], '이미 취소된 묶음은 다시 부르지 않는다');
+        self::assertSame(0, $result['failed']);
+        self::assertCount($requestsBeforeRetry + 1, $this->transport->requests);
+
+        $rows = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? ORDER BY id', [$jobId]);
+        foreach ($rows as $row) {
+            self::assertSame('cancelled', $row['status']);
+            self::assertNull($row['rslt_message'],
+                '멈춘 행이 "취소하지 못했습니다"라고 말하면 안 된다');
+        }
+        $job = $this->db->selectOne('SELECT status FROM ' . $this->db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testRefusesToCancelWhatIsNotScheduled(array $config): void
     {

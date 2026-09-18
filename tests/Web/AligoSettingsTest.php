@@ -116,7 +116,10 @@ final class AligoSettingsTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/aligo',
             ['saved' => '1', 'cancel_ok' => '1', 'cancel_failed' => '1']));
 
-        self::assertStringContainsString('1개는 취소하지 못해 예정대로 나갑니다', $html);
+        self::assertStringContainsString('1개는 취소하지 못했습니다', $html);
+        // 가리키되 약속하지 않는다 — 가드절에 막힌 작업이면 적힌 사유도 재시도할 버튼도 없다.
+        self::assertStringContainsString('이력 화면에서 그 작업의 상태와 사유를 확인해 주세요', $html);
+        self::assertStringNotContainsString('거기서 다시 취소할 수 있습니다', $html);
         self::assertStringContainsString('<div class="alert alert-warning">', $html);
         self::assertStringNotContainsString('<div class="alert alert-success">', $html);
         // 알 수 없는 사유를 지어내지도 않는다.

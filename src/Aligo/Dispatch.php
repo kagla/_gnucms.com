@@ -317,8 +317,9 @@ final class Dispatch
      * 화면의 취소 버튼도 그대로 보이는데, 두 번째 시도는 지난번에 취소하지 못한
      * 묶음만 다시 부른다 — 이미 취소된 묶음은 수신자 행이 'cancelled'라 아래 SELECT
      * 가 고르지 않기 때문이다. 이미 멈춘 것을 다시 멈추려 들지 않으므로 안전하고,
-     * 일시적인 실패였다면 이번에는 성공한다. 작업이 더는 'scheduled'가 아니게 된
-     * 뒤(전부 취소됐거나 이미 나갔거나)에는 가드절이 422 로 거절한다.
+     * 일시적인 실패였다면 이번에는 성공한다 — 그때는 지난번에 적어 둔 실패 사유도 함께
+     * 지운다(아래 성공 분기 참고). 작업이 더는 'scheduled'가 아니게 된 뒤(전부 취소됐거나
+     * 이미 나갔거나)에는 가드절이 422 로 거절한다.
      *
      * @return array{cancelled:int,failed:int,reasons:list<string>}
      */
@@ -365,7 +366,13 @@ final class Dispatch
                 continue;
             }
             $cancelled++;
-            $this->db->update('message_recipients', ['status' => 'cancelled'],
+            // rslt_message 를 함께 지운다. 지난 시도에서 이 묶음의 취소가 실패했다면 그때
+            // 적은 "취소하지 못했습니다: …"가 아직 행에 남아 있는데, 이번에 멈췄으므로
+            // 그 문장은 더는 참이 아니다. 지우지 않으면 상태는 '취소됨'인데 사유 칸은
+            // "취소하지 못했습니다"라고 말하는 행이 영원히 남는다 — 이 행은 이제 결과
+            // 조회를 타지 않으므로(History::apply() 는 'accepted' 행만 건드린다) 아무도
+            // 대신 정리해 주지 않는다.
+            $this->db->update('message_recipients', ['status' => 'cancelled', 'rslt_message' => null],
                 'job_id = :job_id AND mid = :mid AND status = :status',
                 ['job_id' => $jobId, 'mid' => $mid, 'status' => 'accepted']);
         }

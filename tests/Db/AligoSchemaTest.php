@@ -161,6 +161,38 @@ final class AligoSchemaTest extends DatabaseTestCase
             . $db->table('message_jobs')));
     }
 
+    /**
+     * 취소 건수 칸(판 25). 이력 한 줄의 산수(총 = 성공 + 실패 + 취소 + 대기 + 불명확)가
+     * 이 칸 하나에 걸려 있으므로, 없으면 화면이 아니라 집계 UPDATE 자체가 깨진다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheCancelledCountColumnExistsOnAFreshInstall(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        self::assertSame([], $db->select('SELECT cancelled FROM ' . $db->table('message_jobs')));
+    }
+
+    /**
+     * 판 24 설치(예약 칸까지는 있고 취소 건수 칸만 없는 상태)를 흉내 내 올려 본다.
+     * 기본값이 0 이어야 이미 쌓여 있던 작업 행이 NULL 로 남지 않는다 — NOT NULL 로
+     * 붙이므로 기본값이 없으면 기존 행이 있는 설치에서 마이그레이션 자체가 실패한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testUpgradingAVersion24InstallAddsTheCancelledCountColumn(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN cancelled');
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '올리기 전에 이미 있던 작업', 'failover' => 0, 'total' => 2, 'success' => 2,
+            'failure' => 0, 'status' => 'sent', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+
+        (new Schema($db))->migrateAligoMessaging();
+
+        $row = $db->selectOne('SELECT * FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame(0, (int) $row['cancelled'], '이미 있던 행은 취소 0 으로 채워져야 한다');
+        self::assertSame(2, (int) $row['success'], '나머지 값은 그대로다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testFreshInstallIndexesTheScheduledQueue(array $config): void
     {

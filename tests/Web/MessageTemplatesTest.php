@@ -137,13 +137,15 @@ final class MessageTemplatesTest extends WebTestCase
             ['imported' => '0', 'updated' => '1', 'disabled' => '1', 'cancel_ok' => '1', 'cancel_failed' => '1']));
 
         self::assertStringContainsString(
-            '승인을 잃은 템플릿에 걸린 예약 2개 중 1개를 취소했고, 1개는 취소하지 못해 예정대로 나갑니다', $html
+            '승인을 잃은 템플릿에 걸린 예약 2개 중 1개를 취소했고, 1개는 취소하지 못했습니다', $html
         );
         // "취소했습니다"만 있고 실패를 뭉개는 문장은 나오면 안 된다.
         self::assertStringNotContainsString('승인을 잃어 예약돼 있던 발송', $html);
         // 이 화면은 취소가 왜 실패했는지 알지 못한다 — 지어내지 않고 이력 상세로 보낸다.
         self::assertStringNotContainsString('발송 5분 전을 지나', $html);
-        self::assertStringContainsString('사유는 이력 화면의 작업 상세에 적혀 있고', $html);
+        // 가리키되 약속하지 않는다 — 가드절에 막힌 작업이면 적힌 사유도 재시도할 버튼도 없다.
+        self::assertStringContainsString('이력 화면에서 그 작업의 상태와 사유를 확인해 주세요', $html);
+        self::assertStringNotContainsString('거기서 다시 취소할 수 있습니다', $html);
         // 문장만이 아니라 배지도 주의여야 한다. 예전에는 이 안내가 초록 체크를 달고
         // 나와, 문장을 끝까지 읽지 않은 관리자는 다 끝난 줄 알았다.
         self::assertStringContainsString('<div class="alert alert-warning">', $html);
