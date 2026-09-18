@@ -62,6 +62,18 @@ final class UnwiredNotifier
             : \Closure::fromCallable($log);
     }
 
+    /**
+     * Notifier::canReach() 와 같은 질문. 이 길에는 채널이 메일 하나뿐이므로(그마저 없을
+     * 수도 있다) 답도 하나다. 묻기만 하는 자리라 배선 경고는 남기지 않는다 — 경고는
+     * 실제로 알림이 이 길로 나갈 때 적는다.
+     */
+    public function canReach(string $event, Recipient $to): bool
+    {
+        return $this->mailer !== null
+            && in_array('mail', NotifySettings::defaultChannels($event), true)
+            && (new MailChannel($this->mailer))->available($event, $to);
+    }
+
     /** @return bool 메일 한 통이라도 실제로 나갔는가. Notifier::notify() 와 같은 뜻이다. */
     public function notify(string $event, Recipient $to, array $vars): bool
     {

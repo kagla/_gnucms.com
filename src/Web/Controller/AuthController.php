@@ -147,7 +147,8 @@ final class AuthController
             return $this->redirectTo($request, $response, 'admin.index');
         }
         return View::fromRequest($request)->render($response, 'auth/check_email',
-            ['deliverable' => $this->app->accountService()->canNotify('email_verify')]);
+            ['deliverable' => $this->app->accountService()
+                ->canSendVerificationLink((string) $user['email'])]);
     }
 
     private function assertAnyRegistrationEnabled(): void
@@ -205,8 +206,10 @@ final class AuthController
                 'return_url' => $returnUrl,
             ]);
         }
+        // 적어 낸 주소로 묻되 그 주소를 **찾아보지는 않는다** — 답은 모양으로만 정해지고,
+        // 가입된 주소든 아니든 같다(AccountService::canSendVerificationLink).
         return View::fromRequest($request)->render($response, 'auth/check_email',
-            ['deliverable' => $this->app->accountService()->canNotify('email_verify')]);
+            ['deliverable' => $this->app->accountService()->canSendVerificationLink($email)]);
     }
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -230,10 +233,10 @@ final class AuthController
                 'errors' => $e->details(), 'values' => ['email' => $email],
             ]);
         }
-        // "당신에게 보냈다"가 아니라 "이 사이트가 지금 보낼 수 있다"만 말한다. 앞의
-        // 것을 말하면 이 화면이 가입 여부를 묻는 도구가 된다(AccountService::canNotify).
+        // "당신에게 보냈다"가 아니라 "이 설정으로 누구에게든 보낼 수 있다"만 말한다.
+        // 앞의 것을 말하면 이 화면이 가입 여부를 묻는 도구가 된다(canSendResetLink).
         return View::fromRequest($request)->render($response, 'auth/reset_sent',
-            ['deliverable' => $this->app->accountService()->canNotify('password_reset')]);
+            ['deliverable' => $this->app->accountService()->canSendResetLink()]);
     }
 
     public function resetForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

@@ -248,7 +248,10 @@ final class NotificationRoutingTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testASignupIsRefusedWhenTheVerificationLinkCannotBeSent(array $config): void
     {
-        $app = $this->boot($config);
+        // boot() 이 아니라 makeApp() 이다. 스파이 하나만 끼운 발송기에서는 알림함을 켜는
+        // 것이 "배선되지 않은 채널"이 되어 Notifier 가 실패로 던지고, 정작 보려는 것
+        // (닿지 않는 채널만 켜져 있을 때 가입을 막는가)이 시험에서 사라진다.
+        $app = $this->makeApp($config);
         $app->accountService()->register($this->owner());
         $agreements = $this->publishLegalPages($app);
         $app->notifySettings()->save('email_verify', $this->channels([]));
@@ -266,6 +269,114 @@ final class NotificationRoutingTest extends WebTestCase
 
         self::assertSame($before, $app->users()->countAll(), '미인증 회원 행이 남아서는 안 된다');
         self::assertNull($app->users()->findByEmail('member@example.com'));
+    }
+
+    /**
+     * 켜져 있다는 것과 닿는다는 것은 다른 사실이다. 알림함은 comment_new 밖의 알림을
+     * 받지 않으므로, 인증 알림을 알림함 하나로만 켜 두면 "켜져 있다"는 참인데 링크는
+     * 영영 아무 데도 가지 않는다 — 그 답을 믿고 가입을 받으면 그 사람은 갇힌다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASignupIsRefusedWhenTheOnlyChannelCannotReachANewMember(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->accountService()->register($this->owner());
+        $agreements = $this->publishLegalPages($app);
+        $app->notifySettings()->save('email_verify', $this->channels(['inbox']));
+        $before = $app->users()->countAll();
+
+        try {
+            $app->accountService()->register($agreements + [
+                'email' => 'member@example.com', 'password' => 'member-password-123',
+                'password_confirmation' => 'member-password-123',
+            ]);
+            self::fail('닿지 않는 채널만 켜져 있으면 가입을 받아서는 안 된다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('가입을 끝낼 수 없습니다', $e->getMessage());
+        }
+
+        self::assertSame($before, $app->users()->countAll(), '미인증 회원 행이 남아서는 안 된다');
+    }
+
+    /** 같은 구멍이 다시 보내기 화면과 재설정 화면에도 있었다. */
+    #[DataProvider('connectionProvider')]
+    public function testBothScreensSaySoWhenTheOnlyChannelCannotReach(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $this->get($app, '/login');
+        $app->notifySettings()->save('email_verify', $this->channels(['inbox']));
+        $app->notifySettings()->save('password_reset', $this->channels(['inbox']));
+
+        $verify = $this->body($this->post($app, '/verify-email/resend',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('인증 링크를 보낼 수 없습니다', $verify);
+        self::assertStringNotContainsString('인증 링크를 보냈어요', $verify);
+
+        $app->users()->verifyEmail($id);
+        $reset = $this->body($this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+        self::assertStringContainsString('보낼 수 없습니다', $reset);
+        self::assertStringNotContainsString('재설정 링크를 보냈어요', $reset);
+    }
+
+    /** 한 채널만 닿으면 된다. 닿지 않는 채널이 섞여 있다고 "못 보낸다"고 하면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheScreensStillSayItCanSendWhenOneChannelReaches(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $app->notifySettings()->save('password_reset', $this->channels(['mail', 'inbox']));
+
+        self::assertStringContainsString('재설정 링크를 보냈어요', $this->body($this->post($app,
+            '/forgot-password', ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com'])));
+    }
+
+    /**
+     * 재설정 화면이 묻는 것은 "주소만 가진 사람에게 닿는가"가 아니라 "누구에게든 닿는가"다.
+     * 문자만 켜 둔 사이트는 번호 없는 사람에게는 못 가지만 번호를 가진 회원에게는 간다 —
+     * 주소만 가진 본으로 물었다면 "못 보낸다"고 잘못 답했을 설정이다. 진짜 회원으로 물으면
+     * 그 답이 계정의 존재를 말하므로, 가장 잘 닿는 사람의 본으로 묻는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetScreenAsksWhetherAnyoneAtAllCanBeReached(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
+        $app->notifySettings()->save('password_reset', ['mail' => '0', 'alimtalk' => '0',
+            'sms' => '1', 'inbox' => '0', 'sms_body' => '#{이름}님 #{링크} 에서 다시 설정해 주세요']);
+        $this->get($app, '/login');
+
+        // 없는 주소로 묻는다 — 발송이 일어나지 않게 해서 화면의 답만 본다.
+        self::assertStringContainsString('재설정 링크를 보냈어요', $this->body($this->post($app,
+            '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com'])));
+    }
+
+    /** 소셜 확인 메일도 마찬가지다 — 닿지 않는 채널만 켜져 있으면 거절한다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSocialConfirmationIsRefusedWhenTheOnlyChannelCannotReach(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->notifySettings()->save('social_email_verify', $this->channels(['inbox']));
+
+        try {
+            $app->socialAuthService()->sendPendingEmail(
+                new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
+                'social@example.com',
+                'pending-token'
+            );
+            self::fail('닿지 않는 채널만 켜져 있으면 거절해야 한다');
+        } catch (DomainError $e) {
+            // 거절한 것이 이 자리인지 확인한다 — 배선이 빠져 Notifier 가 던진 것과
+            // 구별되지 않으면 이 시험은 엉뚱한 이유로 통과한다.
+            self::assertStringContainsString('확인 메일을 보낼 수 없습니다',
+                (string) ($e->details()['email'] ?? ''));
+        }
     }
 
     /** 첫 사람은 인증을 기다리지 않는다. 여기서 막으면 설정을 고칠 관리자가 생기지 못한다. */
@@ -333,7 +444,10 @@ final class NotificationRoutingTest extends WebTestCase
         $this->get($app, '/login');
 
         foreach ([['password_reset', '/forgot-password'], ['email_verify', '/verify-email/resend']] as [$event, $path]) {
-            foreach ([['mail'], []] as $on) {
+            // 'inbox' 가 여기 있는 것이 중요하다: 그 상태에서 화면이 말하는 답이
+            // 바뀌었으므로(닿지 않는다), 더 정확해진 답이 계정 존재를 흘리기 시작하지
+            // 않았는지 다시 확인해야 한다.
+            foreach ([['mail'], [], ['inbox'], ['mail', 'inbox']] as $on) {
                 $app->notifySettings()->save($event, $this->channels($on));
                 $known = $this->body($this->post($app, $path,
                     ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));

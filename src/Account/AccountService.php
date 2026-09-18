@@ -9,7 +9,6 @@ use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Notify\Notifier;
-use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\UnwiredNotifier;
 use GnuCms\Support\Clock;
@@ -62,18 +61,63 @@ final class AccountService
     }
 
     /**
-     * 이 사이트가 지금 이 알림을 보낼 수 있는가(켜 둔 채널이 하나라도 있는가).
+     * 인증 링크가 이 주소를 적어 낸 사람에게 닿을 수 있는가.
      *
-     * **화면이 물어도 되는 유일한 질문이다.** 인증 링크·재설정 링크 화면은 "당신에게
-     * 보냈는가"를 말할 수 없다 — 없는 계정과 있는 계정의 화면이 달라지는 순간 그 화면이
-     * 계정 목록이 된다. 이 질문의 답은 누구에게나 같으므로 그대로 옮겨도 아무것도
-     * 흘리지 않는다. Notifier::isEnabled() 주석에 같은 이야기가 있다.
+     * **그 주소에 계정이 있는지는 보지 않는다.** 보는 순간 이 답이 "그 주소가 가입돼
+     * 있는가"를 말하게 되고, 그것을 말하는 화면은 계정 목록이다. 대신 묻는 것은 "지금 켜
+     * 둔 채널 가운데, **주소 하나로만 확인되는 사람**(번호도 회원 번호도 없는 사람)에게
+     * 닿을 수 있는 것이 있는가"뿐이다. 갓 가입하는 사람이 정확히 그 모양이므로 이 답은
+     * 가입 화면에서는 정확하고, 다시 보내기 화면에서는 모자란 쪽으로만 틀린다(번호가 있는
+     * 회원이라면 더 닿을 수도 있다). 어느 쪽이든 어떤 주소를 넣어도 답이 같다.
+     *
+     * 가입 화면이 번호를 받는 사이트면 그 번호도 함께 준다 — 그 사람에게 실제로 생길
+     * 모양이 그것이기 때문이다. 이 값 역시 본인이 방금 적어 낸 것이라 아무것도 흘리지 않는다.
      */
-    public function canNotify(string $event): bool
+    public function canSendVerificationLink(string $email, ?string $phone = null): bool
+    {
+        return $this->canReach('email_verify',
+            Recipient::forUser(['email' => $email, 'phone' => $phone]));
+    }
+
+    /**
+     * 이 설정으로 비밀번호 재설정 링크를 **누구에게든** 보낼 수 있는가.
+     *
+     * 여기서는 갓 가입하는 사람의 모양을 쓸 수 없다. 재설정은 전화 채널로도 나갈 수 있고,
+     * 번호를 가진 회원이라면 문자로 닿기 때문이다 — 주소만 있는 본으로 물으면 "못 보낸다"고
+     * 잘못 답한다. 그렇다고 진짜 그 회원으로 물으면 그 답이 계정의 존재를 말한다. 그래서
+     * **가장 잘 닿는 사람의 본**(주소·번호·회원 번호를 모두 갖춘 사람)으로 묻는다. 그러면
+     * 이 질문은 수신자가 아니라 설정의 성질이 되고, 답은 누구에게나 같다.
+     *
+     * 남는 빈틈은 하나다: 문자만 켜 둔 사이트에서 번호가 없는 회원. 그 사람에게는 못 가는데
+     * 화면은 보낼 수 있다고 말한다. 그 사람은 계정을 잃은 것이 아니라 불편할 뿐이고(가입은
+     * 이미 끝났다), 그 사실은 requestPasswordReset() 이 운영자 로그에 남긴다. 화면이 그것을
+     * 말하려면 수신자별로 답해야 하고, 그 순간 이 화면이 계정 목록이 된다.
+     */
+    public function canSendResetLink(): bool
+    {
+        return $this->canReach('password_reset', self::anyoneShape());
+    }
+
+    /**
+     * 부르는 쪽이 건넨 본에 이 알림이 닿을 수 있는가. 공개 메서드 둘이 각자의 본을 들고
+     * 이 자리로 온다 — 어떤 본으로 묻느냐가 화면이 무엇을 말해도 되는지를 정하므로,
+     * 그 선택은 질문마다 이름을 붙여 위에 적어 둔다.
+     */
+    private function canReach(string $event, Recipient $to): bool
     {
         return $this->notifier !== null
-            ? $this->notifier->isEnabled($event)
-            : in_array('mail', NotifySettings::defaultChannels($event), true);
+            ? $this->notifier->canReach($event, $to)
+            : $this->unwired()->canReach($event, $to);
+    }
+
+    /**
+     * "누구에게든 닿을 수 있는가"를 물을 때 쓰는 본. 주소도 번호도 회원 번호도 갖춘,
+     * 가장 잘 닿는 사람의 모양이다. 채널은 이 칸들이 **있는지 없는지**만 보므로 값 자체에는
+     * 아무 뜻이 없다 — 진짜 회원을 찾지 않는다는 것이 이 본의 전부다.
+     */
+    private static function anyoneShape(): Recipient
+    {
+        return new Recipient('someone@example.invalid', '01000000000', '0', '');
     }
 
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
@@ -118,7 +162,16 @@ final class AccountService
         }
         $v->check();
 
-        // 인증 링크를 보낼 수 없는 사이트는 가입을 받지 않는다.
+        // 번호를 받을지는 사이트 설정이 정한다. 본인확인은 하지 않고 형식만 본다.
+        // Validator 가 모은 오류를 먼저 한꺼번에 던진 뒤에 본다 — Aligo\Settings::save()
+        // 가 발신번호를 다루는 방식과 같다. 앞에 둘 경우, 이메일·비밀번호가 함께
+        // 잘못됐을 때 번호 오류만 보이고 나머지는 다음 제출까지 묻힌다.
+        $phone = $this->phoneFromInput($input);
+
+        // 인증 링크가 이 사람에게 닿을 수 없으면 가입을 받지 않는다. "채널이 켜져
+        // 있는가"로는 모자라다 — 알림함 하나만 켜 두면 켜져 있기는 한데 인증 링크는
+        // 영영 아무 데도 가지 않는다(알림함은 comment_new 밖의 알림을 받지 않는다).
+        // 그래서 켜져 있는지가 아니라 **갓 생길 이 사람에게 닿는지**를 묻는다.
         //
         // 받으면 어떻게 되는지가 이 판단의 전부다: 회원 행은 만들어지는데 인증 링크는
         // 아무 데도 안 가고, 이 코드베이스는 인증 전에는 로그인을 막으므로, 그 사람은
@@ -128,17 +181,11 @@ final class AccountService
         //
         // 첫 사람은 빼놓는다. 그 사람은 인증 없이 만들어지므로(createRegistered) 링크를
         // 기다리지 않고, 여기서 막으면 알림 설정을 고칠 관리자 자체가 생기지 못한다.
-        if ($existingUsers > 0 && !$this->canNotify('email_verify')) {
+        if ($existingUsers > 0 && !$this->canSendVerificationLink($email, $phone)) {
             throw DomainError::serviceUnavailable(
                 '지금은 회원가입을 받을 수 없습니다. 인증 링크를 보낼 수 없어 가입을 끝낼 수 없습니다.'
                 . ' 사이트 관리자에게 문의해 주세요.');
         }
-
-        // 번호를 받을지는 사이트 설정이 정한다. 본인확인은 하지 않고 형식만 본다.
-        // Validator 가 모은 오류를 먼저 한꺼번에 던진 뒤에 본다 — Aligo\Settings::save()
-        // 가 발신번호를 다루는 방식과 같다. 앞에 둘 경우, 이메일·비밀번호가 함께
-        // 잘못됐을 때 번호 오류만 보이고 나머지는 다음 제출까지 묻힌다.
-        $phone = $this->phoneFromInput($input);
 
         $existing = $this->users->findByEmail($email);
         if ($existing !== null) {
@@ -524,7 +571,12 @@ final class AccountService
     {
         return $this->notifier !== null
             ? $this->notifier->notify($event, $to, $vars)
-            : (new UnwiredNotifier($this->mailer, self::class))->notify($event, $to, $vars);
+            : $this->unwired()->notify($event, $to, $vars);
+    }
+
+    private function unwired(): UnwiredNotifier
+    {
+        return new UnwiredNotifier($this->mailer, self::class);
     }
 
     /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */
