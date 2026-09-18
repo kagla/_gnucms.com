@@ -28,20 +28,35 @@
         <?php
           // 배열(phone[]=x)이 넘어오면 (string) 캐스팅이 경고를 낸다 — 스칼라만 쓴다.
           $phoneValue = is_scalar($values['phone'] ?? null) ? (string) $values['phone'] : '';
-          $phoneOff = ($site['signup_phone'] ?? 'off') === 'off';
+          // 저장된 번호는 제출값과 따로 본다. off 는 칸을 잠그므로 제출값이 아예 없고,
+          // required 의 "지울 수 없음" 표시도 지금 무엇을 쳤는지가 아니라 무엇이
+          // 저장돼 있는지로 정해야 서버 규칙과 어긋나지 않는다.
+          $phoneStored = is_scalar($values['phone_stored'] ?? null) ? (string) $values['phone_stored'] : '';
+          $phonePolicy = $site['signup_phone'] ?? 'off';
+          $phoneOff = $phonePolicy === 'off';
+          // 번호를 지울 수 없는 경우에만 required 를 붙인다 — 서버도 딱 그때만 거절한다.
+          $phoneLocked = $phonePolicy === 'required' && $phoneStored !== '';
+          $phoneShown = $phoneOff ? $phoneStored : $phoneValue;
         ?>
+        <?php // 수집이 꺼져 있고 저장된 번호도 없으면 보여 줄 것이 없다 — 가입 화면처럼 칸 자체를 감춘다. ?>
+        <?php if (!$phoneOff || $phoneStored !== ''): ?>
         <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">알림톡·문자 수신 번호</span></legend>
           <input class="input input-bordered input-block" type="tel" name="phone" inputmode="numeric" autocomplete="tel"
-                 value="<?= $this->e($phoneValue === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneValue)) ?>"
-                 placeholder="010-1234-5678"<?php if ($phoneOff): ?> disabled<?php endif ?>>
+                 value="<?= $this->e($phoneShown === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneShown)) ?>"
+                 placeholder="010-1234-5678"<?php if ($phoneOff): ?> disabled<?php endif ?><?php if ($phoneLocked): ?> required<?php endif ?>>
           <?php if ($phoneOff): ?>
           <p class="fieldset-label">번호 수집이 꺼져 있어 여기서는 바꿀 수 없습니다. 이미 저장된 번호는 계속 쓰입니다.</p>
+          <?php elseif ($phoneLocked): ?>
+          <p class="fieldset-label">필수 항목이라 번호를 지울 수는 없습니다. 바꾸려면 새 번호를 입력해 주세요.</p>
+          <?php elseif ($phonePolicy === 'required'): ?>
+          <p class="fieldset-label">번호를 넣으면 알림톡·문자를 받을 수 있습니다. 비워 두고 저장해도 됩니다.</p>
           <?php else: ?>
           <p class="fieldset-label">비워 두고 저장하면 번호가 지워집니다.</p>
           <?php endif ?>
           <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
         </fieldset>
+        <?php endif ?>
         <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
           <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">JPG, PNG, WebP · 2MB 이하</span></legend>
           <?php if (!empty($values['avatar_file'])): ?><div class="profile-image-preview"><img src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="현재 프로필 이미지"><label><input class="checkbox checkbox-sm" type="checkbox" name="remove_profile_image" value="1"> 현재 이미지 삭제</label></div><?php endif ?>

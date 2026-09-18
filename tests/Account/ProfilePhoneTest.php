@@ -30,6 +30,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
  */
 final class ProfilePhoneTest extends DatabaseTestCase
 {
+    /** 검증을 거치지 않는 값을 직접 심어야 하는 테스트를 위해 bootWithMember() 가 채운다. */
+    private UserRepository $users;
+
     #[DataProvider('connectionProvider')]
     public function testMemberCanSetAndClearTheirNumber(array $config): void
     {
@@ -66,19 +69,74 @@ final class ProfilePhoneTest extends DatabaseTestCase
         self::assertSame('01012345678', $this->phoneOf($db, $userId), '빈 값 제출도 off 에서는 지우는 뜻이 아니다');
     }
 
+    /**
+     * required 에서 "빈 값 거절"은 저장된 번호를 지우려 할 때만이다 — 지우는 것은
+     * 필수 정책과 정면으로 어긋나므로 조용히 무시하지 않고 말해 준다.
+     */
     #[DataProvider('connectionProvider')]
-    public function testRequiredPolicyRejectsAnEmptySubmit(array $config): void
+    public function testRequiredPolicyRefusesToClearAStoredNumber(array $config): void
     {
         [$service, $db, $userId] = $this->bootWithMember($config, 'required');
         $service->updateProfile($userId, $this->profile(['phone' => '010-1234-5678']));
 
         try {
             $service->updateProfile($userId, $this->profile(['phone' => '']));
-            self::fail('required 정책에서는 빈 번호를 거절해야 한다');
+            self::fail('required 정책에서는 저장된 번호를 지우려는 빈 값을 거절해야 한다');
         } catch (DomainError $e) {
             self::assertArrayHasKey('phone', $e->details());
         }
         self::assertSame('01012345678', $this->phoneOf($db, $userId), '거절됐으니 기존 번호가 남아 있어야 한다');
+    }
+
+    /**
+     * 잠김 방지 핀. required 로 바꾼 사이트에서 번호가 없는 회원(정책을 켜기 전에
+     * 가입한 회원, 번호를 받지 않는 소셜 가입)이 이름도 비밀번호도 못 바꾸면,
+     * 관리자가 라디오 하나를 눌러 기존 회원 전체를 회원정보 수정에서 잠근 셈이 된다.
+     * 번호 칸이 비어 있어도 나머지는 저장돼야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testRequiredPolicyDoesNotLockOutAMemberWhoHasNoNumber(array $config): void
+    {
+        [$service, $db, $userId] = $this->bootWithMember($config, 'required');
+
+        $service->updateProfile($userId, $this->profile([
+            'display_name' => '새이름',
+            'phone' => '',
+            'current_password' => 'member-password-123',
+            'password' => 'brand-new-password-123',
+            'password_confirmation' => 'brand-new-password-123',
+        ]));
+
+        $row = $db->selectOne('SELECT display_name, password_hash, phone FROM '
+            . $db->table('users') . ' WHERE id = ?', [$userId]);
+        self::assertSame('새이름', $row['display_name'], '번호가 없어도 이름은 저장돼야 한다');
+        self::assertTrue(
+            password_verify('brand-new-password-123', (string) $row['password_hash']),
+            '번호가 없어도 비밀번호는 바꿀 수 있어야 한다'
+        );
+        self::assertNull($row['phone']);
+    }
+
+    /**
+     * 저장된 번호가 휴대폰 형식이 아니면(예전 데이터·외부 이관) 화면은 그 값을 미리
+     * 채워 보여 준다. 그대로 다시 제출한 것까지 거절하면, 그 번호 때문에 이름조차
+     * 바꿀 수 없게 된다 — 막고 있는 값을 고치려는 사람까지 막는 셈이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStoredNonMobileNumberCanBeSubmittedBackUnchanged(array $config): void
+    {
+        [$service, $db, $userId] = $this->bootWithMember($config, 'optional');
+        $this->users->updatePhone($userId, '0212345678');
+
+        $service->updateProfile($userId, $this->profile(['display_name' => '새이름', 'phone' => '02-1234-5678']));
+
+        self::assertSame('0212345678', $this->phoneOf($db, $userId), '손대지 않은 값은 그대로 남아야 한다');
+        self::assertSame('새이름', $db->selectOne('SELECT display_name FROM '
+            . $db->table('users') . ' WHERE id = ?', [$userId])['display_name']);
+
+        // 값을 실제로 바꿀 때는 그대로 휴대폰 형식을 요구한다.
+        $this->expectException(DomainError::class);
+        $service->updateProfile($userId, $this->profile(['phone' => '02-9999-8888']));
     }
 
     #[DataProvider('connectionProvider')]
@@ -118,6 +176,7 @@ final class ProfilePhoneTest extends DatabaseTestCase
             $cms,
             $consents
         );
+        $this->users = $users;
         $userId = $users->create(
             'member@example.com',
             password_hash('member-password-123', PASSWORD_DEFAULT),

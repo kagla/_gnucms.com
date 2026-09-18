@@ -32,6 +32,24 @@ final class PhoneNumber
         return $digits;
     }
 
+    /**
+     * 수정 화면용. 저장된 값을 손대지 않고 그대로 다시 제출했을 때만 형식 검사를
+     * 건너뛴다. 수정 화면은 저장된 번호를 미리 채워 보여주는데, 그 번호가 휴대폰
+     * 형식이 아니면(예전 데이터·외부 이관으로 들어온 02-1234-5678 같은 값) 그
+     * 화면은 번호뿐 아니라 이름·비밀번호까지 저장할 수 없게 된다 — 그 값을
+     * 고치려는 사람까지 막는 셈이다. 값을 실제로 바꿀 때는 normalize() 와 똑같이
+     * 휴대폰 형식을 요구한다.
+     */
+    public static function normalizeEdit(string $value, ?string $stored): string
+    {
+        $digits = self::digits($value);
+        if ($digits !== '' && $stored !== null && $digits === self::digits($stored)) {
+            return $digits;
+        }
+
+        return self::normalize($value);
+    }
+
     public static function normalizeSender(string $value): string
     {
         $digits = self::digits($value);

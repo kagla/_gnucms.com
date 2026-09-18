@@ -29,6 +29,7 @@ final class AccountController
         return $this->render($request, $response, [
             'id' => $user['id'], 'display_name' => $user['display_name'], 'email' => $user['email'],
             'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
+            'phone_stored' => $user['phone'] ?? null,
         ], [], ($request->getQueryParams()['saved'] ?? '') === '1',
             ($request->getQueryParams()['mail'] ?? '') === 'failed', $user['password_hash'] !== null);
     }
@@ -56,6 +57,9 @@ final class AccountController
                 'email' => $user['email'], 'avatar_file' => $user['avatar_file'] ?? null,
                 // phone[]=x 처럼 배열로 오면 (string) 캐스팅이 경고를 낸다 — 늘 스칼라만 되돌린다.
                 'phone' => isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '',
+                // 화면은 "무엇을 제출했나"와 "무엇이 저장돼 있나"를 둘 다 알아야 한다 —
+                // required 에서 번호를 지울 수 없다는 표시는 저장된 번호를 보고 정한다.
+                'phone_stored' => $user['phone'] ?? null,
             ], $e->details(), false, false, $user['password_hash'] !== null);
         } catch (\Throwable $e) {
             $this->app->avatars()->delete($newAvatar);
@@ -104,6 +108,7 @@ final class AccountController
             return $this->render($request, $response->withStatus(422), [
                 'id' => $id, 'display_name' => $user['display_name'], 'email' => $user['email'],
                 'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
+                'phone_stored' => $user['phone'] ?? null,
             ], $e->details(), false, false, $user['password_hash'] !== null);
         }
 

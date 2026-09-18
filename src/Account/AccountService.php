@@ -247,7 +247,7 @@ final class AccountService
         // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
         // register() 와 같은 이유로 $v->check() 뒤에 본다 — 표시 이름·비밀번호 오류가
         // 함께 있을 때 번호 오류만 보이고 나머지가 다음 제출까지 묻히지 않게 한다.
-        $phone = $this->phoneForEdit($input);
+        $phone = $this->phoneForEdit($input, isset($user['phone']) ? (string) $user['phone'] : null);
         $this->users->updateDisplayName($userId, $displayName);
         if ($phone['write']) {
             $this->users->updatePhone($userId, $phone['phone']);
@@ -377,37 +377,60 @@ final class AccountService
     }
 
     /**
-     * 회원정보 수정·관리자 회원 수정 공용. AdminService 도 이 메서드로 정책을 묻는다 —
-     * signup_phone 의 세 값 분기를 두 곳에 나눠 베끼지 않으려는 것이다.
+     * 회원정보 수정 화면 전용. 관리자 회원 수정은 정책을 아예 보지 않으므로 이 메서드를
+     * 쓰지 않는다(AdminService::phoneFromAdminInput() 의 설명 참고).
      *
-     * 가입용 phoneFromInput() 과 정책은 같지만 off 의 뜻이 다르다: 가입은 아직 아무
-     * 것도 저장돼 있지 않으니 off 에서 null 을 돌려줘도 안전하지만, 수정 화면에서
-     * 그 null 을 그대로 썼다가는 관리자가 설정을 끄는 순간 모든 회원의 저장된
-     * 번호가 다음 프로필 저장마다 조용히 지워진다. 그래서 off 는 "쓸지 여부" 자체를
-     * false 로 돌려 칸을 아예 건드리지 않게 한다 — 이미 있는 번호는 화면에서 고칠
-     * 수 없을 뿐, 지워지지 않고 알림톡·문자 발송에 계속 쓰인다.
+     * 가입용 phoneFromInput() 과 세 값은 같지만 off 와 required 의 뜻이 다르다.
+     *
+     * off — 가입은 아직 아무 것도 저장돼 있지 않으니 null 을 돌려줘도 안전하지만,
+     * 수정 화면에서 그 null 을 그대로 썼다가는 관리자가 설정을 끄는 순간 모든 회원의
+     * 저장된 번호가 다음 프로필 저장마다 조용히 지워진다. 그래서 "쓸지 여부" 자체를
+     * false 로 돌려 칸을 아예 건드리지 않는다 — 이미 있는 번호는 화면에서 고칠 수
+     * 없을 뿐, 지워지지 않고 알림톡·문자 발송에 계속 쓰인다.
+     *
+     * required — 가입 화면에서는 빈 값을 거절하는 것이 곧 정책이지만, 수정 화면에서
+     * 그렇게 하면 번호가 없는 회원(정책을 켜기 전에 가입한 회원, 번호를 받지 않는
+     * 소셜 가입)이 이름·프로필 이미지는 물론 비밀번호까지 바꿀 수 없게 된다. 라디오
+     * 하나로 기존 회원 전체가 회원정보 수정에서 잠기는 셈이다. signup_phone 은
+     * "가입 화면이 무엇을 물을지"를 정하는 설정이므로(R72), 수정 화면에서 required 는
+     * "저장된 번호를 지울 수는 없다"는 뜻으로만 받는다: 저장된 번호가 있는데 빈 값을
+     * 보내면 거절하고, 저장된 번호가 아예 없으면 칸을 건드리지 않고 넘어간다.
      *
      * @return array{write: bool, phone: ?string}
      */
-    public function phoneForEdit(array $input): array
+    private function phoneForEdit(array $input, ?string $stored): array
     {
-        if ($this->signupPhonePolicy() === 'off') {
+        $policy = $this->signupPhonePolicy();
+        if ($policy === 'off') {
             return ['write' => false, 'phone' => null];
         }
+        $stored = $stored === null || trim($stored) === '' ? null : trim($stored);
+        $given = self::submittedPhone($input);
+        if ($given === '') {
+            if ($policy === 'required') {
+                if ($stored !== null) {
+                    throw DomainError::validation([
+                        'phone' => '필수 항목이라 저장된 번호를 지울 수 없습니다. 바꾸려면 새 번호를 입력해 주세요.',
+                    ]);
+                }
 
-        return ['write' => true, 'phone' => $this->phoneFromInput($input)];
+                return ['write' => false, 'phone' => null];
+            }
+
+            return ['write' => true, 'phone' => null];
+        }
+
+        return ['write' => true, 'phone' => PhoneNumber::normalizeEdit($given, $stored)];
     }
 
-    /** 가입·프로필 공통. 설정이 off 면 입력을 무시하고, required 면 빈 값을 거절한다. */
+    /** 가입 화면 전용. 설정이 off 면 입력을 무시하고, required 면 빈 값을 거절한다. */
     private function phoneFromInput(array $input): ?string
     {
         $policy = $this->signupPhonePolicy();
         if ($policy === 'off') {
             return null;
         }
-        // requiredString() 등 Validator 의 다른 헬퍼와 같은 이유로 스칼라만 받는다 —
-        // 배열이 오면(예: phone[]=x) (string) 캐스팅이 경고를 낸다.
-        $given = isset($input['phone']) && is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
+        $given = self::submittedPhone($input);
         if ($given === '') {
             if ($policy === 'required') {
                 throw DomainError::validation(['phone' => '휴대폰번호를 입력해 주세요.']);
@@ -417,6 +440,15 @@ final class AccountService
         }
 
         return PhoneNumber::normalize($given);
+    }
+
+    /**
+     * 제출된 번호 칸. requiredString() 등 Validator 의 다른 헬퍼와 같은 이유로 스칼라만
+     * 받는다 — 배열이 오면(예: phone[]=x) (string) 캐스팅이 경고를 낸다.
+     */
+    private static function submittedPhone(array $input): string
+    {
+        return isset($input['phone']) && is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
     }
 
     /** signup_phone 설정값. CmsService 가 이미 세 값으로 정규화하지만, 한 번 더 확인한다. */

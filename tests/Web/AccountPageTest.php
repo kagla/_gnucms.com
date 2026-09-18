@@ -291,6 +291,99 @@ final class AccountPageTest extends WebTestCase
     }
 
     /**
+     * 화면이 말하는 것과 서버가 하는 것이 같아야 한다. 번호가 없는 회원에게 required
+     * 정책은 아무 것도 막지 않으므로, 칸에 HTML required 를 붙이지 않고 "비워 두고
+     * 저장해도 된다"고 적으며, 실제로 이름만 바꾼 제출이 303 으로 저장돼야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testRequiredPolicyDoesNotBlockTheProfileOfAMemberWithNoNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/account'));
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
+        self::assertNotEmpty($tag, '번호 칸은 있어야 한다');
+        self::assertStringNotContainsString(' required', $tag[0], '막지 않을 것에 required 를 붙이면 안 된다');
+        self::assertStringContainsString('비워 두고 저장해도 됩니다', $form);
+        self::assertStringNotContainsString('비워 두고 저장하면 번호가 지워집니다', $form);
+
+        $saved = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야', 'phone' => '',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('나야', $app->users()->findById($id)['display_name']);
+    }
+
+    /**
+     * 같은 화면의 반대쪽. 번호가 저장돼 있으면 required 는 "지울 수 없다"는 뜻이므로,
+     * 칸에 HTML required 가 붙고 문구도 그렇게 말하며, 빈 값 제출은 422 다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStoredNumberIsMarkedAsUnclearableUnderRequiredPolicy(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $app->users()->updatePhone($id, '01012345678');
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/account'));
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
+        self::assertNotEmpty($tag);
+        self::assertStringContainsString(' required', $tag[0], '서버가 거절할 것은 화면도 막아야 한다');
+        self::assertStringContainsString('번호를 지울 수는 없습니다', $form);
+
+        $refused = $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야', 'phone' => '',
+            'current_password' => '', 'password' => '', 'password_confirmation' => '',
+        ]);
+        self::assertSame(422, $refused->getStatusCode());
+        self::assertSame('01012345678', $app->users()->findById($id)['phone']);
+        // 되그릴 때도 같은 표시가 남아야 한다 — 제출값은 비어 있지만 저장된 번호는 그대로다.
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $this->body($refused), $again);
+        self::assertStringContainsString(' required', $again[0]);
+    }
+
+    /**
+     * 수집이 꺼져 있고 저장된 번호도 없으면 보여 줄 것이 없다 — 가입 화면이 칸을
+     * 감추는 것과 같게 맞춘다. 저장된 번호가 있으면 그때는 보여 준다(잠긴 채로).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheProfileHidesThePhoneFieldWhenCollectionIsOffAndNothingIsStored(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'me@example.com', 'password' => 'member-password-123',
+        ]);
+
+        $empty = $this->body($this->get($app, '/account'));
+        self::assertStringNotContainsString('name="phone"', $empty, '보여 줄 번호가 없으면 칸도 없어야 한다');
+        self::assertStringNotContainsString('번호 수집이 꺼져 있어', $empty);
+
+        $app->users()->updatePhone($id, '01012345678');
+        $stored = $this->body($this->get($app, '/account'));
+        self::assertStringContainsString('name="phone"', $stored, '저장된 번호는 보여 줘야 한다');
+        self::assertStringContainsString('value="010-1234-5678"', $stored);
+        self::assertStringContainsString('번호 수집이 꺼져 있어', $stored);
+    }
+
+    /**
      * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. AuthController::register() 가
      * phone[]=x 를 is_scalar 가드 없이 (string) 캐스팅해 경고를 냈던 것과 같은 결함이
      * 여기서도 날 수 있다 — 같은 방식으로 값을 되돌리는 화면이기 때문이다.
