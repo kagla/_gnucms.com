@@ -74,6 +74,21 @@ final class SendTime
         return gmdate('Y-m-d H:i:s', $timestamp);
     }
 
+    /**
+     * parse() 가 돌려준 저장용 UTC 문자열에 UTC 오프셋을 붙여 돌려준다. 그 값이 다시
+     * parse() 를 거칠 때 오프셋 없는 벽시계로 보이지 않게 하는 표식이다 — 관리자 화면은
+     * 검증이 끝난 값을 요청 배열에 담아 Dispatch::send() 에 넘기고, 그 안에서 parse() 가
+     * 한 번 더 돈다(확장과 같은 문을 쓰기 때문이다). 표식이 없으면 이미 UTC 인 값이
+     * 두 번째 parse() 에서 KST 로 다시 읽혀 9시간이 또 빠진다.
+     *
+     * 이 문자열 형식을 정하는 곳이 parse() 와 같아야 하므로(형식을 아는 것은 이 클래스
+     * 하나뿐이다) 호출부가 '+00:00' 을 직접 이어 붙이지 않고 이 메서드를 쓴다.
+     */
+    public static function withUtcOffset(string $utc): string
+    {
+        return $utc . '+00:00';
+    }
+
     /** 알림톡(senddate)용 — 한국 시각 'YYYYMMDDHHMMSS'. $utc 는 저장돼 있는 UTC 문자열이다. */
     public static function alimtalk(string $utc): string
     {

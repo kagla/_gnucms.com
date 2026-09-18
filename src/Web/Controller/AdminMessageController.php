@@ -465,15 +465,16 @@ final class AdminMessageController
      * Dispatch::send() 가 검증을 위해 SendTime::parse() 를 한 번 더 부른다(확장이
      * 부르는 것과 같은 문을 관리자 화면도 그대로 쓰기 때문이다). 오프셋을 붙이지
      * 않고 그대로 돌려주면, 이미 UTC로 바꿔 둔 값이 오프셋 없는 문자열로 보여 그
-     * 두 번째 parse() 에서 다시 KST로 읽혀 9시간이 또 빠진다. "+00:00"을 붙여 이
-     * 값이 이미 절대 시각(UTC)이라는 것을 명시해 두면 두 번째 parse() 는 있는
-     * 그대로 존중할 뿐 다시 변환하지 않는다.
+     * 두 번째 parse() 에서 다시 KST로 읽혀 9시간이 또 빠진다. SendTime::withUtcOffset()
+     * 이 이 값은 이미 절대 시각(UTC)이라는 표식을 붙여 주므로 두 번째 parse() 는 있는
+     * 그대로 존중할 뿐 다시 변환하지 않는다 — 그 표식의 문자열 형식을 아는 것도
+     * SendTime 하나뿐이다(시간대는 그 클래스 밖에서 다루지 않는다는 규칙 그대로다).
      */
     private function scheduledAtForRequest(string $raw): ?string
     {
         $utc = SendTime::parse($raw);
 
-        return $utc === null ? null : $utc . '+00:00';
+        return $utc === null ? null : SendTime::withUtcOffset($utc);
     }
 
     /**

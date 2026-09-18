@@ -344,9 +344,10 @@ final class MessageSendTest extends WebTestCase
 
     /**
      * 화면의 발송 시각 입력은 이 화면의 다른 모든 시각(요청 시각 등)과 같이 관리자가
-     * 사이트가 실제로 쓰는 시간대(한국 표준시)로 읽고 쓴다. datetime-local 입력값을
-     * 그대로 SendTime::parse() 에 넘기면 그 클래스는 이미 UTC로 본다(9시간 어긋난다) —
-     * 그래서 관리자가 입력한 KST 벽시계 값을 미리 UTC로 바꿔서 넘긴다.
+     * 사이트가 실제로 쓰는 시간대(한국 표준시)로 읽고 쓴다. datetime-local 은 오프셋을
+     * 낼 수 없으므로 그 값은 오프셋 없이 SendTime::parse() 에 닿고, 그 클래스가 오프셋
+     * 없는 입력을 한국 표준시(KST) 벽시계로 읽는다 — 시간대를 다루는 곳은 그 클래스
+     * 하나뿐이고, 화면은 9시간을 더하거나 빼지 않는다(SendTime 문서 주석 참고).
      *
      * 예약은 알리고에 호출 자체를 미루는 것이 아니라, 알리고 API 를 한 번 부르되 그
      * 안에 rdate·rtime(문자는 두 칸, DispatchTest::testSchedulesInsteadOfSendingNow

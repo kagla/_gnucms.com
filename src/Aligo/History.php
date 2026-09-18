@@ -394,6 +394,12 @@ final class History
      * result_at(대체문자가 있었다는 사실을 알아낸 시각)이다 — 알림톡 결과 자체가 늦게
      * 확인되면 requested_at 은 이미 오래됐을 수 있지만, 대체문자를 기다리기 시작한 것은
      * 그 실패를 안 순간부터다.
+     *
+     * 여기만 scheduled_at 을 보지 않는 것도 같은 이유로 일부러 그렇게 둔 것이다:
+     * 대체문자는 알림톡 결과가 들어온 뒤에야 생기므로 이 행이 존재하는 시점에 예약
+     * 시각은 이미 지나 있고, result_at 이 언제나 그보다 늦다. 예약 때문에 시계가 일찍
+     * 도는 일은 여기서는 일어날 수 없다 — 나중에 이 차이를 보고 예약 버그로 의심하며
+     * giveUpOnStaleRows() 처럼 COALESCE 를 붙이지 않아도 된다.
      */
     private function giveUpOnStaleFallbacks(): void
     {

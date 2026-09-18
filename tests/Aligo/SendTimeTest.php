@@ -125,4 +125,24 @@ final class SendTimeTest extends TestCase
 
         self::assertSame(SendTime::parse($date . 'T14:00+00:00'), SendTime::parse($date . 'T14:00Z'));
     }
+
+    /**
+     * 관리자 화면이 실제로 만들어 내는 철자를 직접 확인한다: parse() 가 돌려준 저장용
+     * UTC 문자열(공백 구분, 초 있음)에 withUtcOffset() 이 오프셋을 붙인 값이다. 이 값은
+     * Dispatch::send() 안에서 parse() 를 한 번 더 지나므로, 여기서 오프셋이 무시되고
+     * KST 로 다시 읽히면 모든 화면 예약이 9시간 이르게 나간다. 그동안 이 철자는 화면
+     * 전체를 도는 시험에서만 간접적으로 지켜지고 있었다.
+     */
+    public function testTheSpaceSeparatedUtcSpellingTheScreenProducesSurvivesASecondParse(): void
+    {
+        $once = SendTime::parse(gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z');
+        self::assertNotNull($once);
+
+        $tagged = SendTime::withUtcOffset($once);
+        self::assertSame($once . '+00:00', $tagged, '저장값 그대로에 오프셋만 붙는다');
+        self::assertStringContainsString(' ', $tagged, '화면이 넘기는 값은 공백으로 구분된 철자다');
+
+        self::assertSame($once, SendTime::parse($tagged),
+            '두 번째 parse() 는 이미 절대 시각인 값을 그대로 존중해야 한다');
+    }
 }
