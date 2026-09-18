@@ -9,6 +9,13 @@
   <?php if (($query['saved'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>회원·글쓰기 설정을 저장했습니다.</span></div><?php endif ?>
   <form method="post" action="<?= $this->url('admin.settings.writing') ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
     <div class="form-section settings-write-rules">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">가입 시 휴대폰번호</legend>
+        <?php foreach (['off' => '받지 않음', 'optional' => '선택 입력', 'required' => '필수 입력'] as $phoneValue => $phoneLabel): ?>
+          <label class="label"><input class="radio radio-sm" type="radio" name="signup_phone" value="<?= $this->e($phoneValue) ?>"<?= ($values['signup_phone'] ?? 'off') === $phoneValue ? ' checked' : '' ?>> <?= $this->e($phoneLabel) ?></label>
+        <?php endforeach ?>
+        <p class="fieldset-label">알림톡·문자를 회원에게 보내려면 번호가 필요합니다. 본인확인은 하지 않고 형식만 확인합니다.</p>
+      </fieldset>
       <fieldset class="fieldset toggle-list settings-write-toggle"><label class="label toggle-row"><input class="toggle toggle-primary" type="checkbox" name="guest_write_enabled" value="1"<?= ($values['guest_write_enabled'] ?? false) ? ' checked' : '' ?>><span><strong>비회원 글쓰기 허용</strong><small>게시판 쓰기 권한이 “누구나”여도 이 스위치가 꺼져 있으면 회원만 글을 쓸 수 있습니다.</small></span></label></fieldset>
       <div class="settings-write-rules-row">
         <fieldset class="fieldset"><legend class="fieldset-legend">본문 최소 글자수</legend><input class="input input-bordered input-block" type="number" name="post_min_chars" min="0" max="10000" value="<?= $this->e((string) ($values['post_min_chars'] ?? 0)) ?>" required><p class="fieldset-label">0 = 제한 없음. 태그와 공백을 뺀 글자 수입니다.</p></fieldset>
