@@ -265,6 +265,30 @@ final class NotifySettings
         return is_scalar($input[$key] ?? null) ? trim((string) $input[$key]) : '';
     }
 
+    /**
+     * 저장된 변수 연결 원본. 손으로 고친 값이나 옛 버전이 남긴 값이 JSON 이 아니거나
+     * 배열이 아닐 수 있으므로 그때는 빈 배열로 본다 — 화면이 첨자로 쓰는 값이라,
+     * 문자열 아닌 것이 섞여 들어오면 그 칸만 버린다. 검증은 하지 않는다(그것이
+     * validTemplate() 의 일이다): 여기는 "무엇이 저장돼 있는가"만 답한다.
+     *
+     * @return array<string,string>
+     */
+    private static function storedMap(array $stored, string $event): array
+    {
+        $map = json_decode((string) ($stored[$event . '.var_map'] ?? '[]'), true);
+        if (!is_array($map)) {
+            return [];
+        }
+        $clean = [];
+        foreach ($map as $name => $core) {
+            if (is_string($core)) {
+                $clean[(string) $name] = $core;
+            }
+        }
+
+        return $clean;
+    }
+
     public function formValues(): array
     {
         $stored = $this->repository->all();
@@ -280,11 +304,32 @@ final class NotifySettings
                 'channels' => $this->channelsFor($key),
                 'template' => $this->templateFor($key),
                 'sms_body' => $this->smsBody($key),
-                // 검증을 거치지 않은 원본 tpl_code. template 이 null 인데 이 값이 비어
-                // 있지 않다면, 관리자가 골라 둔 템플릿이 그 사이 못 쓰게 된 것이다 —
-                // 화면이 "알림톡이 꺼졌습니다"가 아니라 "고르신 템플릿(OOO)을 더는 쓸 수
-                // 없습니다"라고 진짜 이유를 말할 수 있게 남겨 둔다.
+                // 아래 넷은 **검증을 거치지 않은 저장 원본**이다. 위의 channels·
+                // template·sms_body 가 "지금 실제로 쓸 수 있는가"를 답한다면, 이 넷은
+                // "관리자가 무엇을 저장해 두었는가"를 답한다. 둘을 나란히 내주는 이유는
+                // 하나다 — 둘이 어긋날 때 화면이 그 사실을 말할 수 있어야 하기 때문이다.
+                // 어긋난 상태를 그냥 "꺼짐"으로만 그리면, 관리자는 자기가 켜 둔 채널이
+                // 스스로 꺼진 것을 이유 없이 보게 되거나(알림톡) 자기가 쓴 본문이
+                // 사라진 것처럼 보게 된다(문자).
+                //
+                //  alimtalk_tpl_code — 고른 템플릿 코드. template 이 null 인데 이 값이
+                //      비어 있지 않다면 그 템플릿이 그 사이 못 쓰게 된 것이다. 화면은
+                //      "알림톡이 꺼졌습니다"가 아니라 "고르신 템플릿(OOO)을 더는 쓸 수
+                //      없습니다"라고 진짜 이유를 말한다.
+                //  alimtalk_on — 관리자가 알림톡을 켜 두었는가. 이것 없이는 위 문장을
+                //      말할 수 없다: 템플릿이 멀쩡한데 관리자가 알림톡을 그냥 꺼 둔
+                //      경우에도 template 은 null 이라(isOn() 게이트), 두 경우를 가릴
+                //      길이 없어 화면이 멀쩡한 템플릿을 죽었다고 말하게 된다.
+                //  alimtalk_var_map — 저장된 변수 연결. save() 는 채널을 꺼도 이 값을
+                //      지우지 않는다(다시 켤 때 다시 고르지 않아도 되게). 화면이 이 값을
+                //      되살리지 않으면 그 의도가 화면에서 무너진다.
+                //  sms_body_stored — 저장된 문자 본문. 같은 이유다. sms_body 는 채널이
+                //      꺼지면 빈 문자열이므로, 이 값이 없으면 문자를 껐다 돌아온 관리자는
+                //      자기 본문이 지워진 빈 칸을 보게 된다.
                 'alimtalk_tpl_code' => (string) ($stored[$key . '.tpl_code'] ?? ''),
+                'alimtalk_on' => ($stored[$key . '.alimtalk'] ?? '0') === '1',
+                'alimtalk_var_map' => self::storedMap($stored, $key),
+                'sms_body_stored' => (string) ($stored[$key . '.sms_body'] ?? ''),
             ];
         }
 

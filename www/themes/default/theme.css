@@ -1922,3 +1922,16 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 
 /* 공지 선택은 세 항목뿐이라 칸을 가득 채울 이유가 없다 */
 .notice-select{width:100%;max-width:16rem}
+
+/* 알림 설정: 이벤트마다 접었다 펴는 묶음. 일곱 묶음 × 채널 넷을 한 화면에 펼쳐 두면
+   관리자가 어디를 보고 있는지 잃어버리므로, 기본은 접어 두고 요약줄에 지금 켜진
+   채널을 뱃지로 적는다 — 열지 않고도 무엇이 켜져 있는지 읽을 수 있어야 한다. */
+.notify-event{margin-top:.75rem;border:var(--border) solid var(--bc-10);border-radius:var(--radius-box);background:var(--color-base-100)}
+.notify-event > summary{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.875rem 1rem;cursor:pointer;list-style:none}
+.notify-event > summary::-webkit-details-marker{display:none}
+.notify-event[open] > summary{border-bottom:var(--border) solid var(--bc-10)}
+.notify-event-name{font-size:14px;font-weight:800;letter-spacing:-.02em;margin-right:auto}
+.notify-event > form{padding:0 1rem 1.125rem}
+.notify-varmap{margin-top:.75rem}
+.notify-varmap .toggle-row{justify-content:space-between;gap:.75rem}
+.notify-varmap .select{width:auto;min-width:9rem}

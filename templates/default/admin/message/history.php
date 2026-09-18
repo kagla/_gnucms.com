@@ -24,9 +24,22 @@ $jobStatusLabels = [
     'cancelled' => ['label' => '취소됨', 'class' => 'badge-ghost'],
 ];
 $channelLabels = ['at' => '알림톡', 'sms' => '문자'];
+// 어느 알림이 이 작업을 만들었는가. 관리자가 발송 화면에서 손으로 보낸 것은 event_key
+// 가 비어 있다(설계 문서: 관리자 수동 발송이면 NULL). 카탈로그에서 빠진 옛 키는 라벨을
+// 찾을 수 없으므로 키를 그대로 보여준다 — "-" 로 뭉개면 수동 발송과 구별되지 않는다.
+$eventLabel = function ($key) use ($event_labels) {
+    $key = (string) ($key ?? '');
+    if ($key === '') {
+        return ['label' => '관리자 수동 발송', 'class' => 'badge-ghost'];
+    }
+
+    return ['label' => $event_labels[$key] ?? $key, 'class' => 'badge-info'];
+};
 $totalPages = (int) ceil($listing['total'] / max(1, $listing['per_page']));
-$pageUrl = function (int $p) {
-    return $this->url('admin.messages.history', [], $p > 1 ? ['page' => $p] : []);
+$filterQuery = $event_filter !== '' ? ['event' => $event_filter] : [];
+$pageUrl = function (int $p) use ($filterQuery) {
+    return $this->url('admin.messages.history', [],
+        $p > 1 ? $filterQuery + ['page' => $p] : $filterQuery);
 };
 ?>
 <div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li aria-current="page">알림톡·문자</li></ul></div>
@@ -51,23 +64,41 @@ $pageUrl = function (int $p) {
         <form method="post" action="<?= $this->url('admin.messages.history.refresh') ?>">
           <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
           <?php if (($listing['page'] ?? 1) > 1): ?><input type="hidden" name="page" value="<?= $this->e($listing['page']) ?>"><?php endif ?>
+          <?php if ($event_filter !== ''): ?><input type="hidden" name="event" value="<?= $this->e($event_filter) ?>"><?php endif ?>
           <button class="btn btn-sm btn-outline" type="submit"><?= $this->icon('restore', 15) ?> 갱신</button>
         </form>
       </div>
     <?php endif ?>
 
+    <?php // 알림 한 건이 작업 하나를 만든다 — 댓글이 활발한 사이트에서는 알림이 일괄
+      // 발송을 금세 덮으므로, 운영자가 보러 온 것만 남길 수 있어야 한다. 쿼리에 실리는
+      // 것은 열거값 하나뿐이고(빈 값·manual·이벤트 키), 그 밖의 값은 거르지 않은 것으로
+      // 본다 — 컨트롤러가 그렇게 받는다. ?>
+    <form class="post-filter" method="get" action="<?= $this->url('admin.messages.history') ?>">
+      <select class="select select-bordered" name="event" aria-label="어느 알림이 만든 작업인지로 거르기">
+        <option value=""<?= $event_filter === '' ? ' selected' : '' ?>>전체</option>
+        <option value="manual"<?= $event_filter === 'manual' ? ' selected' : '' ?>>관리자 수동 발송</option>
+        <?php foreach ($event_labels as $key => $label): ?>
+          <option value="<?= $this->e($key) ?>"<?= $event_filter === $key ? ' selected' : '' ?>><?= $this->e($label) ?></option>
+        <?php endforeach ?>
+      </select>
+      <button class="btn btn-outline" type="submit"><?= $this->icon('search', 15) ?> 거르기</button>
+    </form>
+
     <div class="table-wrap">
       <table class="table table-zebra">
-        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th class="right">취소</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
+        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>알림</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th class="right">취소</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
         <tbody>
         <?php if ($listing['items'] === []): ?>
-          <tr class="table-empty"><td colspan="11">아직 보낸 작업이 없습니다.</td></tr>
+          <tr class="table-empty"><td colspan="12"><?= $event_filter === '' ? '아직 보낸 작업이 없습니다.' : '거른 조건에 맞는 작업이 없습니다.' ?></td></tr>
         <?php else: foreach ($listing['items'] as $row): ?>
           <?php $statusInfo = $jobStatusLabels[$row['status']] ?? ['label' => (string) $row['status'], 'class' => 'badge-ghost']; ?>
           <tr>
             <td data-label="요청 시각"><time datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at'], 'Y.m.d H:i') ?></time></td>
             <td data-label="발송 예정"><?php if ($row['scheduled_at'] !== null): ?><time datetime="<?= $this->e($row['scheduled_at']) ?>"><?= $this->date($row['scheduled_at'], 'Y.m.d H:i') ?></time><?php else: ?>-<?php endif ?></td>
             <td data-label="채널"><?= $this->e($channelLabels[$row['channel']] ?? $row['channel']) ?></td>
+            <?php $event = $eventLabel($row['event_key'] ?? null); ?>
+            <td data-label="알림"><span class="badge badge-sm <?= $this->e($event['class']) ?> badge-soft"><?= $this->e($event['label']) ?></span></td>
             <td data-label="템플릿"><?= $row['template_label'] !== null ? $this->e($row['template_label']) : '-' ?></td>
             <td data-label="총" class="right"><?= $this->e($row['total']) ?></td>
             <td data-label="성공" class="right"><?= $this->e($row['success']) ?></td>

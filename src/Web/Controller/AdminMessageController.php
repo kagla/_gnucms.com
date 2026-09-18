@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Web\Controller;
 
+use GnuCms\Aligo\History;
 use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Aligo\SendTime;
@@ -11,6 +12,7 @@ use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
+use GnuCms\Notify\Events;
 use GnuCms\Support\Clock;
 use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
@@ -264,15 +266,35 @@ final class AdminMessageController
             $refreshError = $e instanceof DomainError ? $this->firstError($e) : $e->getMessage();
         }
         $page = max(1, (int) ($request->getQueryParams()['page'] ?? 1));
-        $listing = $this->app->aligo()->history->jobs($page);
+        $event = self::eventFilter($request->getQueryParams());
+        $listing = $this->app->aligo()->history->jobs($page, 20, $event);
         $listing['items'] = array_map([$this, 'withTemplateLabel'], $listing['items']);
 
         return View::fromRequest($request)->render($response, 'admin/message/history', [
             'listing' => $listing,
             'pending' => $this->app->aligo()->history->pendingCount(),
             'refresh_error' => $refreshError,
+            'event_filter' => $event ?? '',
+            'event_labels' => Events::labels(),
             'query' => $request->getQueryParams(),
         ]);
+    }
+
+    /**
+     * 이력을 거를 값. 쿼리에서 받는 것은 문장이 아니라 **열거값 하나**다 — 빈 값(전부),
+     * History::MANUAL(관리자가 손으로 보낸 것), 또는 카탈로그가 아는 이벤트 키. 그 밖의
+     * 값은 거르지 않은 것으로 본다: 우리 화면의 <select> 가 낼 수 없는 값이므로 URL 을
+     * 손으로 고친 것이고, 모르는 값으로 빈 목록을 보여 주면 "그 알림은 한 번도 나가지
+     * 않았다"는 거짓을 말하게 된다.
+     */
+    private static function eventFilter(array $query): ?string
+    {
+        $value = is_scalar($query['event'] ?? null) ? (string) $query['event'] : '';
+        if ($value === History::MANUAL || Events::exists($value)) {
+            return $value;
+        }
+
+        return null;
     }
 
     /**
@@ -296,6 +318,12 @@ final class AdminMessageController
         // 실패했다는 사실만 깃발로 넘긴다. 사유 문장을 URL 에 실어 보내면 그 자리가
         // 공격자에게 열린다(클래스 주석 참고) — 목록 화면이 문장을 만든다.
         $query = $page > 1 ? ['page' => (string) $page] : [];
+        // 갱신하고 돌아왔더니 거르기가 풀려 있으면, 관리자는 방금 보던 목록을 잃는다.
+        // 폼이 실어 보낸 값도 목록 화면과 똑같이 열거값으로만 받아들인다.
+        $event = self::eventFilter(is_array($input) ? $input : []);
+        if ($event !== null) {
+            $query['event'] = $event;
+        }
         if ($failed) {
             $query['failed'] = '1';
         }
@@ -325,6 +353,7 @@ final class AdminMessageController
 
         return View::fromRequest($request)->render($response, 'admin/message/history_detail', [
             'job' => $job,
+            'event_labels' => Events::labels(),
             'notice' => $this->dispatchNotice($request->getQueryParams(), (int) $job['id']),
             'cancel_notice' => $this->cancelNotice($request->getQueryParams(), (int) $job['id']),
         ]);

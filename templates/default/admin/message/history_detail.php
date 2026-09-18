@@ -78,6 +78,8 @@ $fmtDate = function ($v) {
       <div><dt>발송 예정</dt><dd><?= $fmtDate($job['scheduled_at']) ?></dd></div>
       <div><dt>종료 시각</dt><dd><?= $fmtDate($job['finished_at']) ?></dd></div>
       <div><dt>발신번호</dt><dd><?= $this->e($job['sender_display']) ?></dd></div>
+      <?php // 어느 알림이 이 작업을 만들었는가. 비어 있으면 관리자가 손으로 보낸 것이다. ?>
+      <div><dt>보낸 알림</dt><dd><?php $eventKey = (string) ($job['event_key'] ?? ''); ?><?= $eventKey === '' ? '관리자 수동 발송' : $this->e($event_labels[$eventKey] ?? $eventKey) ?></dd></div>
       <div><dt>템플릿</dt><dd><?= $job['template_label'] !== null ? $this->e($job['template_label']) : '-' ?></dd></div>
       <div><dt>총 · 성공 · 실패 · 취소</dt><dd><?= $this->e($job['total']) ?> · <?= $this->e($job['success']) ?> · <?= $this->e($job['failure']) ?> · <?= $this->e($job['cancelled']) ?></dd></div>
       <?php if ((string) $job['created_by'] !== ''): ?><div><dt>보낸 사람</dt><dd><?= $this->e($job['created_by']) ?></dd></div><?php endif ?>

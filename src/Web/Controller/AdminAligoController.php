@@ -7,7 +7,10 @@ namespace GnuCms\Web\Controller;
 use GnuCms\App;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Aligo\TransportFailure;
+use GnuCms\Aligo\Variables;
 use GnuCms\Error\DomainError;
+use GnuCms\Notify\Events;
+use GnuCms\Notify\NotifySettings;
 use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -112,6 +115,187 @@ final class AdminAligoController
         }
 
         return $this->redirect($request, $response, 'admin.aligo', $query);
+    }
+
+    /**
+     * 알림 설정 화면. 이벤트 일곱 개마다 어느 채널로 보낼지를 고른다.
+     *
+     * **묶음마다 따로 저장한다.** NotifySettings::save() 가 이벤트 하나씩만 받기 때문만은
+     * 아니다. 한 폼으로 일곱 개를 한꺼번에 저장하면 네 번째 이벤트의 검증이 실패했을 때
+     * 앞의 셋은 이미 저장되고 뒤의 셋은 저장되지 않은 채로 422 를 돌려주게 된다 —
+     * 트랜잭션이 없는 저장소에서 "반쯤 저장됨"은 관리자가 화면만 보고는 알아낼 수 없는
+     * 상태다. 묶음마다 버튼을 따로 두면 실패한 묶음만 그대로 남고 나머지는 손대지 않는다.
+     */
+    public function notifications(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+
+        return $this->renderNotifications($request, $response, null, [],
+            $this->notifySavedNotice($request->getQueryParams()));
+    }
+
+    /**
+     * 이벤트 하나를 저장한다. 422 면 관리자가 방금 고른 값을 그대로 되돌려 보여준다 —
+     * 저장된 값으로 다시 그리면 방금 쓴 문자 본문과 고른 템플릿이 통째로 사라진다.
+     */
+    public function saveNotifications(
+        ServerRequestInterface $request,
+        ResponseInterface $response
+    ): ResponseInterface {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $event = is_scalar($input['event'] ?? null) ? (string) $input['event'] : '';
+        try {
+            $this->app->notifySettings()->save($event, $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) {
+                throw $e;
+            }
+
+            return $this->renderNotifications(
+                $request, $response->withStatus(422), $input, $e->details()
+            );
+        }
+
+        // 쿼리에는 이벤트 키(카탈로그가 정한 열거값)만 싣는다. 문장은 아래에서 만든다 —
+        // 화면에 그대로 찍을 문장을 쿼리로 받으면 공격자가 만든 URL 을 관리자가 열었을 때
+        // 우리가 그 문장을 시스템 알림처럼 보여주게 된다(AdminMessageController 클래스 주석).
+        return $this->redirect($request, $response, 'admin.settings.notifications', ['saved' => $event]);
+    }
+
+    /** 저장 안내. 쿼리에 실려 온 이벤트 키로 라벨을 찾아 문장을 여기서 만든다. */
+    private function notifySavedNotice(array $query): ?string
+    {
+        $event = is_scalar($query['saved'] ?? null) ? (string) $query['saved'] : '';
+        if (!Events::exists($event)) {
+            return null;
+        }
+
+        return sprintf('「%s」 알림 설정을 저장했습니다.', Events::labels()[$event]);
+    }
+
+    /**
+     * 화면이 쓸 값. 이벤트마다 "지금 실제로 어떻게 되어 있는가"와 "관리자가 무엇을
+     * 저장해 두었는가"를 나란히 놓고, 둘이 어긋나는 자리마다 그 이유를 문장으로 만든다.
+     * 그 어긋남을 말하지 않고 꺼진 칸만 보여주면, 관리자는 자기가 켠 채널이 이유 없이
+     * 스스로 꺼진 것을 보게 된다 — 이 분기가 되풀이해 고쳐 온 결함과 같은 모양이다.
+     *
+     * $posted 가 있으면 그 이벤트 한 묶음만 방금 들어온 입력으로 덮는다(422 되보여주기).
+     */
+    private function notifyRows(?array $posted): array
+    {
+        $values = $this->app->notifySettings()->formValues();
+        // 화면은 템플릿마다 "이 템플릿의 변수 목록"을 함께 필요로 한다 — 그 변수 하나하나에
+        // 코어 변수를 이어 줘야 알림톡을 켤 수 있기 때문이다(NotifySettings::save()).
+        // 본문을 뷰로 내려보내 거기서 파싱하게 하지 않는다: 판단은 컨트롤러가 한다.
+        $usable = array_map(static fn (array $t): array => [
+            'tpl_code' => (string) $t['tpl_code'],
+            'name' => (string) $t['name'],
+            'vars' => Variables::names((string) $t['content']),
+        ], $this->app->aligo()->templates->usable());
+        $postedEvent = is_array($posted) && is_scalar($posted['event'] ?? null)
+            ? (string) $posted['event'] : '';
+        $rows = [];
+        foreach ($values as $key => $value) {
+            $on = [];
+            foreach (NotifySettings::CHANNELS as $channel) {
+                $on[$channel] = in_array($channel, $value['channels'], true);
+            }
+            // 알림톡만은 저장 원본을 쓴다. channels 는 템플릿이 죽으면 알림톡을 빼는데,
+            // 그 상태에서 체크를 꺼진 것으로 그려 두면 관리자가 다른 칸만 고쳐 저장했을 때
+            // "켜 두었다"는 사실 자체가 조용히 지워진다. 체크는 관리자의 선택을 그대로
+            // 두고, 지금 나가지 않는다는 사실은 아래 alimtalk_notice 가 말한다.
+            $on['alimtalk'] = $on['alimtalk'] || ($value['alimtalk_on'] && $value['phone']);
+            $row = [
+                'key' => $key,
+                'label' => $value['label'],
+                'vars' => $value['vars'],
+                'phone' => $value['phone'],
+                'inbox_capable' => $value['inbox'],
+                'on' => $on,
+                'tpl_code' => $value['alimtalk_tpl_code'],
+                // 꺼져 있어도 저장된 값을 그대로 보여준다 — 다시 켤 때 다시 만들지
+                // 않아도 되는 것이 save() 가 이 값을 지우지 않는 이유다.
+                'var_map' => $value['alimtalk_var_map'],
+                'sms_body' => $value['sms_body_stored'],
+                'alimtalk_notice' => self::alimtalkNotice($value),
+                'sms_notice' => (!$on['sms'] && $value['sms_body_stored'] !== '')
+                    ? '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 저장된 값은 그대로 남아'
+                        . ' 있으니, 문자를 다시 켜고 저장하면 이 본문으로 나갑니다.'
+                    : null,
+            ];
+            if ($postedEvent === $key) {
+                $row = self::withPostedInput($row, $posted ?? []);
+            }
+            $rows[$key] = $row;
+        }
+
+        return ['rows' => $rows, 'templates' => $usable, 'open' => $postedEvent];
+    }
+
+    /**
+     * 저장된 알림톡 설정이 지금은 쓸 수 없게 되었을 때 그 이유를 말하는 한 문장.
+     * 관리자가 켜 두지 않았으면 아무 말도 하지 않는다 — 켜 두지 않은 이벤트에서
+     * template 이 null 인 것은 templateFor() 의 isOn() 게이트 때문이지 템플릿이 죽어서가
+     * 아니라서, 그때 "이 템플릿을 쓸 수 없습니다"라고 적으면 멀쩡한 템플릿을 두고
+     * 거짓말을 하게 된다.
+     */
+    private static function alimtalkNotice(array $value): ?string
+    {
+        if (!$value['phone'] || !$value['alimtalk_on'] || $value['template'] !== null) {
+            return null;
+        }
+        if ($value['alimtalk_tpl_code'] === '') {
+            return '알림톡을 켜 두었지만 고른 템플릿이 없어 지금은 나가지 않습니다. 아래에서 템플릿을 고르고 저장해 주세요.';
+        }
+
+        return sprintf(
+            '알림톡을 켜 두었지만 지금은 나가지 않습니다. 고르신 템플릿(%s)을 더는 쓸 수 없습니다 —'
+            . ' 카카오 승인이 풀렸거나, 템플릿 목록에서 사라졌거나, 본문이 바뀌어 변수 연결이 어긋났습니다.'
+            . ' 운영 → 알림톡·문자 → 템플릿에서 다시 가져오거나, 아래에서 다른 템플릿을 골라 주세요.',
+            $value['alimtalk_tpl_code']
+        );
+    }
+
+    /**
+     * 422 로 되돌아온 묶음을 관리자가 방금 화면에서 고른 값으로 덮는다. 저장된 값이
+     * 아니므로 "지금 쓸 수 있는가"를 말하는 안내문은 지운다 — 저장되지 않은 입력을 두고
+     * 저장된 설정에 대한 문장을 붙여 두면 두 문장이 서로 다른 것을 가리키게 된다.
+     */
+    private static function withPostedInput(array $row, array $posted): array
+    {
+        foreach (NotifySettings::CHANNELS as $channel) {
+            $row['on'][$channel] = ($posted[$channel] ?? '') === '1';
+        }
+        $row['tpl_code'] = is_scalar($posted['tpl_code'] ?? null) ? trim((string) $posted['tpl_code']) : '';
+        $map = [];
+        foreach (is_array($posted['var_map'] ?? null) ? $posted['var_map'] : [] as $name => $core) {
+            if (is_scalar($core)) {
+                $map[(string) $name] = trim((string) $core);
+            }
+        }
+        $row['var_map'] = $map;
+        $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
+        $row['alimtalk_notice'] = null;
+        $row['sms_notice'] = null;
+
+        return $row;
+    }
+
+    private function renderNotifications(ServerRequestInterface $request, ResponseInterface $response,
+        ?array $posted, array $errors, ?string $notice = null): ResponseInterface
+    {
+        $view = $this->notifyRows($posted);
+
+        return View::fromRequest($request)->render($response, 'admin/notify_settings', [
+            'events' => $view['rows'],
+            'templates' => $view['templates'],
+            'open' => $view['open'],
+            'errors' => $errors,
+            'notice' => $notice,
+            'status' => $this->app->aligo()->status(),
+        ]);
     }
 
     /**

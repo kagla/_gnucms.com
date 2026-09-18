@@ -462,4 +462,155 @@ final class MessageHistoryTest extends WebTestCase
 
         $this->assertLoginRedirect($response);
     }
+
+    /**
+     * 알림이 만든 작업과 관리자가 손으로 보낸 작업을 심는다. event_key 는 Dispatch 가
+     * 실제로 적는 자리 그대로다 — 알림은 Notify\Events 의 키, 수동 발송은 NULL.
+     */
+    private function seedWithEventKeys(App $app): array
+    {
+        $db = $app->db();
+        $ids = [];
+        foreach (['manual' => null, 'reset' => 'password_reset', 'comment' => 'comment_new'] as $name => $key) {
+            $ids[$name] = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+                'body' => '본문 ' . $name, 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+                'status' => 'sent', 'test_mode' => 0, 'event_key' => $key,
+                'created_at' => '2026-09-17 10:00:00']);
+        }
+
+        return $ids;
+    }
+
+    /** 목록에서 그 작업의 줄이 있는지. 목록은 본문을 보여주지 않으므로 상세 링크로 가린다. */
+    private static function listsJob(string $html, int $jobId): bool
+    {
+        return str_contains($html, '/admin/messages/history/' . $jobId . '"');
+    }
+
+    /**
+     * message_jobs.event_key 는 알림이 보낼 때마다 적히는데 여태 어느 화면도 보여주지
+     * 않았다. 알림 한 통이 작업 하나를 만들기 때문에, 이 값이 보이지 않으면 비밀번호
+     * 재설정과 댓글 알림과 관리자의 일괄 발송이 목록에서 서로 구별되지 않는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheListNamesTheNotificationThatProducedEachJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringContainsString('비밀번호 재설정', $html);
+        self::assertStringContainsString('새 댓글·답글', $html);
+        self::assertStringContainsString('관리자 수동 발송', $html);
+    }
+
+    /** 거르기 목록 자체가 아니라 표의 칸이 그 사실을 말하는지. 목록 밖 어디에서도 나오지 않는 문구다. */
+    #[DataProvider('connectionProvider')]
+    public function testAJobWithNoEventKeyIsCalledAManualSendRatherThanLeftBlank(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $ids['manual']));
+
+        self::assertStringContainsString('관리자 수동 발송', $html);
+    }
+
+    /** 상세에서도 같은 사실을 말해야 한다 — 목록에서 고른 줄을 열었더니 사라지면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheDetailNamesTheNotificationThatProducedTheJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $ids['reset']));
+
+        self::assertStringContainsString('보낸 알림', $html);
+        self::assertStringContainsString('비밀번호 재설정', $html);
+    }
+
+    /**
+     * 댓글 한 건이 최대 두 통을 만든다 — 거를 수 없으면 알림이 일괄 발송을 금세 덮는다.
+     * 거르기는 이벤트별로도, "관리자가 손으로 보낸 것"으로도 되어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheListCanBeFilteredToOneNotificationAndToManualSends(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $onlyReset = $this->body($this->get($app, '/admin/messages/history', ['event' => 'password_reset']));
+        self::assertTrue(self::listsJob($onlyReset, $ids['reset']));
+        self::assertFalse(self::listsJob($onlyReset, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyReset, $ids['comment']));
+
+        $onlyManual = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+        self::assertTrue(self::listsJob($onlyManual, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyManual, $ids['reset']));
+
+        // 거르지 않으면 셋 다 보인다 — 위 단언들이 "아무것도 안 나온다"로 통과하지 않게.
+        $all = $this->body($this->get($app, '/admin/messages/history'));
+        foreach ($ids as $id) {
+            self::assertTrue(self::listsJob($all, $id));
+        }
+    }
+
+    /**
+     * 쿼리는 열거값만 받는다. 모르는 값으로 빈 목록을 보여주면 "그 알림은 한 번도 나가지
+     * 않았다"는 거짓을 말하게 되므로, 거르지 않은 것으로 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnUnknownFilterValueDoesNotHideEverything(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['event' => "' OR 1=1 --"]));
+
+        foreach ($ids as $id) {
+            self::assertTrue(self::listsJob($html, $id));
+        }
+        self::assertStringNotContainsString('OR 1=1', $html);
+    }
+
+    /** 거르기는 페이저와 갱신 버튼을 건너서도 살아남아야 한다 — 풀리면 보던 목록을 잃는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheFilterSurvivesPagingAndTheRefreshButton(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $manual = $this->seedWithEventKeys($app)['manual'];
+        $oldest = 0;
+        for ($i = 0; $i < 21; $i++) {
+            $id = (int) $app->db()->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+                'body' => '재설정 ' . $i, 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+                'status' => 'sent', 'test_mode' => 0, 'event_key' => 'password_reset',
+                'created_at' => '2026-09-17 10:00:00']);
+            $oldest = $oldest === 0 ? $id : $oldest;
+        }
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['event' => 'password_reset']));
+        self::assertStringContainsString('page=2', $html);
+        self::assertStringContainsString('event=password_reset', $html);
+
+        $second = $this->body($this->get($app, '/admin/messages/history',
+            ['event' => 'password_reset', 'page' => '2']));
+        // 거른 22건(위에서 심은 password_reset 하나 + 21건) 중 두 번째 쪽에 남는 둘.
+        // 총 개수까지 거르지 않으면 페이저와 목록이 서로 다른 집합을 가리키게 되고,
+        // 거르기가 두 번째 쪽에 닿지 않으면 수동 발송 작업이 여기 섞여 나온다.
+        self::assertTrue(self::listsJob($second, $oldest));
+        self::assertFalse(self::listsJob($second, $manual));
+
+        // 총 개수까지 거르지 않으면 한 건짜리 목록에 두 쪽짜리 페이저가 붙고, 그 두 번째
+        // 쪽은 비어 있다 — 목록과 페이저가 서로 다른 집합을 가리키는 상태다.
+        $manualOnly = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+        self::assertTrue(self::listsJob($manualOnly, $manual));
+        self::assertStringNotContainsString('page=2', $manualOnly);
+
+        $refreshed = $this->post($app, '/admin/messages/history/refresh', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+        ]);
+        self::assertSame(303, $refreshed->getStatusCode());
+        self::assertStringContainsString('event=password_reset', $refreshed->getHeaderLine('Location'));
+    }
 }

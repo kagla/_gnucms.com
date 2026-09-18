@@ -5,5 +5,6 @@
   <a class="tab<?= $active === 'oauth' ? ' tab-active' : '' ?>"<?= $active === 'oauth' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.oauth') ?>">소셜 로그인</a>
   <a class="tab<?= $active === 'mail' ? ' tab-active' : '' ?>"<?= $active === 'mail' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.mail') ?>">메일</a>
   <a class="tab<?= $active === 'aligo' ? ' tab-active' : '' ?>"<?= $active === 'aligo' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.aligo') ?>">알림톡·문자</a>
+  <a class="tab<?= $active === 'notify' ? ' tab-active' : '' ?>"<?= $active === 'notify' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.notifications') ?>">알림</a>
   <a class="tab<?= $active === 'maintenance' ? ' tab-active' : '' ?>"<?= $active === 'maintenance' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.maintenance') ?>">시스템·유지보수</a>
 </nav>

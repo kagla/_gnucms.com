@@ -14,6 +14,14 @@ use GnuCms\Support\Clock;
  */
 final class History
 {
+    /**
+     * jobs() 의 event 인자에 주는, "관리자가 손으로 보낸 것"을 뜻하는 값. 알림이 만든
+     * 작업은 event_key 에 Notify\Events 의 키가 적히고 관리자 발송은 비어 있는데(설계
+     * 문서: 관리자 수동 발송이면 NULL), "비어 있음"은 값이 아니라서 거르는 쪽에서 부를
+     * 이름이 필요하다. Events 의 어떤 키와도 겹치지 않는다.
+     */
+    public const MANUAL = 'manual';
+
     public const RECHECK_SECONDS = 60;
     public const GIVE_UP_DAYS = 7;
     private const BATCH = 5;
@@ -439,15 +447,46 @@ final class History
             . self::DUE_ONLY, ['accepted', 'accepted', Clock::now()])['c'];
     }
 
-    public function jobs(int $page = 1, int $perPage = 20): array
+    /**
+     * 이력 목록. $event 는 event_key 로 거르는 값이다.
+     *
+     *  - null       — 거르지 않는다(전부)
+     *  - self::MANUAL — 관리자가 손으로 보낸 것만(event_key 가 비어 있는 작업)
+     *  - 그 밖의 값  — 그 알림이 만든 작업만(Notify\Events 의 키)
+     *
+     * 거른 목록과 총 개수는 반드시 같은 조건을 써야 한다 — 어긋나면 한 페이지짜리
+     * 목록에 열 페이지짜리 페이저가 붙는다. 그래서 조건을 한 번만 만들어 둘 다에 준다.
+     */
+    public function jobs(int $page = 1, int $perPage = 20, ?string $event = null): array
     {
         $page = max(1, $page);
+        [$where, $params] = self::eventFilter($event);
         $total = (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM '
-            . $this->db->table('message_jobs'))['c'];
-        $items = $this->db->select('SELECT * FROM ' . $this->db->table('message_jobs')
-            . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage));
+            . $this->db->table('message_jobs') . $where, $params)['c'];
+        $items = $this->db->select('SELECT * FROM ' . $this->db->table('message_jobs') . $where
+            . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
 
-        return ['items' => $items, 'total' => $total, 'page' => $page, 'per_page' => $perPage];
+        return ['items' => $items, 'total' => $total, 'page' => $page, 'per_page' => $perPage,
+            'event' => $event];
+    }
+
+    /**
+     * 위 필터의 WHERE 절과 파라미터. 수동 발송은 event_key 가 NULL 인 작업이지만
+     * 빈 문자열도 같이 본다 — 뜻이 같은 두 저장 모양 중 하나만 세면 그 작업은 "전체"
+     * 에만 나타나고 어느 갈래에도 들어가지 않는다.
+     *
+     * @return array{0:string,1:list<string>}
+     */
+    private static function eventFilter(?string $event): array
+    {
+        if ($event === null) {
+            return ['', []];
+        }
+        if ($event === self::MANUAL) {
+            return [" WHERE (event_key IS NULL OR event_key = '')", []];
+        }
+
+        return [' WHERE event_key = ?', [$event]];
     }
 
     public function job(int $id): ?array
