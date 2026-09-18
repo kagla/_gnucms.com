@@ -162,7 +162,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminEmailLogsInAndRendersDashboard(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['theme' => 'modern']);
+        $this->saveSiteSettings($app, ['theme' => 'modern']);
         $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
         $app->users()->verifyEmail($id);
 
@@ -883,7 +883,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminSetsAndClearsAMembersPhoneNumber(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
@@ -931,7 +931,7 @@ final class AdminPageTest extends WebTestCase
     public function testMemberUpdateRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
@@ -966,7 +966,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminCanChangeAMembersPhoneEvenWhenSignupPhoneIsOff(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
@@ -1010,7 +1010,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminFormPrefillsTheStoredNumberSoAnUntouchedSaveKeepsIt(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
@@ -1052,7 +1052,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminMembersListSearchesByPhoneAndShowsItMasked(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );

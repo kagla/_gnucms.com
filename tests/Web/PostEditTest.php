@@ -116,7 +116,7 @@ final class PostEditTest extends WebTestCase
 
     private function seedGuestPost(App $app): int
     {
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유게시판', 'perm_write' => 'guest',
         ]);

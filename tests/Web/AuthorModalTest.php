@@ -14,7 +14,7 @@ final class AuthorModalTest extends WebTestCase
     public function testMemberAuthorIsButtonAndGuestAuthorIsNot(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest']);
         // 회원 글: adminAcl 의 신원이 글쓴이가 된다.

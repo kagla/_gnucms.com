@@ -105,7 +105,7 @@ final class CmsPageTest extends WebTestCase
             'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '기존회원', false
         );
         $app->users()->verifyEmail($id);
-        $app->cms()->saveSettings([
+        $this->saveSiteSettings($app, [
             'registration_enabled' => '0', 'social_registration_enabled' => '0',
         ]);
 

@@ -266,7 +266,7 @@ final class AuthPageTest extends WebTestCase
     public function testRegisterRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'required']);
         $this->get($app, '/register');
 
         $arrayResponse = $this->post($app, '/register', [

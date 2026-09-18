@@ -183,7 +183,7 @@ final class OauthFlowTest extends WebTestCase
         $app->users()->create('owner@example.com', password_hash('password123', PASSWORD_DEFAULT), '관리자', true);
         $memberId = $app->users()->createSocial('social@example.com', '기존소셜회원');
         $app->identities()->attach($memberId, 'google', 'google-user-1');
-        $app->cms()->saveSettings([
+        $this->saveSiteSettings($app, [
             'registration_enabled' => '0', 'social_registration_enabled' => '0',
         ]);
         $app->setProviderRegistry(new ProviderRegistry([], [$this->fakeGoogle()]));

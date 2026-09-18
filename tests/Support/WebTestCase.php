@@ -7,6 +7,7 @@ namespace GnuCms\Tests\Support;
 use GnuCms\App;
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
+use GnuCms\Cms\CmsService;
 use GnuCms\Db\Schema;
 use GnuCms\Web\Kernel;
 use Psr\Http\Message\ResponseInterface;
@@ -90,10 +91,34 @@ abstract class WebTestCase extends DatabaseTestCase
             $theme = is_string($env) && $env !== '' ? $env : null;
         }
         if (is_string($theme) && $theme !== '') {
-            $app->cms()->saveSettings(['theme' => $theme]);
+            $this->saveSiteSettings($app, ['theme' => $theme]);
         }
 
         return $app;
+    }
+
+    /**
+     * 사이트 설정을 바꾼다. 테스트에서 설정을 바꿀 때는 언제나 이 길로 온다.
+     *
+     * CmsService 는 settings() 를 메모리에 캐시한다(CmsService::$settingsCache). 그런데
+     * $app->cms() 가 돌려주는 것은 그 캐시를 모르는 맨 CmsRepository 다. 그래서 화면을
+     * 한 번이라도 그렸거나 서비스를 한 번이라도 쓴 앱에서 $this->saveSiteSettings($app, ) 로
+     * 값을 바꾸면 DB 만 바뀌고, 정작 검사 대상인 서비스는 옛 값을 계속 본다.
+     *
+     * 이 함정은 이 분기에서만 세 번 값을 치렀다. 두 번은 바꾸지도 않은 설정으로 돌아간
+     * 테스트가 없는 실패를 보고했고(그중 하나는 Critical 로 올라갔다), 한 번은 고친 것을
+     * 실제로는 확인하지 않는 빈 테스트가 통과했다 — 고침을 되돌려 보고서야 드러났다.
+     *
+     * 저장 자체는 리포지토리로 한다. 설정 저장 화면들(saveSettings·saveGeneralSettings·
+     * saveWritingSettings)은 저마다 자기 묶음의 키를 전부 검증하고 빠진 키는 기본값으로
+     * 덮어쓰므로, 키 하나만 바꾸는 통로로 쓸 수 없다. 대신 저장한 뒤 서비스가 들고 있는
+     * 캐시를 비워, 다음 settings() 가 DB 를 다시 읽게 한다. 필드 이름이 바뀌면 이
+     * ReflectionProperty 가 바로 예외를 던지므로 조용히 어긋나지는 않는다.
+     */
+    protected function saveSiteSettings(App $app, array $settings): void
+    {
+        $app->cms()->saveSettings($settings);
+        (new \ReflectionProperty(CmsService::class, 'settingsCache'))->setValue($app->cmsService(), null);
     }
 
     /** 게시판·글을 만들 때 쓴다. 1단계에는 로그인이 없으므로 화면은 항상 게스트다. */

@@ -49,7 +49,7 @@ final class BackupPageTest extends WebTestCase
             'editor' => ['dir' => $this->root . '/editor'],
         ];
         $app = $this->makeApp($this->dbConfig, $config);
-        $app->cms()->saveSettings(['timezone' => 'Pacific/Honolulu']);
+        $this->saveSiteSettings($app, ['timezone' => 'Pacific/Honolulu']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );

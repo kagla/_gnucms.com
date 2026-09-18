@@ -265,7 +265,7 @@ final class AccountPageTest extends WebTestCase
     public function testMemberSetsAndClearsTheirPhoneNumberFromTheProfileScreen(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
@@ -305,7 +305,7 @@ final class AccountPageTest extends WebTestCase
     public function testRequiredPolicyDoesNotBlockTheProfileOfAMemberWithNoNumber(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'required']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
@@ -336,7 +336,7 @@ final class AccountPageTest extends WebTestCase
     public function testAStoredNumberIsMarkedAsUnclearableUnderRequiredPolicy(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'required']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'required']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $app->users()->updatePhone($id, '01012345678');
@@ -370,7 +370,7 @@ final class AccountPageTest extends WebTestCase
     public function testTheProfileHidesThePhoneFieldWhenCollectionIsOffAndNothingIsStored(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
@@ -399,7 +399,7 @@ final class AccountPageTest extends WebTestCase
     public function testAProfileSaveWithNoPhoneFieldKeepsTheStoredNumber(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $app->users()->updatePhone($id, '01012345678');
@@ -449,7 +449,7 @@ final class AccountPageTest extends WebTestCase
     public function testAccountUpdateRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
         $id = $app->users()->create('me@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '나', false);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');

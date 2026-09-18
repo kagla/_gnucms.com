@@ -20,7 +20,7 @@ final class WriteRateLimitWebTest extends WebTestCase
     {
         Clock::freeze('2026-09-02 00:00:00');
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings([
+        $this->saveSiteSettings($app, [
             'guest_write_enabled' => '1',
             'post_rate_interval' => '30', 'post_rate_10m' => '0', 'post_rate_day' => '0',
         ]);
@@ -52,7 +52,7 @@ final class WriteRateLimitWebTest extends WebTestCase
     {
         Clock::freeze('2026-09-02 00:00:00');
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings([
+        $this->saveSiteSettings($app, [
             'guest_write_enabled' => '1',
             'comment_rate_interval' => '5', 'comment_rate_10m' => '0', 'comment_rate_day' => '0',
         ]);

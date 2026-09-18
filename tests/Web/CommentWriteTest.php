@@ -277,7 +277,7 @@ final class CommentWriteTest extends WebTestCase
     public function testGuestPostAuthorCanSeeSecretCommentsWithPostOwnership(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'guest-post',
             'name' => '비회원 원글',
@@ -353,7 +353,7 @@ final class CommentWriteTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         // 이 테스트는 연속 작성 제한이 아니라 비밀 댓글의 부모·답글 관계를 검증한다.
-        $app->cms()->saveSettings([
+        $this->saveSiteSettings($app, [
             'comment_rate_interval' => '0', 'comment_rate_10m' => '0', 'comment_rate_day' => '0',
         ]);
         $app->boardService()->create($this->adminAcl(), [
@@ -403,7 +403,7 @@ final class CommentWriteTest extends WebTestCase
     public function testEditorImageUploadFollowsBoardPermission(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'open', 'name' => '열린게시판', 'perm_write' => 'guest',
         ]);

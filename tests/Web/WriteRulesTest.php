@@ -13,7 +13,7 @@ final class WriteRulesTest extends WebTestCase
     private function guestBoardApp(array $dbConfig, string $minChars): \GnuCms\App
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1', 'post_min_chars' => $minChars]);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1', 'post_min_chars' => $minChars]);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);
@@ -71,7 +71,7 @@ final class WriteRulesTest extends WebTestCase
     public function testShortCommentIsRejectedWhenCommentMinimumIsSet(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['comment_min_chars' => '5']);
+        $this->saveSiteSettings($app, ['comment_min_chars' => '5']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
@@ -96,7 +96,7 @@ final class WriteRulesTest extends WebTestCase
     public function testEditorsCarryTheMinimumSoTheyCanWarnBeforeSubmit(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1', 'post_min_chars' => '10', 'comment_min_chars' => '5']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1', 'post_min_chars' => '10', 'comment_min_chars' => '5']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
