@@ -292,7 +292,8 @@ final class AccountService
     {
         $user = $this->users->findByEmail(strtolower(trim($email)));
         if ($user !== null && !(bool) $user['email_verified']) {
-            $this->sendVerification($user);
+            // 조용히. 이 화면은 없는 주소에도 같은 답을 내야 한다(notifyQuietly 주석).
+            $this->sendVerification($user, true);
         }
     }
 
@@ -304,7 +305,7 @@ final class AccountService
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
         $url = $this->appUrl . '/reset-password?token=' . rawurlencode($token);
-        $sent = $this->notify('password_reset', Recipient::forUser($user), [
+        $sent = $this->notifyQuietly('password_reset', Recipient::forUser($user), [
             '사이트명' => $this->siteName(),
             '이름' => (string) $user['display_name'],
             '링크' => $url,
@@ -313,7 +314,7 @@ final class AccountService
         if (!$sent) {
             // 화면에는 이 사실을 옮기지 않는다. 이 메서드는 없는 계정에도 조용히 돌아가야
             // 하므로(그래야 화면이 계정 목록이 되지 않는다), "이 사람에게는 못 보냈다"를
-            // 화면에 말하는 순간 계정이 있다는 뜻이 된다. 화면은 대신 canNotify() 로
+            // 화면에 말하는 순간 계정이 있다는 뜻이 된다. 화면은 대신 canSendResetLink() 로
             // 누구에게나 같은 사실만 말한다. 운영자에게는 여기서 알린다.
             error_log('[' . GNUCMS_ID . '] 비밀번호 재설정 링크가 아무 데도 나가지 않았습니다'
                 . ' — 회원 #' . (int) $user['id'] . ' 는 지금 비밀번호를 되찾을 수 없습니다.');
@@ -518,18 +519,30 @@ final class AccountService
         ];
     }
 
-    private function sendVerification(array $user): void
+    /**
+     * @param bool $quiet 발송 실패를 예외로 올리지 않는다. 다시 보내기 화면만 참을 준다 —
+     *   그 화면은 없는 주소에도 같은 답을 내야 하기 때문이다(notifyQuietly 주석).
+     *   가입은 거짓이다: 거기서 실패를 삼키면 인증 링크 없는 회원 행이 남고, 화면은
+     *   "보냈어요"라고 말한다. 가입 화면은 세 갈래가 모두 같은 오류를 내므로 그 자리에서는
+     *   예외가 계정의 존재를 흘리지 않는다.
+     */
+    private function sendVerification(array $user, bool $quiet = false): void
     {
         $token = $this->tokens->issue((int) $user['id'], TokenService::VERIFY_EMAIL);
         $url = $this->appUrl . '/verify-email?token=' . rawurlencode($token);
-        $sent = $this->notify('email_verify', Recipient::forUser($user), [
+        $to = Recipient::forUser($user);
+        $vars = [
             '사이트명' => $this->siteName(),
             '이름' => (string) $user['display_name'],
             '링크' => $url,
             '유효시간' => '24시간',
-        ]);
+        ];
+        $sent = $quiet
+            ? $this->notifyQuietly('email_verify', $to, $vars)
+            : $this->notify('email_verify', $to, $vars);
         if (!$sent) {
-            // 이 회원은 인증을 끝낼 길이 없다 — 화면은 canNotify() 로 사실대로 말하지만,
+            // 이 회원은 인증을 끝낼 길이 없다 — 화면은 canSendVerificationLink() 로 누구에게나
+            // 같은 사실만 말하지만,
             // 고칠 수 있는 사람은 사이트 주인뿐이라 로그에도 남긴다. Notifier 는 켠 채널이
             // 아예 없는 경우에는 아무 줄도 적지 않으므로(그쪽은 사고가 아니라 설정이다)
             // 이 자리에서 적어야 한다. 주소는 적지 않는다 — 회원 번호면 충분하다.
@@ -567,6 +580,34 @@ final class AccountService
      *
      * @return bool 한 군데라도 실제로 나갔는가.
      */
+    /**
+     * 없는 계정에도 **똑같이** 돌아가야 하는 두 자리(다시 보내기·비밀번호 재설정)가 쓰는
+     * 발송. 결과가 false 든 예외든 부르는 쪽에는 "안 나갔다" 하나로만 돌아온다.
+     *
+     * **왜 예외까지 삼키는가.** 전부 실패하면 Notifier 는 503 을 올린다(발송기가 배선되지
+     * 않은 조립이면 메일러의 예외가 그대로 올라온다). 그 예외가 화면까지 가면 오류 페이지가
+     * 뜨는데 — **계정이 있는 주소에서만** 뜬다. 없는 주소는 보낼 것이 없어 조용히 200 을
+     * 받기 때문이다. 그 차이가 곧 "이 주소가 가입돼 있는가"를 묻는 도구다. SMTP 가 죽어
+     * 있는 동안 누구나 계정 목록을 뽑을 수 있다는 뜻이고, 이 분기가 네 라운드에 걸쳐
+     * 막아 온 것이 정확히 그 모양이다.
+     *
+     * **관계없는 사고까지 삼키지는 않는다.** try 안에 있는 것은 발송 호출 한 줄뿐이다 —
+     * 토큰 발급도 회원 조회도 바깥이라 그쪽 사고는 그대로 올라간다. 삼킨 것은 조용히
+     * 사라지지도 않는다: 무엇이 터졌는지 여기서 로그에 적고, 부르는 쪽이 "아무 데도 나가지
+     * 않았습니다" 한 줄을 덧붙인다. 수신자와 $vars 는 적지 않는다(Notifier 와 같은 규칙).
+     */
+    private function notifyQuietly(string $event, Recipient $to, array $vars): bool
+    {
+        try {
+            return $this->notify($event, $to, $vars);
+        } catch (\Throwable $e) {
+            error_log('[' . GNUCMS_ID . '] 알림 ' . $event . ' 발송이 실패했습니다 — '
+                . get_class($e) . ': ' . $e->getMessage());
+
+            return false;
+        }
+    }
+
     private function notify(string $event, Recipient $to, array $vars): bool
     {
         return $this->notifier !== null

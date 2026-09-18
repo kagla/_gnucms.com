@@ -8,6 +8,7 @@ use GnuCms\Account\AccountService;
 use GnuCms\Aligo\AligoService;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
+use GnuCms\Mail\MailerInterface;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Notify\ChannelInterface;
 use GnuCms\Notify\Events;
@@ -324,7 +325,18 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertStringNotContainsString('재설정 링크를 보냈어요', $reset);
     }
 
-    /** 한 채널만 닿으면 된다. 닿지 않는 채널이 섞여 있다고 "못 보낸다"고 하면 안 된다. */
+    /**
+     * 한 채널만 닿으면 된다. 닿지 않는 채널이 섞여 있다고 "못 보낸다"고 하면 안 된다.
+     *
+     * 본은 {mail, sms} 에 알리고 미연결이다. 이 조합은 **필터가 지우지 못한다** —
+     * password_reset 은 전화 채널을 쓸 수 있는 알림이라 sms 가 그대로 남고, 남은 채로
+     * "지금은 쓸 수 없는 채널"이 된다. 앞서 쓰던 {mail, inbox} 는 계획 4 의 필터가
+     * inbox 를 지워 {mail} 로 만들어 버려, 닿지 않는 채널이 섞인 상태 자체가 사라졌다.
+     *
+     * 이 시험이 깨지려면: canReach() 가 "하나라도 닿으면"에서 "전부 닿아야"로 바뀌면 된다.
+     * 그 상태는 이 설정에서 실제로 도달 가능하다(알리고를 연결하지 않은 사이트가 문자를
+     * 켜 두는 것은 흔한 중간 상태다).
+     */
     #[DataProvider('connectionProvider')]
     public function testTheScreensStillSayItCanSendWhenOneChannelReaches(array $config): void
     {
@@ -332,10 +344,96 @@ final class NotificationRoutingTest extends WebTestCase
         $id = $this->unverifiedMember($app);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
-        $this->forceChannels($app, 'password_reset', ['mail', 'inbox']);
+        $app->notifySettings()->save('password_reset', ['mail' => '1', 'alimtalk' => '0',
+            'sms' => '1', 'inbox' => '0', 'sms_body' => '#{이름}님 #{링크} 에서 다시 설정해 주세요']);
+        self::assertSame(['mail', 'sms'], $app->notifySettings()->channelsFor('password_reset'),
+            '필터가 지우지 않는 조합이어야 이 시험에 뜻이 있다');
 
         self::assertStringContainsString('재설정 링크를 보냈어요', $this->body($this->post($app,
-            '/forgot-password', ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com'])));
+            '/forgot-password', ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com'])));
+    }
+
+    /**
+     * 발송이 통째로 실패해도 두 화면의 답은 달라지지 않는다.
+     *
+     * 실패하면 Notifier 가 503 을 올리는데, 올릴 것이 있는 쪽은 **계정이 있는 주소뿐**이다 —
+     * 없는 주소는 보낼 것이 없어 조용히 200 을 받는다. SMTP 가 죽어 있는 동안 그 차이가
+     * 계정 목록이 된다. 이 분기 이전부터 있던 모양이고, 이 화면들을 고쳐 놓고 그대로 둘
+     * 자리가 아니다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testNeitherScreenChangesItsAnswerWhenTheSendItselfFails(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->setMailer($this->throwingMailer());
+        $id = $this->unverifiedMember($app);
+        $this->get($app, '/login');
+
+        $known = $this->post($app, '/verify-email/resend',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']);
+        $unknown = $this->post($app, '/verify-email/resend',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']);
+        self::assertSame(200, $known->getStatusCode(), $this->body($known));
+        self::assertSame($this->body($unknown), $this->body($known));
+
+        $app->users()->verifyEmail($id);
+        $knownReset = $this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']);
+        $unknownReset = $this->post($app, '/forgot-password',
+            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']);
+        self::assertSame(200, $knownReset->getStatusCode(), $this->body($knownReset));
+        self::assertSame($this->body($unknownReset), $this->body($knownReset));
+    }
+
+    /** 삼킨 실패는 조용히 사라지지 않는다 — 무엇이 터졌는지 운영자 로그에 남는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheOperatorIsToldWhatBrokeWhenTheSendFailed(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->setMailer($this->throwingMailer());
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+
+        $logged = $this->captureErrorLog(function () use ($app): void {
+            $app->accountService()->requestPasswordReset('member@example.com');
+        });
+
+        self::assertStringContainsString('발송이 실패했습니다', $logged);
+        self::assertStringNotContainsString('member@example.com', $logged, '주소는 로그에 적지 않는다');
+    }
+
+    /**
+     * 가입은 조용하지 않다. 발송 실패를 삼키면 인증 링크 없는 회원 행이 남고 화면은
+     * "보냈어요"라고 말한다 — 네 라운드에 걸쳐 막은 바로 그 자리다. 다시 보내기 화면과
+     * 달리 가입 화면은 세 갈래가 모두 같은 오류를 내므로, 여기서 예외가 올라가도 계정의
+     * 존재는 드러나지 않는다.
+     *
+     * 이 시험이 깨지려면: register() 가 부르는 sendVerification() 이 조용한 쪽으로 바뀌면 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASignupDoesNotClaimSuccessWhenTheVerificationSendFails(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $app->accountService()->register($this->owner());
+        $agreements = $this->publishLegalPages($app);
+        $app->setMailer($this->throwingMailer());
+
+        $this->expectException(DomainError::class);
+        $app->accountService()->register($agreements + [
+            'email' => 'member@example.com', 'password' => 'member-password-123',
+            'password_confirmation' => 'member-password-123',
+        ]);
+    }
+
+    /** SMTP 가 죽었을 때의 메일러. SmtpMailer 가 실제로 던지는 것과 같은 모양이다. */
+    private function throwingMailer(): MailerInterface
+    {
+        return new class () implements MailerInterface {
+            public function send(string $to, string $subject, string $body): void
+            {
+                throw DomainError::internal('SMTP 메일을 보내지 못했습니다. 계정과 앱 비밀번호를 확인해 주세요.');
+            }
+        };
     }
 
     /**
@@ -469,8 +567,10 @@ final class NotificationRoutingTest extends WebTestCase
         foreach ([['password_reset', '/forgot-password'], ['email_verify', '/verify-email/resend']] as [$event, $path]) {
             // 'inbox' 가 여기 있는 것이 중요하다: 그 상태에서 화면이 말하는 답이
             // 바뀌었으므로(닿지 않는다), 더 정확해진 답이 계정 존재를 흘리기 시작하지
-            // 않았는지 다시 확인해야 한다.
-            foreach ([['mail'], [], ['inbox'], ['mail', 'inbox']] as $on) {
+            // 않았는지 다시 확인해야 한다. 'sms' 가 섞인 둘은 재설정 쪽에서 필터가 지우지
+            // 못하는 상태다 — 화면의 답이 '못 보낸다'(문자만, 알리고 미연결)와
+            // '보낸다'(메일이 함께 켜져 있음)로 갈리는, 서로 다른 두 자리를 함께 본다.
+            foreach ([['mail'], [], ['inbox'], ['mail', 'inbox'], ['sms'], ['mail', 'sms']] as $on) {
                 $this->forceChannels($app, $event, $on);
                 $known = $this->body($this->post($app, $path,
                     ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
