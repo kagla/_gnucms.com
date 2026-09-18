@@ -125,9 +125,11 @@ final class AdminService
         $v->check();
         // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
         // AccountService::updateProfile() 과 같은 이유로 $v->check() 뒤에 본다.
-        $phone = $this->phoneFromAdminInput($input);
+        $phone = $this->phoneFromAdminInput($input, isset($user['phone']) ? (string) $user['phone'] : null);
         $this->users->updateForAdmin($id, $email, $displayName, $status);
-        $this->users->updatePhone($id, $phone);
+        if ($phone['write']) {
+            $this->users->updatePhone($id, $phone['phone']);
+        }
         if ($password !== '') {
             // 비밀번호가 바뀌면 다른 기기의 세션은 끊긴다(session_epoch 증가).
             $this->users->updatePassword($id, password_hash($password, PASSWORD_DEFAULT));
@@ -168,11 +170,27 @@ final class AdminService
      * 그래서 여기는 AccountService::phoneForEdit() 의 세 값 분기를 쓰지 않는다 —
      * "입력이 있으면 정규화, 없으면 null" 뿐이다. 이건 세 값 분기를 복사한 게
      * 아니라 그 분기가 아예 없는 쪽이다.
+     *
+     * 다만 "빈 칸을 보냈다"와 "칸 자체를 안 보냈다"는 구분한다. 빈 칸은 지우라는
+     * 뜻이지만, 칸이 없는 제출(손으로 만든 POST, 나중에 생길 부분 수정 폼, 번호
+     * 칸을 빼먹은 다른 테마)까지 지우기로 읽으면 관리자 저장 한 번이 통째로 번호를
+     * 날린다. 안 보낸 칸은 건드리지 않는다.
+     *
+     * @return array{write: bool, phone: ?string}
      */
-    private function phoneFromAdminInput(array $input): ?string
+    private function phoneFromAdminInput(array $input, ?string $stored): array
     {
-        $given = isset($input['phone']) && is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
+        if (!array_key_exists('phone', $input)) {
+            return ['write' => false, 'phone' => null];
+        }
+        $given = is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
 
-        return $given === '' ? null : PhoneNumber::normalize($given);
+        return [
+            'write' => true,
+            // 저장된 번호를 그대로 다시 보낸 경우에는 형식을 다시 따지지 않는다 —
+            // 휴대폰 형식이 아닌 예전 번호가 들어 있으면, 그 번호를 고치려는
+            // 관리자까지 이 화면에서 아무것도 저장할 수 없게 되기 때문이다.
+            'phone' => $given === '' ? null : PhoneNumber::normalizeEdit($given, $stored),
+        ];
     }
 }

@@ -89,6 +89,53 @@ final class AdminMemberPhoneTest extends DatabaseTestCase
         $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '02-1234-5678']));
     }
 
+    /**
+     * "빈 칸을 보냈다"(지우라는 뜻)와 "칸 자체를 안 보냈다"는 다르다. 실제 폼은 늘
+     * 번호 칸을 함께 보내지만, 손으로 만든 POST·나중에 생길 부분 수정 폼·번호 칸을
+     * 빼먹은 다른 테마에서는 칸이 빠진 채로 들어올 수 있다. 그것까지 "지움"으로
+     * 읽으면 관리자 저장 한 번이 번호를 통째로 날린다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASaveWithNoPhoneFieldAtAllLeavesTheStoredNumberAlone(array $config): void
+    {
+        [$admin, $db, $memberId] = $this->bootWithMember($config, 'optional');
+        $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '010-1234-5678']));
+
+        $input = $this->member(['display_name' => '새이름']);
+        unset($input['phone']);
+        $admin->updateMember($this->adminAcl(), $memberId, $input);
+
+        self::assertSame('01012345678', $this->phoneOf($db, $memberId), '안 보낸 칸은 건드리지 않는다');
+        self::assertSame('새이름', $db->selectOne('SELECT display_name FROM '
+            . $db->table('users') . ' WHERE id = ?', [$memberId])['display_name']);
+    }
+
+    /**
+     * 저장된 번호가 휴대폰 형식이 아니면(예전 데이터·외부 이관) 폼은 그 값을 미리
+     * 채워 보여 준다. 그대로 다시 제출한 것까지 거절하면, 관리자는 자신을 막고 있는
+     * 바로 그 값을 고칠 수 없다 — 이름·상태 같은 다른 항목도 함께 막힌다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStoredNonMobileNumberCanBeSubmittedBackUnchanged(array $config): void
+    {
+        [$admin, $db, $memberId, , $users] = $this->bootWithMember($config, 'optional');
+        $users->updatePhone($memberId, '0212345678');
+
+        $admin->updateMember($this->adminAcl(), $memberId,
+            $this->member(['display_name' => '새이름', 'phone' => '02-1234-5678']));
+
+        self::assertSame('0212345678', $this->phoneOf($db, $memberId));
+        self::assertSame('새이름', $db->selectOne('SELECT display_name FROM '
+            . $db->table('users') . ' WHERE id = ?', [$memberId])['display_name']);
+
+        // 관리자는 그 값을 제대로 된 번호로 고칠 수 있고, 다른 잘못된 번호는 여전히 거절된다.
+        $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '010-1234-5678']));
+        self::assertSame('01012345678', $this->phoneOf($db, $memberId));
+
+        $this->expectException(DomainError::class);
+        $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '02-9999-8888']));
+    }
+
     /** freshDatabase() 로 DB 를 만들고 signup_phone 을 $policy 로 저장한 뒤, 활성 회원 한 명과 AdminService 를 돌려준다. */
     private function bootWithMember(array $config, string $policy): array
     {
@@ -121,7 +168,7 @@ final class AdminMemberPhoneTest extends DatabaseTestCase
         );
         $users->verifyEmail($memberId);
 
-        return [$admin, $db, $memberId, $cms];
+        return [$admin, $db, $memberId, $cms, $users];
     }
 
     /** updateMember() 이 요구하는 이메일·표시 이름을 채운다. */
