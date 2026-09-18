@@ -49,17 +49,22 @@ final class NotifierTest extends WebTestCase
     /** 채널들이 실제로 send() 된 차례. 순서 시험이 이것을 본다. */
     private array $order = [];
 
+    /** 발송과 로그를 한 줄에 섞어 적은 기록. "언제 적었는가"를 보는 시험이 이것을 본다. */
+    private array $timeline = [];
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->logged = [];
         $this->order = [];
+        $this->timeline = [];
     }
 
     private function channel(string $key, bool $available = true, bool $throws = false): ChannelInterface
     {
         $record = function (string $sent): void {
             $this->order[] = $sent;
+            $this->timeline[] = 'send:' . $sent;
         };
 
         return new class ($key, $available, $throws, $record) implements ChannelInterface {
@@ -163,6 +168,32 @@ final class NotifierTest extends WebTestCase
     {
         return function (string $line): void {
             $this->logged[] = $line;
+            $this->timeline[] = 'log';
+        };
+    }
+
+    /** 주어진 예외를 그대로 던지는 채널. 로그가 그 예외에서 무엇을 건져 내는지 본다. */
+    private function throwingChannel(string $key, \Throwable $error): ChannelInterface
+    {
+        return new class ($key, $error) implements ChannelInterface {
+            public function __construct(private string $k, private \Throwable $error)
+            {
+            }
+
+            public function key(): string
+            {
+                return $this->k;
+            }
+
+            public function available(string $event, Recipient $to): bool
+            {
+                return true;
+            }
+
+            public function send(string $event, Recipient $to, array $vars): void
+            {
+                throw $this->error;
+            }
         };
     }
 
@@ -268,6 +299,118 @@ final class NotifierTest extends WebTestCase
             self::assertSame([], $e->details());
         }
         self::assertStringContainsString('테스트 실패', $this->loggedText());
+    }
+
+    /**
+     * 이 스택의 거절은 거의 전부 DomainError::validation() 이고, 그 getMessage() 는 언제나
+     * '입력값을 확인해 주세요.' 라는 고정 문구다 — 진짜 이유는 details() 에만 있다.
+     * 실패를 보이게 하려고 만든 자리에 아무것도 말하지 않는 문장을 남기면 안 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheLogSaysWhyTheChannelRefused(array $dbConfig): void
+    {
+        // 알리고 Dispatch 가 번호 하나도 못 쓸 때 실제로 던지는 모양 그대로.
+        $sms = $this->throwingChannel('sms',
+            DomainError::validation(['recipients' => '보낼 수 있는 수신번호가 없습니다.']));
+        $this->notifier($dbConfig, [$this->channel('mail'), $sms], ['mail', 'sms'])
+            ->notify('welcome', $this->to(), []);
+
+        self::assertStringContainsString('recipients', $this->loggedText());
+        self::assertStringContainsString('보낼 수 있는 수신번호가 없습니다.', $this->loggedText(),
+            '고정 문구만 남기면 운영자는 무엇이 잘못됐는지 알 수 없다');
+    }
+
+    /** details() 의 값은 던지는 쪽이 만든 자유 문자열이다. 자격증명처럼 읽히는 칸의 값은
+     *  적지 않는다 — 비밀이 생긴다면 바로 그 이름으로 온다. */
+    #[DataProvider('connectionProvider')]
+    public function testCredentialShapedDetailsAreNotWrittenToTheLog(array $dbConfig): void
+    {
+        $sms = $this->throwingChannel('sms',
+            DomainError::validation(['api_key' => 'LIVE-KEY-abc123', 'senderkey' => 'SK-secret']));
+
+        try {
+            $this->notifier($dbConfig, [$sms], ['sms'])->notify('welcome', $this->to(), []);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+        }
+
+        self::assertStringContainsString('api_key=***', $this->loggedText());
+        self::assertStringNotContainsString('LIVE-KEY-abc123', $this->loggedText());
+        self::assertStringNotContainsString('SK-secret', $this->loggedText());
+    }
+
+    /** 긴 값은 잘라서 적는다 — 본문 한 통이 통째로 로그에 눕지 않게. */
+    #[DataProvider('connectionProvider')]
+    public function testALongDetailIsCutShort(array $dbConfig): void
+    {
+        $body = str_repeat('가', 500);
+        $sms = $this->throwingChannel('sms', DomainError::validation(['body' => $body]));
+
+        try {
+            $this->notifier($dbConfig, [$sms], ['sms'])->notify('welcome', $this->to(), []);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+        }
+
+        self::assertStringNotContainsString($body, $this->loggedText());
+        self::assertStringContainsString('…', $this->loggedText());
+        self::assertLessThan(400, mb_strlen($this->loggedText()));
+    }
+
+    /**
+     * 로그에 들어가는 것은 실패의 모양뿐이다. 수신자의 번호와 $vars(재설정 링크 같은)는
+     * 실패를 알아보는 데 필요하지 않고, 링크가 로그에 남으면 그 로그를 읽는 사람이 계정을
+     * 가져갈 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheLogCarriesNeitherTheRecipientNorTheMessage(array $dbConfig): void
+    {
+        $to = Recipient::forUser(['id' => '1', 'display_name' => '홍',
+            'email' => 'a@example.com', 'phone' => '01012345678']);
+        $sms = $this->throwingChannel('sms', DomainError::validation(['vars' => '값이 비어 있는 변수가 있습니다: 이름']));
+
+        try {
+            $this->notifier($dbConfig, [$sms], ['sms'])
+                ->notify('welcome', $to, ['링크' => 'https://example.com/r/TOKEN-abc123']);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+        }
+
+        self::assertStringNotContainsString('TOKEN-abc123', $this->loggedText());
+        self::assertStringNotContainsString('01012345678', $this->loggedText());
+        self::assertStringNotContainsString('a@example.com', $this->loggedText());
+    }
+
+    /** 실패는 일어난 자리에서 바로 적는다. 모아 두었다가 끝나고 적으면, 뒤 채널이
+     *  프로세스째 죽는 순간(타임아웃·메모리) 앞 채널의 실패 기록까지 함께 사라진다. */
+    #[DataProvider('connectionProvider')]
+    public function testEachFailureIsRecordedBeforeTheNextChannelRuns(array $dbConfig): void
+    {
+        $mail = $this->channel('mail', true, true);
+        $inbox = $this->channel('inbox');
+        $this->notifier($dbConfig, [$mail, $inbox], ['mail', 'inbox'], 'comment_new')
+            ->notify('comment_new', $this->to(), []);
+
+        self::assertSame(['log', 'send:inbox'], $this->timeline);
+        self::assertStringContainsString('mail', $this->logged[0]);
+    }
+
+    /**
+     * 채널은 상대 서버가 메시지를 받아들인 뒤에도 터질 수 있다 — 이 분기가 재시도하지
+     * 않는 이유가 그것이다. 그래 놓고 화면이 "다시 시도해 주세요"라고 하면, 코드가
+     * 일부러 하지 않는 일을 사람에게 시켜 진짜 전화기로 두 통을 보낸다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheRaisedErrorDoesNotAskForASecondSend(array $dbConfig): void
+    {
+        try {
+            $this->notifier($dbConfig, [$this->channel('mail', true, true)], ['mail'])
+                ->notify('welcome', $this->to(), []);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+            self::assertStringNotContainsString('다시 시도', $e->getMessage());
+            self::assertStringContainsString('관리자', $e->getMessage());
+        }
     }
 
     #[DataProvider('connectionProvider')]

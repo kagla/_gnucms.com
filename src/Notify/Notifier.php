@@ -34,7 +34,8 @@ use GnuCms\Error\DomainError;
  *
  * **잡는 것.** 채널이 던지는 것은 무엇이든 잡는다(Throwable). DomainError 만 잡으면
  * 정작 흔한 실패 — 알리고 쪽 연결 끊김, PDO 오류 — 가 그대로 올라가 다른 채널을 막는다.
- * 잡은 것은 클래스 이름과 함께 전부 로그에 남으므로 조용히 사라지지 않는다.
+ * 잡은 것은 터진 그 자리에서 곧바로 로그로 간다 — 클래스 이름, 문구, 그리고 DomainError 면
+ * 진짜 이유가 들어 있는 details() 까지(reason() 주석). 조용히 사라지지 않는다.
  */
 final class Notifier
 {
@@ -51,6 +52,12 @@ final class Notifier
      * 목록이 같은 집합인지는 시험이 지킨다.
      */
     private const ORDER = ['mail', 'inbox', 'alimtalk', 'sms'];
+
+    /** 이런 이름의 칸은 값을 로그에 적지 않는다. reason() 주석 참고. */
+    private const SECRET_FIELD = '/(api[_-]?key|senderkey|secret|password|passwd|token|credential)/i';
+
+    /** details() 값 하나를 로그에 적을 때의 길이 상한(글자 수). */
+    private const DETAIL_MAX = 200;
 
     private NotifySettings $settings;
 
@@ -106,14 +113,15 @@ final class Notifier
         }
 
         $delivered = 0;
-        $failures = [];
+        $failed = 0;
 
         foreach (array_intersect(self::ORDER, $wanted) as $key) {
             $channel = $this->channels[$key] ?? null;
             if ($channel === null) {
                 // 켜 두었는데 채널 객체가 없다. 설정이 아니라 조립의 결함이므로 건너뛰기가
                 // 아니라 실패로 센다 — 이것 하나만 켜져 있었다면 예외로 드러난다.
-                $failures[] = $key . ': 이 앱에 배선되지 않은 채널입니다';
+                $failed++;
+                $this->recordFailure($event, $key . ': 이 앱에 배선되지 않은 채널입니다');
                 continue;
             }
             try {
@@ -127,25 +135,81 @@ final class Notifier
                 $channel->send($event, $to, $vars);
                 $delivered++;
             } catch (\Throwable $e) {
-                $failures[] = $key . ': ' . get_class($e) . ': ' . $e->getMessage();
+                // 모아 두었다가 끝나고 적지 않는다. 뒤 채널이 프로세스째 죽으면(타임아웃·
+                // 메모리) 모아 둔 기록은 함께 사라지고, 운영자에게는 아무 일도 없었던 것처럼
+                // 보인다 — 실패는 일어난 자리에서 바로 남긴다.
+                $failed++;
+                $this->recordFailure($event, self::reason($key, $e));
             }
         }
 
-        foreach ($failures as $failure) {
-            ($this->log)('알림 ' . $event . ' 발송 실패 — ' . $failure);
-        }
         if ($delivered > 0) {
             return;
         }
 
-        if ($failures !== []) {
-            // 원문은 로그에만 남긴다. 이 예외의 문구는 화면에 그대로 나가므로, 알리고
+        if ($failed > 0) {
+            // 이유는 로그에만 남긴다. 이 예외의 문구는 화면에 그대로 나가므로, 알리고
             // 응답이나 DB 오류를 거기에 실어 보내지 않는다.
+            //
+            // "잠시 후 다시 시도해 주세요"라고 말하지 않는다. 채널은 상대 서버가 메시지를
+            // 받아들인 **뒤에도** 터질 수 있고(응답을 못 받은 발송), 이 분기는 바로 그래서
+            // 재시도하지 않는다. 코드가 일부러 하지 않는 일을 사람에게 시키면 진짜 전화기로
+            // 두 통이 간다.
             throw DomainError::serviceUnavailable(
-                '알림을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                '알림을 보내지 못했습니다. 다시 보내면 같은 알림이 두 번 갈 수 있으니 관리자에게 알려 주세요.');
         }
         // 실패도 없는데 한 통도 못 보냈다 = 켠 채널이 전부 건너뛰기였다.
         ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
             . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
+    }
+
+    private function recordFailure(string $event, string $reason): void
+    {
+        ($this->log)('알림 ' . $event . ' 발송 실패 — ' . $reason);
+    }
+
+    /**
+     * 실패 한 건을 로그에 적을 문장.
+     *
+     * **예외 문구만으로는 아무것도 알 수 없다.** 이 스택의 거절은 거의 전부
+     * DomainError::validation() 이고 그 getMessage() 는 언제나 '입력값을 확인해 주세요.'
+     * 라는 고정 문구다 — 어느 칸이 왜 거절됐는지는 details() 에만 있다(알리고 Dispatch 의
+     * '보낼 수 있는 수신번호가 없습니다.', 알림함의 '적을 값이 모자랍니다' 가 모두 그렇다).
+     * 그래서 details() 를 함께 적는다. 이것이 로그 한 줄의 전부다: 예외 문구와 details()
+     * 뿐이고, **수신자(번호·주소)도 $vars(링크·토큰)도 넣지 않는다** — 실패를 알아보는 데
+     * 필요하지 않고, 비밀번호 재설정 링크가 로그에 남으면 그 로그를 읽는 사람이 계정을
+     * 가져갈 수 있다.
+     *
+     * **details() 의 값은 던지는 쪽이 만든 자유 문자열이다.** 지금 이 스택에서 그 값은
+     * 사람에게 보여 줄 안내 문구뿐이지만, 앞으로도 그러리라는 보장은 없다. 그래서 둘을
+     * 지킨다: 자격증명처럼 읽히는 칸 이름의 값은 적지 않고(비밀이 생긴다면 바로 그 이름으로
+     * 온다 — 지금도 api_key·senderkey 라는 칸이 있다), 나머지 값도 길이를 잘라 본문 같은
+     * 것이 통째로 흘러나오지 않게 한다.
+     */
+    private static function reason(string $key, \Throwable $e): string
+    {
+        $reason = $key . ': ' . get_class($e) . ': ' . $e->getMessage();
+        $parts = [];
+        foreach ($e instanceof DomainError ? $e->details() : [] as $field => $value) {
+            $name = (string) $field;
+            $parts[] = $name . '=' . (preg_match(self::SECRET_FIELD, $name) === 1
+                ? '***'
+                : self::shorten($value));
+        }
+
+        return $parts === [] ? $reason : $reason . ' (' . implode(', ', $parts) . ')';
+    }
+
+    private static function shorten(mixed $value): string
+    {
+        // 배열·객체는 문자열로 뭉개지 않는다(캐스팅하면 'Array' 한 단어가 남고 경고가 뜬다).
+        if (!is_scalar($value)) {
+            return get_debug_type($value);
+        }
+        $text = (string) $value;
+
+        return mb_strlen($text) > self::DETAIL_MAX
+            ? mb_substr($text, 0, self::DETAIL_MAX) . '…'
+            : $text;
     }
 }
