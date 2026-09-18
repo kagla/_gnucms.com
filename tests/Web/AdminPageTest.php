@@ -956,4 +956,90 @@ final class AdminPageTest extends WebTestCase
         self::assertNull($app->users()->findById($memberId)['phone']);
     }
 
+    /**
+     * signup_phone 은 가입 화면이 무엇을 물을지를 정할 뿐, 관리자가 무엇을 관리할
+     * 수 있는지는 정하지 않는다 — off 인 동안 번호를 지우고 싶은 회원은 관리자에게
+     * 요청할 수밖에 없으므로, 관리자 화면은 정책과 무관하게 늘 입력 가능해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanChangeAMembersPhoneEvenWhenSignupPhoneIsOff(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'off']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
+        self::assertNotEmpty($tag, '휴대폰번호 입력칸이 있어야 한다');
+        self::assertStringNotContainsString('disabled', $tag[0], 'off 여도 관리자 화면의 번호 칸은 늘 입력 가능해야 한다');
+
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '010-1234-5678',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($memberId)['phone'], 'off 여도 관리자는 번호를 넣을 수 있어야 한다');
+
+        $cleared = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode(), $this->body($cleared));
+        self::assertNull($app->users()->findById($memberId)['phone'], 'off 여도 관리자는 번호를 지울 수 있어야 한다');
+    }
+
+    /**
+     * 폼이 저장된 번호로 미리 채워지지 않으면, "손대지 않았다"는 제출이 실제로는
+     * 빈 값을 다시 저장해 번호를 지워 버린다 — off 트랩과 반대 방향의 같은 사고다.
+     * 화면에 실제로 찍힌 값을 그대로 다시 제출해 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminFormPrefillsTheStoredNumberSoAnUntouchedSaveKeepsIt(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->cms()->saveSettings(['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+        $app->users()->updatePhone($memberId, '01055556666');
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        preg_match('/name="phone"[\s\S]*?value="([^"]*)"/', $form, $m);
+        self::assertSame('010-5555-6666', $m[1] ?? null, '폼은 저장된 번호를 미리 채워야 한다');
+
+        // 표시 이름만 바꾸고, 폼에 이미 찍혀 있던 번호 값을 그대로 다시 제출한다 — 손대지 않은 셈이다.
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '새이름', 'status' => 'active', 'phone' => $m[1],
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame(
+            '01055556666',
+            $app->users()->findById($memberId)['phone'],
+            '번호 칸을 건드리지 않았다면 그대로 남아야 한다'
+        );
+    }
+
 }

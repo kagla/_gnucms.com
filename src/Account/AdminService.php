@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Acl;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
@@ -15,20 +16,12 @@ final class AdminService
     private Connection $db;
     private UserRepository $users;
     private BoardService $boards;
-    private AccountService $accountService;
 
-    /**
-     * signup_phone 세 값 분기(off/optional/required)를 여기서 다시 베끼지 않고
-     * AccountService::phoneForEdit() 를 그대로 빌려 쓴다 — 회원정보 수정 화면과
-     * 관리자 회원 수정 화면이 같은 정책을 따라야 하는데, 두 곳에 같은 분기를
-     * 복사하면 둘 중 하나만 고치고 잊는 사고가 난다.
-     */
-    public function __construct(Connection $db, UserRepository $users, BoardService $boards, AccountService $accountService)
+    public function __construct(Connection $db, UserRepository $users, BoardService $boards)
     {
         $this->db = $db;
         $this->users = $users;
         $this->boards = $boards;
-        $this->accountService = $accountService;
     }
 
     public function dashboard(Acl $acl): array
@@ -132,11 +125,9 @@ final class AdminService
         $v->check();
         // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
         // AccountService::updateProfile() 과 같은 이유로 $v->check() 뒤에 본다.
-        $phone = $this->accountService->phoneForEdit($input);
+        $phone = $this->phoneFromAdminInput($input);
         $this->users->updateForAdmin($id, $email, $displayName, $status);
-        if ($phone['write']) {
-            $this->users->updatePhone($id, $phone['phone']);
-        }
+        $this->users->updatePhone($id, $phone);
         if ($password !== '') {
             // 비밀번호가 바뀌면 다른 기기의 세션은 끊긴다(session_epoch 증가).
             $this->users->updatePassword($id, password_hash($password, PASSWORD_DEFAULT));
@@ -166,5 +157,22 @@ final class AdminService
             throw DomainError::notFound('회원을 찾을 수 없습니다.');
         }
         return $user;
+    }
+
+    /**
+     * 관리자 회원 수정은 signup_phone 정책을 보지 않는다 — 그 정책은 "가입 화면이
+     * 무엇을 물을지"를 정하는 것이지 "관리자가 무엇을 관리할 수 있는지"를 정하는
+     * 것이 아니다. 정책이 off 여도(심지어 required 여도) 관리자는 항상 번호를
+     * 넣고 지울 수 있어야 한다 — off 인 동안 번호를 지우고 싶은 회원은 관리자에게
+     * 요청할 수밖에 없는데, 이 메서드가 정책을 따르면 그 관리자조차 못 지운다.
+     * 그래서 여기는 AccountService::phoneForEdit() 의 세 값 분기를 쓰지 않는다 —
+     * "입력이 있으면 정규화, 없으면 null" 뿐이다. 이건 세 값 분기를 복사한 게
+     * 아니라 그 분기가 아예 없는 쪽이다.
+     */
+    private function phoneFromAdminInput(array $input): ?string
+    {
+        $given = isset($input['phone']) && is_scalar($input['phone']) ? trim((string) $input['phone']) : '';
+
+        return $given === '' ? null : PhoneNumber::normalize($given);
     }
 }

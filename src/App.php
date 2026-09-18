@@ -591,9 +591,7 @@ final class App
     public function adminService(): AdminService
     {
         if ($this->adminService === null) {
-            $this->adminService = new AdminService(
-                $this->db(), $this->users(), $this->boardService(), $this->accountService()
-            );
+            $this->adminService = new AdminService($this->db(), $this->users(), $this->boardService());
         }
         return $this->adminService;
     }

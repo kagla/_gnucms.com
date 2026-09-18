@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Account;
 
-use GnuCms\Account\AccountService;
 use GnuCms\Account\AdminService;
 use GnuCms\Account\ConsentRepository;
-use GnuCms\Account\TokenRepository;
-use GnuCms\Account\TokenService;
 use GnuCms\Account\UserRepository;
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
@@ -23,14 +20,15 @@ use GnuCms\Repository\BoardRepository;
 use GnuCms\Repository\CommentRepository;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Service\BoardService;
-use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\DatabaseTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * 관리자 회원 수정 화면도 회원정보 수정과 같은 signup_phone 세 정책을 따라야
- * 한다(AdminService::updateMember() 가 AccountService::phoneForEdit() 를 그대로
- * 빌려 쓴다) — 여기서는 그 위임이 실제로 세 정책 모두를 지키는지 확인한다.
+ * 관리자 회원 수정은 signup_phone 정책을 보지 않는다 — 그 정책은 가입 화면이
+ * 무엇을 물을지를 정할 뿐, 관리자가 무엇을 관리할 수 있는지는 정하지 않는다.
+ * 정책이 off(심지어 required)여도 관리자는 늘 번호를 넣고 지울 수 있어야 한다 —
+ * off 인 동안 번호를 지우고 싶은 회원은 관리자에게 요청할 수밖에 없는데, 그
+ * 관리자조차 못 지우면 번호가 누구에게도 닿지 않는 곳에 갇힌다.
  */
 final class AdminMemberPhoneTest extends DatabaseTestCase
 {
@@ -46,9 +44,14 @@ final class AdminMemberPhoneTest extends DatabaseTestCase
         self::assertNull($this->phoneOf($db, $memberId));
     }
 
-    /** THE TRAP, 관리자 화면에도 같은 핀: off 인 동안은 새 값도, 빈 값도 저장된 번호를 건드리지 않는다. */
+    /**
+     * 이전 라운드에서는 "off 인 동안 관리자도 못 고친다"를 핀으로 박았는데, 그건
+     * 틀린 규칙이었다 — off 인 동안 번호를 지우고 싶은 회원은 관리자에게 요청할
+     * 수밖에 없다. 그래서 지금은 정반대를 확인한다: off 여도 관리자는 새 번호를
+     * 넣을 수 있고, 지울 수도 있다.
+     */
     #[DataProvider('connectionProvider')]
-    public function testStoredNumberSurvivesAPolicySwitchToOff(array $config): void
+    public function testAdminCanChangeTheNumberEvenWhenThePolicyIsOff(array $config): void
     {
         [$admin, $db, $memberId, $cms] = $this->bootWithMember($config, 'optional');
         $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '010-1234-5678']));
@@ -57,25 +60,24 @@ final class AdminMemberPhoneTest extends DatabaseTestCase
         $cms->saveWritingSettings($this->adminAcl(), $this->writingInput(['signup_phone' => 'off']));
 
         $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '010-9999-8888']));
-        self::assertSame('01012345678', $this->phoneOf($db, $memberId), '정책이 꺼진 동안은 새 값도 쓰지 않아야 한다');
+        self::assertSame('01099998888', $this->phoneOf($db, $memberId), 'off 여도 관리자는 새 번호를 넣을 수 있어야 한다');
 
         $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '']));
-        self::assertSame('01012345678', $this->phoneOf($db, $memberId), '빈 값 제출도 off 에서는 지우는 뜻이 아니다');
+        self::assertNull($this->phoneOf($db, $memberId), 'off 여도 관리자는 번호를 지울 수 있어야 한다');
     }
 
+    /**
+     * required 정책도 관리자를 막지 않는다 — 번호가 없는 예전 회원을 관리자가
+     * 저장하려는데 필수 정책 때문에 막히면, 번호 말고는 아무것도 안 바꾸려는
+     * 관리자 작업까지 함께 막힌다.
+     */
     #[DataProvider('connectionProvider')]
-    public function testRequiredPolicyRejectsAnEmptySubmit(array $config): void
+    public function testAdminMayLeaveAMemberWithNoNumberEvenUnderRequiredPolicy(array $config): void
     {
         [$admin, $db, $memberId] = $this->bootWithMember($config, 'required');
-        $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '010-1234-5678']));
 
-        try {
-            $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '']));
-            self::fail('required 정책에서는 빈 번호를 거절해야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('phone', $e->details());
-        }
-        self::assertSame('01012345678', $this->phoneOf($db, $memberId));
+        $admin->updateMember($this->adminAcl(), $memberId, $this->member(['phone' => '']));
+        self::assertNull($this->phoneOf($db, $memberId));
     }
 
     #[DataProvider('connectionProvider')]
@@ -103,21 +105,13 @@ final class AdminMemberPhoneTest extends DatabaseTestCase
             $consentUses,
             $consents
         );
-        $accountService = new AccountService(
-            $users,
-            new TokenService(new TokenRepository($db)),
-            new CollectingMailer(),
-            'https://example.test',
-            $cms,
-            $consents
-        );
         $boards = new BoardService(
             $db,
             new BoardRepository($db),
             new PostRepository($db),
             new CommentRepository($db)
         );
-        $admin = new AdminService($db, $users, $boards, $accountService);
+        $admin = new AdminService($db, $users, $boards);
 
         $memberId = $users->create(
             'member@example.com',

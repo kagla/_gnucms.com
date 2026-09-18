@@ -29,19 +29,18 @@
       </fieldset>
       <?php
         // 배열(phone[]=x)이 넘어오면 (string) 캐스팅이 경고를 낸다 — 스칼라만 쓴다.
+        // 관리자 화면은 signup_phone 정책을 보지 않는다 — 그 정책은 가입 화면이
+        // 무엇을 물을지를 정할 뿐, 관리자가 무엇을 관리할 수 있는지는 정하지 않는다.
+        // 정책이 off 인 동안 번호를 지우고 싶은 회원은 관리자에게 요청할 수밖에
+        // 없으므로, 이 칸은 정책과 무관하게 항상 입력할 수 있어야 한다.
         $phoneValue = is_scalar($values['phone'] ?? null) ? (string) $values['phone'] : '';
-        $phoneOff = ($site['signup_phone'] ?? 'off') === 'off';
       ?>
       <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
         <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">알림톡·문자 수신 번호</span></legend>
         <input class="input input-bordered input-block" type="tel" name="phone" inputmode="numeric" autocomplete="tel"
                value="<?= $this->e($phoneValue === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneValue)) ?>"
-               placeholder="010-1234-5678"<?php if ($phoneOff): ?> disabled<?php endif ?>>
-        <?php if ($phoneOff): ?>
-        <p class="fieldset-label">번호 수집이 꺼져 있어 여기서는 바꿀 수 없습니다. 이미 저장된 번호는 계속 쓰입니다.</p>
-        <?php else: ?>
+               placeholder="010-1234-5678">
         <p class="fieldset-label">비워 두고 저장하면 번호가 지워집니다.</p>
-        <?php endif ?>
         <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
       </fieldset>
       <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
