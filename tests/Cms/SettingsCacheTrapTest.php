@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Tests\Cms;
 
 use GnuCms\Tests\Support\WebTestCase;
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -50,6 +51,41 @@ final class SettingsCacheTrapTest extends WebTestCase
         $this->saveSiteSettings($app, ['signup_phone' => 'required']);
 
         self::assertSame('required', $service->settings()['signup_phone']);
+    }
+
+    /**
+     * 헬퍼가 닿지 못하는 네 설정은 조용히 지나가지 않는다. post_min_chars 는
+     * App::postService() 가 만들어질 때 한 번 읽어 가므로, 그 뒤에 바꾸면 이 헬퍼로도
+     * 서비스에 닿지 않는다 — 막지 않으면 "짧은 글이 거절되는지" 같은 테스트가 바꾸지도
+     * 않은 값으로 돌아가 통과해 버린다. 함정을 닫겠다는 헬퍼가 같은 함정을 새로 파는 셈이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testHelperRefusesASettingAnExistingServiceAlreadyCopied(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $app->postService(); // 요청 한 번이 하는 일과 같다: 여기서 post_min_chars 를 읽어 간다
+
+        $refused = null;
+        try {
+            $this->saveSiteSettings($app, ['post_min_chars' => '50']);
+        } catch (AssertionFailedError $e) {
+            $refused = $e->getMessage();
+        }
+
+        self::assertNotNull($refused, '닿지 못하는 설정을 조용히 받아 주면 안 된다');
+        self::assertStringContainsString('post_min_chars', $refused);
+        self::assertStringContainsString('postService', $refused, '어느 서비스가 범인인지 말해 줘야 한다');
+    }
+
+    /** 반대로 서비스가 아직 없으면 같은 설정도 평범하게 통과한다 — 막기만 하면 쓸모가 없다. */
+    #[DataProvider('connectionProvider')]
+    public function testHelperAllowsTheSameSettingBeforeThatServiceExists(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+
+        $this->saveSiteSettings($app, ['post_min_chars' => '50']);
+
+        self::assertSame(50, $app->cmsService()->settings()['post_min_chars']);
     }
 
     /**

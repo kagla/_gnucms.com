@@ -98,11 +98,22 @@ abstract class WebTestCase extends DatabaseTestCase
     }
 
     /**
+     * 서비스가 만들어질 때 그 값을 한 번 읽어 가는 설정들. 설정 키 => 그 값을 읽어 간
+     * App 의 비공개 서비스 필드. 그 서비스가 이미 있으면 설정을 고쳐도 닿지 않는다.
+     */
+    private const SETTINGS_READ_ONCE_AT_BOOT = [
+        'post_min_chars' => 'postService',        // App::postService() → setContentMinChars()
+        'comment_min_chars' => 'commentService',  // App::commentService() → setContentMinChars()
+        'attach_max_mb' => 'attachmentService',   // App::attachments() → uploads.max_bytes
+        'attach_limit' => 'attachmentService',    // App::attachments() → setAttachmentLimit()
+    ];
+
+    /**
      * 사이트 설정을 바꾼다. 테스트에서 설정을 바꿀 때는 언제나 이 길로 온다.
      *
      * CmsService 는 settings() 를 메모리에 캐시한다(CmsService::$settingsCache). 그런데
      * $app->cms() 가 돌려주는 것은 그 캐시를 모르는 맨 CmsRepository 다. 그래서 화면을
-     * 한 번이라도 그렸거나 서비스를 한 번이라도 쓴 앱에서 $this->saveSiteSettings($app, ) 로
+     * 한 번이라도 그렸거나 서비스를 한 번이라도 쓴 앱에서 $app->cms()->saveSettings() 로
      * 값을 바꾸면 DB 만 바뀌고, 정작 검사 대상인 서비스는 옛 값을 계속 본다.
      *
      * 이 함정은 이 분기에서만 세 번 값을 치렀다. 두 번은 바꾸지도 않은 설정으로 돌아간
@@ -114,9 +125,36 @@ abstract class WebTestCase extends DatabaseTestCase
      * 덮어쓰므로, 키 하나만 바꾸는 통로로 쓸 수 없다. 대신 저장한 뒤 서비스가 들고 있는
      * 캐시를 비워, 다음 settings() 가 DB 를 다시 읽게 한다. 필드 이름이 바뀌면 이
      * ReflectionProperty 가 바로 예외를 던지므로 조용히 어긋나지는 않는다.
+     *
+     * **이 헬퍼가 닿는 곳과 닿지 못하는 곳.** 닿는 것은 settings() 를 그때그때 읽는
+     * 코드뿐이다. 값을 한 번 읽어 자기 안에 옮겨 담는 서비스에는 닿지 못한다 —
+     * post_min_chars·comment_min_chars·attach_max_mb·attach_limit 네 개가 그렇다
+     * (App::postService()·commentService()·attachments() 가 만들어질 때 한 번 읽는다).
+     * 이미 만들어진 서비스를 여기서 다시 만들 수는 없으므로, 그 넷을 요청 뒤에 바꾸려
+     * 들면 조용히 지나가지 않고 그 자리에서 실패시킨다. 없는 보장을 말없이 해 주는
+     * 시늉을 하느니 시끄럽게 막는 편이 낫다 — 이 함정이 세 번째 희생자를 낸 방식이
+     * 정확히 "다 된 줄 알았다"였다.
+     *
+     * 그 넷은 서비스가 생기기 전에(=첫 요청 전에) 바꾸거나, AttachmentFormTest 처럼
+     * 해당 서비스를 reflection 으로 끊어 다시 만들게 한 뒤 이 헬퍼를 부르면 된다.
      */
     protected function saveSiteSettings(App $app, array $settings): void
     {
+        foreach (self::SETTINGS_READ_ONCE_AT_BOOT as $key => $property) {
+            if (!array_key_exists($key, $settings)
+                || (new \ReflectionProperty(App::class, $property))->getValue($app) === null) {
+                continue;
+            }
+            self::fail(sprintf(
+                "'%s' 는 App::\$%s 가 만들어질 때 한 번만 읽어 가는 값이라, 이미 만들어진"
+                . " 뒤에는 설정을 바꿔도 그 서비스에 닿지 않습니다. 그대로 두면 이 테스트는"
+                . " 바꾸지 않은 값으로 돌아가 통과해 버립니다. 그 서비스가 만들어지기"
+                . " 전에(=첫 요청 전에) 바꾸거나, AttachmentFormTest 처럼 ReflectionProperty"
+                . " 로 App::\$%s 를 null 로 끊어 다시 만들게 한 뒤 부르세요.",
+                $key, $property, $property
+            ));
+        }
+
         $app->cms()->saveSettings($settings);
         (new \ReflectionProperty(CmsService::class, 'settingsCache'))->setValue($app->cmsService(), null);
     }
