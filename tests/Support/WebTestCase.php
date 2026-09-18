@@ -16,6 +16,40 @@ use Psr\Http\Message\UploadedFileInterface;
 abstract class WebTestCase extends DatabaseTestCase
 {
     /**
+     * $_SESSION 은 PHP 프로세스 전역이다 — makeApp() 이 스키마는 매번 새로 만들어도
+     * 세션까지 지우지는 않으므로, 이전 테스트가 세션에 남긴 값(예: 알리고 중복발송
+     * 방지 지문)이 다음 테스트로 새어 들어간다. 같은 프로세스에서 sqlite 데이터셋이
+     * 먼저 돌고 mysql 데이터셋이 똑같은 요청 내용으로 뒤이어 돌 때 특히 잘 드러난다.
+     * makeApp() 은 한 테스트 메서드 안에서 여러 번 불리기도 하고(로그인을 한 앱에서
+     * 하고 다음 앱에서도 쓰는 식으로 세션 유지에 기대는 경우가 있다), 그때는 지우면
+     * 안 되므로 여기, 테스트 메서드 시작 시점 한 번만 지운다.
+     *
+     * $_SESSION 배열을 메모리에서 비우는 것만으로는 부족하다. 이 프로세스에는 실제
+     * HTTP 쿠키 왕복이 없는데도(각 request()가 그냥 Kernel::handle() 을 직접 부르는
+     * PSR-7 호출일 뿐이다) 로그인 유지 테스트는 여러 request() 에 걸쳐 세션이 살아
+     * 있어야 하므로, SessionGuard::process() 가 부르는 session_start() 는 쿠키가 없어도
+     * PHP 세션 모듈이 프로세스 안에 캐시해 둔 이전 세션 아이디를 그대로 재사용한다.
+     * 그 아이디의 세션 파일이 디스크에 남아 있으면 다음 테스트의 첫 session_start() 가
+     * 그 파일을 다시 읽어 들여 방금 비운 $_SESSION 을 도로 채워 버린다. 그래서 세션을
+     * 한 번 열어 session_destroy() 로 파일까지 지우고, session_id('') 로 캐시된 아이디를
+     * 비워서 다음 session_start() 가 완전히 새 아이디로 시작하게 만든다.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        if (session_id() !== '') {
+            session_start();
+            session_destroy();
+            session_id('');
+        }
+        $_SESSION = [];
+    }
+
+    /**
      * @param array $configOverrides 기본 설정 위에 덮어쓸 값. 최상위 키 단위로 합쳐진다.
      *                                예: ['debug' => false] 로 프로덕션 오류 화면을 테스트한다.
      */

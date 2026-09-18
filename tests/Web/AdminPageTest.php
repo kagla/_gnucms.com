@@ -347,6 +347,7 @@ final class AdminPageTest extends WebTestCase
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
+        $app->users()->verifyEmail($adminId);
         $memberId = $app->users()->create(
             'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원'
         );
