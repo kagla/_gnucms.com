@@ -339,6 +339,67 @@ final class NotifierTest extends WebTestCase
         self::assertStringNotContainsString('SK-secret', $this->loggedText());
     }
 
+    /**
+     * 가리는 규칙이 실제로 쓰일 이름들을 하나씩 짚는다. 처음 규칙은 api[_-]?key 처럼
+     * 온전한 이름만 알아봐서, 정작 이 저장소에서 다음 사람이 가장 쓸 법한 aligo_key 와
+     * 맨 Authorization 이 그대로 찍혔다 — 가장 있을 법한 자리에서 새는 보험이었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEveryCredentialShapedFieldNameIsRedacted(array $dbConfig): void
+    {
+        $fields = [
+            'aligo_key' => 'LEAK-aligo-1',            // 이 저장소가 알리고 키를 부를 법한 이름
+            'alimtalk_api_key' => 'LEAK-at-2',        // 실제 설정 칸 이름
+            'senderkey' => 'LEAK-sk-3',
+            'api_key' => 'LEAK-api-4',
+            'apiKey' => 'LEAK-camel-5',
+            'x-api-key' => 'LEAK-header-6',
+            'Authorization' => 'LEAK-header-7',       // 전송 계층 예외가 헤더 이름을 실어 올 수 있다
+            'AUTH' => 'LEAK-auth-8',
+            'auth_token' => 'LEAK-token-9',
+            'reset_token' => 'LEAK-token-10',
+            'client_secret' => 'LEAK-oauth-11',
+            'PASSWORD' => 'LEAK-pw-12',
+            'session_id' => 'LEAK-session-13',
+        ];
+        $sms = $this->throwingChannel('sms', DomainError::validation($fields));
+
+        try {
+            $this->notifier($dbConfig, [$sms], ['sms'])->notify('welcome', $this->to(), []);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+        }
+
+        foreach ($fields as $name => $value) {
+            self::assertStringContainsString($name . '=***', $this->loggedText(),
+                $name . ' 은 자격증명처럼 읽히는 이름인데 값이 그대로 찍혔습니다');
+            self::assertStringNotContainsString($value, $this->loggedText());
+        }
+    }
+
+    /** 반대로, 멀쩡한 칸까지 가리면 1차 수정이 되살린 정보가 도로 사라진다. */
+    #[DataProvider('connectionProvider')]
+    public function testOrdinaryFieldsAreStillReadableInTheLog(array $dbConfig): void
+    {
+        $sms = $this->throwingChannel('sms', DomainError::validation([
+            'recipients' => '보낼 수 있는 수신번호가 없습니다.',
+            'tpl_code' => '사용 중인 승인 템플릿을 골라 주세요.',
+            'body' => '본문을 입력해 주세요.',
+            'sender' => '발신번호를 확인해 주세요.',
+        ]));
+
+        try {
+            $this->notifier($dbConfig, [$sms], ['sms'])->notify('welcome', $this->to(), []);
+            self::fail('아무 데도 못 보냈는데 조용히 성공했습니다');
+        } catch (DomainError $e) {
+        }
+
+        self::assertStringContainsString('보낼 수 있는 수신번호가 없습니다.', $this->loggedText());
+        self::assertStringContainsString('사용 중인 승인 템플릿을 골라 주세요.', $this->loggedText());
+        self::assertStringContainsString('본문을 입력해 주세요.', $this->loggedText());
+        self::assertStringContainsString('발신번호를 확인해 주세요.', $this->loggedText());
+    }
+
     /** 긴 값은 잘라서 적는다 — 본문 한 통이 통째로 로그에 눕지 않게. */
     #[DataProvider('connectionProvider')]
     public function testALongDetailIsCutShort(array $dbConfig): void

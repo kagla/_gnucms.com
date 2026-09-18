@@ -53,8 +53,28 @@ final class Notifier
      */
     private const ORDER = ['mail', 'inbox', 'alimtalk', 'sms'];
 
-    /** 이런 이름의 칸은 값을 로그에 적지 않는다. reason() 주석 참고. */
-    private const SECRET_FIELD = '/(api[_-]?key|senderkey|secret|password|passwd|token|credential)/i';
+    /**
+     * 이런 이름의 칸은 값을 로그에 적지 않는다(이름은 적는다 — 어느 칸이 거절했는지는
+     * 알아야 한다). reason() 주석이 이유를, 여기가 범위를 정한다.
+     *
+     * **조각으로 맞춘다.** 앞뒤에 무엇이 붙든 이 조각이 이름 안에 있으면 가린다:
+     * key 하나로 api_key·apiKey·x-api-key·aligo_key·senderkey·alimtalk_api_key 가 모두
+     * 걸리고, auth 하나로 Authorization·AUTH·auth_token·oauth 가 걸린다. 처음 규칙은
+     * api[_-]?key 처럼 온전한 이름을 적어 두었는데, 정작 이 저장소에서 다음 사람이 가장
+     * 쓸 법한 이름(aligo_key)이 빠져 있었다.
+     *
+     * **애매하면 가린다.** 이 규칙은 자격증명이 아닌 칸까지 몇 개 가린다(keyword 같은
+     * 이름이나, 지금 senderkey 가 담고 있는 안내 문구). 그 대가는 로그 한 줄에서 문장
+     * 하나가 '***' 로 바뀌는 것뿐이고, 반대 방향의 대가는 살아 있는 키가 로그 파일에
+     * 평문으로 남는 것이다. 같은 값이 아니다.
+     *
+     * **못 잡는 것.** 이름은 멀쩡한데 값 속 문장 한가운데 비밀이 섞여 오는 경우
+     * (body 에 링크가 들어간 채 거절되는 식)는 이름으로 판단하는 규칙이 잡을 수 없다.
+     * 그건 길이 자르기(DETAIL_MAX)와 "수신자·$vars 는 아예 안 적는다"는 규칙이 줄일 뿐
+     * 없애지는 못한다 — 로그 값마다 내용을 훑는 쪽이 문제보다 나쁘다.
+     */
+    private const SECRET_FIELD =
+        '/(key|secret|password|passwd|pwd|token|auth|credential|signature|session|cookie)/i';
 
     /** details() 값 하나를 로그에 적을 때의 길이 상한(글자 수). */
     private const DETAIL_MAX = 200;
