@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Web\Controller;
 
+use GnuCms\Account\AccountService;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
@@ -101,7 +102,7 @@ final class AdminController
             'members' => $this->app->adminService()->members($this->app->guestAcl(), $query),
             'query' => $query,
             'saved' => ($params['saved'] ?? '') === '1',
-            'mail_failed' => ($params['mail'] ?? '') === 'failed',
+            'password_notice' => AccountService::noticeOrNull($params['notice'] ?? null),
         ]);
     }
 
@@ -160,7 +161,9 @@ final class AdminController
                     $_SESSION['session_epoch'] = (int) $fresh['session_epoch'];
                 }
             }
-            $mailFailed = $changedPassword && !$this->app->accountService()->notifyPasswordChanged($id);
+            // 비밀번호를 바꿨을 때만 알린다. 셋 중 무엇이 일어났는지는 화면이 그대로 말한다.
+            $passwordNotice = $changedPassword
+                ? $this->app->accountService()->notifyPasswordChanged($id) : null;
         } catch (DomainError $e) {
             $this->app->avatars()->delete($newAvatar);
             if ($e->status() !== 422) {
@@ -186,7 +189,7 @@ final class AdminController
             $this->app->avatars()->delete(isset($member['avatar_file']) ? (string) $member['avatar_file'] : null);
         }
         return $this->redirect($request, $response, 'admin.members',
-            ['saved' => '1'] + ($mailFailed ? ['mail' => 'failed'] : []));
+            ['saved' => '1'] + ($passwordNotice === null ? [] : ['notice' => $passwordNotice]));
     }
 
 

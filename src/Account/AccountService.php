@@ -8,10 +8,9 @@ use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\MailerInterface;
-use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\Notifier;
-use GnuCms\Notify\NotifySettings;
 use GnuCms\Notify\Recipient;
+use GnuCms\Notify\UnwiredNotifier;
 use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
 use GnuCms\Auth\PasswordThrottle;
@@ -19,6 +18,22 @@ use GnuCms\Cms\CmsService;
 
 final class AccountService
 {
+    /** notifyPasswordChanged() 의 세 결과. 화면이 셋을 각각 다르게 말한다. */
+    public const NOTICE_SENT = 'sent';
+    /** 켠 채널이 없거나, 켠 채널이 전부 이 회원에게는 쓸 수 없었다. 사고가 아니라 설정이다. */
+    public const NOTICE_OFF = 'off';
+    public const NOTICE_FAILED = 'failed';
+
+    /**
+     * 화면이 보여 줄 수 있는 결과인지 확인한다. 이 값은 주소창(?notice=)을 거쳐 돌아오므로
+     * 아무 문자열이나 들어올 수 있고, 화면은 이 셋 말고는 아무것도 말해서는 안 된다.
+     */
+    public static function noticeOrNull(mixed $value): ?string
+    {
+        return in_array($value, [self::NOTICE_SENT, self::NOTICE_OFF, self::NOTICE_FAILED], true)
+            ? (string) $value : null;
+    }
+
     private UserRepository $users;
     private TokenService $tokens;
     private MailerInterface $mailer;
@@ -357,28 +372,35 @@ final class AccountService
     }
 
     /**
-     * 비밀번호가 바뀌었다고 본인에게 알린다. 남이 바꿨다면 이 메일로 알아채고 되찾는다.
-     * 메일이 실패해도 비밀번호 변경은 이미 끝난 일이라 막지 않는다. 실패 여부만 돌려준다.
+     * 비밀번호가 바뀌었다고 본인에게 알린다. 남이 바꿨다면 이 알림으로 알아채고 되찾는다.
+     * 발송이 실패해도 비밀번호 변경은 이미 끝난 일이라 막지 않는다 — 대신 **무슨 일이
+     * 일어났는지**를 돌려준다.
+     *
+     * 예전에는 bool 이었고, 그 true 는 "보냈다"가 아니라 "예외 없이 돌아왔다"는 뜻이었다.
+     * 관리자가 이 알림의 채널을 전부 꺼 두면 한 통도 나가지 않는데도 true 가 나갔고,
+     * 화면은 아무 경고도 띄우지 않아 보낸 것처럼 읽혔다. 세 결과는 서로 다른 사실이고
+     * 화면이 셋을 다르게 말해야 하므로, 셋을 구별해 돌려준다.
+     *
+     * @return self::NOTICE_* 셋 중 하나
      */
-    public function notifyPasswordChanged(int $userId): bool
+    public function notifyPasswordChanged(int $userId): string
     {
         $user = $this->users->findById($userId);
         if ($user === null) {
-            return false;
+            return self::NOTICE_FAILED;
         }
         try {
-            $this->notify('password_changed', Recipient::forUser($user), [
+            return $this->notify('password_changed', Recipient::forUser($user), [
                 '사이트명' => $this->siteName(),
                 '이름' => (string) $user['display_name'],
                 // 시간대 표기를 본문이 아니라 값이 들고 간다 — 같은 값이 문자·알림톡으로
                 // 나갈 때 시각만 덩그러니 남으면 어느 시간대인지 알 수 없다.
                 '일시' => Clock::now() . ' (UTC)',
                 '링크' => $this->appUrl . '/forgot-password',
-            ]);
-            return true;
+            ]) ? self::NOTICE_SENT : self::NOTICE_OFF;
         } catch (\Throwable $e) {
             error_log('[' . GNUCMS_ID . '] 비밀번호 변경 알림 실패: ' . $e->getMessage());
-            return false;
+            return self::NOTICE_FAILED;
         }
     }
 
@@ -439,24 +461,16 @@ final class AccountService
 
     /**
      * 알림 하나를 내보낸다. 제목·본문은 여기서 만들지 않는다 — 어느 길로 가든 문구는
-     * Notify\MailBodies 한 곳에서 나오므로 메일 글자가 갈라질 수 없다.
+     * Notify\MailBodies 한 곳에서 나오므로 메일 글자가 갈라질 수 없다. 발송기를 받지
+     * 못한 조립에서 무슨 일이 벌어지는지는 UnwiredNotifier 의 주석이 설명한다.
      *
-     * **발송기가 없는 조립.** setNotifier() 를 거치지 않고 만들어진 이 서비스도 계속
-     * 동작해야 한다(App 밖에서 직접 조립하는 자리가 있다). 그때는 설정을 읽을 저장소가
-     * 없으므로 "설정하기 전의 동작", 곧 NotifySettings 의 기본값만 따라 메일 한 통을
-     * 보낸다 — Notifier 를 들이기 전 이 클래스가 하던 일과 정확히 같다. 기본값이 채널을
-     * 켜 두지 않은 알림(welcome)은 이 길에서도 나가지 않는다.
+     * @return bool 한 군데라도 실제로 나갔는가.
      */
-    private function notify(string $event, Recipient $to, array $vars): void
+    private function notify(string $event, Recipient $to, array $vars): bool
     {
-        if ($this->notifier !== null) {
-            $this->notifier->notify($event, $to, $vars);
-
-            return;
-        }
-        if (in_array('mail', NotifySettings::defaultChannels($event), true)) {
-            (new MailChannel($this->mailer))->send($event, $to, $vars);
-        }
+        return $this->notifier !== null
+            ? $this->notifier->notify($event, $to, $vars)
+            : (new UnwiredNotifier($this->mailer, self::class))->notify($event, $to, $vars);
     }
 
     /** 메일에 쓰는 이름은 관리자가 설정한 홈페이지 제목(site_name)을 따른다. */

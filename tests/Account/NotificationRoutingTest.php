@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Account;
 
+use GnuCms\Account\AccountService;
 use GnuCms\Aligo\AligoService;
 use GnuCms\App;
 use GnuCms\Mail\SecretCipher;
@@ -120,7 +121,8 @@ final class NotificationRoutingTest extends WebTestCase
         $id = $this->unverifiedMember($app);
         $app->users()->verifyEmail($id);
 
-        self::assertTrue($app->accountService()->notifyPasswordChanged($id));
+        self::assertSame(AccountService::NOTICE_SENT,
+            $app->accountService()->notifyPasswordChanged($id));
 
         $call = $this->lastCall();
         self::assertSame('password_changed', $call['event']);
@@ -244,6 +246,193 @@ final class NotificationRoutingTest extends WebTestCase
 
         self::assertNotSame($account, $app->accountService());
         self::assertNotSame($social, $app->socialAuthService());
+    }
+
+    /**
+     * 채널을 전부 꺼 두면 한 통도 나가지 않는다. 그때 "보냈다"고 답하면 화면이 그
+     * 거짓말을 그대로 옮긴다 — 이 저장소가 같은 모양으로 네 번 고친 결함이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testPasswordChangedSaysNothingWentWhenEveryChannelIsOff(array $config): void
+    {
+        $app = $this->boot($config);
+        $app->notifySettings()->save('password_changed', $this->channels([]));
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+
+        self::assertSame(AccountService::NOTICE_OFF,
+            $app->accountService()->notifyPasswordChanged($id));
+        self::assertSame([], $this->calls);
+    }
+
+    /** 켜 둔 채널이 터진 것은 설정이 아니라 사고다. 화면도 다르게 말해야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testPasswordChangedSaysFailedWhenTheOnlyChannelThrows(array $config): void
+    {
+        $app = $this->makeApp($config);
+        (new \ReflectionProperty(App::class, 'notifier'))->setValue($app,
+            new Notifier($app->notifySettings(), [$this->throwingChannel()], static function (): void {
+            }));
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+
+        self::assertSame(AccountService::NOTICE_FAILED,
+            $app->accountService()->notifyPasswordChanged($id));
+    }
+
+    /**
+     * 소셜로 **처음 가입한** 사람도 가입 완료 안내를 받는다. createSocial() 이 그 자리에서
+     * 인증까지 끝내므로 이 사람은 verifyEmail() 도 register() 도 지나지 않는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testANewSocialMemberIsWelcomed(array $config): void
+    {
+        $app = $this->boot($config);
+        $this->enable($app, 'welcome');
+        // 소셜 가입은 관리자가 한 명이라도 있어야 받는다.
+        $app->accountService()->register($this->owner());
+        $this->calls = [];
+
+        $app->socialAuthService()->resolve(
+            new SocialProfile('kakao', '42', 'social@example.com', true, '소셜회원'));
+
+        $call = $this->lastCall();
+        self::assertSame('welcome', $call['event']);
+        self::assertSame('social@example.com', $call['to']->email);
+        self::assertSame('소셜회원', $call['vars']['이름']);
+    }
+
+    /** 이미 있는 회원이 소셜 계정을 하나 더 붙이는 것은 가입이 아니다. */
+    #[DataProvider('connectionProvider')]
+    public function testAnExistingMemberLinkingASocialAccountIsNotWelcomed(array $config): void
+    {
+        $app = $this->boot($config);
+        $this->enable($app, 'welcome');
+        $app->accountService()->register($this->owner());
+        $id = $app->users()->create('social@example.com',
+            password_hash('member-password-123', PASSWORD_DEFAULT), '기존회원', false);
+        $app->users()->verifyEmail($id);
+        $this->calls = [];
+
+        $app->socialAuthService()->resolve(
+            new SocialProfile('kakao', '42', 'social@example.com', true, '소셜회원'));
+
+        self::assertSame([], $this->calls);
+    }
+
+    /**
+     * 화면이 세 결과를 각각 다르게 말하는지 본다. 경고가 없다는 것만으로 "갔다"를
+     * 읽게 두면, 채널을 전부 꺼 둔 사이트에서 관리자는 알림이 나간 줄 안다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheAdminScreenSaysWhatActuallyHappenedToTheNotice(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $adminId = $app->users()->create('admin@example.com',
+            password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($adminId);
+        $memberId = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($memberId);
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+
+        // 기본 설정은 이 알림의 메일을 켜 둔다 → 실제로 나갔다.
+        $sent = $this->changeMemberPassword($app, $memberId, 'new-password-456');
+        self::assertStringContainsString('notice=sent', $sent->getHeaderLine('Location'));
+        self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다',
+            $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'sent'])));
+
+        // 채널을 전부 끄면 → 아무 데도 가지 않았다고 말해야 한다.
+        $app->notifySettings()->save('password_changed', $this->channels([]));
+        $off = $this->changeMemberPassword($app, $memberId, 'other-password-789');
+        self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
+        self::assertStringContainsString('어디로도 가지 않았습니다',
+            $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'off'])));
+
+        // 시도했는데 실패한 것은 또 다른 사실이다.
+        self::assertStringContainsString('보내지 못했습니다',
+            $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed'])));
+    }
+
+    /** 본인 화면도 같은 세 가지를 말한다 — 문구만 회원이 읽을 말로 다르다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheMemberScreenSaysWhatActuallyHappenedToTheNotice(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $app->users()->create('member@example.com',
+            password_hash('old-password-123', PASSWORD_DEFAULT), '회원이름', false);
+        $app->users()->verifyEmail($id);
+        $this->get($app, '/login');
+        $this->post($app, '/login', ['csrf_token' => $_SESSION['csrf_token'],
+            'email' => 'member@example.com', 'password' => 'old-password-123']);
+
+        $sent = $this->changeOwnPassword($app, 'old-password-123', 'new-password-456');
+        self::assertStringContainsString('notice=sent', $sent->getHeaderLine('Location'));
+        self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다',
+            $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'sent'])));
+
+        $app->notifySettings()->save('password_changed', $this->channels([]));
+        $off = $this->changeOwnPassword($app, 'new-password-456', 'other-password-789');
+        self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
+        self::assertStringContainsString('어디로도 가지 않았습니다',
+            $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'off'])));
+
+        self::assertStringContainsString('보내지 못했습니다',
+            $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'failed'])));
+    }
+
+    private function changeOwnPassword(App $app, string $current, string $password)
+    {
+        return $this->post($app, '/account', [
+            'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '회원이름',
+            'current_password' => $current, 'password' => $password,
+            'password_confirmation' => $password,
+        ]);
+    }
+
+    /** 소셜 신원으로 찾은 회원 행도 번호를 들고 온다 — UserRepository 의 두 finder 와 같은 이유다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSocialIdentityLookupCarriesThePhone(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->updatePhone($id, '01012345678');
+        $app->identities()->attach($id, 'kakao', '42');
+
+        self::assertSame('01012345678', $app->identities()->findUser('kakao', '42')['phone']);
+    }
+
+    private function changeMemberPassword(App $app, int $memberId, string $password)
+    {
+        return $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '회원이름', 'status' => 'active',
+            'password' => $password, 'password_confirmation' => $password,
+        ]);
+    }
+
+    /** 보낼 수 있다고 답해 놓고 터지는 채널. "설정이 꺼졌다"와 구별되는지 보기 위한 것이다. */
+    private function throwingChannel(): ChannelInterface
+    {
+        return new class () implements ChannelInterface {
+            public function key(): string
+            {
+                return 'mail';
+            }
+
+            public function available(string $event, Recipient $to): bool
+            {
+                return true;
+            }
+
+            public function send(string $event, Recipient $to, array $vars): void
+            {
+                throw new \RuntimeException('보내다 터졌다');
+            }
+        };
     }
 
     /**

@@ -7,6 +7,9 @@ namespace GnuCms\Account;
 use GnuCms\Cms\CmsService;
 use GnuCms\Db\Connection;
 use GnuCms\Error\DomainError;
+use GnuCms\Notify\Notifier;
+use GnuCms\Notify\Recipient;
+use GnuCms\Notify\UnwiredNotifier;
 use GnuCms\Oauth\SocialProfile;
 
 final class LinkingService
@@ -17,6 +20,13 @@ final class LinkingService
     private CmsService $cms;
     private ConsentRepository $consents;
     private ?AvatarService $avatars;
+    private ?Notifier $notifier = null;
+
+    /** AccountService::setNotifier() 와 같은 이유의 같은 배선이다. */
+    public function setNotifier(Notifier $notifier): void
+    {
+        $this->notifier = $notifier;
+    }
 
     public function __construct(
         Connection $db,
@@ -88,7 +98,10 @@ final class LinkingService
 
     private function connect(SocialProfile $profile, string $email, ?ConsentTrace $trace): array
     {
-        $user = $this->db->transaction(function () use ($profile, $email, $trace): array {
+        // 이 메서드는 두 가지 일을 한다: 없던 회원을 만드는 일과, 이미 있는 회원에게
+        // 공급자를 하나 더 붙이는 일. 가입 완료 안내는 앞쪽에만 해당한다.
+        $created = false;
+        $user = $this->db->transaction(function () use ($profile, $email, $trace, &$created): array {
             $user = $this->users->findByEmail($email);
             if ($user === null) {
                 if (!$this->cms->settings()['social_registration_enabled']) {
@@ -99,6 +112,7 @@ final class LinkingService
                 }
                 $id = $this->users->createSocial($email, $profile->name, $trace?->ip);
                 $user = $this->users->findById($id);
+                $created = true;
                 // 소셜로 처음 가입하는 사람. 여기서 동의를 남기지 않으면 기록이 아예 없다.
                 $this->recordConsents($user, $trace);
             } elseif (!(bool) $user['email_verified']) {
@@ -110,7 +124,41 @@ final class LinkingService
             return $user;
         });
         $user = $this->importSocialAvatar($user, $profile);
+        if ($created) {
+            $this->sendWelcome($user);
+        }
         return $this->publicUser($user);
+    }
+
+    /**
+     * 소셜로 **처음 가입한** 사람에게 보내는 가입 완료 안내.
+     *
+     * createSocial() 은 그 자리에서 인증까지 끝내므로 이 사람은
+     * AccountService::verifyEmail() 도 register() 도 지나지 않는다. 그 자리들에만 알림을
+     * 두면 관리자가 welcome 을 켰을 때 비밀번호 가입자에게만 가고 소셜 가입자에게는
+     * 가지 않는데, 화면 어디에도 그 사실이 드러나지 않는다.
+     *
+     * 보내는 자리는 트랜잭션이 닫힌 **뒤**다 — 알림 한 통이 열린 트랜잭션 안에서 바깥
+     * 서비스(SMTP·알리고)의 응답을 기다리게 두지 않는다. 실패를 삼키는 것도
+     * AccountService::sendWelcome() 과 같은 이유다: 여기 닿았다는 것은 회원이 이미
+     * 만들어졌다는 뜻이고, 안내 한 통 때문에 로그인 자체가 실패하면 안 된다.
+     */
+    private function sendWelcome(array $user): void
+    {
+        try {
+            $to = Recipient::forUser($user);
+            $vars = [
+                '사이트명' => (string) $this->cms->settings()['site_name'],
+                '이름' => (string) $user['display_name'],
+            ];
+            // 이 서비스는 메일러를 쥐고 있지 않다. 발송기가 없으면 보낼 길이 없고,
+            // UnwiredNotifier 가 그 사실을 운영자 로그에 한 줄 남긴다.
+            $this->notifier !== null
+                ? $this->notifier->notify('welcome', $to, $vars)
+                : (new UnwiredNotifier(null, self::class))->notify('welcome', $to, $vars);
+        } catch (\Throwable $e) {
+            error_log('[' . GNUCMS_ID . '] 가입 완료 안내 실패: ' . $e->getMessage());
+        }
     }
 
     private function replacePlaceholderEmail(array $linked, string $email): array

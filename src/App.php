@@ -497,6 +497,7 @@ final class App
         $this->mailer = $mailer;
         $this->accountService = null;
         $this->socialAuthService = null;
+        $this->linkingService = null;
         $this->notifier = null;
     }
 
@@ -508,6 +509,8 @@ final class App
                     $this->db(), $this->users(), $this->identities(),
                     $this->cmsService(), $this->consents(), $this->avatars()
                 );
+                // 소셜로 처음 가입하는 사람의 가입 완료 안내가 이 서비스에서 나간다.
+                $this->linkingService->setNotifier($this->notifier());
             }
             $this->socialAuthService = new SocialAuthService(
                 $this->providerRegistry(), $this->linkingService, $this->mailer(),
@@ -583,9 +586,10 @@ final class App
         $this->notifySettings = null;
         $this->notifier = null;
         // 발송기를 끊었으면 그 발송기를 이미 받아 쥔 서비스도 함께 끊어야 한다.
-        // 그러지 않으면 두 서비스만 옛 발송기(=진짜 알리고)를 계속 들고 있다.
+        // 그러지 않으면 그 서비스들만 옛 발송기(=진짜 알리고)를 계속 들고 있다.
         $this->accountService = null;
         $this->socialAuthService = null;
+        $this->linkingService = null;
     }
 
     public function aligo(): AligoService

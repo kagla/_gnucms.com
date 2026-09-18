@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Web\Controller;
 
+use GnuCms\Account\AccountService;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
 use GnuCms\View\View;
@@ -31,7 +32,8 @@ final class AccountController
             'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
             'phone_stored' => $user['phone'] ?? null,
         ], [], ($request->getQueryParams()['saved'] ?? '') === '1',
-            ($request->getQueryParams()['mail'] ?? '') === 'failed', $user['password_hash'] !== null);
+            AccountService::noticeOrNull($request->getQueryParams()['notice'] ?? null),
+            $user['password_hash'] !== null);
     }
 
     public function update(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -60,7 +62,7 @@ final class AccountController
                 // 화면은 "무엇을 제출했나"와 "무엇이 저장돼 있나"를 둘 다 알아야 한다 —
                 // required 에서 번호를 지울 수 없다는 표시는 저장된 번호를 보고 정한다.
                 'phone_stored' => $user['phone'] ?? null,
-            ], $e->details(), false, false, $user['password_hash'] !== null);
+            ], $e->details(), false, null, $user['password_hash'] !== null);
         } catch (\Throwable $e) {
             $this->app->avatars()->delete($newAvatar);
             throw $e;
@@ -82,9 +84,8 @@ final class AccountController
             if ($fresh !== null) {
                 $_SESSION['session_epoch'] = (int) $fresh['session_epoch'];
             }
-            if (!$this->app->accountService()->notifyPasswordChanged($id)) {
-                $query['mail'] = 'failed';
-            }
+            // 셋 중 무엇이든 그대로 넘긴다. 화면이 셋을 각각 다르게 말한다.
+            $query['notice'] = $this->app->accountService()->notifyPasswordChanged($id);
         }
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('account.edit', [], $query);
         return $response->withHeader('Location', $url)->withStatus(303);
@@ -109,7 +110,7 @@ final class AccountController
                 'id' => $id, 'display_name' => $user['display_name'], 'email' => $user['email'],
                 'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
                 'phone_stored' => $user['phone'] ?? null,
-            ], $e->details(), false, false, $user['password_hash'] !== null);
+            ], $e->details(), false, null, $user['password_hash'] !== null);
         }
 
         $this->app->avatars()->delete(isset($user['avatar_file']) ? (string) $user['avatar_file'] : null);
@@ -136,7 +137,7 @@ final class AccountController
     }
 
     private function render(ServerRequestInterface $request, ResponseInterface $response, array $values,
-        array $errors, bool $saved, bool $mailFailed, bool $hasPassword): ResponseInterface
+        array $errors, bool $saved, ?string $passwordNotice, bool $hasPassword): ResponseInterface
     {
         $labels = ['google' => 'Google', 'naver' => '네이버', 'kakao' => '카카오'];
         $identities = $this->app->identities()->listForUser((int) $values['id']);
@@ -146,7 +147,8 @@ final class AccountController
         }
         unset($identity);
         return View::fromRequest($request)->render($response, 'account/edit', [
-            'values' => $values, 'errors' => $errors, 'saved' => $saved, 'mail_failed' => $mailFailed,
+            'values' => $values, 'errors' => $errors, 'saved' => $saved,
+            'password_notice' => $passwordNotice,
             'has_password' => $hasPassword,
             'social_identities' => $identities,
             'withdraw_reauthenticated' => $this->socialReauthenticated((int) $values['id']),

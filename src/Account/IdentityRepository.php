@@ -16,11 +16,14 @@ final class IdentityRepository
         $this->db = $db;
     }
 
+    /** 칸 목록은 UserRepository 의 두 finder 와 같은 이유로 phone 을 함께 읽는다 —
+     *  여기서 온 회원 행도 Notify\Recipient::forUser() 로 흘러갈 수 있고, 어느 길로
+     *  왔느냐에 따라 번호가 있고 없고가 갈리면 알아채기 어려운 결함이 된다. */
     public function findUser(string $provider, string $providerUid): ?array
     {
         return $this->db->selectOne(
             'SELECT u.id, u.email, u.email_verified, u.password_hash, u.display_name, u.is_admin, u.status, u.session_epoch,'
-            . ' u.avatar_file, u.avatar_source'
+            . ' u.avatar_file, u.avatar_source, u.phone'
             . ' FROM ' . $this->db->table('user_identities') . ' i'
             . ' JOIN ' . $this->db->table('users') . ' u ON u.id = i.user_id'
             . ' WHERE i.provider = ? AND i.provider_uid = ?',

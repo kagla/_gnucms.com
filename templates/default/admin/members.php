@@ -7,7 +7,9 @@
   <div><h1>회원 관리</h1><p class="page-sub">회원 정보를 수정하거나 필요한 경우 이용을 차단합니다. 소유자 권한은 변경되지 않습니다.</p></div>
 </div>
 <?php if ($saved): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>회원 정보를 저장했습니다.</span></div><?php endif ?>
-<?php if ($mail_failed): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림 메일은 보내지 못했습니다. 메일 설정을 확인하세요.</span></div><?php endif ?>
+<?php if ($password_notice === 'sent'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>비밀번호 변경 알림을 보냈습니다.</span></div><?php endif ?>
+<?php if ($password_notice === 'off'): ?><div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림은 어디로도 가지 않았습니다. 이 알림의 채널이 모두 꺼져 있거나, 이 회원에게 보낼 수단이 없습니다. 알림 설정을 확인하세요.</span></div><?php endif ?>
+<?php if ($password_notice === 'failed'): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림을 보내지 못했습니다. 알림 설정을 확인하세요.</span></div><?php endif ?>
 <form class="inline-search" method="get" action="<?= $this->url('admin.members') ?>" role="search">
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>

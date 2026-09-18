@@ -11,7 +11,9 @@
         <p class="card-sub"><?= $has_password ? '표시 이름과 비밀번호를 바꿉니다.' : '표시 이름을 바꿉니다.' ?></p>
       </div>
       <?php if ($saved): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>저장했습니다.</span></div><?php endif ?>
-      <?php if ($has_password && $mail_failed): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림 메일은 보내지 못했습니다.</span></div><?php endif ?>
+      <?php if ($has_password && $password_notice === 'sent'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>비밀번호 변경 알림을 보냈습니다.</span></div><?php endif ?>
+      <?php if ($has_password && $password_notice === 'off'): ?><div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림은 어디로도 가지 않았습니다. 이 사이트는 지금 이 알림을 보내지 않도록 설정돼 있습니다.</span></div><?php endif ?>
+      <?php if ($has_password && $password_notice === 'failed'): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림을 보내지 못했습니다.</span></div><?php endif ?>
       <form method="post" action="<?= $this->url('account.edit') ?>" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset">
