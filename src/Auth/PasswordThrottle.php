@@ -15,6 +15,13 @@ use GnuCms\Support\Clock;
  * 세션·쿠키 기반은 공격자가 쿠키를 버리면 그만이라 IP 기준이다. 프록시 헤더는
  * 믿지 않는다(동의 증적과 같은 원칙). IP 를 모르는 환경에서도 'unknown' 으로 묶어
  * 최소한의 방어는 한다.
+ *
+ * **IP 를 섞지 않는 열쇠(ANY_IP_PREFIX).** 비밀번호 대입은 공격자가 있는 쪽을 세면
+ * 되지만, 비밀번호 재설정 요청은 **당하는 쪽**을 세야 한다: 그 요청은 남의 전화기를
+ * 울리고 사이트 주인의 돈을 쓴다. IP 별로만 세면 IP 를 바꿔 가며 같은 번호로 계속
+ * 보낼 수 있으므로, 그 열쇠만은 IP 칸에 고정값을 적어 어디서 오든 한 통에 모은다.
+ * 열쇠에 붙은 접두사 하나가 그 뜻을 옮기고, 이 접두사가 없는 기존 열쇠의 동작은
+ * 그대로다(로그인·현재 비밀번호 확인은 예전과 글자 하나 다르지 않다).
  */
 final class PasswordThrottle
 {
@@ -22,6 +29,27 @@ final class PasswordThrottle
     public const LOGIN_MAX_FAILURES = 10;
     public const CAPTCHA_AFTER_FAILURES = 3;
     public const WINDOW_SECONDS = 600;
+
+    /**
+     * 주소 하나에 보낼 수 있는 비밀번호 재설정 요청 수(10분). 실패가 아니라 요청을
+     * 센다 — 이 길에서는 "틀린 값"이라는 것이 없고, 값이 맞든 틀리든 문자 한 통이
+     * 나가기 때문이다. 셋이면 사람이 쓰기에는 넉넉하고(못 받아 다시 눌러도 두 번 남는다)
+     * 남의 저녁을 망치기에는 모자란다.
+     */
+    public const RESET_MAX_REQUESTS = 3;
+
+    /**
+     * 한 IP 에서 나가는 재설정 요청은 주소를 가리지 않고 함께 센다. 주소별 한도만으로는
+     * 주소 목록을 들고 온 공격자가 주소마다 세 통씩 보낼 수 있다. 이쪽은 사무실 공용
+     * 회선처럼 여러 사람이 한 IP 를 쓸 수 있으므로 기본 한도(5)를 그대로 쓴다.
+     */
+    public const RESET_IP_KEY = 'pwreset-ip';
+
+    /** 이 접두사로 시작하는 열쇠는 IP 를 섞지 않는다. 이유는 클래스 주석에 있다. */
+    private const ANY_IP_PREFIX = 'all:';
+
+    /** 그런 열쇠의 행이 client_ip 칸에 적는 값. 진짜 IP 와 부딪히지 않는 모양이다. */
+    private const ANY_IP = '(any)';
 
     private Connection $db;
     private string $clientIp;
@@ -56,7 +84,7 @@ final class PasswordThrottle
         }
 
         throw DomainError::validation([
-            $field => $this->lockedMessage($row, $this->limitFor($key)),
+            $field => $this->lockedMessage($row, $key),
         ]);
     }
 
@@ -86,19 +114,20 @@ final class PasswordThrottle
     {
         $now = Clock::timestamp();
         $k = $this->keyOf($key);
+        $ip = $this->ipFor($key);
 
-        if ($this->tryAtomicUpdate($k, $now) === 0) {
+        if ($this->tryAtomicUpdate($k, $ip, $now) === 0) {
             try {
                 $this->db->insert('password_attempts', [
                     'attempt_key' => $k,
-                    'client_ip' => $this->clientIp,
+                    'client_ip' => $ip,
                     'fail_count' => 1,
                     'first_failed_at' => $now,
                 ]);
             } catch (DomainError $e) {
                 // 경합에서 졌다: 그 사이 다른 요청이 같은 (attempt_key, client_ip) 로 먼저
                 // insert 했다(UNIQUE 인덱스 위반). 그 행을 이번 실패로 다시 갱신한다.
-                $this->tryAtomicUpdate($k, $now);
+                $this->tryAtomicUpdate($k, $ip, $now);
             }
         }
 
@@ -122,7 +151,7 @@ final class PasswordThrottle
 
         $limit = $this->limitFor($key);
         if ($failures >= $limit) {
-            return $this->lockedMessage($row, $limit);
+            return $this->lockedMessage($row, $key);
         }
 
         $remaining = $limit - $failures;
@@ -137,7 +166,7 @@ final class PasswordThrottle
      * 한 문장에서 여러 번 쓰는 것을 금지하므로, 값이 같아도 :now/:now2/:now3,
      * :win/:win2 처럼 자리마다 이름을 나눈다.
      */
-    private function tryAtomicUpdate(string $k, int $now): int
+    private function tryAtomicUpdate(string $k, string $ip, int $now): int
     {
         return $this->db->execute(
             'UPDATE ' . $this->db->table('password_attempts')
@@ -147,7 +176,7 @@ final class PasswordThrottle
             [
                 'now' => $now, 'win' => self::WINDOW_SECONDS,
                 'now2' => $now, 'win2' => self::WINDOW_SECONDS, 'now3' => $now,
-                'k' => $k, 'ip' => $this->clientIp,
+                'k' => $k, 'ip' => $ip,
             ]
         );
     }
@@ -169,7 +198,8 @@ final class PasswordThrottle
 
     public function clear(string $key): void
     {
-        $this->db->delete('password_attempts', 'attempt_key = ? AND client_ip = ?', [$this->keyOf($key), $this->clientIp]);
+        $this->db->delete('password_attempts', 'attempt_key = ? AND client_ip = ?',
+            [$this->keyOf($key), $this->ipFor($key)]);
     }
 
     private function find(string $key): ?array
@@ -177,25 +207,68 @@ final class PasswordThrottle
         return $this->db->selectOne(
             'SELECT id, fail_count, first_failed_at FROM ' . $this->db->table('password_attempts')
             . ' WHERE attempt_key = ? AND client_ip = ?',
-            [$this->keyOf($key), $this->clientIp]
+            [$this->keyOf($key), $this->ipFor($key)]
         );
     }
 
-    /** @param array<string,mixed>|null $row */
-    private function lockedMessage(?array $row, ?int $limit = null): string
+    /**
+     * 잠긴 이유를 그 화면의 말로 적는다. 재설정 요청은 **틀린 값을 낸 것이 아니므로**
+     * 「비밀번호를 5회 잘못 입력했습니다」라고 말하면 안 된다 — 아무 잘못도 하지 않은
+     * 사람에게 틀렸다고 말하는 문장이 되고, 사람은 없는 실수를 찾게 된다.
+     *
+     * @param array<string,mixed>|null $row
+     */
+    private function lockedMessage(?array $row, string $key): string
     {
         $elapsed = $row === null ? 0 : Clock::timestamp() - (int) $row['first_failed_at'];
         $minutes = max(1, (int) ceil((self::WINDOW_SECONDS - $elapsed) / 60));
 
-        return '비밀번호를 ' . ($limit ?? self::MAX_FAILURES) . '회 잘못 입력했습니다. '
-            . $minutes . '분 뒤 다시 시도해 주세요.';
+        return self::isReset($key)
+            ? '비밀번호 재설정 요청이 너무 잦습니다. ' . $minutes . '분 뒤 다시 시도해 주세요.'
+            : '비밀번호를 ' . $this->limitFor($key) . '회 잘못 입력했습니다. '
+                . $minutes . '분 뒤 다시 시도해 주세요.';
     }
 
     private function limitFor(string $key): int
     {
+        if (self::isReset($key)) {
+            return self::kindOf($key) === self::RESET_IP_KEY
+                ? self::MAX_FAILURES
+                : self::RESET_MAX_REQUESTS;
+        }
+
         return $this->adaptiveLogin && str_starts_with($key, 'login:')
             ? self::LOGIN_MAX_FAILURES
             : self::MAX_FAILURES;
+    }
+
+    /**
+     * 주소 하나에 대한 비밀번호 재설정 요청을 세는 열쇠. **주소는 해시로 넣는다** —
+     * 이 표는 잠금 집계일 뿐 회원 목록이 아니고, 긴 주소가 잘려 서로 다른 주소가 한
+     * 통에 섞이는 일도 없다(WriteRateLimiter 가 작성자 열쇠에 쓰는 것과 같은 방법).
+     */
+    public static function resetKeyFor(string $email): string
+    {
+        return self::ANY_IP_PREFIX . 'pwreset:' . hash('sha256', $email);
+    }
+
+    private static function isReset(string $key): bool
+    {
+        return str_starts_with(self::kindOf($key), 'pwreset');
+    }
+
+    /** IP 를 섞지 않는다는 표시를 뗀 열쇠. 한도와 문구는 이 값으로 정한다. */
+    private static function kindOf(string $key): string
+    {
+        return str_starts_with($key, self::ANY_IP_PREFIX)
+            ? substr($key, strlen(self::ANY_IP_PREFIX))
+            : $key;
+    }
+
+    /** 이 열쇠의 행이 쓸 IP 칸. 표시가 붙은 열쇠는 어디서 왔든 한 통에 모인다. */
+    private function ipFor(string $key): string
+    {
+        return str_starts_with($key, self::ANY_IP_PREFIX) ? self::ANY_IP : $this->clientIp;
     }
 
     private function keyOf(string $key): string

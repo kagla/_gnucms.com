@@ -572,6 +572,12 @@ final class NotificationRoutingTest extends WebTestCase
             // '보낸다'(메일이 함께 켜져 있음)로 갈리는, 서로 다른 두 자리를 함께 본다.
             foreach ([['mail'], [], ['inbox'], ['mail', 'inbox'], ['sms'], ['mail', 'sms']] as $on) {
                 $this->forceChannels($app, $event, $on);
+                // 재설정 요청에는 횟수 제한이 있고(AccountService::requestPasswordReset),
+                // 그 셈은 주소가 아니라 **누른 횟수**에 달렸다 — 여기서 여섯 번을 잇따라
+                // 누르면 나중 것부터 잠긴 화면이 되어, 주소와 무관한 차이로 두 응답이
+                // 갈린다. 비교하려는 것은 주소이므로 짝마다 셈을 지우고 같은 자리에서
+                // 출발시킨다. 잠긴 화면끼리도 같은지는 ForgotPasswordThrottleTest 가 본다.
+                $app->db()->delete('password_attempts', '1 = 1');
                 $known = $this->body($this->post($app, $path,
                     ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
                 $unknown = $this->body($this->post($app, $path,

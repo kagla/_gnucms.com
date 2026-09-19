@@ -297,9 +297,25 @@ final class AccountService
         }
     }
 
+    /**
+     * 비밀번호를 잊은 사람에게 재설정 링크를 보낸다.
+     *
+     * **로그인이 필요 없는 자리인데 돈이 든다.** 이 알림이 문자·알림톡으로도 나가게 된
+     * 뒤로, 주소 하나만 아는 사람이 누르는 만큼 남의 전화기가 울리고 사이트 주인의 잔여
+     * 건수가 줄어든다(예전에는 메일 한 통이라 아무도 세지 않았다). 그래서 **주소를
+     * 찾아보기 전에** 횟수를 센다 — 세는 자리가 조회 뒤에 있으면 "있는 주소만 세는"
+     * 셈이 되어, 잠겼는지 여부가 곧 계정이 있는지를 말하게 된다. 없는 주소로 눌러도
+     * 똑같이 세고 똑같이 잠긴다.
+     *
+     * 열쇠는 둘이다: 주소마다(IP 를 섞지 않는다 — 번호를 울리는 쪽을 세야 하므로),
+     * 그리고 IP 마다(주소 목록을 들고 온 사람을 세야 하므로). 둘 다 PasswordThrottle 의
+     * 것이고, 한도와 문구는 그 클래스에 적혀 있다.
+     */
     public function requestPasswordReset(string $email): void
     {
-        $user = $this->users->findByEmail(strtolower(trim($email)));
+        $email = strtolower(trim($email));
+        $this->countResetRequest($email);
+        $user = $this->users->findByEmail($email);
         if ($user === null || !(bool) $user['email_verified'] || $user['status'] !== 'active') {
             return;
         }
@@ -318,6 +334,26 @@ final class AccountService
             // 누구에게나 같은 사실만 말한다. 운영자에게는 여기서 알린다.
             error_log('[' . GNUCMS_ID . '] 비밀번호 재설정 링크가 아무 데도 나가지 않았습니다'
                 . ' — 회원 #' . (int) $user['id'] . ' 는 지금 비밀번호를 되찾을 수 없습니다.');
+        }
+    }
+
+    /**
+     * 재설정 요청 한 번을 두 열쇠에 센다. 잠겨 있으면 422 로 막고(그 문구는 폼의 이메일
+     * 칸 밑에 붙는다), 아니면 세고 지나간다. 막힌 요청은 세지 않는다 — 계속 누르는
+     * 사람 때문에 창이 끝없이 뒤로 밀리면, 정작 그 사람이 지나간 뒤 진짜 주인이 눌러도
+     * 계속 잠겨 있다. 로그인 쪽이 assertNotLocked() 를 먼저 부르는 것과 같은 차례다.
+     */
+    private function countResetRequest(string $email): void
+    {
+        if ($this->throttle === null) {
+            return;
+        }
+        $keys = [PasswordThrottle::resetKeyFor($email), PasswordThrottle::RESET_IP_KEY];
+        foreach ($keys as $key) {
+            $this->throttle->assertNotLocked($key, 'email');
+        }
+        foreach ($keys as $key) {
+            $this->throttle->recordFailure($key);
         }
     }
 

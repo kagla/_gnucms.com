@@ -236,6 +236,75 @@ final class PasswordThrottleTest extends WebTestCase
         $t->assertNotLocked('modify:comment:1'); // 다른 키이므로 영향이 없어야 한다
     }
 
+    /**
+     * **재설정 요청 열쇠는 IP 를 섞지 않는다.** 비밀번호 대입은 공격자가 있는 쪽을 세면
+     * 되지만, 재설정 요청은 당하는 쪽(남의 전화기)을 세야 한다 — IP 별로만 세면 IP 만
+     * 바꿔 가며 같은 번호로 계속 보낼 수 있다. 다른 열쇠는 예전 그대로 IP 별이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetKeyCountsTheAddressWhereverItComesFrom(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $key = PasswordThrottle::resetKeyFor('victim@example.com');
+        $first = new PasswordThrottle($db, '203.0.113.5');
+        for ($i = 0; $i < PasswordThrottle::RESET_MAX_REQUESTS; $i++) {
+            $first->assertNotLocked($key, 'email');
+            $first->recordFailure($key);
+        }
+
+        try {
+            // IP 를 바꿔도 같은 통이다.
+            (new PasswordThrottle($db, '198.51.100.7'))->assertNotLocked($key, 'email');
+            self::fail('주소 열쇠는 IP 를 바꿔도 잠겨 있어야 한다');
+        } catch (DomainError $e) {
+            self::assertSame(422, $e->status());
+            // 틀린 값을 낸 적이 없는 사람에게 "잘못 입력했습니다"라고 하지 않는다.
+            self::assertStringContainsString('재설정 요청이 너무 잦습니다', $e->details()['email']);
+            self::assertStringNotContainsString('잘못 입력', $e->details()['email']);
+        }
+        // 다른 주소는 영향을 받지 않는다 — 한 사람이 눌렀다고 사이트가 잠기지는 않는다.
+        $first->assertNotLocked(PasswordThrottle::resetKeyFor('someone@example.com'), 'email');
+    }
+
+    /** IP 별 열쇠는 주소를 가리지 않고 함께 센다 — 주소 목록을 들고 온 쪽을 막는 자리다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetIpKeyStillCountsPerIp(array $dbConfig): void
+    {
+        $db = $this->freshDatabase($dbConfig);
+        $attacker = new PasswordThrottle($db, '203.0.113.5');
+        for ($i = 0; $i < PasswordThrottle::MAX_FAILURES; $i++) {
+            $attacker->assertNotLocked(PasswordThrottle::RESET_IP_KEY, 'email');
+            $attacker->recordFailure(PasswordThrottle::RESET_IP_KEY);
+        }
+
+        try {
+            $attacker->assertNotLocked(PasswordThrottle::RESET_IP_KEY, 'email');
+            self::fail('여섯 번째는 잠겨야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('재설정 요청이 너무 잦습니다', $e->details()['email']);
+        }
+        // 다른 회선에서 온 요청까지 막지는 않는다.
+        (new PasswordThrottle($db, '198.51.100.7'))
+            ->assertNotLocked(PasswordThrottle::RESET_IP_KEY, 'email');
+    }
+
+    /** 로그인 문구는 예전 그대로다 — 재설정 문구를 들이면서 옮겨 붙으면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheLoginMessageIsUnchanged(array $dbConfig): void
+    {
+        $t = $this->throttle($dbConfig);
+        for ($i = 0; $i < 5; $i++) {
+            $t->recordFailure('login:a@example.com');
+        }
+
+        try {
+            $t->assertNotLocked('login:a@example.com', 'email');
+            self::fail('여섯 번째는 잠겨야 한다');
+        } catch (DomainError $e) {
+            self::assertStringContainsString('비밀번호를 5회 잘못 입력했습니다', $e->details()['email']);
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testAdaptiveLoginRequiresCaptchaAfterThreeAndLocksAfterTen(array $dbConfig): void
     {
