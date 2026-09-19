@@ -210,11 +210,23 @@ final class NotifySettings
         // 무관하게 저장하고, **들어오지 않은 값만** 건드리지 않는다 — 그래야 채널을
         // 끄는 저장(본문·템플릿을 아예 싣지 않는다)이 예전처럼 매핑을 지키면서도,
         // 값을 실어 보낸 저장은 그 값을 실제로 남긴다.
+        // **"빈 값으로 보냈다"와 "아예 안 보냈다"는 다른 사실이다.** 이 둘을 한데 묶으면
+        // 둘 중 하나는 반드시 거짓말이 된다 — 2계획의 전화번호 칸에서는 disabled 라
+        // 빠진 값을 "지우라"로 읽어 저장된 번호를 말없이 지웠고, 여기서는 반대로 빈
+        // 값을 "안 보냈다"로 읽어 **본문을 영영 못 지우게** 만들었다(문자를 켜면 빈
+        // 본문은 거절되므로 지울 길이 아예 없었다). 그래서 무엇을 할지는 **키가
+        // 왔는가**로 정하고, 무엇을 쓸지는 그 값으로 정한다.
+        //   키 없음      — 건드리지 않는다. 채널만 끄는 저장(본문을 싣지 않는다)이 이 길이다.
+        //   키 있고 빈 값 — 지운다. 관리자가 칸을 비우고 저장한 것이다(문자가 켜져 있으면
+        //                   그 전에 거절된다 — 켠 채로 본문 없는 상태는 허용하지 않는다).
+        //   키 있고 값 있음 — 검사하고 저장한다. 채널이 꺼져 있어도 그렇다.
+        // 스칼라가 아닌 값(sms_body[]=x)은 stringInput() 이 예전부터 "값 없음"으로 다룬다.
+        $bodyGiven = array_key_exists('sms_body', $input);
         $body = $this->stringInput($input, 'sms_body');
         if ($saved[$event . '.sms'] === '1' && $body === '') {
             throw DomainError::validation(['sms_body' => '문자로 보낼 본문을 입력해 주세요.']);
         }
-        if ($body !== '') {
+        if ($bodyGiven && $body !== '') {
             $unknown = array_diff(Variables::names($body), $allowed);
             if ($unknown !== []) {
                 throw DomainError::validation(['sms_body' =>
@@ -226,12 +238,23 @@ final class NotifySettings
             // 실제 발송은 Dispatch 에서 전건 거절된다 — 켜졌다고 답하면서 아무것도
             // 보낼 수 없는 상태, 이 클래스가 알림톡에서 없애려고 애쓴 바로 그 상태다.
             self::assertSendable($body);
+        }
+        if ($bodyGiven) {
             $saved[$event . '.sms_body'] = $body;
         }
 
-        // 알림톡도 같다. 템플릿을 실어 보냈으면 채널이 꺼져 있어도 검증하고 저장하고,
-        // 싣지 않았으면(=채널만 끄는 저장) 저장된 매핑을 그대로 둔다.
+        // **tpl_code 는 일부러 다르게 다룬다 — 빈 값을 "지우라"로 읽지 않는다.** 본문
+        // 칸과 달리 이 칸의 빈 값은 두 가지를 뜻할 수 있고, 화면은 그 둘을 구별해 보낼
+        // 수 없다: 관리자가 "고르지 않음"을 고른 경우와, **저장된 템플릿이 죽어 고를
+        // 목록에 없는** 경우다(후자에서는 어떤 option 도 selected 가 되지 않아 빈 값이
+        // 나간다). 빈 값을 지우기로 읽으면 후자에서 다른 칸만 고쳐 저장하는 순간 죽은
+        // tpl_code 가 사라지는데, 그 코드는 화면이 「고르신 템플릿(T1)을 더는 쓸 수
+        // 없습니다」라고 이유를 말할 수 있는 유일한 근거다(formValues 의 alimtalk_tpl_code).
+        // 못 지워서 잃는 것도 없다: 알림톡을 끄면 templateFor() 는 어차피 null 이고,
+        // 다른 템플릿으로 바꾸는 길은 열려 있다. 남은 코드는 아무 데도 나가지 않는다.
         if ($saved[$event . '.alimtalk'] === '1' || $this->stringInput($input, 'tpl_code') !== '') {
+            // var_map 은 여기서 tpl_code 와 **함께 통째로** 쓰인다 — 한 칸씩 지워지거나
+            // 남거나 하는 일이 없으므로 위와 같은 질문이 생기지 않는다.
             $saved += $this->alimtalkSettings($event, $input, $allowed);
         }
 

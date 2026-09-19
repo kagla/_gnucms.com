@@ -255,6 +255,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         // 지금은 안 나간다는 사실과, 고쳐 둔 값이 남는다는 사실을 둘 다 말해야 한다.
         self::assertStringContainsString('문자 채널이 꺼져 있어', $section);
         self::assertStringContainsString('고쳐 저장해 두면 그대로 보관되고', $section);
+        self::assertStringContainsString('칸을 비우고 저장하면 지워집니다', $section);
     }
 
     /** 알림톡도 같다 — 꺼진 채로 고친 변수 연결이 저장돼야 한다. */
@@ -380,6 +381,47 @@ final class NotifySettingsScreenTest extends WebTestCase
         // 다른 묶음은 제 본문(없음)을 잰다 — 한 묶음의 숫자를 일곱 곳에 베끼지 않는다.
         self::assertStringContainsString('<strong>0바이트</strong>', self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_changed'));
+    }
+
+    /**
+     * **빈 칸으로 저장하는 것과 칸을 아예 안 보내는 것은 다른 사실이다.** 둘을 한데 묶어
+     * 두면 문자를 끈 채로는 본문을 지울 수 없고(빈 값이 무시된다), 켠 채로도 지울 수
+     * 없다(빈 값이 거절된다) — 저장된 본문을 이 화면에서 영영 못 지운다. 2계획의 전화번호
+     * 칸이 같은 뭉개기로 반대 방향 사고를 냈다: 거기서는 안 보낸 것을 "지우라"로 읽었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEmptyingTheBodyOfASwitchedOffChannelActuallyDeletesIt(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => '지울 본문 #{링크}',
+        ]);
+
+        // 문자를 끄고 칸을 비워 저장한다 — 화면이 실제로 보내는 모양 그대로다.
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'sms_body' => '',
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('',
+            $app->notifySettings()->formValues()['password_reset']['sms_body_stored']);
+        $section = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringNotContainsString('지울 본문', $section);
+        // 지운 뒤에도 「이 본문으로 나갑니다」가 남아 있으면 가리킬 본문이 없는 문장이 된다.
+        self::assertStringNotContainsString('문자 채널이 꺼져 있어', $section);
+    }
+
+    /** 본문이 한 번도 없었던 묶음에도 그 문장이 붙으면 안 된다 — 같은 거짓말의 다른 입구다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheOffChannelNoticeIsSilentWhenThereIsNoStoredBody(array $dbConfig): void
+    {
+        $html = $this->body($this->get($this->adminApp($dbConfig), '/admin/settings/notifications'));
+
+        self::assertStringNotContainsString('문자 채널이 꺼져 있어', self::section($html, 'welcome'));
+        self::assertStringNotContainsString('알림톡 채널이 꺼져 있어', self::section($html, 'welcome'));
     }
 
     /**

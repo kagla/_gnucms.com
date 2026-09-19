@@ -458,6 +458,66 @@ final class NotifySettingsTest extends DatabaseTestCase
         self::assertNull($settings->templateFor('password_reset'));
     }
 
+    /**
+     * "빈 값으로 보냈다"와 "아예 안 보냈다"는 다른 사실이다. 한데 묶으면 둘 중 하나는
+     * 반드시 거짓말이 된다 — 여기서는 빈 값을 "안 보냈다"로 읽는 바람에 저장된 본문을
+     * 지울 길이 아예 없었다(문자를 켜면 빈 본문은 거절되므로 그쪽 길도 막혀 있다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEmptySubmittedBodyDeletesWhileAnAbsentOneKeeps(array $config): void
+    {
+        $settings = $this->boot($config);
+        $settings->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+
+        // 키를 아예 안 보낸다 — 채널만 끄는 저장. 본문은 그대로 남아야 한다.
+        $settings->save('password_reset', ['mail' => '1']);
+        self::assertSame('#{이름}님 #{링크}',
+            $settings->formValues()['password_reset']['sms_body_stored']);
+
+        // 빈 값으로 보낸다 — 관리자가 칸을 비우고 저장한 것이다. 지워져야 한다.
+        $settings->save('password_reset', ['mail' => '1', 'sms_body' => '']);
+        self::assertSame('', $settings->formValues()['password_reset']['sms_body_stored']);
+    }
+
+    /** 문자를 켠 채로는 빈 본문을 받지 않는다 — 켜졌다고 답하면서 보낼 것이 없는 상태는
+     *  만들지 않는다. 지우려면 채널을 끄고 비우면 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testAnEmptyBodyIsStillRefusedWhileSmsIsOn(array $config): void
+    {
+        $settings = $this->boot($config);
+        $settings->save('password_reset', ['sms' => '1', 'sms_body' => '#{링크}']);
+
+        try {
+            $settings->save('password_reset', ['sms' => '1', 'sms_body' => '']);
+            self::fail('문자를 켠 채 빈 본문은 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('sms_body', $e->details());
+        }
+        self::assertSame('#{링크}', $settings->formValues()['password_reset']['sms_body_stored']);
+    }
+
+    /**
+     * tpl_code 는 일부러 다르다 — 빈 값을 "지우라"로 읽지 않는다. 저장된 템플릿이 죽으면
+     * 화면의 <select> 에는 그 코드에 맞는 option 이 없어 빈 값이 나가는데, 그걸 지우기로
+     * 읽으면 다른 칸만 고쳐 저장하는 순간 죽은 코드가 사라진다 — 화면이 「고르신
+     * 템플릿(T1)을 더는 쓸 수 없습니다」라고 말할 수 있는 유일한 근거다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEmptyTemplateCodeDoesNotEraseTheStoredOne(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        $templates->setEnabled('T1', false);
+
+        // 죽은 템플릿 때문에 빈 값이 나가는 저장. 다른 칸만 고쳤을 뿐이다.
+        $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'sms_body' => '#{링크}']);
+
+        $values = $settings->formValues()['password_reset'];
+        self::assertSame('T1', $values['alimtalk_tpl_code']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
+    }
+
     /** smsBody() 도 같은 함정이 있다 — 문자를 끄면 본문은 저장소에 남지만 더는
      *  내주지 않는다. */
     #[DataProvider('connectionProvider')]
