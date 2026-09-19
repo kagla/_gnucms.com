@@ -8,7 +8,9 @@ use GnuCms\Aligo\AligoService;
 use GnuCms\App;
 use GnuCms\Mail\MailerInterface;
 use GnuCms\Mail\SecretCipher;
+use GnuCms\Notify\ChannelInterface;
 use GnuCms\Notify\Notifier;
+use GnuCms\Notify\Recipient;
 use GnuCms\Service\NotificationService;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\FakeAligoTransport;
@@ -363,6 +365,57 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         self::assertSame([], $this->inbox($app));
         self::assertSame([], $mailer->messages);
+    }
+
+    /**
+     * **한 댓글의 팬아웃 전체가 하나의 시간 상한을 나눠 쓴다.** 받을 사람이 둘이면
+     * notify() 가 두 번 불리는데, 그 둘이 각자 상한을 갖는다면 사람 수만큼 곱해져
+     * 댓글 쓴 사람이 기다리는 시간에는 여전히 끝이 없다. 상한을 쥔 것은 요청당 하나인
+     * 발송기이므로, 이 자리가 발송기를 사람마다 새로 만들기 시작하면 상한이 뜻을 잃는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheWholeFanOutSharesOneSendingTimeLimit(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $this->turnOn($app, ['mail']);
+        $this->spaceOutIds($app);
+        $now = 0.0;
+        $sent = [];
+        // 부를 때마다 10초를 쓰는 채널. 느린 알리고·SMTP 를 대신한다.
+        $record = function (string $to) use (&$now, &$sent): void {
+            $now += 10.0;
+            $sent[] = $to;
+        };
+        $channel = new class ($record) implements ChannelInterface {
+            public function __construct(private \Closure $record)
+            {
+            }
+
+            public function key(): string
+            {
+                return 'mail';
+            }
+
+            public function available(string $event, Recipient $to): bool
+            {
+                return true;
+            }
+
+            public function send(string $event, Recipient $to, array $vars): void
+            {
+                ($this->record)((string) $to->email);
+            }
+        };
+        (new \ReflectionProperty(App::class, 'notifier'))->setValue($app, new Notifier(
+            $app->notifySettings(), [$channel], static function (): void {
+            }, function () use (&$now): float {
+                return $now;
+            }));
+        [, , $postId, , $replyId] = $this->seedReplyThread($app);
+
+        $app->notificationService()->notifyComment($postId, $replyId);
+
+        self::assertCount(1, $sent, '한 사람에게 10초를 쓴 뒤 두 번째 사람은 시작하지 않는다');
     }
 
     /**

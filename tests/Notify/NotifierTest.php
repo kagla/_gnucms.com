@@ -161,7 +161,48 @@ final class NotifierTest extends WebTestCase
         $input['var_map'] = ['고객명' => '이름', '주소' => '사이트명'];
         $settings->save($event, $input);
 
-        return new Notifier($settings, $channels, $this->log());
+        return new Notifier($settings, $channels, $this->log(), $this->clock());
+    }
+
+    /**
+     * 시험이 조종하는 시계. 느린 채널만 이 값을 앞으로 민다 — 그래서 다른 시험에서는
+     * 언제나 0초가 지난 것으로 보이고, 발송 시간 상한은 걸리지 않는다.
+     */
+    private float $fakeNow = 0.0;
+
+    private function clock(): \Closure
+    {
+        return fn (): float => $this->fakeNow;
+    }
+
+    /** 부르면 시계를 그만큼 밀고 돌아오는 채널. 느린 알리고·SMTP 를 대신한다. */
+    private function slowChannel(string $key, float $seconds): ChannelInterface
+    {
+        $record = function (string $sent) use ($seconds): void {
+            $this->fakeNow += $seconds;
+            $this->order[] = $sent;
+        };
+
+        return new class ($key, $record) implements ChannelInterface {
+            public function __construct(private string $k, private \Closure $record)
+            {
+            }
+
+            public function key(): string
+            {
+                return $this->k;
+            }
+
+            public function available(string $event, Recipient $to): bool
+            {
+                return true;
+            }
+
+            public function send(string $event, Recipient $to, array $vars): void
+            {
+                ($this->record)($this->k);
+            }
+        };
     }
 
     private function settings(Connection $db): NotifySettings
@@ -541,6 +582,65 @@ final class NotifierTest extends WebTestCase
             '무엇이 꺼졌는지를 말하지 않으면 운영자는 어디를 볼지 알 수 없다');
         // 한 발 앞선 상태(채널은 살아 있는데 지금 이 수신자에게 못 보낸다)와 같은 줄을
         // 쓰면 안 된다 — 그 둘을 가려 읽을 수 있어야 운영자가 다음 할 일을 정한다.
+        self::assertStringNotContainsString('보낼 수 있는 것이 없어', $this->logged[0]);
+    }
+
+    /**
+     * **오래 걸린 요청은 남은 채널을 시작하지 않는다.** 알리고가 흔들리면 왕복 한 번이
+     * 10초씩 걸리고, 댓글 하나에 채널 둘 × 받는 사람 둘이면 댓글을 쓴 사람이 40초를
+     * 기다린다. 큐로 미룰 수 없는 구조라(cron 없음) 고른 것은 정직한 상한이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testASlowChannelDoesNotDragTheRestOfTheFanOutWithIt(array $dbConfig): void
+    {
+        $alimtalk = $this->slowChannel('alimtalk', 10.0);
+        $sms = $this->channel('sms');
+        $notifier = $this->notifier($dbConfig, [$alimtalk, $sms], ['alimtalk', 'sms'], 'comment_new');
+
+        self::assertTrue($notifier->notify('comment_new', $this->to(), []));
+
+        self::assertSame(['alimtalk'], $this->order, '시간을 다 쓴 뒤의 채널은 부르지 않는다');
+        self::assertSame([], $sms->sent);
+        self::assertCount(1, $this->logged);
+        self::assertStringContainsString('발송 시간', $this->logged[0]);
+        self::assertStringContainsString('sms', $this->logged[0],
+            '무엇을 포기했는지 말하지 않으면 운영자는 알 길이 없다');
+    }
+
+    /** 정상 속도에서는 아무것도 달라지지 않는다 — 상한은 이미 느린 요청에만 걸린다. */
+    #[DataProvider('connectionProvider')]
+    public function testANormalFanOutIsNotAffectedByTheLimit(array $dbConfig): void
+    {
+        $alimtalk = $this->slowChannel('alimtalk', 0.4);
+        $sms = $this->slowChannel('sms', 0.4);
+        $notifier = $this->notifier($dbConfig, [$alimtalk, $sms], ['alimtalk', 'sms'], 'comment_new');
+
+        $notifier->notify('comment_new', $this->to(), []);
+        $notifier->notify('comment_new', $this->to(), []);
+
+        self::assertSame(['alimtalk', 'sms', 'alimtalk', 'sms'], $this->order);
+        self::assertSame([], $this->logged);
+    }
+
+    /**
+     * **상한은 요청 하나의 것이다.** 댓글 하나에 받을 사람이 둘이면 notify() 가 두 번
+     * 불리는데, 셈이 호출마다 새로 시작하면 사람 수만큼 곱해져 상한이 뜻을 잃는다.
+     * 두 번째 사람 쪽은 아무 데도 못 갔지만 "보낼 수 있는 채널이 없어서"가 아니므로,
+     * 그 문구로 적으면 운영자가 설정을 뒤지게 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheLimitIsSharedByEveryNotificationInTheSameRequest(array $dbConfig): void
+    {
+        $alimtalk = $this->slowChannel('alimtalk', 10.0);
+        $notifier = $this->notifier($dbConfig, [$alimtalk], ['alimtalk'], 'comment_new');
+        $notifier->notify('comment_new', $this->to(), []);
+        $this->logged = [];
+
+        self::assertFalse($notifier->notify('comment_new', $this->to(), []));
+
+        self::assertSame(['alimtalk'], $this->order, '두 번째 사람 쪽은 부르지도 않는다');
+        self::assertCount(1, $this->logged);
+        self::assertStringContainsString('발송 시간', $this->logged[0]);
         self::assertStringNotContainsString('보낼 수 있는 것이 없어', $this->logged[0]);
     }
 

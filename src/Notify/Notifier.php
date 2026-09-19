@@ -19,6 +19,9 @@ use GnuCms\Error\DomainError;
  *              것도 같다 — 못 보낸다고 답한 것이 아니라 답을 못 한 것이다). 이 채널만 실패한 것이고,
  *              나머지 채널은 그대로 계속 간다(비밀번호 재설정은 문자가 죽어도 메일로 가야
  *              한다). 원문은 로그에 남긴다.
+ *   시간    — 앞선 채널이 이 요청의 발송 시간을 다 썼다. 보낼 수단이 없는 것도, 보내다
+ *              터진 것도 아니라 **이번에는 시작하지 않은** 것이다. 실패로 세지 않고 한 줄만
+ *              남긴다 — 이유와 상한은 BUDGET_SECONDS 주석에 있다.
  *   설정    — 관리자가 이 알림의 채널을 하나도 켜 두지 않았다. 사고가 아니라 설정이므로
  *              아무 일도 하지 않고 조용히 끝난다. 다만 **켜 둔 것이 있었는데 설정 쪽
  *              재확인이 그것을 도로 껐다면** 그건 설정이 아니라 사고에 가깝다 —
@@ -87,6 +90,31 @@ final class Notifier
     /** details() 값 하나를 로그에 적을 때의 길이 상한(글자 수). */
     private const DETAIL_MAX = 200;
 
+    /**
+     * **한 요청 안에서 알림 발송에 쓸 수 있는 시간(초).** 이 시간을 이미 써 버렸으면 남은
+     * 채널은 이번에 부르지 않고 한 줄 남긴다.
+     *
+     * 댓글 하나가 알림톡·문자 둘을 켜 둔 사이트에서 받을 사람이 둘이면 바깥 서비스 왕복이
+     * **네 번**이고, 알리고가 흔들리면 한 번에 10초씩(StreamTransport 의 기본 타임아웃)
+     * 걸린다 — 댓글을 쓴 사람이 40초를 기다리는 화면이 된다. 원래 그 자리에 있던 것은
+     * 같은 DB 에 한 줄 적는 알림함 쓰기였다. 돈이 드는 바깥 왕복을 평범한 사용자 동작의
+     * 임계 경로에 올린 것은 이 분기이므로, 그 대가도 이 분기가 진다.
+     *
+     * **진짜 비동기가 아닌 이유.** 이 저장소는 호스팅 cron 을 요구하지 않고(docs/extensions.md),
+     * 엔진은 방문이 있을 때만 움직인다. "일단 큐에 넣는다"는 그 큐를 비울 사람이 있어야
+     * 성립하는데 여기엔 없다 — 넣어 두고 아무도 꺼내지 않으면 알림은 영영 안 간다. 그래서
+     * 고르는 것은 **정직한 상한**이다: 이미 오래 걸렸으면 남은 채널은 이번에 포기하고,
+     * 포기했다는 사실을 운영자에게 남긴다. 최악의 대기는 "이 예산 + 마지막으로 시작한
+     * 호출 하나"로 묶인다(채널이 몇 개든, 받을 사람이 몇 명이든).
+     *
+     * 값은 정상적인 발송이 걸리지 않을 만큼 넉넉하다(알리고 왕복은 보통 1초 아래다).
+     * 여기 걸린다는 것은 이미 무언가 느리다는 뜻이다.
+     *
+     * 이 셈은 **요청 하나**의 것이다 — App::notifier() 가 요청당 하나를 만들어 메모이즈하므로,
+     * 댓글 한 건의 받는 사람 둘이 같은 셈을 나눠 쓴다(그러지 않으면 사람 수만큼 곱해진다).
+     */
+    private const BUDGET_SECONDS = 6.0;
+
     private NotifySettings $settings;
 
     /** @var array<string,ChannelInterface> 채널 키 => 채널 */
@@ -95,11 +123,21 @@ final class Notifier
     /** @var \Closure(string): void */
     private \Closure $log;
 
+    /** @var \Closure(): float 지금 시각(초, 소수점 포함). 시험이 바꿔 끼운다. */
+    private \Closure $clock;
+
+    /** 이 요청에서 채널을 부르는 데 쓴 시간(초). BUDGET_SECONDS 주석 참고. */
+    private float $spent = 0.0;
+
     /**
      * @param list<ChannelInterface> $channels
      * @param (callable(string): void)|null $log 기본은 PHP 오류 로그. 시험이 바꿔 끼운다.
+     * @param (callable(): float)|null $clock 지금 시각(초). 기본은 microtime(true) —
+     *   Clock 을 쓰지 않는 이유는 그쪽이 초 단위 정수이고 시험이 통째로 얼려 두는 값이라,
+     *   "얼마나 걸렸는가"를 잴 수 없기 때문이다. 예산을 보는 시험만 이 자리를 바꿔 낀다.
      */
-    public function __construct(NotifySettings $settings, array $channels, ?callable $log = null)
+    public function __construct(NotifySettings $settings, array $channels, ?callable $log = null,
+        ?callable $clock = null)
     {
         $this->settings = $settings;
         foreach ($channels as $channel) {
@@ -124,6 +162,9 @@ final class Notifier
                 error_log('[' . GNUCMS_ID . '] ' . $line);
             }
             : \Closure::fromCallable($log);
+        $this->clock = $clock === null
+            ? static fn (): float => microtime(true)
+            : \Closure::fromCallable($clock);
     }
 
     /**
@@ -185,6 +226,7 @@ final class Notifier
 
         $delivered = 0;
         $failed = 0;
+        $outOfTime = [];
 
         foreach (array_intersect(self::ORDER, $wanted) as $key) {
             $channel = $this->channels[$key] ?? null;
@@ -195,6 +237,15 @@ final class Notifier
                 $this->recordFailure($event, $key . ': 이 앱에 배선되지 않은 채널입니다');
                 continue;
             }
+            // 이미 오래 걸렸으면 **새로 시작하지 않는다**. 실패가 아니라 포기이므로 실패로
+            // 세지 않고(메일이 나갔는데 문자를 못 보냈다고 503 을 던지면 안 된다) 건너뛰기와도
+            // 섞지 않는다 — 건너뛰기는 "보낼 수단이 없다"이고 이것은 "보낼 수 있는데 지금은
+            // 안 한다"다. 그 사실은 아래에서 따로 한 줄 남긴다.
+            if ($this->spent >= self::BUDGET_SECONDS) {
+                $outOfTime[] = $key;
+                continue;
+            }
+            $started = ($this->clock)();
             try {
                 // 보낼 수 있는지는 채널에게 먼저 묻는다. send() 안의 거절은 마지막 방어선이지
                 // 이 자리의 관문이 아니다. available() 도 try 안에 있다 — 문자·알림톡은 그
@@ -211,7 +262,17 @@ final class Notifier
                 // 보인다 — 실패는 일어난 자리에서 바로 남긴다.
                 $failed++;
                 $this->recordFailure($event, self::reason($key, $e));
+            } finally {
+                // 성공했든 터졌든 기다린 시간은 똑같이 지나갔다. 느려서 터진 채널이 예산을
+                // 쓰지 않는다면 이 상한은 정확히 필요한 순간에 아무 일도 하지 않는다.
+                $this->spent += max(0.0, ($this->clock)() - $started);
             }
+        }
+
+        if ($outOfTime !== []) {
+            ($this->log)('알림 ' . $event . ' — 앞선 채널이 이 요청의 발송 시간('
+                . self::BUDGET_SECONDS . '초)을 다 써서 ' . implode(', ', $outOfTime)
+                . ' 는 이번에 보내지 않았습니다. 알리고·메일 서버가 느린지 확인해 주세요.');
         }
 
         if ($delivered > 0) {
@@ -229,9 +290,13 @@ final class Notifier
             throw DomainError::serviceUnavailable(
                 '알림을 보내지 못했습니다. 다시 보내면 같은 알림이 두 번 갈 수 있으니 관리자에게 알려 주세요.');
         }
-        // 실패도 없는데 한 통도 못 보냈다 = 켠 채널이 전부 건너뛰기였다.
-        ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
-            . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
+        // 실패도 없는데 한 통도 못 보냈다 = 켠 채널이 전부 건너뛰기였다. 시간이 모자라
+        // 포기한 채널이 있었다면 그 줄은 이미 위에서 나갔다 — "보낼 수 있는 것이 없다"는
+        // 그 경우에 참이 아니므로 겹쳐 적지 않는다.
+        if ($outOfTime === []) {
+            ($this->log)('알림 ' . $event . ' — 켜 둔 채널(' . implode(', ', $wanted)
+                . ') 중 지금 보낼 수 있는 것이 없어 아무 데도 나가지 않았습니다');
+        }
 
         return false;
     }
