@@ -300,6 +300,9 @@ final class NotifySettingsScreenTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset', 'mail' => '1',
         ]);
 
+        // 끄기 자체가 성공했는지 먼저 못 박는다 — 끄기를 거절하는 구현에서도 "값이
+        // 그대로다"는 참이 되므로, 그 단언만으로는 아무것도 증명하지 못한다.
+        self::assertSame(['mail'], $app->notifySettings()->channelsFor('password_reset'));
         $values = $app->notifySettings()->formValues()['password_reset'];
         self::assertSame('지켜야 할 본문 #{링크}', $values['sms_body_stored']);
         self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
@@ -380,6 +383,26 @@ final class NotifySettingsScreenTest extends WebTestCase
     }
 
     /**
+     * 거절당한 이유가 길이일 때 화면이 저장된 옛 본문의 크기를 보여주면, 관리자는
+     * 무엇을 얼마나 줄여야 하는지 알 수 없다 — 숫자는 방금 거절당한 그 본문의 것이어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheRejectedBodysOwnByteCountIsShownOnThe422(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => str_repeat('가', 1207),
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('<strong>2,414바이트</strong>', $section);
+        self::assertStringNotContainsString('<strong>0바이트</strong>', $section);
+    }
+
+    /**
      * 업그레이드가 이벤트를 없앤 사이 열려 있던 폼이 그 키로 저장을 시도하면 save() 는
      * 422 로 거절하는데, 그 오류를 받아 줄 묶음이 화면에 없다 — 그리지 않으면 422 인데
      * 화면은 평소와 똑같아 관리자는 저장이 안 된 줄도 모른다.
@@ -415,8 +438,13 @@ final class NotifySettingsScreenTest extends WebTestCase
             $inboxLocked = $event !== 'comment_new';
             $phoneLocked = in_array($event, ['email_verify', 'signup_attempt', 'social_email_verify'], true);
 
-            self::assertSame($inboxLocked, str_contains($section, '지금은 새 댓글·답글 알림만 받습니다'), $event);
-            self::assertSame($phoneLocked, str_contains($section, '이 알림은 이메일로만 보낼 수 있습니다'), $event);
+            // 있음/없음만 물으면 안 된다. 전화 불가 안내는 한 묶음 안에서 알림톡 칸과
+            // 문자 칸 옆에 **각각** 붙으므로, 둘 중 하나를 지워도 "있다"는 여전히 참이다.
+            // 개수를 세야 칸마다 붙었는지 답할 수 있다.
+            self::assertSame($inboxLocked ? 1 : 0,
+                substr_count($section, '지금은 새 댓글·답글 알림만 받습니다'), $event);
+            self::assertSame($phoneLocked ? 2 : 0,
+                substr_count($section, '이 알림은 이메일로만 보낼 수 있습니다'), $event);
         }
     }
 
