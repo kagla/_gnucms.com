@@ -183,10 +183,12 @@ final class ChannelsTest extends DatabaseTestCase
         $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ?', [(int) $job['id']]);
         self::assertSame('01012345678', $row['phone']);
-        self::assertSame('홍길동님 https://example.com/r', $row['body']);
+        // 재설정 링크에는 토큰이 박혀 있다 — 표에는 값을 남기지 않는다(Events 의 secret).
+        self::assertSame('홍길동님 ***', $row['body']);
         self::assertSame('1', (string) $row['user_id']);
         self::assertSame('홍길동', $row['name']);
-        // 문자 API 는 본문을 EUC-KR 로 실어 보낸다 — 실제로 그 길을 탔는지까지 본다.
+        // 그래도 **나가는 본문은 그대로다.** 문자 API 는 본문을 EUC-KR 로 실어 보낸다 —
+        // 실제로 그 길을 탔는지까지 본다.
         self::assertSame(mb_convert_encoding('홍길동님 https://example.com/r', 'EUC-KR', 'UTF-8'),
             $this->transport->requests[0]['fields']['msg_1']);
     }
@@ -212,7 +214,11 @@ final class ChannelsTest extends DatabaseTestCase
 
         $row = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ?', [(int) $job['id']]);
-        self::assertSame('홍길동님 https://example.com/r 에서 재설정하세요', $row['body']);
+        // 매핑을 지난 뒤의 이름(주소)으로 가려진다 — 코어 이름(링크)만 알고 있으면
+        // 알림톡에서는 아무것도 가리지 못한다.
+        self::assertSame('홍길동님 *** 에서 재설정하세요', $row['body']);
+        self::assertSame('홍길동님 https://example.com/r 에서 재설정하세요',
+            $this->transport->requests[0]['fields']['message_1'], '나가는 본문은 그대로다');
         self::assertSame('01012345678', $this->transport->requests[0]['fields']['receiver_1']);
     }
 
@@ -340,8 +346,8 @@ final class ChannelsTest extends DatabaseTestCase
         (new AlimtalkChannel($this->aligo, $this->notify))->send('password_reset', $this->member(),
             ['이름' => '홍길동', '링크' => 'https://example.com/r']);
 
-        $row = $this->db->selectOne('SELECT body FROM ' . $this->db->table('message_recipients'));
-        self::assertSame('홍길동님 https://example.com/r 에서 재설정하세요', $row['body']);
+        self::assertSame('홍길동님 https://example.com/r 에서 재설정하세요',
+            $this->transport->requests[0]['fields']['message_1']);
     }
 
     /**

@@ -18,6 +18,8 @@ use GnuCms\Support\Clock;
  *   tpl_code   알림톡 템플릿 코드 (알림톡 필수)
  *   failover   알림톡 실패 시 문자 대체발송 (선택)
  *   event_key  이 발송을 일으킨 알림 이벤트 (선택)
+ *   secret_vars 값이 표에 남으면 안 되는 변수 이름들. 실제로 나가는 본문은 그대로이고,
+ *               수신자 행에 적을 사본에서만 그 값이 '***' 로 바뀐다 (선택)
  *   created_by 요청한 관리자 표시명 (선택)
  *   scheduled_at 예약 시각. 비우면 즉시 발송 — SendTime::parse() 가 검증해 UTC로 바꾼다.
  *                오프셋 없는 값은 한국 시각(KST)으로 읽는다(그 클래스 문서 주석 참고) (선택)
@@ -75,7 +77,7 @@ final class Dispatch
         // 변수를 먼저 채운 뒤에 분류·길이를 검사한다. 템플릿 상태로는 90바이트 이하라도
         // 이름 같은 변수를 채우면 쉽게 넘어간다. msg_type 을 명시해서 보내기 때문에,
         // 알리고는 짧게 신고해 놓고 긴 본문을 보내도 자동으로 LMS 로 올려주지 않는다.
-        $prepared = $this->prepare($body, $request['recipients'] ?? []);
+        $prepared = $this->prepare($body, $request['recipients'] ?? [], self::secretNames($request));
         if ($prepared === []) {
             throw DomainError::validation(['recipients' => '보낼 수 있는 수신번호가 없습니다.']);
         }
@@ -124,9 +126,11 @@ final class Dispatch
                 'phone' => $one['phone'],
                 'name' => $one['name'],
                 'user_id' => $one['user_id'],
-                'body' => $one['body'],
+                // 나간 본문이 아니라 **표에 남길 사본**이다. 비밀을 담은 변수가
+                // 신고된 발송에서는 그 값만 가려져 있다(secret_vars, prepare() 주석).
+                'body' => $one['stored'],
                 'status' => 'queued',
-                'fallback_body' => $failover ? $one['body'] : null,
+                'fallback_body' => $failover ? $one['stored'] : null,
                 'requested_at' => Clock::now(),
             ]);
         }
@@ -208,8 +212,24 @@ final class Dispatch
         return [(string) $template['content'], $code];
     }
 
-    /** 번호를 정규화하고 중복을 없애며 변수를 치환한다. 하나라도 어긋나면 작업을 만들지 않는다. */
-    private function prepare(string $body, array $recipients): array
+    /**
+     * 번호를 정규화하고 중복을 없애며 변수를 치환한다. 하나라도 어긋나면 작업을 만들지 않는다.
+     *
+     * 수신자 하나마다 본문이 **둘**이다.
+     *   body    실제로 알리고에 나가는 본문. 길이 분류(classify)와 길이 검사도 이것으로 한다.
+     *   stored  message_recipients 에 남길 사본. $secret 에 적힌 변수의 값만 '***' 로
+     *           바뀌어 있고, 신고된 변수가 없으면 body 와 글자 하나까지 같다.
+     *
+     * 둘을 가르는 이유는 Notify\Events 의 secret 주석에 있다 — 짧게는, 비밀번호 재설정
+     * 링크는 코어가 어디에도 되돌릴 수 있는 형태로 저장하지 않기로 한 값인데 발송 이력은
+     * 영구 표이고 백업에 따라다닌다. 가리는 자리를 여기로 둔 것은 여기가 두 본문이 함께
+     * 있는 유일한 곳이기 때문이다. 이력 화면이 잃는 것은 수신자별 본문 안의 그 값 하나뿐이다
+     * (작업 본문은 치환 전 원문 그대로라 문구는 남고, 상세 화면은 애초에 수신자 본문을
+     * 보여주지 않는다).
+     *
+     * @param list<string> $secret 값을 표에 남기지 않을 변수 이름
+     */
+    private function prepare(string $body, array $recipients, array $secret = []): array
     {
         $prepared = [];
         $seen = [];
@@ -219,15 +239,50 @@ final class Dispatch
                 continue;
             }
             $seen[$phone] = true;
+            $vars = (array) ($one['vars'] ?? []);
+            $real = Variables::apply($body, $vars);
             $prepared[] = [
                 'phone' => $phone,
                 'name' => ($one['name'] ?? '') !== '' ? (string) $one['name'] : null,
                 'user_id' => ($one['user_id'] ?? '') !== '' ? (string) $one['user_id'] : null,
-                'body' => Variables::apply($body, (array) ($one['vars'] ?? [])),
+                'body' => $real,
+                // 가릴 것이 없으면 두 번 치환하지 않는다. '***' 는 빈 값이 아니므로
+                // Variables::apply() 가 거절하지 않는다 — 가린 쪽만 따로 터지는 일은 없다.
+                'stored' => $secret === [] ? $real : Variables::apply($body, self::hide($vars, $secret)),
             ];
         }
 
         return $prepared;
+    }
+
+    /** 표에 남기지 않을 값을 가린 변수 묶음. 없는 이름은 만들지 않는다. */
+    private static function hide(array $vars, array $secret): array
+    {
+        foreach ($secret as $name) {
+            if (array_key_exists($name, $vars)) {
+                $vars[$name] = '***';
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * 요청이 신고한 "값을 표에 남기지 않을 변수" 이름들. 확장도 보내는 요청이라
+     * 문자열이 아닌 것은 조용히 버린다 — 여기서 터뜨려 발송을 막을 만한 값이 아니다.
+     *
+     * @return list<string>
+     */
+    private static function secretNames(array $request): array
+    {
+        $names = [];
+        foreach ((array) ($request['secret_vars'] ?? []) as $name) {
+            if (is_string($name) && $name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return $names;
     }
 
     /** 치환이 끝난 수신자 본문 중 하나라도 SMS 경계를 넘으면 작업 전체를 LMS 로 분류한다. */

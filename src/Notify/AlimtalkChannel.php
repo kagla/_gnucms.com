@@ -70,6 +70,9 @@ final class AlimtalkChannel implements ChannelInterface
         // 세 번째 방어선이다.
         $values = MessageVars::forBody($event, $vars);
         $mapped = [];
+        // 비밀을 담은 변수의 **템플릿 쪽 이름**. 발송 요청에 실리는 변수 이름은 매핑을
+        // 지난 뒤의 것이라, 코어 이름 그대로 넘기면 아무것도 가리지 못한다.
+        $secret = [];
         foreach ($template['var_map'] as $templateName => $coreName) {
             // 저장된 매핑은 약속이 아니다. templateFor() 는 템플릿 본문에 실제로 쓰인
             // 변수만 검사하므로, 손으로 고친 값이나 옛 버전이 남긴 값이 그 밖의 칸에
@@ -80,12 +83,16 @@ final class AlimtalkChannel implements ChannelInterface
                 continue;
             }
             $mapped[(string) $templateName] = $values[$coreName] ?? '';
+            if (in_array($coreName, Events::secretVars($event), true)) {
+                $secret[] = (string) $templateName;
+            }
         }
 
         $jobId = $this->aligo->send([
             'channel' => 'at',
             'tpl_code' => $template['tpl_code'],
             'event_key' => $event,
+            'secret_vars' => $secret,
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
                 'user_id' => $to->userId, 'vars' => $mapped]],
         ]);

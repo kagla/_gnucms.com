@@ -724,10 +724,60 @@ final class NotificationRoutingTest extends WebTestCase
     }
 
     /**
+     * **비밀번호 재설정 토큰은 발송 표에도 남지 않는다.**
+     *
+     * 코어는 이 토큰을 되돌릴 수 있는 형태로 어디에도 저장하지 않는다 —
+     * user_tokens 에는 sha256 만 있다. 그 결정을 발송 층이 조용히 되돌렸었다: 치환이
+     * 끝난 수신자 본문이 message_recipients.body 에 적히면서, 살아 있는 토큰이 평문으로
+     * 영구 표에 들어가 백업마다 따라다녔다.
+     *
+     * 나간 문자에서 토큰을 꺼내 그 해시가 user_tokens 에 있는지 먼저 확인한다 —
+     * 이것이 "진짜 살아 있는 토큰"이라는 전제이고, 이 단언이 없으면 이 시험은 아무
+     * 문자열이나 못 찾았다고 말하는 빈 시험이 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheResetTokenNeverReachesTheMessageTables(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $app->users()->updatePhone($id, '01012345678');
+        $transport = $this->smsOnly($app, 'password_reset', '#{이름}님 #{링크} 에서 재설정하세요');
+        $transport->queue(200, (string) json_encode(
+            ['result_code' => 1, 'msg_id' => 'M1', 'success_cnt' => 1, 'error_cnt' => 0]));
+
+        $app->accountService()->requestPasswordReset('member@example.com');
+
+        // 문자 API 는 EUC-KR 로 실어 보낸다. 실제로 나간 본문에는 링크가 그대로 있다.
+        $sent = (string) mb_convert_encoding(
+            (string) $transport->requests[0]['fields']['msg_1'], 'UTF-8', 'EUC-KR');
+        self::assertSame(1, preg_match('/token=([^\s&]+)/', $sent, $matches),
+            '보낸 문자에 재설정 링크가 없으면 이 시험은 아무것도 지키지 못한다');
+        $token = rawurldecode($matches[1]);
+        self::assertNotNull($app->db()->selectOne('SELECT id FROM '
+            . $app->db()->table('user_tokens') . ' WHERE token_hash = ?', [hash('sha256', $token)]),
+            '이 토큰으로 지금 비밀번호를 바꿀 수 있다 — 그래서 저장되면 안 된다');
+
+        foreach (['message_jobs', 'message_recipients'] as $table) {
+            foreach ($app->db()->select('SELECT * FROM ' . $app->db()->table($table)) as $row) {
+                self::assertStringNotContainsString($token, implode(' ', array_map(
+                    static fn ($value): string => is_scalar($value) ? (string) $value : '', $row)),
+                    $table . ' 에 평문 토큰이 남았습니다');
+            }
+        }
+        // 운영자가 무엇이 나갔는지는 여전히 알 수 있다: 작업 본문은 치환 전 원문이고,
+        // 수신자 본문은 값 하나만 가려진 같은 문장이다.
+        self::assertSame('#{이름}님 #{링크} 에서 재설정하세요',
+            $app->db()->select('SELECT * FROM ' . $app->db()->table('message_jobs'))[0]['body']);
+        self::assertSame('회원이름님 *** 에서 재설정하세요',
+            $app->db()->select('SELECT * FROM ' . $app->db()->table('message_recipients'))[0]['body']);
+    }
+
+    /**
      * 문자 하나만 켜 둔 앱. 알리고 계정은 저장돼 있고 문자 발송도 허용돼 있다 —
      * 남은 변수는 알리고가 이 발송을 받느냐 하나뿐이고, 그것을 전송기가 정한다.
      */
-    private function smsOnly(App $app, string $event): FakeAligoTransport
+    private function smsOnly(App $app, string $event, string $body = '#{이름}님 안내입니다'): FakeAligoTransport
     {
         $transport = new FakeAligoTransport();
         // setAligo() 는 알림 설정과 발송기를 함께 끊으므로 채널 설정보다 먼저 와야 한다.
@@ -735,8 +785,7 @@ final class NotificationRoutingTest extends WebTestCase
         $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
             'sender' => '0212345678', 'senderkey' => 'SK1']);
         $app->aligo()->settings->setEnabled('sms', true);
-        $app->notifySettings()->save($event,
-            $this->channels(['sms']) + ['sms_body' => '#{이름}님 안내입니다']);
+        $app->notifySettings()->save($event, $this->channels(['sms']) + ['sms_body' => $body]);
 
         return $transport;
     }

@@ -27,24 +27,43 @@ namespace GnuCms\Notify;
  *
  * 이 깃발은 phone 과 똑같이 쓰인다: NotifySettings::save() 가 거절하고, channelsFor() 가
  * 저장소에 남은 값을 걸러내고, 채널 자신이 available() 에서 다시 확인한다.
+ *
+ * **secret 은 "이 변수의 값이 한 번 쓰는 비밀인가"다.** 비밀번호 재설정 링크에는
+ * 그 링크를 가진 사람이면 누구나 계정을 가져갈 수 있는 토큰이 박혀 있다. 코어는 그
+ * 토큰을 되돌릴 수 있는 형태로 **어디에도 저장하지 않기로** 한 지 오래다
+ * (TokenService::issue() 는 sha256 만 남긴다). 그런데 그 링크를 문자·알림톡으로 보내면
+ * 치환이 끝난 수신자 본문이 message_recipients.body 에 그대로 적혀, 백업마다 평문
+ * 토큰이 따라다니게 된다 — 다른 층에서 내린 보안 결정을 발송 층이 조용히 되돌린 것이다.
+ * 그래서 전화 채널은 이 목록을 발송 요청에 실어 보내고, Dispatch 는 **표에 남길 사본**
+ * 에서만 그 값을 가린다(실제로 나가는 본문은 그대로다). 메일은 저장하지 않으므로
+ * 해당이 없고, 알림함은 카탈로그 변수 중 작성자·글제목만 적는다.
+ *
+ * 새 알림을 더할 때: 값이 링크든 숫자든, **그것을 아는 사람이 무언가를 할 수 있게
+ * 되는 값**이면 여기에 적는다. 적지 않으면 아무 경고 없이 그대로 저장된다.
  */
 final class Events
 {
     public const ALL = [
         'password_reset' => ['label' => '비밀번호 재설정',
-            'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => true, 'inbox' => false],
+            'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => true, 'inbox' => false,
+            'secret' => ['링크']],
         'password_changed' => ['label' => '비밀번호 변경 안내',
-            'vars' => ['사이트명', '이름', '일시', '링크'], 'phone' => true, 'inbox' => false],
+            'vars' => ['사이트명', '이름', '일시', '링크'], 'phone' => true, 'inbox' => false,
+            // 이 링크는 /forgot-password 다 — 누구나 열 수 있는 화면이고 토큰이 없다.
+            'secret' => []],
         'welcome' => ['label' => '가입 완료 안내',
-            'vars' => ['사이트명', '이름'], 'phone' => true, 'inbox' => false],
+            'vars' => ['사이트명', '이름'], 'phone' => true, 'inbox' => false, 'secret' => []],
         'comment_new' => ['label' => '새 댓글·답글',
-            'vars' => ['사이트명', '이름', '글제목', '작성자', '링크'], 'phone' => true, 'inbox' => true],
+            'vars' => ['사이트명', '이름', '글제목', '작성자', '링크'], 'phone' => true, 'inbox' => true,
+            'secret' => []],
         'email_verify' => ['label' => '이메일 인증',
-            'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => false, 'inbox' => false],
+            'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => false, 'inbox' => false,
+            'secret' => ['링크']],
         'signup_attempt' => ['label' => '가입 시도 안내',
-            'vars' => ['사이트명', '링크'], 'phone' => false, 'inbox' => false],
+            'vars' => ['사이트명', '링크'], 'phone' => false, 'inbox' => false, 'secret' => []],
         'social_email_verify' => ['label' => '소셜 로그인 이메일 확인',
-            'vars' => ['사이트명', '링크', '유효시간'], 'phone' => false, 'inbox' => false],
+            'vars' => ['사이트명', '링크', '유효시간'], 'phone' => false, 'inbox' => false,
+            'secret' => ['링크']],
     ];
 
     public static function exists(string $key): bool
@@ -73,5 +92,17 @@ final class Events
     public static function inboxCapable(string $key): bool
     {
         return (bool) (self::ALL[$key]['inbox'] ?? false);
+    }
+
+    /**
+     * 이 알림의 변수 가운데 **한 번 쓰는 비밀**을 담은 것. 지금은 토큰이 박힌 링크 셋
+     * (비밀번호 재설정·이메일 인증·소셜 이메일 확인)뿐이다. 무엇을 뜻하고 무엇을 하지
+     * 않는지는 클래스 주석에 있다.
+     *
+     * @return list<string>
+     */
+    public static function secretVars(string $key): array
+    {
+        return self::ALL[$key]['secret'] ?? [];
     }
 }

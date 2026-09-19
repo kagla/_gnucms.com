@@ -64,6 +64,9 @@ final class SmsChannel implements ChannelInterface
             'channel' => 'sms',
             'body' => $this->settings->smsBody($event),
             'event_key' => $event,
+            // 한 번 쓰는 비밀을 담은 변수는 발송 이력에 값을 남기지 않는다 —
+            // 무엇이 그런 값인지는 Events 의 secret 주석에 있다.
+            'secret_vars' => Events::secretVars($event),
             // 카탈로그 변수만 넘긴다. 채널 문맥(_post_id 등)은 여기서 걸러지므로 본문에
             // 닿을 수 없고, 그런 이름을 담은 본문은 값을 찾지 못해 Variables::apply()
             // 가 거절한다 — 조용히 채워 내보내지 않는다.
