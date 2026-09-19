@@ -7,6 +7,7 @@ namespace GnuCms\Tests\Web;
 use GnuCms\App;
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
+use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Slim\Psr7\Factory\StreamFactory;
@@ -97,7 +98,7 @@ final class CommentWriteTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $postId = $this->seed($app, 'guest');
-        $parent = $app->commentService()->create($this->adminAcl(), $postId, ['content' => '부모 댓글']);
+        $parent = $app->commentService()->create($this->adminAclFor($app), $postId, ['content' => '부모 댓글']);
 
         $this->get($app, '/posts/' . $postId);
         $this->post($app, '/posts/' . $postId . '/comments', [
@@ -118,14 +119,14 @@ final class CommentWriteTest extends WebTestCase
     public function testGuestCannotWriteASecretCommentOrReply(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'secret-reply', 'name' => '비밀답글 제한',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'secret-reply', [
+        $post = $app->postService()->create($this->adminAclFor($app), 'secret-reply', [
             'title' => '글', 'content' => '본문',
         ]);
-        $parent = $app->commentService()->create($this->adminAcl(), (int) $post['id'], [
+        $parent = $app->commentService()->create($this->adminAclFor($app), (int) $post['id'], [
             'content' => '부모 댓글',
         ]);
         $this->get($app, '/posts/' . $post['id']);
@@ -165,7 +166,7 @@ final class CommentWriteTest extends WebTestCase
 
         $parent = null;
         for ($depth = 1; $depth <= 4; $depth++) {
-            $comment = $app->commentService()->create($this->adminAcl(), $postId, array_filter([
+            $comment = $app->commentService()->create($this->adminAclFor($app), $postId, array_filter([
                 'content'   => '깊이 ' . $depth,
                 'parent_id' => $parent,
             ]));
@@ -210,7 +211,7 @@ final class CommentWriteTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $postId = $this->seed($app, 'guest');
-        $app->commentService()->create($this->adminAcl(), $postId, [
+        $app->commentService()->create($this->adminAclFor($app), $postId, [
             'content' => '비밀스러운 댓글',
             'is_secret' => '1',
         ]);
@@ -237,7 +238,7 @@ final class CommentWriteTest extends WebTestCase
         ]);
         self::assertSame(303, $created->getStatusCode());
 
-        $comments = $app->commentService()->listComments($this->adminAcl(), $postId, null);
+        $comments = $app->commentService()->listComments($this->adminAclFor($app), $postId, null);
         $commentId = (int) $comments[0]['id'];
         // 새 비회원 비밀댓글은 금지하지만, 기존에 저장된 데이터의 열람 길은 유지한다.
         $app->db()->execute(
@@ -278,7 +279,7 @@ final class CommentWriteTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'guest-post',
             'name' => '비회원 원글',
             'perm_write' => 'guest',
@@ -356,14 +357,14 @@ final class CommentWriteTest extends WebTestCase
         $this->saveSiteSettings($app, [
             'comment_rate_interval' => '0', 'comment_rate_10m' => '0', 'comment_rate_day' => '0',
         ]);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'members-secret', 'name' => '회원 비밀댓글',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'members-secret', [
+        $post = $app->postService()->create($this->adminAclFor($app), 'members-secret', [
             'title' => '글', 'content' => '본문',
         ]);
-        $member = new Acl(Identity::user('42', '회원', false));
+        $member = $this->member($app, '42', '회원');
         $comment = $app->commentService()->create($member, (int) $post['id'], [
             'content' => '회원 비밀댓글', 'is_secret' => '1',
         ]);
@@ -379,14 +380,14 @@ final class CommentWriteTest extends WebTestCase
     public function testSecretReplyIsVisibleToParentAuthorAndPostAuthor(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'secret-tree', 'name' => '비밀답글',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
         ]);
-        $postAuthor = new Acl(Identity::user('40', '원글쓴이', false));
-        $parentAuthor = new Acl(Identity::user('41', '댓글쓴이', false));
-        $replyAuthor = new Acl(Identity::user('42', '답글쓴이', false));
-        $outsider = new Acl(Identity::user('43', '다른 회원', false));
+        $postAuthor = $this->member($app, '40', '원글쓴이');
+        $parentAuthor = $this->member($app, '41', '댓글쓴이');
+        $replyAuthor = $this->member($app, '42', '답글쓴이');
+        $outsider = $this->member($app, '43', '다른 회원');
         $post = $app->postService()->create($postAuthor, 'secret-tree', ['title' => '글', 'content' => '본문']);
         $parent = $app->commentService()->create($parentAuthor, (int) $post['id'], ['content' => '부모 댓글']);
         $app->commentService()->create($replyAuthor, (int) $post['id'], [
@@ -404,10 +405,10 @@ final class CommentWriteTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'open', 'name' => '열린게시판', 'perm_write' => 'guest',
         ]);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'closed', 'name' => '닫힌게시판', 'perm_write' => 'admin',
         ]);
 
@@ -451,9 +452,35 @@ final class CommentWriteTest extends WebTestCase
         return new UploadedFile($tmp, '사진.png', 'image/png', filesize($tmp) ?: null, UPLOAD_ERR_OK);
     }
 
+    /**
+     * 흉내 낼 회원을 **실제로 심고** 그 신원의 Acl 을 돌려준다.
+     *
+     * 신원만 만들고 users 행을 만들지 않으면, 그 사람의 글·댓글에 답이 달릴 때 알림이
+     * 없는 회원을 만나 「받을 사람이 모두 활성 회원이 아니어서 …」 한 줄을 stderr 에
+     * 남긴다. 그 줄은 진짜 무결성 사고를 알리는 신호라, 시험이 같은 줄을 매번 뱉으면
+     * 사람이 출력을 읽지 않게 된다. 번호는 신원과 같아야 하므로 직접 지정해 심는다.
+     */
+    private function member(App $app, string $id, string $name): Acl
+    {
+        $app->db()->insert('users', [
+            'id' => (int) $id,
+            'email' => 'member' . $id . '@example.test',
+            'email_verified' => 1,
+            'password_hash' => password_hash('member-password-' . $id, PASSWORD_DEFAULT),
+            'display_name' => $name,
+            'is_admin' => 0,
+            'status' => 'active',
+            'session_epoch' => 0,
+            'created_at' => Clock::now(),
+            'updated_at' => Clock::now(),
+        ]);
+
+        return new Acl(Identity::user($id, $name, false));
+    }
+
     private function seed(App $app, string $permComment): int
     {
-        $acl = $this->adminAcl();
+        $acl = $this->adminAclFor($app);
         $app->boardService()->create($acl, [
             'board_key' => 'free', 'name' => '자유게시판', 'perm_comment' => $permComment,
         ]);

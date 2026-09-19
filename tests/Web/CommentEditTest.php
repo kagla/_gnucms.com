@@ -100,12 +100,12 @@ final class CommentEditTest extends WebTestCase
     public function testSecretCommentOfAnotherMemberIsNotReadableThroughTheEditForm(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유게시판',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
         ]);
         // 글쓴이도 관리자도 아닌 다른 회원이 남긴 비밀 댓글
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '본문']);
         $comment = $app->commentService()->create(
             new \GnuCms\Auth\Acl(\GnuCms\Auth\Identity::user('42', '다른 회원', false)),
             (int) $post['id'],
@@ -159,11 +159,11 @@ final class CommentEditTest extends WebTestCase
     public function testLegacyGuestSecretCommentEditKeepsItsSecretStateWithoutOfferingToggle(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'secret', 'name' => '비밀댓글 게시판',
             'perm_write' => 'guest', 'perm_comment' => 'guest', 'use_secret' => '1',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'secret', ['title' => '글', 'content' => '본문']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'secret', ['title' => '글', 'content' => '본문']);
         $postId = (int) $post['id'];
         $this->get($app, '/posts/' . $postId);
         $this->post($app, '/posts/' . $postId . '/comments', [
@@ -200,10 +200,10 @@ final class CommentEditTest extends WebTestCase
     /** @return array{0:int,1:int} 글 번호와 댓글 번호 */
     private function seedGuestComment(App $app): array
     {
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유게시판', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '본문']);
         $postId = (int) $post['id'];
 
         $this->get($app, '/posts/' . $postId);

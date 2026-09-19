@@ -298,11 +298,16 @@ final class CommentNotificationRoutingTest extends WebTestCase
         [$writer, $replied, $postId, , $replyId] = $this->seedReplyThread($app);
         $app->users()->setStatus((int) $writer, 'blocked');
         $app->users()->withdraw((int) $replied, null);
+        // App 이 조립하는 서비스는 이 줄을 PHP 오류 로그로 보낸다 — 시험에서는 그것이
+        // 스위트 출력에 섞이는 잡음이 되므로, 받아 볼 자리를 주고 실제로 적히는지까지 본다.
+        $logged = [];
 
-        $app->notificationService()->notifyComment($postId, $replyId);
+        $this->serviceLogging($app, $logged)->notifyComment($postId, $replyId);
 
         self::assertSame([], $this->inbox($app));
         self::assertSame([], $mailer->messages);
+        self::assertCount(1, $logged);
+        self::assertStringContainsString('활성 회원이 아니어서', $logged[0]);
     }
 
     /**

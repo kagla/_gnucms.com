@@ -471,7 +471,15 @@ final class MessageHistoryTest extends WebTestCase
     {
         $db = $app->db();
         $ids = [];
-        foreach (['manual' => null, 'reset' => 'password_reset', 'comment' => 'comment_new'] as $name => $key) {
+        // 'blank' 는 event_key 를 빈 문자열로 쥔 작업이다. Dispatch 는 'event_key' 를
+        // 주지 않은 요청에 NULL 을 적지만, 확장이 '' 를 실어 보내면 이 모양이 남는다 —
+        // 뜻은 NULL 과 같고(수동 발송), 거르기가 한쪽만 세면 그 작업은 어느 갈래에도
+        // 들어가지 못한 채 '전체'에만 나타난다.
+        // 'gone' 은 업그레이드로 카탈로그에서 빠졌거나 확장이 쓰는 키다 — 라벨을 찾을 수
+        // 없다고 '-' 로 뭉개면 수동 발송과 구별되지 않아, 사람이 보낸 적 없는 작업이
+        // 사람 것으로 읽힌다.
+        foreach (['manual' => null, 'reset' => 'password_reset', 'comment' => 'comment_new',
+            'blank' => '', 'gone' => 'retired_event'] as $name => $key) {
             $ids[$name] = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
                 'body' => '본문 ' . $name, 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
                 'status' => 'sent', 'test_mode' => 0, 'event_key' => $key,
@@ -573,6 +581,41 @@ final class MessageHistoryTest extends WebTestCase
         foreach ($ids as $id) {
             self::assertTrue(self::listsJob($all, $id));
         }
+    }
+
+    /**
+     * event_key 가 빈 문자열인 작업도 "관리자 수동 발송"이다 — NULL 과 뜻이 같다.
+     * 거르기가 NULL 만 세면 그 작업은 '전체'에만 나타나고 어느 갈래에도 들어가지 못한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEmptyEventKeyCountsAsAManualSendToo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $onlyManual = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+
+        self::assertTrue(self::listsJob($onlyManual, $ids['blank']), '빈 문자열도 수동 발송이다');
+        self::assertTrue(self::listsJob($onlyManual, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyManual, $ids['reset']));
+        self::assertStringContainsString('관리자 수동 발송', self::jobRow($onlyManual, $ids['blank']));
+    }
+
+    /**
+     * 카탈로그가 더는 모르는 키는 **그대로** 보여준다. 라벨이 없다고 '-' 로 적으면
+     * 그 줄은 수동 발송처럼 읽히고, 사람이 보낸 적 없는 작업이 사람 것으로 오해된다
+     * (업그레이드로 이벤트가 빠졌거나 확장이 자기 키를 쓰는 경우에 실제로 생긴다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEventKeyTheCatalogueNoLongerKnowsIsPrintedAsItIs(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $row = self::jobRow($this->body($this->get($app, '/admin/messages/history')), $ids['gone']);
+
+        self::assertStringContainsString('retired_event', $row);
+        self::assertStringNotContainsString('관리자 수동 발송', $row);
     }
 
     /**

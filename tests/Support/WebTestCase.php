@@ -165,6 +165,34 @@ abstract class WebTestCase extends DatabaseTestCase
         return new Acl(Identity::user('1', '관리자', true));
     }
 
+    /** adminAclFor() 가 심는 회원. 다른 시험이 쓰는 주소와 겹치지 않는 이름이다. */
+    private const SEEDED_ADMIN_EMAIL = 'seeded-admin@example.test';
+
+    /**
+     * adminAcl() 과 같은 관리자이지만 **users 행이 실제로 있는** 신원.
+     *
+     * adminAcl() 은 아무 회원 행도 없이 신원만 만든다. 화면 권한만 보는 시험에는 그것으로
+     * 충분하지만, 그 신원으로 **글이나 댓글을 쓰면** 그 글에 달린 댓글의 알림이 글쓴이를
+     * 찾다가 없는 회원을 만난다 — NotificationService 는 그것을 무결성 신호로 보고
+     * 「받을 사람이 모두 활성 회원이 아니어서 …」 한 줄을 남기고, 그 줄이 스위트 실행마다
+     * 스무 줄 넘게 stderr 로 쏟아졌다. 로그를 끄는 대신 그 회원을 만들어 두는 쪽을
+     * 고른다: 저 줄은 진짜 사고를 알리는 유일한 신호라, 시험 소음과 구별되지 않게 두면
+     * 사람이 출력을 읽지 않게 된다.
+     *
+     * 같은 앱에서 여러 번 불러도 회원은 하나다 — 부르는 자리마다 새로 만들면 주소가
+     * 겹쳐 거절된다.
+     */
+    protected function adminAclFor(App $app): Acl
+    {
+        $user = $app->users()->findByEmail(self::SEEDED_ADMIN_EMAIL);
+        $id = $user === null
+            ? $app->users()->create(self::SEEDED_ADMIN_EMAIL,
+                password_hash('seeded-admin-password-123', PASSWORD_DEFAULT), '관리자', true)
+            : (int) $user['id'];
+
+        return new Acl(Identity::user((string) $id, '관리자', true));
+    }
+
     protected function get(App $app, string $path, array $query = []): ResponseInterface
     {
         return $this->request($app, 'GET', $path, $query);

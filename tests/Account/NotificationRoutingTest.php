@@ -486,11 +486,12 @@ final class NotificationRoutingTest extends WebTestCase
         $this->forceChannels($app, 'social_email_verify', ['inbox']);
 
         try {
-            $app->socialAuthService()->sendPendingEmail(
+            // 엔진이 도로 끄는 조합이라 운영자 로그 한 줄이 나간다(위 시험과 같은 이유).
+            $this->captureErrorLog(fn () => $app->socialAuthService()->sendPendingEmail(
                 new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
                 'social@example.com',
                 'pending-token'
-            );
+            ));
             self::fail('닿지 않는 채널만 켜져 있으면 거절해야 한다');
         } catch (DomainError $e) {
             // 거절한 것이 이 자리인지 확인한다 — 배선이 빠져 Notifier 가 던진 것과
@@ -578,10 +579,17 @@ final class NotificationRoutingTest extends WebTestCase
                 // 갈린다. 비교하려는 것은 주소이므로 짝마다 셈을 지우고 같은 자리에서
                 // 출발시킨다. 잠긴 화면끼리도 같은지는 ForgotPasswordThrottleTest 가 본다.
                 $app->db()->delete('password_attempts', '1 = 1');
-                $known = $this->body($this->post($app, $path,
-                    ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-                $unknown = $this->body($this->post($app, $path,
-                    ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']));
+                // 여기 심는 설정 가운데 몇은 엔진이 도로 끄는 조합이라(알림함은 이 두
+                // 알림을 받지 않는다) 운영자 로그 한 줄이 나간다 — 일부러 만든 상태의
+                // 정상적인 진단이므로, 스위트 출력에 흘리지 않고 받아만 둔다.
+                $known = '';
+                $unknown = '';
+                $this->captureErrorLog(function () use ($app, $path, &$known, &$unknown): void {
+                    $known = $this->body($this->post($app, $path,
+                        ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
+                    $unknown = $this->body($this->post($app, $path,
+                        ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']));
+                });
                 self::assertSame($known, $unknown, $path . ' 화면이 계정 존재를 흘린다');
             }
         }

@@ -122,13 +122,28 @@ final class MailBodiesTest extends TestCase
         MailBodies::render('no_such_event', []);
     }
 
-    /** 값이 빠져도 메일 자체는 나간다 — 비밀번호 재설정 메일이 변수 하나 때문에
-     *  통째로 사라지는 편이 더 나쁘다. 문자·알림톡과 일부러 다르게 둔 선택이다. */
+    /**
+     * 값이 빠져도 메일 자체는 나간다 — 비밀번호 재설정 메일이 변수 하나 때문에 통째로
+     * 사라지는 편이 더 나쁘다. 문자·알림톡과 일부러 다르게 둔 선택이다.
+     *
+     * **빈 자리가 진짜로 비어 있는지까지 본다.** 예전에는 '#{' 가 없다는 것만 봤는데,
+     * 그 단언은 빠진 값을 무엇으로 채우든 통과한다 — 이벤트 키로 채워
+     * 「이 링크는 password_reset 동안 유효합니다.」라고 적어도 초록이었다. 여기서
+     * 지키려는 것은 "치환이 일어났다"가 아니라 "빠진 값 자리에 아무것도 없다"이므로
+     * 만들어진 본문을 글자 그대로 박아 둔다.
+     */
     public function testMissingVariablesLeaveTheirPlaceEmptyRatherThanFailing(): void
     {
         $rendered = MailBodies::render('password_reset', ['사이트명' => '우리 커뮤니티']);
 
         self::assertSame('[우리 커뮤니티] 비밀번호 재설정', $rendered['subject']);
+        self::assertSame("아래 링크에서 비밀번호를 다시 설정해 주세요.\n\n\n\n"
+            . '이 링크는  동안 유효합니다.', $rendered['body']);
         self::assertStringNotContainsString('#{', $rendered['body']);
+        // 이벤트 키나 변수 이름이 그 자리에 흘러드는 일도 없어야 한다 — 값이 없는 것과
+        // 이름이 있는 것은 다른 사실이고, 사람이 읽는 메일에 변수 이름이 나오면 그건
+        // 깨진 메일이다. ('링크'는 본문 문장에도 들어 있는 낱말이라 여기서 묻지 않는다.)
+        self::assertStringNotContainsString('password_reset', $rendered['body']);
+        self::assertStringNotContainsString('유효시간', $rendered['body']);
     }
 }

@@ -42,7 +42,7 @@ final class TurnstileWebTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig, ['turnstile' => $this->config()]);
         $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);
 
@@ -103,10 +103,10 @@ final class TurnstileWebTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig, ['turnstile' => $this->config()]);
         $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '본문']);
 
         $page = $this->body($this->get($app, '/posts/' . $post['id']));
         self::assertStringContainsString('data-action="comment_create"', $page);

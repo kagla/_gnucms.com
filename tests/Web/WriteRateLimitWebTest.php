@@ -24,7 +24,7 @@ final class WriteRateLimitWebTest extends WebTestCase
             'guest_write_enabled' => '1',
             'post_rate_interval' => '30', 'post_rate_10m' => '0', 'post_rate_day' => '0',
         ]);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);
         $this->get($app, '/boards/free/new');
@@ -56,10 +56,10 @@ final class WriteRateLimitWebTest extends WebTestCase
             'guest_write_enabled' => '1',
             'comment_rate_interval' => '5', 'comment_rate_10m' => '0', 'comment_rate_day' => '0',
         ]);
-        $app->boardService()->create($this->adminAcl(), [
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_comment' => 'guest',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '본문']);
         $this->get($app, '/posts/' . $post['id']);
         $base = [
             'csrf_token' => $_SESSION['csrf_token'], 'content' => '댓글',
