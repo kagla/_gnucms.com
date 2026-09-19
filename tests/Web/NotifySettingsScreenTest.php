@@ -191,8 +191,10 @@ final class NotifySettingsScreenTest extends WebTestCase
         $section = self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
         self::assertSame([], $app->notifySettings()->channelsFor('password_reset'));
-        self::assertStringContainsString('T1', $section);
-        self::assertStringContainsString('더는 쓸 수 없습니다', $section);
+        // 코드를 부르는 곳이 **안내 문장**인지 묻는다. 같은 카드의 지우기 라벨도 코드를
+        // 인쇄하므로, 카드 전체를 상대로 'T1' 만 물으면 둘 중 하나가 코드 부르기를
+        // 그만두어도 통과한다 — 한 커밋에서 함께 태어난 두 기능이 서로를 가려 준다.
+        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
         // 체크는 관리자가 고른 그대로 남는다 — 꺼진 것으로 그려 두면 다른 칸만 고쳐
         // 저장하는 순간 "켜 두었다"는 사실이 조용히 지워진다.
         self::assertStringContainsString('checked', self::checkbox($section, 'alimtalk'));
@@ -469,8 +471,10 @@ final class NotifySettingsScreenTest extends WebTestCase
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
 
         self::assertStringNotContainsString('알림톡을 켜는 순간 이대로 나갑니다', $section);
-        self::assertStringContainsString('더는 쓸 수 없습니다', $section);
-        self::assertStringContainsString('T1', $section);
+        // 안내 문장과 지우기 라벨은 **각각** 코드를 불러야 한다. 하나로 뭉쳐 물으면
+        // 나머지 하나가 코드를 잃어도 통과한다(둘의 합집합만 고정된다).
+        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('고를 수 없게 된 템플릿 설정(T1) 지우기', $section);
         self::assertStringContainsString('지금 이대로는 켤 수도 없습니다', $section);
     }
 
@@ -743,6 +747,38 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertSame(422, $refused->getStatusCode());
         $section = self::section($this->body($refused), 'password_reset');
         self::assertStringNotContainsString('checked', self::checkbox($section, 'tpl_clear'));
+    }
+
+    /**
+     * 「아직 고른 템플릿이 없습니다」는 화면에 그려진 값을 두고 하는 말이어야 한다.
+     * 저장소를 보면, 변수 연결이 덜 된 채 거절당한 422 에서 T1 이 selected 로 그려진
+     * 바로 위에 그 문장을 적게 된다 — 아직 저장되지 않았을 뿐인데.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheCardDoesNotClaimNoTemplateWhileShowingOneSelected(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedTemplate($app);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => 'T1', 'var_map' => ['고객명' => '이름'],
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('<option value="T1" selected>', $section);
+        self::assertStringNotContainsString('아직 고른 템플릿이 없습니다', $section);
+        // 거절 이유는 그대로 표시돼 있어야 한다 — 위 단언이 "아무 말도 없다"로 통과하지 않게.
+        self::assertStringContainsString('템플릿 변수에 넣을 값을 모두 골라 주세요', $section);
+
+        // 대조군: 정말로 고르지 않았으면 그때는 말해야 한다.
+        $none = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '',
+        ]);
+        self::assertStringContainsString('아직 고른 템플릿이 없습니다',
+            self::section($this->body($none), 'password_reset'));
     }
 
     /**

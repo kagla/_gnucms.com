@@ -290,7 +290,12 @@ final class AdminAligoController
             return null;
         }
         if (!$row['tpl_dead']) {
-            return ($row['on']['alimtalk'] && $row['stored_tpl_code'] === '')
+            // 여기서만 저장소가 아니라 **화면에 그려진 값**(tpl_code)을 본다. 이 문장은
+            // 지금 고른 것이 없다는 말이고, 그 답은 <select> 에 있다 — 저장소를 보면
+            // 422 되보여주기에서 T1 이 selected 로 그려진 바로 위에 「아직 고른 템플릿이
+            // 없습니다」를 적게 된다(아직 저장되지 않았을 뿐이다). 아래 죽은 참조 문장이
+            // 저장소를 보는 것은 반대 이유다: 그것은 저장된 참조에 대한 사실이다.
+            return ($row['on']['alimtalk'] && $row['tpl_code'] === '')
                 ? '알림톡을 켜려면 쓸 템플릿을 고르고 변수를 이어야 합니다. 아직 고른 템플릿이 없습니다.'
                 : null;
         }
