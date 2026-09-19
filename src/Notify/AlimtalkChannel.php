@@ -82,12 +82,15 @@ final class AlimtalkChannel implements ChannelInterface
             $mapped[(string) $templateName] = $values[$coreName] ?? '';
         }
 
-        $this->aligo->send([
+        $jobId = $this->aligo->send([
             'channel' => 'at',
             'tpl_code' => $template['tpl_code'],
             'event_key' => $event,
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
                 'user_id' => $to->userId, 'vars' => $mapped]],
         ]);
+        // 작업 행이 생겼다는 것과 알리고가 그것을 받았다는 것은 다른 사실이다 —
+        // 그 둘을 가르는 이유는 PhoneOutcome 주석에 있다.
+        PhoneOutcome::assertAccepted($this->aligo, $this->key(), $jobId);
     }
 }

@@ -20,6 +20,7 @@ use GnuCms\Notify\MailChannel;
 use GnuCms\Notify\InboxChannel;
 use GnuCms\Notify\Notifier;
 use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\PhoneOutcome;
 use GnuCms\Notify\Recipient;
 use GnuCms\Notify\SettingsRepository;
 use GnuCms\Notify\SmsChannel;
@@ -27,6 +28,7 @@ use GnuCms\Repository\CommentRepository;
 use GnuCms\Repository\NotificationRepository;
 use GnuCms\Repository\PostRepository;
 use GnuCms\Service\NotificationService;
+use GnuCms\Support\Clock;
 use GnuCms\Tests\Support\CollectingMailer;
 use GnuCms\Tests\Support\DatabaseTestCase;
 use GnuCms\Tests\Support\FakeAligoTransport;
@@ -381,6 +383,89 @@ final class ChannelsTest extends DatabaseTestCase
 
         self::assertSame([], $this->jobs());
         self::assertSame([], $this->transport->requests);
+    }
+
+    /**
+     * 알리고가 한 건도 받지 않았으면 채널은 조용히 끝내지 않는다.
+     *
+     * Dispatch 는 이 경우에도 예외를 올리지 않고 작업 번호를 돌려준다(관리자 발송
+     * 화면에는 그것이 옳다). 그 계약을 그대로 둔 채 알림 쪽만 사실을 알아내는지 본다 —
+     * 작업 행은 남아 있어야 하고(이력이 그것을 보여 준다), send() 는 던져야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testPhoneChannelsRefuseWhenAligoNeverTookTheJob(array $config): void
+    {
+        $this->boot($config);
+        $this->aligo->settings->setEnabled('sms', true);
+        $this->notify->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+        // 알리고에 닿지 못했다. Dispatch 는 이것을 삼키고 작업을 'failed' 로 적는다.
+        $this->transport->queueFailure();
+
+        $details = $this->refusal(fn () => (new SmsChannel($this->aligo, $this->notify))
+            ->send('password_reset', $this->member(), ['이름' => '홍길동', '링크' => 'https://e.test/r']));
+
+        self::assertStringContainsString('접수하지 못했습니다', $details['sms']);
+        self::assertStringContainsString('테스트용 연결 실패', $details['sms'],
+            '운영자 로그에 남을 사유는 알리고 쪽에서 온 것이어야 한다');
+        $job = $this->jobs()[0];
+        self::assertSame('failed', (string) $job['status'], '작업 행은 그대로 남는다');
+        self::assertSame(0, (int) $job['success']);
+        self::assertSame(1, (int) $job['failure']);
+    }
+
+    /** 알림톡도 같은 규칙이다 — 알리고가 요청을 거절한 경우(연결은 됐다). */
+    #[DataProvider('connectionProvider')]
+    public function testAlimtalkRefusesWhenAligoRejectedTheRequest(array $config): void
+    {
+        $this->boot($config);
+        $this->aligo->settings->setEnabled('at', true);
+        $this->notify->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        $this->transport->queue(200, (string) json_encode(['code' => -99, 'message' => '잔여 건수가 부족합니다']));
+
+        $details = $this->refusal(fn () => (new AlimtalkChannel($this->aligo, $this->notify))
+            ->send('password_reset', $this->member(), ['이름' => '홍길동', '링크' => 'https://e.test/r']));
+
+        self::assertStringContainsString('접수하지 못했습니다', $details['alimtalk']);
+        self::assertStringContainsString('잔여 건수가 부족합니다', $details['alimtalk']);
+        self::assertSame('failed', (string) $this->jobs()[0]['status']);
+    }
+
+    /**
+     * **아직 나가지 않은 것은 실패가 아니다.** 예약은 접수된 채 그 시각을 기다린다 —
+     * 그때 집계는 접수 성공 0 건일 수 있는데(알리고가 scnt 0 으로 답한 경우), 그것을
+     * 실패로 읽으면 제 시각에 잘 나갈 예약이 "못 보냈습니다"로 보고된다. 같은 집계를
+     * 가진 즉시 발송은 반대로 실패다 — 두 상태를 나란히 놓아 어느 한쪽 규칙을 지워도
+     * 이 시험이 죽게 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAJobThatIsStillWaitingForItsTimeIsNotAFailure(array $config): void
+    {
+        $this->boot($config);
+        $this->aligo->settings->setEnabled('sms', true);
+        $accepted = (string) json_encode(
+            ['result_code' => 1, 'msg_id' => 'M9', 'success_cnt' => 0, 'error_cnt' => 1]);
+
+        $this->transport->queue(200, $accepted);
+        $scheduled = $this->aligo->send(['channel' => 'sms', 'body' => '예약 안내',
+            'scheduled_at' => gmdate('Y-m-d\TH:i:s\Z', Clock::timestamp() + 3600),
+            'recipients' => [['phone' => '01012345678']]]);
+        $this->transport->queue(200, $accepted);
+        $now = $this->aligo->send(['channel' => 'sms', 'body' => '즉시 안내',
+            'recipients' => [['phone' => '01055556666']]]);
+
+        // 같은 집계(접수 0 · 실패 1), 다른 상태.
+        foreach ([[$scheduled, 'scheduled'], [$now, 'partial']] as [$id, $status]) {
+            $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
+                . ' WHERE id = ?', [$id]);
+            self::assertSame($status, (string) $job['status']);
+            self::assertSame(0, (int) $job['success']);
+            self::assertSame(1, (int) $job['failure']);
+        }
+
+        PhoneOutcome::assertAccepted($this->aligo, 'sms', $scheduled);
+        self::assertStringContainsString('접수하지 못했습니다',
+            $this->refusal(fn () => PhoneOutcome::assertAccepted($this->aligo, 'sms', $now))['sms']);
     }
 
     /**

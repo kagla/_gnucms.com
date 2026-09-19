@@ -679,6 +679,88 @@ final class NotificationRoutingTest extends WebTestCase
     }
 
     /**
+     * **작업 행이 생겼다는 것은 나갔다는 뜻이 아니다.** 알리고가 받지 못한 발송을
+     * Dispatch 는 'failed' 로 적고 작업 번호를 그대로 돌려준다 — 그것을 "나갔다"로 세면
+     * 같은 요청이 실패를 기록하면서 화면에는 초록 띠를 그린다. 실제로 그랬다.
+     *
+     * 문자 하나만 켜 두고 알리고를 죽여 둔 채 관리자가 비밀번호를 바꾼다. 진짜 HTTP
+     * 요청으로 몰고, 화면이 무엇을 말하는지와 DB 에 무엇이 남았는지를 함께 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheScreenDoesNotClaimASendAligoNeverTook(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $adminId = $app->users()->create('admin@example.com',
+            password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
+        $app->users()->verifyEmail($adminId);
+        $memberId = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($memberId);
+        $app->users()->updatePhone($memberId, '01012345678');
+        $transport = $this->smsOnly($app, 'password_changed');
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+        $transport->queueFailure();
+
+        $response = $this->changeMemberPassword($app, $memberId, 'new-password-456');
+
+        self::assertSame([['failed', 0, 1]], array_map(
+            static fn (array $job): array => [(string) $job['status'], (int) $job['success'], (int) $job['failure']],
+            $app->db()->select('SELECT * FROM ' . $app->db()->table('message_jobs'))),
+            '알리고는 이 발송을 받지 않았다 — 그것이 이 시험의 전제다');
+        self::assertStringContainsString('notice=failed', $response->getHeaderLine('Location'));
+        $body = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed']));
+        self::assertStringContainsString('보내지 못했습니다', $body);
+        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $body);
+    }
+
+    /**
+     * 같은 결함의 두 번째 얼굴: 재설정 링크가 아무 데도 가지 못했다는 사실을 운영자에게
+     * 알리는 줄이 함께 사라졌다. 그 줄은 $sent === false 일 때만 적히는데, 작업 행 하나로
+     * true 가 나갔기 때문이다. 이 사람은 지금 비밀번호를 되찾을 수 없다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheOperatorIsToldWhenTheResetLinkOnlyProducedAFailedJob(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $id = $this->unverifiedMember($app);
+        $app->users()->verifyEmail($id);
+        $app->users()->updatePhone($id, '01012345678');
+        $transport = $this->smsOnly($app, 'password_reset');
+        $transport->queueFailure();
+
+        $logged = $this->captureErrorLog(function () use ($app): void {
+            $app->accountService()->requestPasswordReset('member@example.com');
+        });
+
+        self::assertStringContainsString('비밀번호를 되찾을 수 없습니다', $logged);
+        self::assertStringContainsString('#' . $id, $logged);
+        self::assertSame(['failed'], array_map(
+            static fn (array $job): string => (string) $job['status'],
+            $app->db()->select('SELECT * FROM ' . $app->db()->table('message_jobs'))));
+    }
+
+    /**
+     * 문자 하나만 켜 둔 앱. 알리고 계정은 저장돼 있고 문자 발송도 허용돼 있다 —
+     * 남은 변수는 알리고가 이 발송을 받느냐 하나뿐이고, 그것을 전송기가 정한다.
+     */
+    private function smsOnly(App $app, string $event): FakeAligoTransport
+    {
+        $transport = new FakeAligoTransport();
+        // setAligo() 는 알림 설정과 발송기를 함께 끊으므로 채널 설정보다 먼저 와야 한다.
+        $app->setAligo(new AligoService($app->db(), $transport, new SecretCipher('s')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
+        $app->notifySettings()->save($event,
+            $this->channels(['sms']) + ['sms_body' => '#{이름}님 안내입니다']);
+
+        return $transport;
+    }
+
+    /**
      * 소셜로 **처음 가입한** 사람도 가입 완료 안내를 받는다. createSocial() 이 그 자리에서
      * 인증까지 끝내므로 이 사람은 verifyEmail() 도 register() 도 지나지 않는다.
      */
@@ -747,12 +829,18 @@ final class NotificationRoutingTest extends WebTestCase
         $app->notifySettings()->save('password_changed', $this->channels([]));
         $off = $this->changeMemberPassword($app, $memberId, 'other-password-789');
         self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
-        self::assertStringContainsString('어디로도 가지 않았습니다',
-            $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'off'])));
+        $offBody = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'off']));
+        self::assertStringContainsString('어디로도 가지 않았습니다', $offBody);
 
         // 시도했는데 실패한 것은 또 다른 사실이다.
-        self::assertStringContainsString('보내지 못했습니다',
-            $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed'])));
+        $failedBody = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed']));
+        self::assertStringContainsString('보내지 못했습니다', $failedBody);
+
+        // **셋은 서로를 배제한다.** 있어야 할 문구가 있는지만 보면, 세 상태에서 전부
+        // 초록 띠를 함께 그리는 화면도 이 시험을 통과한다 — 그리고 그 초록 띠가 바로
+        // 이 분기가 되풀이해 만들어 온 결함이다.
+        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
+        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $failedBody);
     }
 
     /** 본인 화면도 같은 세 가지를 말한다 — 문구만 회원이 읽을 말로 다르다. */
@@ -775,11 +863,15 @@ final class NotificationRoutingTest extends WebTestCase
         $app->notifySettings()->save('password_changed', $this->channels([]));
         $off = $this->changeOwnPassword($app, 'new-password-456', 'other-password-789');
         self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
-        self::assertStringContainsString('어디로도 가지 않았습니다',
-            $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'off'])));
+        $offBody = $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'off']));
+        self::assertStringContainsString('어디로도 가지 않았습니다', $offBody);
 
-        self::assertStringContainsString('보내지 못했습니다',
-            $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'failed'])));
+        $failedBody = $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'failed']));
+        self::assertStringContainsString('보내지 못했습니다', $failedBody);
+
+        // 관리자 화면과 같은 이유의 같은 울타리다(그 시험의 주석 참고).
+        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
+        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $failedBody);
     }
 
     private function changeOwnPassword(App $app, string $current, string $password)

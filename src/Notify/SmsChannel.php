@@ -60,7 +60,7 @@ final class SmsChannel implements ChannelInterface
             throw DomainError::validation(['sms' => '문자로 보낼 수 없는 알림입니다.']);
         }
 
-        $this->aligo->send([
+        $jobId = $this->aligo->send([
             'channel' => 'sms',
             'body' => $this->settings->smsBody($event),
             'event_key' => $event,
@@ -70,5 +70,8 @@ final class SmsChannel implements ChannelInterface
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
                 'user_id' => $to->userId, 'vars' => MessageVars::forBody($event, $vars)]],
         ]);
+        // 작업 행이 생겼다는 것과 알리고가 그것을 받았다는 것은 다른 사실이다 —
+        // 그 둘을 가르는 이유는 PhoneOutcome 주석에 있다.
+        PhoneOutcome::assertAccepted($this->aligo, $this->key(), $jobId);
     }
 }
