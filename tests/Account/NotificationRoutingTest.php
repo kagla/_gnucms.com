@@ -613,25 +613,6 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertStringContainsString('비밀번호를 되찾을 수 없습니다', $logged);
     }
 
-    /** error_log() 를 파일로 돌려 그 사이에 적힌 줄을 돌려준다. */
-    private function captureErrorLog(callable $run): string
-    {
-        $file = sys_get_temp_dir() . '/' . GNUCMS_ID . '-notify-log-' . getmypid() . '.log';
-        @unlink($file);
-        $previous = (string) ini_get('error_log');
-        ini_set('error_log', $file);
-        try {
-            $run();
-        } finally {
-            ini_set('error_log', $previous);
-        }
-        $written = is_file($file) ? (string) file_get_contents($file) : '';
-        @unlink($file);
-
-        return $written;
-    }
-
-
     /** 알리고를 바꾸면 발송기가 새로 만들어진다. 그 발송기를 쥔 두 서비스도 함께 새로 만들어야 한다. */
     #[DataProvider('connectionProvider')]
     public function testReplacingAligoRebuildsTheServicesThatHoldTheNotifier(array $config): void

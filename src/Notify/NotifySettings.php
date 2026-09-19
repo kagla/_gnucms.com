@@ -81,6 +81,44 @@ final class NotifySettings
         return self::DEFAULTS[$event] ?? [];
     }
 
+    /**
+     * **관리자가 켜 둔 것으로 저장돼 있는 채널.** channelsFor() 와 달리 그 채널을 지금
+     * 실제로 쓸 수 있는지는 따지지 않는다.
+     *
+     * 이 메서드가 있는 이유는 하나다: 두 답이 갈리는 순간을 부르는 쪽이 알아볼 수 있어야
+     * 하기 때문이다. channelsFor() 의 재확인(전화 가능·알림함 가능·템플릿 유효)은 저장된
+     * 설정을 **비울 수 있고**, 그때 결과는 "관리자가 아무것도 켜 두지 않았다"와 구별되지
+     * 않는다. 앞은 설정이고 뒤는 사고에 가깝다(카카오 승인이 풀린 알림톡 템플릿 하나로
+     * 댓글 알림이 통째로 멈춘다). 발송기가 그 둘을 다르게 다루려면 재확인을 거치지 않은
+     * 답이 하나 필요하다 — formValues() 가 화면을 위해 저장 원본을 함께 내주는 것과
+     * 같은 이유의 같은 통로다.
+     *
+     * @return list<string>
+     */
+    public function storedChannelsFor(string $event): array
+    {
+        if (!Events::exists($event)) {
+            return [];
+        }
+
+        return array_values(array_intersect(self::CHANNELS,
+            self::configured($event, $this->repository->all())));
+    }
+
+    /**
+     * 저장된 설정(또는 저장 전의 기본값)이 켜 둔 채널. 재확인은 하지 않는다 —
+     * 그것은 channelsFor() 의 일이다.
+     *
+     * @return list<string>
+     */
+    private static function configured(string $event, array $stored): array
+    {
+        return isset($stored[$event . '.configured'])
+            ? array_values(array_filter(self::CHANNELS,
+                static fn (string $channel): bool => ($stored[$event . '.' . $channel] ?? '0') === '1'))
+            : (self::DEFAULTS[$event] ?? []);
+    }
+
     /** @return list<string> */
     public function channelsFor(string $event): array
     {
@@ -89,10 +127,7 @@ final class NotifySettings
         }
 
         $stored = $this->repository->all();
-        $on = isset($stored[$event . '.configured'])
-            ? array_filter(self::CHANNELS,
-                fn (string $channel): bool => ($stored[$event . '.' . $channel] ?? '0') === '1')
-            : (self::DEFAULTS[$event] ?? []);
+        $on = self::configured($event, $stored);
 
         // 저장소에 남은 값이 지금 이 이벤트가 쓸 수 없는 전화 채널을 가리켜도(수동 DB
         // 편집이나 검증을 우회한 과거 버전의 흔적일 수 있다) 여기서 한 번 더 걸러낸다.

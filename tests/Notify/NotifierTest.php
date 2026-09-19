@@ -53,6 +53,9 @@ final class NotifierTest extends WebTestCase
     /** Notifier 가 남긴 로그 줄. 실패·미발송은 화면이 아니라 여기로 간다. */
     private array $logged = [];
 
+    /** notifier() 가 만든 DB. 설정을 심은 **뒤에** 세상이 바뀌는 시험이 쓴다. */
+    private Connection $db;
+
     /** 채널들이 실제로 send() 된 차례. 순서 시험이 이것을 본다. */
     private array $order = [];
 
@@ -142,7 +145,7 @@ final class NotifierTest extends WebTestCase
      */
     private function notifier(array $dbConfig, array $channels, array $on, string $event = 'welcome'): Notifier
     {
-        $db = $this->freshDatabase($dbConfig);
+        $db = $this->db = $this->freshDatabase($dbConfig);
         $db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1', 'name' => '안내',
             'content' => '#{고객명}님 #{주소} 를 확인하세요', 'status' => 'A', 'insp_status' => 'APR',
             'enabled' => 1, 'fetched_at' => '2026-09-17 10:00:00']);
@@ -512,6 +515,33 @@ final class NotifierTest extends WebTestCase
 
         self::assertSame([], $mail->sent);
         self::assertSame([], $this->logged, '꺼 둔 알림까지 로그를 채우면 진짜 사고가 묻힌다');
+    }
+
+    /**
+     * **관리자가 켠 채널을 엔진이 도로 끈 것은 설정이 아니다.** channelsFor() 는 저장된
+     * 설정을 그대로 믿지 않고 읽을 때마다 다시 따지는데(여기서는 알림톡 템플릿이 카카오
+     * 승인을 잃었다), 그 재확인이 비어 있지 않던 설정을 비울 수 있다. 관리자는 아무것도
+     * 건드리지 않았는데 알림이 그냥 멈추는 길이고, 그래서 위 시험의 "조용하다"에 섞이면
+     * 안 된다 — 두 시험은 같은 겉모습(나간 것이 하나도 없다)의 서로 다른 사실이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAChannelTheEngineRevokedIsNotSilent(array $dbConfig): void
+    {
+        $alimtalk = $this->channel('alimtalk');
+        $notifier = $this->notifier($dbConfig, [$alimtalk], ['alimtalk']);
+        // 승인이 풀려 템플릿이 꺼졌다. 저장된 설정은 그대로 'alimtalk 켜짐'이다.
+        $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => 'T1']);
+
+        self::assertFalse($notifier->notify('welcome', $this->to(), []));
+
+        self::assertSame([], $alimtalk->sent);
+        self::assertCount(1, $this->logged);
+        self::assertStringContainsString('더는 쓸 수 없는 상태', $this->logged[0]);
+        self::assertStringContainsString('alimtalk', $this->logged[0],
+            '무엇이 꺼졌는지를 말하지 않으면 운영자는 어디를 볼지 알 수 없다');
+        // 한 발 앞선 상태(채널은 살아 있는데 지금 이 수신자에게 못 보낸다)와 같은 줄을
+        // 쓰면 안 된다 — 그 둘을 가려 읽을 수 있어야 운영자가 다음 할 일을 정한다.
+        self::assertStringNotContainsString('보낼 수 있는 것이 없어', $this->logged[0]);
     }
 
     /**

@@ -365,6 +365,43 @@ final class CommentNotificationRoutingTest extends WebTestCase
         self::assertSame([], $mailer->messages);
     }
 
+    /**
+     * **엔진이 채널을 도로 끄면 댓글 알림은 그냥 멈춘다.** 승인 템플릿이 카카오 승인을
+     * 잃으면 channelsFor() 는 알림톡을 빼고, 알림톡 하나만 켜 둔 사이트에서는 켤 채널이
+     * 하나도 남지 않는다. 관리자는 아무것도 건드리지 않았고, 이 호출부는 돌려받은 값을
+     * 보지 않는다(설계대로다) — 그래서 운영자 로그 한 줄이 유일한 신호다. 그 줄이
+     * 없으면 "댓글 알림이 안 온다"는 사실만 남고 이유가 아무 데도 없다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testItSaysSoWhenTheEngineRevokedTheOnlyChannel(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $this->bootAligo($app);
+        $app->aligo()->settings->setEnabled('at', true);
+        $app->db()->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1',
+            'name' => '새 댓글', 'content' => '#{고객명}님 #{제목} 에 새 댓글이 있습니다',
+            'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
+            'fetched_at' => '2026-09-17 10:00:00']);
+        $this->turnOn($app, ['alimtalk'],
+            ['tpl_code' => 'T1', 'var_map' => ['고객명' => '이름', '제목' => '글제목']]);
+        $this->spaceOutIds($app);
+        $writer = $this->seedMember($app, 'writer@example.com', self::WRITER);
+        $app->users()->updatePhone((int) $writer, '01011112222');
+        $postId = $this->seedPost($app, $writer, '알림이 멈출 글');
+        $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
+        // 카카오 승인이 풀려 Templates::fetch() 가 이 템플릿을 껐다.
+        $app->db()->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => 'T1']);
+
+        $logged = $this->captureErrorLog(function () use ($app, $postId, $commentId): void {
+            $app->notificationService()->notifyComment($postId, $commentId);
+        });
+
+        self::assertSame([], $this->jobs($app), '보낼 수 없는 채널로 발송을 만들지는 않는다');
+        self::assertSame([], $this->inbox($app));
+        self::assertStringContainsString('더는 쓸 수 없는 상태', $logged);
+        self::assertStringContainsString('comment_new', $logged);
+    }
+
     /** 이 알림으로 켤 채널. 관리자 화면이 저장하는 그 길로 저장한다. */
     private function turnOn(App $app, array $channels, array $extra = []): void
     {

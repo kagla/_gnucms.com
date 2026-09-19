@@ -237,6 +237,31 @@ abstract class WebTestCase extends DatabaseTestCase
         ];
     }
 
+    /**
+     * error_log() 를 파일로 돌려 그 사이에 적힌 줄을 돌려준다.
+     *
+     * 운영자 로그는 화면에 나오지 않는 진단이라, 그것이 실제로 적히는지 보려면 받아 볼
+     * 자리가 필요하다. 로그를 받는 곳을 바꿔 끼울 수 있는 발송기(Notifier·
+     * NotificationService)와 달리 AccountService 같은 자리는 error_log() 를 직접 부르고,
+     * App 이 조립한 발송기도 마찬가지다 — 그 줄을 보려면 여기를 지나야 한다.
+     */
+    protected function captureErrorLog(callable $run): string
+    {
+        $file = sys_get_temp_dir() . '/' . GNUCMS_ID . '-notify-log-' . getmypid() . '.log';
+        @unlink($file);
+        $previous = (string) ini_get('error_log');
+        ini_set('error_log', $file);
+        try {
+            $run();
+        } finally {
+            ini_set('error_log', $previous);
+        }
+        $written = is_file($file) ? (string) file_get_contents($file) : '';
+        @unlink($file);
+
+        return $written;
+    }
+
     /** 공유 임시 업로드 폴더를 비운다. collectGarbage 의 개수 단언이 이전 실행에 흔들리지 않게. */
     protected function purgeTestUploads(): void
     {
