@@ -140,6 +140,144 @@ final class AligoServiceTest extends DatabaseTestCase
         self::assertSame(['history', 'settings', 'templates'], $publicProperties);
     }
 
+    /**
+     * 대조군. 같은 계정을 그대로 다시 저장하면 스위치는 꺼지지 않고 취소할 것도 없다 —
+     * 저장이 무조건 취소를 돌리는 것이 아니라 **채널이 꺼질 때만** 돈다는 사실을 먼저
+     * 못 박아 둔다. 이 시험이 없으면 아래 시험은 "저장하면 언제나 취소한다"는 훨씬 나쁜
+     * 구현으로도 통과한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testSavingTheSameAccountAgainSwitchesNothingOffAndCancelsNothing(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $account = ['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678', 'senderkey' => 'SK1'];
+        $service->settings->save($account);
+        $service->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+        $requestsBefore = count($transport->requests);
+
+        $result = $service->saveSettings($account);
+
+        self::assertSame(['cancelled' => 0, 'failed' => 0, 'reasons' => []], $result);
+        self::assertCount($requestsBefore, $transport->requests, '취소 요청을 보내지 않아야 한다');
+        self::assertTrue($service->settings->isEnabled('sms'), '같은 키를 다시 저장해도 스위치는 켜진 채여야 한다');
+        $job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status']);
+    }
+
+    /**
+     * 계정을 바꿔 저장하면 두 스위치가 꺼진다(Settings::save()). 그 길에도 끄기 버튼과
+     * 같은 취소 조율이 붙어야 한다 — 붙지 않으면 관리자는 초록 체크와 함께 「설정을
+     * 저장했습니다」를 보는데 예약은 그대로 살아 있고, 게다가 그 예약은 새 키로는
+     * 취소할 수도 없다.
+     *
+     * 꺼진 채널의 예약만 취소한다는 것도 함께 본다 — 계정 변경은 두 채널을 한꺼번에
+     * 끄므로 "꺼진 채널만" 을 볼 수 있는 자리가 아니지만, 애초에 꺼져 있던 채널
+     * (여기서는 알림톡)에 걸린 예약까지 건드리지는 않는지는 볼 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testChangingTheApiKeyCancelsTheSchedulesOfTheChannelsItSwitchesOff(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'shop', 'api_key' => 'OLD-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $result = $service->saveSettings(['user_id' => 'shop', 'api_key' => 'NEW-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+
+        self::assertSame(1, $result['cancelled']);
+        self::assertSame(0, $result['failed']);
+        self::assertFalse($service->settings->isEnabled('sms'), '계정이 바뀌면 스위치는 꺼진다');
+
+        $cancelRequest = end($transport->requests);
+        self::assertStringContainsString('/cancel/', $cancelRequest['url']);
+        self::assertSame('M1', $cancelRequest['fields']['mid']);
+
+        $job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+        // 새 키는 저장됐다 — 취소를 먼저 한다고 해서 저장이 뒤로 밀리지 않는다.
+        self::assertSame('NEW-KEY', $service->settings->runtime()['api_key']);
+    }
+
+    /**
+     * **취소 요청은 옛 키로 나가야 한다.** 이 시험 하나가 순서를 붙들고 있다: 새 키를
+     * 저장한 **뒤에** 취소를 부르면 옛 계정이 접수한 예약을 새 자격증명으로 취소하려
+     * 들어 알리고가 거절하고, 검토가 적은 "이 예약은 영영 멈출 수 없다"가 그대로 남는다.
+     * 작업 상태만 보면 두 순서가 구별되지 않으므로(가짜 전송기는 어느 키에나 성공을
+     * 돌려준다) 실제로 나간 자격증명을 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheCancellationThatFollowsAKeyChangeGoesOutWithTheOldKey(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'old-shop', 'api_key' => 'OLD-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $service->saveSettings(['user_id' => 'new-shop', 'api_key' => 'NEW-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+
+        $cancelRequest = end($transport->requests);
+        self::assertStringContainsString('/cancel/', $cancelRequest['url']);
+        self::assertSame('OLD-KEY', $cancelRequest['fields']['key']);
+        self::assertSame('old-shop', $cancelRequest['fields']['user_id']);
+    }
+
+    /**
+     * 취소가 실패해도 저장은 그대로 일어난다 — 저장을 되돌리면 "키를 바꾸지 못했다"가
+     * 되고, 그것은 setChannelEnabled() 이 스위치를 되돌리지 않는 것과 같은 이유로
+     * 더 나쁜 신호다. 실패는 숫자로 드러나 화면이 주의(노랑)로 칠한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailedCancellationStillSavesTheNewAccount(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'shop', 'api_key' => 'OLD-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $transport->queue(200, '{"result_code":-804,"message":"too late"}');
+        $result = $service->saveSettings(['user_id' => 'shop', 'api_key' => 'NEW-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+
+        self::assertSame(0, $result['cancelled']);
+        self::assertSame(1, $result['failed']);
+        self::assertNotSame([], $result['reasons']);
+        self::assertSame('NEW-KEY', $service->settings->runtime()['api_key']);
+        $job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '취소되지 못했으므로 예약 상태가 그대로 남아야 한다');
+    }
+
     /** 켜는 경우는 취소할 것이 없다 — 이미 예약된 작업이 있어도 손대지 않고, 알리고에 취소 요청도 보내지 않는다. */
     #[DataProvider('connectionProvider')]
     public function testTurningAChannelOnCancelsNothing(array $config): void

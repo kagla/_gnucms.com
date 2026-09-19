@@ -104,6 +104,65 @@ final class AligoSettingsTest extends WebTestCase
     }
 
     /**
+     * 두 설정 화면이 한 방향으로만 가리키고 있었다. 알림 설정 화면은 채널 스위치가
+     * 꺼져 있으면 이 화면으로 링크를 걸어 "여기서 켜 주세요"라고 말하는데, 이 화면의
+     * "채널별 발송 허용"은 그 스위치를 끄면 코어 알림도 함께 멈춘다는 사실도, 알림
+     * 설정 화면의 존재도 말하지 않았다 — 관리자는 이 화면만 보고 끄면서 무엇이 함께
+     * 멈추는지 알 수 없었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheChannelSwitchesSayThatCoreNotificationsRideOnThem(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/aligo'));
+
+        self::assertStringContainsString('코어 알림', $html);
+        self::assertStringContainsString('/admin/settings/notifications', $html);
+    }
+
+    /**
+     * 계정 저장 화면(=/admin/aligo)에서 API 키만 바꿔 저장하면 두 채널 스위치가 함께
+     * 꺼진다. 그때 걸려 있던 예약이 취소되는지, 그리고 그 사실이 안내에 숫자로
+     * 실리는지를 화면 경로로 확인한다 — 예전에는 303 과 초록 체크 「설정을
+     * 저장했습니다」만 나오고 취소 호출은 0회였다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testChangingTheKeyThroughTheScreenCancelsSchedulesAndSaysSo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = new FakeAligoTransport();
+        $app->setAligo(new AligoService($app->db(), $transport,
+            new SecretCipher('web-test-secret-that-is-long-enough')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'OLD-KEY',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $app->aligo()->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678']]]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $response = $this->post($app, '/admin/aligo', ['csrf_token' => $_SESSION['csrf_token'],
+            'user_id' => 'shop', 'api_key' => 'NEW-KEY', 'sender' => '0212345678', 'senderkey' => 'SK1']);
+
+        self::assertSame(303, $response->getStatusCode());
+        // 숫자는 쿼리로, 문장은 화면이 만든다(클래스 주석의 원칙).
+        self::assertStringContainsString('cancel_ok=1', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('cancel_failed=0', $response->getHeaderLine('Location'));
+
+        $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+        self::assertFalse($app->aligo()->settings->isEnabled('sms'));
+
+        $html = $this->body($this->get($app, '/admin/aligo',
+            ['saved' => '1', 'cancel_ok' => '1', 'cancel_failed' => '0']));
+        self::assertStringContainsString('예약된 발송 1개를 함께 취소했습니다', $html);
+    }
+
+    /**
      * 취소하지 못한 예약이 남았다는 안내에 초록 체크가 붙으면, 문장을 끝까지 읽지 않은
      * 관리자는 다 끝난 줄 안다 — 이 기능이 낼 수 있는 가장 잘못된 신호다. 문장만이
      * 아니라 배지(색과 아이콘)까지 주의로 올라가야 하므로 마크업을 직접 본다.

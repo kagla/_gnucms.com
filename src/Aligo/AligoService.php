@@ -67,9 +67,45 @@ final class AligoService
     }
 
     /**
-     * 채널 발송 허용 스위치를 바꾼다. 관리자 화면에서 채널을 끄는 유일한 통로
-     * (AdminAligoController::toggle())가 이 메서드를 거치므로, 여기서 취소를 조율하지
-     * 않으면 스위치를 꺼도 이미 걸린 예약은 그대로 나간다.
+     * 계정 설정을 저장한다. 관리자 화면의 저장 버튼(AdminAligoController::save())이
+     * 지나는 길이다.
+     *
+     * **저장이 채널을 끄는 두 번째 길이다.** Settings::save() 는 사용자ID 나 API 키가
+     * 바뀌면 두 스위치를 모두 끈다(옛 계정에서 확인한 상태를 새 계정에 물려주지 않는다).
+     * 그 길에는 끄기 버튼이 지나는 setChannelEnabled() 의 예약 취소가 없어서, 계정을
+     * 바꾼 관리자는 초록 체크와 함께 「설정을 저장했습니다」를 보고 예약은 그대로
+     * 살아 있었다 — 게다가 그 예약은 새 키로는 취소할 수도 없다.
+     *
+     * 그래서 같은 취소 조율(cancelJobs)을 이 길에도 태운다. 부르는 자리는 저장
+     * **직전**이다(Settings::save() 의 갈고리 주석): 취소 요청은 그 예약을 접수한
+     * 옛 계정의 자격증명으로 나가야 알리고가 받아 준다. 그 대가로, 취소까지 끝난 뒤
+     * 설정 쓰기가 터지면 예약은 취소됐는데 설정은 그대로인 상태가 남는다 — 반대
+     * 순서(설정은 바뀌었는데 예약은 영영 못 멈춤)보다 나은 쪽을 골랐다.
+     *
+     * @return array{cancelled:int,failed:int,reasons:list<string>} 함께 취소한(또는 취소하지
+     *   못한) 예약. 화면은 이 숫자를 저장 안내에 싣는다 — 끄기 버튼과 같은 문장이다.
+     */
+    public function saveSettings(array $input): array
+    {
+        $result = ['cancelled' => 0, 'failed' => 0, 'reasons' => []];
+        $this->settings->save($input, function (array $channels) use (&$result): void {
+            $jobIds = [];
+            foreach ($channels as $channel) {
+                // 채널 하나에 걸린 예약은 다른 채널 목록에 다시 나오지 않는다(작업 하나는
+                // 채널 하나다). 한 번에 모아 두고 한 번만 취소를 돌린다.
+                array_push($jobIds, ...$this->scheduledJobIdsForChannel($channel));
+            }
+            $result = $this->cancelJobs($jobIds);
+        });
+
+        return $result;
+    }
+
+    /**
+     * 채널 발송 허용 스위치를 바꾼다. 관리자 화면의 끄기 버튼
+     * (AdminAligoController::toggle())이 이 메서드를 거치므로, 여기서 취소를 조율하지
+     * 않으면 스위치를 꺼도 이미 걸린 예약은 그대로 나간다. 채널이 꺼지는 다른 길
+     * (계정 변경)은 saveSettings() 가 같은 조율을 태운다.
      *
      * Settings 는 Dispatch 를 모른다(거꾸로 Dispatch 가 Settings 를 안다) — 순환을
      * 만들지 않기 위해 Settings::setEnabled() 는 스위치만 바꾸고, 이미 모든 조각을

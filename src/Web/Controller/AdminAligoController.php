@@ -40,13 +40,19 @@ final class AdminAligoController
         return $this->render($request, $response, null, [], null, null, [], $notice);
     }
 
+    /**
+     * 계정 저장. 사용자ID·API 키가 바뀌면 두 채널 스위치가 함께 꺼지고, 그때는 끄기
+     * 버튼과 똑같이 걸려 있던 예약도 취소된다(AligoService::saveSettings()). 그래서
+     * 저장도 toggle() 과 같은 숫자를 안내에 싣는다 — 한쪽 길만 숫자를 말하고 다른 쪽이
+     * 침묵하면 관리자는 침묵하는 쪽을 "아무 일도 없었다"로 읽는다.
+     */
     public function save(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
         $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
         try {
-            $this->app->aligo()->settings->save($input);
+            $result = $this->app->aligo()->saveSettings($input);
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -57,7 +63,7 @@ final class AdminAligoController
             );
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', ['saved' => '1']);
+        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result));
     }
 
     public function verify(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -109,13 +115,25 @@ final class AdminAligoController
             return $this->render($request, $response->withStatus(422), null, $e->details(), null, null, []);
         }
 
+        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result));
+    }
+
+    /**
+     * 저장·끄기가 함께 싣는 리다이렉트 쿼리. 두 길이 같은 취소 조율을 쓰므로 안내도
+     * 같은 값으로 만든다 — 숫자만 싣고 문장은 savedNotice() 가 만든다.
+     *
+     * @param array{cancelled:int,failed:int,reasons:list<string>} $result
+     * @return array<string,string>
+     */
+    private static function savedQuery(array $result): array
+    {
         $query = ['saved' => '1'];
         if ($result['cancelled'] > 0 || $result['failed'] > 0) {
             $query['cancel_ok'] = (string) $result['cancelled'];
             $query['cancel_failed'] = (string) $result['failed'];
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', $query);
+        return $query;
     }
 
     /**

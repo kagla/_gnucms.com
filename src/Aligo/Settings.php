@@ -40,7 +40,19 @@ final class Settings
         ];
     }
 
-    public function save(array $input): void
+    /**
+     * 계정 설정을 저장한다.
+     *
+     * @param (callable(list<string>): void)|null $beforeChannelsOff 이 저장으로 꺼지는 채널이
+     *   있으면 **저장 직전에** 그 목록으로 한 번 부른다. 자리가 저장 뒤가 아니라 앞인 것이
+     *   핵심이다: 이 갈고리를 다는 쪽(AligoService::saveSettings())이 하는 일은 그 채널에
+     *   걸린 예약을 알리고에서 취소하는 것인데, 새 계정·새 키를 저장한 **뒤에** 취소를
+     *   부르면 옛 계정이 접수한 예약을 새 자격증명으로 취소하려 들어 알리고가 거절한다 —
+     *   고치려던 결함(계정을 바꾸면 예약이 영영 멈추지 않는다)이 그대로 남는다.
+     *   검증(위의 $v->check() 와 키 규칙)은 이 갈고리보다 먼저 끝나므로, 422 로 거절되는
+     *   저장은 아무것도 취소하지 않는다.
+     */
+    public function save(array $input, ?callable $beforeChannelsOff = null): void
     {
         $current = $this->repository->all();
         $v = new Validator($input);
@@ -69,6 +81,22 @@ final class Settings
         // 모두 꺼져버린다.
         $accountChanged = $userId !== (string) ($current['user_id'] ?? '')
             || $this->decryptedOrEmpty($keys['api_key']) !== $this->decryptedOrEmpty((string) ($current['api_key'] ?? ''));
+
+        // 지금 켜져 있는데 이 저장으로 꺼지는 채널. 끄기 버튼이 지나는 길
+        // (AligoService::setChannelEnabled())과 같은 조율을 이 길에도 태우기 위해,
+        // **무엇이 꺼지는지를 결정하는 이 자리**에서 알린다. 바깥에서 저장 전후를
+        // 비교하게 하면 계정이 바뀌었는지 판단하는 규칙(위의 복호화 비교)이 두 곳에 생긴다.
+        $switchedOff = [];
+        if ($accountChanged) {
+            foreach (self::CHANNELS as $channel) {
+                if ((string) ($current[self::enabledKey($channel)] ?? '0') === '1') {
+                    $switchedOff[] = $channel;
+                }
+            }
+        }
+        if ($switchedOff !== [] && $beforeChannelsOff !== null) {
+            $beforeChannelsOff($switchedOff);
+        }
 
         $this->repository->save([
             'user_id' => $userId,
@@ -124,11 +152,16 @@ final class Settings
         ];
     }
 
+    /** 채널의 허용 스위치가 저장되는 칸 이름. 세 자리가 같은 이름을 각자 적지 않게 여기 하나에 둔다. */
+    private static function enabledKey(string $channel): string
+    {
+        return $channel === 'at' ? 'alimtalk_enabled' : 'sms_enabled';
+    }
+
     public function isEnabled(string $channel): bool
     {
-        $key = $channel === 'at' ? 'alimtalk_enabled' : 'sms_enabled';
-
-        return ($this->repository->all()[$key] ?? '0') === '1' && $this->runtime() !== null;
+        return ($this->repository->all()[self::enabledKey($channel)] ?? '0') === '1'
+            && $this->runtime() !== null;
     }
 
     public function setEnabled(string $channel, bool $on): void
@@ -139,6 +172,6 @@ final class Settings
         if ($on && $this->runtime() === null) {
             throw DomainError::validation(['api_key' => '계정을 먼저 저장해 주세요.']);
         }
-        $this->repository->save([($channel === 'at' ? 'alimtalk_enabled' : 'sms_enabled') => $on ? '1' : '0']);
+        $this->repository->save([self::enabledKey($channel) => $on ? '1' : '0']);
     }
 }
