@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Web\Controller;
 
 use GnuCms\App;
+use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
@@ -232,6 +233,7 @@ final class AdminAligoController
                         . ' 고쳐 저장해 두면 그대로 보관되고, 알림톡을 켜는 순간 이대로 나갑니다.'
                     : null,
             ];
+            $row += self::bodySize($row['sms_body']);
             if ($postedEvent === $key) {
                 $row = self::withPostedInput($row, $posted ?? []);
             }
@@ -307,6 +309,9 @@ final class AdminAligoController
         $row['alimtalk_notice'] = null;
         $row['sms_notice'] = null;
         $row['alimtalk_off_notice'] = null;
+        // 크기는 방금 들어온 본문으로 다시 잰다 — 거절당한 이유가 길이일 때 화면이
+        // 저장된 옛 본문의 크기를 보여주면 관리자는 무엇을 줄여야 하는지 알 수 없다.
+        $row = array_replace($row, self::bodySize($row['sms_body']));
 
         return $row;
     }

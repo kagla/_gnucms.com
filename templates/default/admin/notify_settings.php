@@ -150,8 +150,12 @@ $noTemplates = $templates === [];
               <?php endif ?>
               <fieldset class="fieldset<?php if (array_key_exists('sms_body', $rowErrors)): ?> is-invalid<?php endif ?>">
                 <legend class="fieldset-legend">본문</legend>
+                <?php // maxlength 는 글자를 센다. 실제 한계는 EUC-KR 바이트라 한글은 한 자에
+                  // 두 바이트다 — 그래서 이 속성은 한계가 아니라 붙여넣기 상한일 뿐이고,
+                  // 진짜 판정은 저장할 때 MessageText 가 한다. 아래 줄이 그 숫자를 미리 보여준다. ?>
                 <textarea class="textarea textarea-bordered input-block" name="sms_body" rows="4" maxlength="2000"><?= $this->e($ev['sms_body']) ?></textarea>
                 <?php if (array_key_exists('sms_body', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['sms_body']) ?></p><?php endif ?>
+                <p class="fieldset-label">지금 <strong><?= $this->e(number_format($ev['sms_bytes'])) ?>바이트</strong>를 썼습니다(최대 <?= $this->e(number_format($ev['sms_limit'])) ?>바이트). 한글은 한 자에 2바이트입니다. <?= $ev['sms_bytes'] > 90 ? 'LMS 로 나갑니다' : '90바이트까지는 SMS, 넘으면 LMS 로 나갑니다' ?> — 변수 자리에 들어갈 값만큼 더 늘어나므로 실제 발송은 이보다 깁니다.</p>
                 <p class="fieldset-label">쓸 수 있는 변수: <?php foreach ($ev['vars'] as $i => $var): ?><?= $i > 0 ? ', ' : '' ?><code>#{<?= $this->e($var) ?>}</code><?php endforeach ?>. 다른 이름을 쓰면 저장할 때 거절합니다.</p>
               </fieldset>
             </div>

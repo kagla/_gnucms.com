@@ -306,6 +306,79 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertSame('T1', $values['alimtalk_tpl_code']);
     }
 
+    /**
+     * **문자의 한계는 글자가 아니라 EUC-KR 바이트다.** maxlength 는 글자를 세므로 한글
+     * 1,207자는 브라우저를 통과하지만 2,414바이트라 Dispatch 가 전건 거절한다 — 저장하면
+     * "켜져 있다고 답하면서 아무것도 보낼 수 없는" 상태가 만들어진다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testABodyTooLongInEucKrBytesIsRefusedRatherThanStored(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $long = str_repeat('가', 1207);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => $long,
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('본문이 너무 깁니다', $this->body($response));
+        self::assertNotContains('sms', $app->notifySettings()->channelsFor('password_reset'));
+        self::assertSame('', $app->notifySettings()->formValues()['password_reset']['sms_body_stored']);
+    }
+
+    /** 문자로 옮길 수 없는 글자(이모지 등)도 같은 자리에서 거절한다. */
+    #[DataProvider('connectionProvider')]
+    public function testABodyWithCharactersSmsCannotCarryIsRefused(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => '안녕하세요 🙂 #{링크}',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('문자로 보낼 수 없는 글자가 있습니다', $this->body($response));
+        self::assertNotContains('sms', $app->notifySettings()->channelsFor('password_reset'));
+    }
+
+    /** 꺼진 채로도 저장되므로, 꺼진 채로 밀어 넣는 길이 열려 있으면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testAnUnsendableBodyCannotBeSmuggledInWhileTheChannelIsOff(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'sms_body' => str_repeat('가', 1207),
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('', $app->notifySettings()->formValues()['password_reset']['sms_body_stored']);
+    }
+
+    /** 한계가 저장 버튼을 누른 뒤에야 나타나면 늦다 — 지금 몇 바이트인지 보여준다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheScreenShowsHowManyBytesTheBodyUses(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        // '안녕하세요'(10) + 공백(1) + '#{링크}'(#·{·}·링크 = 1+1+1+4) = 18바이트.
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => '안녕하세요 #{링크}',
+        ]);
+
+        $section = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringContainsString('<strong>18바이트</strong>', $section);
+        self::assertStringContainsString('90바이트까지는 SMS', $section);
+        // 다른 묶음은 제 본문(없음)을 잰다 — 한 묶음의 숫자를 일곱 곳에 베끼지 않는다.
+        self::assertStringContainsString('<strong>0바이트</strong>', self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_changed'));
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void

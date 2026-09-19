@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Notify;
 
+use GnuCms\Aligo\MessageText;
 use GnuCms\Aligo\Templates;
 use GnuCms\Aligo\Variables;
 use GnuCms\Error\DomainError;
@@ -220,6 +221,11 @@ final class NotifySettings
                     '이 알림이 제공하지 않는 변수가 있습니다: ' . implode(', ', $unknown)
                     . '. 쓸 수 있는 변수는 ' . implode(', ', $allowed) . ' 입니다.']);
             }
+            // 보낼 수 없는 본문은 켜져 있든 꺼져 있든 저장하지 않는다. 저장해 두면
+            // 켜는 순간 channelsFor() 가 sms 를 내주고 화면은 초록으로 칠하는데,
+            // 실제 발송은 Dispatch 에서 전건 거절된다 — 켜졌다고 답하면서 아무것도
+            // 보낼 수 없는 상태, 이 클래스가 알림톡에서 없애려고 애쓴 바로 그 상태다.
+            self::assertSendable($body);
             $saved[$event . '.sms_body'] = $body;
         }
 
