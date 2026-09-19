@@ -201,11 +201,19 @@ final class NotifySettings
             $saved[$event . '.' . $channel] = $on ? '1' : '0';
         }
 
-        if ($saved[$event . '.sms'] === '1') {
-            $body = $this->stringInput($input, 'sms_body');
-            if ($body === '') {
-                throw DomainError::validation(['sms_body' => '문자로 보낼 본문을 입력해 주세요.']);
-            }
+        // **채널이 꺼져 있어도 들어온 내용은 저장한다.** 예전에는 채널이 켜져 있을
+        // 때만 본문·템플릿을 썼는데, 화면은 꺼진 채널의 칸도 고칠 수 있게 내준다
+        // (꺼졌다고 감추면 관리자는 자기가 쓴 본문을 잃은 줄 안다 — 그것이 그 칸을
+        // 보여 주는 이유다). 그 둘이 어긋나면 "고치고 저장 → 저장했습니다 → 옛 값이
+        // 그대로"가 된다: 성공처럼 보이는 유실이다. 그래서 들어온 값은 채널 스위치와
+        // 무관하게 저장하고, **들어오지 않은 값만** 건드리지 않는다 — 그래야 채널을
+        // 끄는 저장(본문·템플릿을 아예 싣지 않는다)이 예전처럼 매핑을 지키면서도,
+        // 값을 실어 보낸 저장은 그 값을 실제로 남긴다.
+        $body = $this->stringInput($input, 'sms_body');
+        if ($saved[$event . '.sms'] === '1' && $body === '') {
+            throw DomainError::validation(['sms_body' => '문자로 보낼 본문을 입력해 주세요.']);
+        }
+        if ($body !== '') {
             $unknown = array_diff(Variables::names($body), $allowed);
             if ($unknown !== []) {
                 throw DomainError::validation(['sms_body' =>
@@ -215,11 +223,31 @@ final class NotifySettings
             $saved[$event . '.sms_body'] = $body;
         }
 
-        if ($saved[$event . '.alimtalk'] === '1') {
+        // 알림톡도 같다. 템플릿을 실어 보냈으면 채널이 꺼져 있어도 검증하고 저장하고,
+        // 싣지 않았으면(=채널만 끄는 저장) 저장된 매핑을 그대로 둔다.
+        if ($saved[$event . '.alimtalk'] === '1' || $this->stringInput($input, 'tpl_code') !== '') {
             $saved += $this->alimtalkSettings($event, $input, $allowed);
         }
 
         $this->repository->save($saved);
+    }
+
+    /**
+     * 문자로 실제로 나갈 수 있는 본문인지. 길이와 인코딩 규칙은 MessageText 한 곳에만
+     * 있다 — 여기서 다시 적으면 EUC-KR 바이트 경계를 두 군데서 따로 틀리게 된다.
+     * 화면의 칸 이름이 sms_body 이므로 오류만 그 이름으로 바꿔 단다(MessageText 는
+     * 관리자 발송 화면의 'body' 칸을 가리킨다).
+     *
+     * 변수 자리에 들어갈 값은 여기서 잴 수 없다 — 이 검사는 하한이다. 그래도 본문
+     * 자체가 이미 한계를 넘었으면 그 알림은 무슨 값이 들어가든 절대 못 나간다.
+     */
+    private static function assertSendable(string $body): void
+    {
+        try {
+            MessageText::assertFits($body, null);
+        } catch (DomainError $e) {
+            throw DomainError::validation(['sms_body' => implode(' ', $e->details())]);
+        }
     }
 
     /**

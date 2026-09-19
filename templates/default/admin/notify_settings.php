@@ -158,6 +158,9 @@ $noTemplates = $templates === [];
 
             <div class="form-section">
               <h2 class="form-section-title">알림톡 템플릿</h2>
+              <?php if ($ev['alimtalk_off_notice'] !== null): ?>
+                <p class="fieldset-label"><?= $this->e($ev['alimtalk_off_notice']) ?></p>
+              <?php endif ?>
               <?php if ($noTemplates): ?>
                 <p class="fieldset-label">쓸 수 있는 승인 템플릿이 없습니다. <a href="<?= $this->url('admin.messages.templates') ?>">템플릿 화면</a>에서 먼저 가져와 주세요.</p>
               <?php else: ?>

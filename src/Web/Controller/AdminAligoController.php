@@ -220,9 +220,16 @@ final class AdminAligoController
                 'var_map' => $value['alimtalk_var_map'],
                 'sms_body' => $value['sms_body_stored'],
                 'alimtalk_notice' => self::alimtalkNotice($value),
-                'sms_notice' => (!$on['sms'] && $value['sms_body_stored'] !== '')
-                    ? '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 저장된 값은 그대로 남아'
-                        . ' 있으니, 문자를 다시 켜고 저장하면 이 본문으로 나갑니다.'
+                // 꺼진 채널의 칸도 고칠 수 있고, 고친 값은 실제로 저장된다
+                // (NotifySettings::save()). 그 두 사실을 다 말해야 관리자가 "지금은
+                // 안 나간다"와 "지금 고쳐 둬도 남는다"를 함께 안다.
+                'sms_notice' => !$on['sms']
+                    ? '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 여기서 고쳐 저장해 두면'
+                        . ' 그대로 보관되고, 문자를 켜는 순간 이 본문으로 나갑니다.'
+                    : null,
+                'alimtalk_off_notice' => (!$on['alimtalk'] && $value['alimtalk_tpl_code'] !== '')
+                    ? '알림톡 채널이 꺼져 있어 이 템플릿과 변수 연결은 지금 쓰이지 않습니다. 여기서'
+                        . ' 고쳐 저장해 두면 그대로 보관되고, 알림톡을 켜는 순간 이대로 나갑니다.'
                     : null,
             ];
             if ($postedEvent === $key) {
@@ -232,6 +239,26 @@ final class AdminAligoController
         }
 
         return ['rows' => $rows, 'templates' => $usable, 'open' => $postedEvent];
+    }
+
+    /**
+     * 본문이 실제로 차지하는 크기. 문자의 한계는 글자 수가 아니라 **EUC-KR 바이트**이고
+     * 한글은 한 자에 두 바이트다 — 브라우저의 maxlength 는 글자를 세므로 그 둘은 서로
+     * 다른 것을 잰다. 관리자가 어디쯤 왔는지 보이지 않으면 한계는 저장 버튼을 누른
+     * 뒤에야 나타난다. SMS·LMS 경계도 함께 보여준다: 요금이 갈리는 자리다.
+     *
+     * 변수 자리에 들어갈 값은 여기서 잴 수 없다(수신자마다 다르다). 화면이 그 사실을
+     * 함께 적는다 — 숫자만 보여 주고 "여기까지는 안전하다"고 믿게 두지 않는다.
+     *
+     * @return array{sms_bytes:int,sms_kind:string,sms_limit:int}
+     */
+    private static function bodySize(string $body): array
+    {
+        return [
+            'sms_bytes' => $body === '' ? 0 : MessageText::byteLength($body),
+            'sms_kind' => $body === '' ? 'sms' : MessageText::channelFor($body),
+            'sms_limit' => MessageText::LMS_BYTES,
+        ];
     }
 
     /**
@@ -279,6 +306,7 @@ final class AdminAligoController
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
         $row['alimtalk_notice'] = null;
         $row['sms_notice'] = null;
+        $row['alimtalk_off_notice'] = null;
 
         return $row;
     }

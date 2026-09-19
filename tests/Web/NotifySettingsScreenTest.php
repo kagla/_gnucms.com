@@ -224,6 +224,88 @@ final class NotifySettingsScreenTest extends WebTestCase
             self::checkbox(self::section($html, 'comment_new'), 'inbox'));
     }
 
+    /**
+     * **꺼진 채널의 칸을 고친 값이 저장돼야 한다.** 칸을 고칠 수 있게 내주면서 저장은
+     * 버리면, 관리자는 「저장했습니다」를 보고 나서 옛 본문이 돌아온 것을 본다 —
+     * 성공처럼 보이는 유실이다. 본문을 보여 주기로 한 결정(R117)이 만든 구멍이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEditingASwitchedOffChannelsBodyIsActuallySaved(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => '첫 번째 본문 #{링크}',
+        ]);
+
+        // 문자는 끈 채로 본문만 고친다 — 화면이 실제로 보내는 모양 그대로다.
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'sms_body' => '고친 본문 #{이름}',
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertFalse($app->notifySettings()->isOn('password_reset', 'sms'));
+        self::assertSame('고친 본문 #{이름}',
+            $app->notifySettings()->formValues()['password_reset']['sms_body_stored']);
+        $section = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringContainsString('고친 본문 #{이름}', $section);
+        self::assertStringNotContainsString('첫 번째 본문', $section);
+        // 지금은 안 나간다는 사실과, 고쳐 둔 값이 남는다는 사실을 둘 다 말해야 한다.
+        self::assertStringContainsString('문자 채널이 꺼져 있어', $section);
+        self::assertStringContainsString('고쳐 저장해 두면 그대로 보관되고', $section);
+    }
+
+    /** 알림톡도 같다 — 꺼진 채로 고친 변수 연결이 저장돼야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testEditingASwitchedOffChannelsTemplateMappingIsActuallySaved(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedTemplate($app);
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크'],
+        ]);
+
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '사이트명', '주소' => '링크'],
+        ]);
+
+        self::assertFalse($app->notifySettings()->isOn('password_reset', 'alimtalk'));
+        self::assertSame(['고객명' => '사이트명', '주소' => '링크'],
+            $app->notifySettings()->formValues()['password_reset']['alimtalk_var_map']);
+        $section = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringContainsString('알림톡 채널이 꺼져 있어', $section);
+        self::assertMatchesRegularExpression('/name="var_map\[고객명\]".*?<option value="사이트명" selected/s', $section);
+    }
+
+    /** 채널만 끄는 저장(본문·템플릿을 싣지 않는다)은 예전처럼 저장된 값을 지키지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTurningAChannelOffWithoutSendingItsContentStillKeepsTheStoredContent(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedTemplate($app);
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'sms' => '1', 'sms_body' => '지켜야 할 본문 #{링크}', 'alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크'],
+        ]);
+
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset', 'mail' => '1',
+        ]);
+
+        $values = $app->notifySettings()->formValues()['password_reset'];
+        self::assertSame('지켜야 할 본문 #{링크}', $values['sms_body_stored']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
+        self::assertSame('T1', $values['alimtalk_tpl_code']);
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void
