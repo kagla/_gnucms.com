@@ -125,6 +125,46 @@ final class ForgotPasswordThrottleTest extends WebTestCase
         self::assertSame([200, 200, 200, 200, 200, 422], $statuses);
     }
 
+    /**
+     * **이메일 형태가 아닌 값은 잠금 표에 행을 만들지 않는다.** 주소 쪽 열쇠는
+     * sha256(입력값)이라 아무 문자열이나 넣으면 값마다 영구 행이 하나씩 생기는데,
+     * 그 표에는 정리 루틴이 없다(성공한 로그인이 자기 행을 지울 뿐이다). 로그인 쪽은
+     * 같은 이유로 이미 같은 조건을 쓰고 있었다.
+     *
+     * 세지 않아도 잃는 것이 없다는 것도 함께 확인한다: 그 값들은 어떤 회원과도 맞지
+     * 않아 한 통도 나가지 않고, 진짜 주소의 한도는 그대로 남아 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testValuesThatAreNotEmailAddressesAreNotCounted(array $config): void
+    {
+        $app = $this->makeApp($config);
+        $this->member($app);
+        $transport = $this->smsOnly($app);
+        for ($i = 0; $i < 3; $i++) {
+            $transport->queue(200, (string) json_encode(
+                ['result_code' => 1, 'msg_id' => 'M' . $i, 'success_cnt' => 1, 'error_cnt' => 0]));
+        }
+        $this->get($app, '/forgot-password');
+
+        $statuses = [];
+        foreach (['not-an-email', 'x', '주소', '../../etc/passwd', '<script>', 'a b c'] as $value) {
+            $statuses[] = $this->forgot($app, $value)->getStatusCode();
+        }
+
+        self::assertSame([200, 200, 200, 200, 200, 200], $statuses,
+            '이 값들은 아무 비용도 만들지 않으므로 잠글 이유가 없다');
+        self::assertSame([], $app->db()->select('SELECT id FROM ' . $app->db()->table('password_attempts')),
+            '값마다 영구 행이 하나씩 생기면 표가 끝없이 자란다');
+        self::assertSame([], $transport->requests);
+
+        // 진짜 주소의 한도는 그대로다 — 세지 않는 것과 세는 것을 헷갈리지 않았다.
+        $known = [];
+        for ($i = 0; $i < 4; $i++) {
+            $known[] = $this->forgot($app, self::KNOWN)->getStatusCode();
+        }
+        self::assertSame([200, 200, 200, 422], $known);
+    }
+
     private function forgot(App $app, string $email)
     {
         return $this->post($app, '/forgot-password',

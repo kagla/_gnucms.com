@@ -235,6 +235,14 @@ final class AuthController
         }
         // "당신에게 보냈다"가 아니라 "이 설정으로 누구에게든 보낼 수 있다"만 말한다.
         // 앞의 것을 말하면 이 화면이 가입 여부를 묻는 도구가 된다(canSendResetLink).
+        //
+        // **같은 것은 응답 본문이고, 응답 시간까지 같지는 않다.** 계정이 있는 주소에서만
+        // 실제 발송이 일어나므로, 전화 채널을 켜 두면 그쪽이 알리고 왕복만큼(보통 1초
+        // 안팎) 눈에 띄게 느리다. 방문 요청 안에서 보내는 이 구조에서 시간까지 맞추려면
+        // 없는 주소에도 인위적 지연을 넣어야 하고, 그 지연은 그 자체로 새로운 부하
+        // 창구가 된다. 그래서 맞추는 대신 **수확 속도를 묶어 둔다**: 주소마다 10분에
+        // 3회, 한 회선(IP)마다 10분에 5회이고, 그 셈은 주소를 찾아보기 전에 일어난다
+        // (AccountService::countResetRequest()).
         return View::fromRequest($request)->render($response, 'auth/reset_sent',
             ['deliverable' => $this->app->accountService()->canSendResetLink()]);
     }

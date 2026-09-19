@@ -645,6 +645,35 @@ final class NotifierTest extends WebTestCase
     }
 
     /**
+     * **예산은 바깥 왕복에만 걸린다.** 알림함은 같은 DB 에 한 줄 적는 일이라 이 상한이
+     * 지키려는 비용(바깥 왕복)이 없는데도, 예전에는 종류를 가리지 않고 함께 버렸다:
+     * 댓글 한 건의 첫 사람 문자가 7초를 쓰면 두 번째 사람은 공짜로 남길 수 있는 알림함
+     * 한 줄조차 받지 못했다. 그 사람 화면에서는 알림이 통째로 사라진 것과 같다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheBudgetDoesNotThrowAwayAChannelThatMakesNoNetworkCall(array $dbConfig): void
+    {
+        $inbox = $this->channel('inbox');
+        $sms = $this->slowChannel('sms', 10.0);
+        $notifier = $this->notifier($dbConfig, [$inbox, $sms], ['inbox', 'sms'], 'comment_new');
+
+        // 첫 사람: 알림함이 나가고, 문자가 예산을 통째로 써 버린다.
+        self::assertTrue($notifier->notify('comment_new', $this->to(), []));
+        $this->logged = [];
+
+        // 두 번째 사람: 문자는 포기해도 알림함은 그대로 나가야 한다.
+        self::assertTrue($notifier->notify('comment_new', $this->to(), []),
+            '알림함 한 줄이 나갔으므로 "아무 데도 못 갔다"가 아니다');
+
+        self::assertSame(['inbox', 'sms', 'inbox'], $this->order);
+        self::assertCount(2, $inbox->sent);
+        self::assertCount(1, $this->logged);
+        self::assertStringContainsString('sms', $this->logged[0]);
+        self::assertStringNotContainsString('inbox', $this->logged[0],
+            '포기하지 않은 채널을 포기했다고 적으면 안 된다');
+    }
+
+    /**
      * 순서는 배선 차례도, 설정에 적힌 차례도 아닌 Notifier 가 정한 전달 우선순위다.
      * 그래서 채널을 일부러 거꾸로 배선해 두고 확인한다.
      */

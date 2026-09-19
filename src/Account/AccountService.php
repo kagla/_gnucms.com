@@ -358,7 +358,13 @@ final class AccountService
      */
     private function countResetRequest(string $email): void
     {
-        if ($this->throttle === null) {
+        // 이메일 형태가 아닌 값(공격자가 아무 문자열이나 넣은 것)은 세지 않는다 —
+        // authenticate() 와 **같은 조건, 같은 이유**다: 주소 쪽 열쇠는 sha256(입력값)
+        // 이라 그런 값마다 password_attempts 에 영구 행이 하나씩 생기는데, 그 표에는
+        // 정리 루틴이 없다(clear() 는 성공한 자기 행만 지운다). 세지 않아도 잃는 것이
+        // 없다: 이메일 형태가 아닌 값은 어떤 회원과도 맞지 않아 문자 한 통도 나가지
+        // 않으므로, 이 길에서 한도가 지키려는 비용 자체가 생기지 않는다.
+        if ($this->throttle === null || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             return;
         }
         $keys = [PasswordThrottle::resetKeyFor($email), PasswordThrottle::RESET_IP_KEY];
