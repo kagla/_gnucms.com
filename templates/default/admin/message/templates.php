@@ -33,7 +33,7 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
           <tr class="table-empty"><td colspan="7">아직 가져온 템플릿이 없습니다. "가져오기"를 눌러 알리고에 승인된 템플릿을 불러오세요.</td></tr>
         <?php else: foreach ($copies as $row): ?>
           <?php
-            $approved = $row['status'] === 'A' && $row['insp_status'] === 'APR';
+            $approved = \GnuCms\Aligo\Templates::approved((string) $row['status'], (string) $row['insp_status']);
             $enabled = (int) $row['enabled'] === 1;
           ?>
           <tr>
@@ -54,7 +54,7 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
                   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
                   <input type="hidden" name="tpl_code" value="<?= $this->e($row['tpl_code']) ?>">
                   <input type="hidden" name="action" value="<?= $enabled ? 'disable' : 'enable' ?>">
-                  <button class="btn btn-sm <?= $enabled ? 'btn-outline' : 'btn-primary' ?>" type="submit"<?= (!$enabled && !$approved) ? ' disabled title="카카오 승인이 끝나고 정상 상태인 템플릿만 켤 수 있습니다."' : '' ?>><?= $enabled ? '끄기' : '켜기' ?></button>
+                  <button class="btn btn-sm <?= $enabled ? 'btn-outline' : 'btn-primary' ?>" type="submit"<?= (!$enabled && !$approved) ? ' disabled title="카카오 승인이 끝난 템플릿만 켤 수 있습니다(중단된 템플릿 제외)."' : '' ?>><?= $enabled ? '끄기' : '켜기' ?></button>
                 </form>
               </div>
             </td>

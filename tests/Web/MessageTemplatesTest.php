@@ -61,6 +61,34 @@ final class MessageTemplatesTest extends WebTestCase
     }
 
     /**
+     * 갓 승인된 템플릿은 상태가 대기(R)다 — 정상(A)은 한 번 이상 보낸 뒤에야 된다. 화면의
+     * 버튼 잠금과 저장의 거부가 같은 규칙(Templates::approved)을 쓰므로 둘 다 확인한다:
+     * 버튼이 잠겨 있으면 안 되고, 눌렀을 때 실제로 켜져야 한다. 운영 화면에서 회원가입
+     * 템플릿이 승인을 받고도 켤 수 없었던 사례에서 나온 테스트다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnApprovedButNotYetSentTemplateCanBeTurnedOnFromTheScreen(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $app->db()->insert('alimtalk_templates', ['tpl_code' => 'NEW', 'senderkey' => 'SK1', 'name' => '회원가입',
+            'content' => '본문', 'status' => 'R', 'insp_status' => 'APR', 'enabled' => 0,
+            'fetched_at' => '2026-09-17 10:00:00']);
+
+        $html = $this->body($this->get($app, '/admin/messages/templates'));
+        self::assertStringContainsString('>켜기<', $html);
+        self::assertStringNotContainsString(' disabled title="카카오 승인', $html,
+            '승인(APR)+대기(R)는 켤 수 있어야 하므로 켜기 버튼이 잠겨 있으면 안 된다');
+
+        $response = $this->post($app, '/admin/messages/templates/toggle',
+            ['csrf_token' => $_SESSION['csrf_token'], 'tpl_code' => 'NEW', 'action' => 'enable']);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        $row = $app->db()->selectOne('SELECT enabled FROM ' . $app->db()->table('alimtalk_templates')
+            . ' WHERE tpl_code = ?', ['NEW']);
+        self::assertSame(1, (int) $row['enabled']);
+    }
+
+    /**
      * 화면의 "다시 가져오기" 버튼(=/admin/messages/templates/fetch)이 실제로 예약을
      * 취소하는지, 그리고 그 취소 결과가 화면에 보이는지 확인한다.
      * AdminMessageController::fetchTemplates() 가 AligoService::importTemplates() 가

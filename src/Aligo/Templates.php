@@ -10,7 +10,9 @@ use GnuCms\Support\Clock;
 
 /**
  * 알리고에서 승인 템플릿을 가져와 사본으로 보관한다. 여기서 템플릿을 만들거나 고치지 않는다.
- * 승인(APR)이고 정상(A)인 사본만 켤 수 있고, 가져오기에서 그 조건을 잃으면 자동으로 꺼진다.
+ * 카카오 승인(APR)을 받았고 중단(S)되지 않은 사본만 켤 수 있고, 가져오기에서 그 조건을
+ * 잃으면 자동으로 꺼진다. 상태 대기(R)는 승인 뒤 아직 한 번도 보내지 않은 것이고 정상(A)은
+ * 한 번 이상 보낸 뒤에야 되므로, A 를 요구하면 새로 승인된 템플릿은 영영 켤 수 없다.
  * 알리고 목록에 있었는데(=목록이 비어있지 않은데) 이 사본만 빠졌다면 마찬가지로 꺼진다 —
  * 더는 상태를 확인할 수 없는 템플릿으로 계속 발송할 수는 없다. 다만 내용은 지우지 않고
  * 마지막으로 확인한 값 그대로 남겨 이력·감사 목적에 쓴다. 반대로 목록 자체가 통째로 비어
@@ -40,7 +42,7 @@ final class Templates
 
         $items = $this->api->templates($account['senderkey']);
 
-        // disabledTplCodes 는 이번 fetch() 에서 승인·정상을 잃거나 목록에서 사라져 실제로
+        // disabledTplCodes 는 이번 fetch() 에서 승인을 잃거나 중단되거나 목록에서 사라져 실제로
         // 꺼진(=이전에 enabled=1 이었던) 사본의 코드만 담는다. AligoService::importTemplates()
         // 가 이 코드들로 걸린 예약을 찾아 취소한다 — Templates 는 Dispatch 를 모르므로
         // 여기서는 "무엇이 꺼졌는지"만 돌려주고 취소는 하지 않는다.
@@ -74,8 +76,9 @@ final class Templates
                 continue;
             }
 
-            // 승인·정상을 잃은 사본은 켜져 있었더라도 끈다.
-            $disabling = (int) $existing['enabled'] === 1 && !$this->approved($status, $insp);
+            // 승인을 잃었거나 중단된 사본은 켜져 있었더라도 끈다. 대기(R)↔정상(A) 사이의
+            // 이동은 발송 여부일 뿐이라 끄지 않는다.
+            $disabling = (int) $existing['enabled'] === 1 && !self::approved($status, $insp);
             if (!$disabling && !$this->changed($existing, $row)) {
                 // 알리고 쪽 값이 그대로면 다시 쓰지 않는다 — 두 번째로 같은 목록을 가져와도
                 // imported·updated·disabled 가 모두 0 이어야 한다.
@@ -133,16 +136,20 @@ final class Templates
         if ($row === null) {
             throw DomainError::validation(['tpl_code' => '먼저 템플릿을 가져와 주세요.']);
         }
-        if ($on && !$this->approved((string) $row['status'], (string) $row['insp_status'])) {
+        if ($on && !self::approved((string) $row['status'], (string) $row['insp_status'])) {
             throw DomainError::validation(['tpl_code' =>
-                '카카오 승인이 끝나고 정상 상태인 템플릿만 쓸 수 있습니다. 알리고에서 검수를 마친 뒤 다시 가져와 주세요.']);
+                '카카오 승인이 끝난 템플릿만 쓸 수 있습니다(중단된 템플릿 제외). 알리고에서 검수를 마친 뒤 다시 가져와 주세요.']);
         }
         $this->db->update('alimtalk_templates', ['enabled' => $on ? 1 : 0], 'tpl_code = :code', ['code' => $tplCode]);
     }
 
-    private function approved(string $status, string $insp): bool
+    /**
+     * 켤 수 있는 상태인가. 화면(templates.php)도 이 규칙을 그대로 쓴다 — 버튼을 잠그는 조건과
+     * 저장을 거부하는 조건이 서로 다르면 눌리는데 거부되거나, 잠겼는데 저장되는 화면이 된다.
+     */
+    public static function approved(string $status, string $insp): bool
     {
-        return $status === 'A' && $insp === 'APR';
+        return $insp === 'APR' && $status !== 'S';
     }
 
     /** senderkey·name·content·template_type·emphasis_type·status·insp_status·buttons 중 하나라도 다르면 참. */
