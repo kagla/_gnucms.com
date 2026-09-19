@@ -175,23 +175,49 @@ $noTemplates = $templates === [];
               <?php if ($ev['alimtalk_off_notice'] !== null): ?>
                 <p class="fieldset-label"><?= $this->e($ev['alimtalk_off_notice']) ?></p>
               <?php endif ?>
-              <?php if ($noTemplates): ?>
-                <p class="fieldset-label">쓸 수 있는 승인 템플릿이 없습니다. <a href="<?= $this->url('admin.messages.templates') ?>">템플릿 화면</a>에서 먼저 가져와 주세요.</p>
-              <?php else: ?>
-                <fieldset class="fieldset<?php if (array_key_exists('tpl_code', $rowErrors)): ?> is-invalid<?php endif ?>">
-                  <legend class="fieldset-legend">쓸 템플릿</legend>
+              <?php
+                // 오류 표시는 $noTemplates 바깥에 둔다. 예전에는 else 안에 있어서, 쓸 수 있는
+                // 템플릿이 하나도 없는 채로 알림톡이 켜진 카드(모든 저장이 422 로 거절되는
+                // 바로 그 상태)에서 "저장하지 못했습니다"만 뜨고 어느 칸이 문제인지는 아무
+                // 데도 표시되지 않았다. 422 인데 아무것도 가리키지 않는 화면은 거절하지 않은
+                // 것과 거의 같다.
+                $tplInvalid = array_key_exists('tpl_code', $rowErrors) || array_key_exists('var_map', $rowErrors);
+              ?>
+              <fieldset class="fieldset<?= $tplInvalid ? ' is-invalid' : '' ?>">
+                <legend class="fieldset-legend">쓸 템플릿</legend>
+                <?php if ($noTemplates): ?>
+                  <p class="fieldset-label">쓸 수 있는 승인 템플릿이 없습니다. <a href="<?= $this->url('admin.messages.templates') ?>">템플릿 화면</a>에서 먼저 가져와 사용으로 바꿔 주세요. 알림톡을 켜 두셨다면 그때까지 이 묶음은 저장할 수 없습니다 — 알림톡을 끄고 저장하면 나머지 설정은 그대로 저장됩니다.</p>
+                <?php else: ?>
                   <select class="select select-bordered input-block" name="tpl_code" data-notify-tpl="<?= $this->e($ev['key']) ?>">
                     <option value="">— 고르지 않음 —</option>
                     <?php foreach ($templates as $tpl): ?>
                       <option value="<?= $this->e($tpl['tpl_code']) ?>"<?= $ev['tpl_code'] === $tpl['tpl_code'] ? ' selected' : '' ?>><?= $this->e($tpl['name']) ?> (<?= $this->e($tpl['tpl_code']) ?>)</option>
                     <?php endforeach ?>
                   </select>
-                  <?php if (array_key_exists('tpl_code', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_code']) ?></p><?php endif ?>
                   <p class="fieldset-label">승인 템플릿의 변수 이름은 사이트마다 다릅니다. 고른 템플릿의 변수마다 이 알림이 가진 값을 이어 주어야 알림톡을 켤 수 있습니다.</p>
-                </fieldset>
-
+                <?php endif ?>
+                <?php if (array_key_exists('tpl_code', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_code']) ?></p><?php endif ?>
                 <?php if (array_key_exists('var_map', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['var_map']) ?></p><?php endif ?>
+              </fieldset>
 
+              <?php
+                // 죽은 참조를 버리는 **명시적인** 칸. 빈 <select> 가 "고르지 않음"인지 "고를
+                // 목록에 없음"인지 추측하는 대신, 뜻이 하나뿐인 칸을 준다. 죽었을 때만 나온다 —
+                // 멀쩡한 설정 옆에 지우기 칸을 두면 그것대로 사고의 입구가 된다.
+              ?>
+              <?php if ($ev['tpl_dead']): ?>
+                <fieldset class="fieldset<?php if (array_key_exists('tpl_clear', $rowErrors)): ?> is-invalid<?php endif ?>">
+                  <legend class="fieldset-legend">고를 수 없게 된 템플릿 설정</legend>
+                  <label class="label toggle-row">
+                    <input type="checkbox" name="tpl_clear" value="1">
+                    <span>고를 수 없게 된 템플릿 설정(<?= $this->e($ev['stored_tpl_code']) ?>) 지우기</span>
+                  </label>
+                  <?php if (array_key_exists('tpl_clear', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_clear']) ?></p><?php endif ?>
+                  <p class="fieldset-label">체크하고 저장하면 저장된 템플릿 코드와 변수 연결을 지웁니다. 알림톡은 꺼 둔 채로만 지울 수 있습니다. 새 템플릿을 함께 고르면 그쪽이 우선합니다.</p>
+                </fieldset>
+              <?php endif ?>
+
+              <?php if (!$noTemplates): ?>
                 <?php foreach ($templates as $tpl): ?>
                   <?php $shown = $ev['tpl_code'] === $tpl['tpl_code']; ?>
                   <?php // 고르지 않은 템플릿의 칸은 disabled 로 둔다 — 그래야 제출되지 않는다. ?>

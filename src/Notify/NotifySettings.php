@@ -252,10 +252,30 @@ final class NotifySettings
         // 없습니다」라고 이유를 말할 수 있는 유일한 근거다(formValues 의 alimtalk_tpl_code).
         // 못 지워서 잃는 것도 없다: 알림톡을 끄면 templateFor() 는 어차피 null 이고,
         // 다른 템플릿으로 바꾸는 길은 열려 있다. 남은 코드는 아무 데도 나가지 않는다.
+        // 그 대신 **명시적인 지우기**를 둔다. 빈 <select> 의 뜻을 추측하는 대신 뜻이
+        // 하나뿐인 칸(tpl_clear 체크박스)을 관리자가 직접 누르게 하면 모호함이 아예
+        // 생기지 않는다. 지울 수 없게 두는 것은 안전하지 않았다: 쓸 수 있는 템플릿이
+        // 하나도 없는데 알림톡이 켜진 채로 저장돼 있으면 그 묶음의 **모든** 저장이
+        // 거절되고(문자 본문을 고쳐도 함께 버려진다), 알림톡을 끄고 나면 죽은 참조가
+        // 영영 남는다.
+        $clearTemplate = ($input['tpl_clear'] ?? '') === '1';
+        if ($clearTemplate && $saved[$event . '.alimtalk'] === '1'
+            && $this->stringInput($input, 'tpl_code') === '') {
+            throw DomainError::validation(['tpl_clear' =>
+                '알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다. 알림톡을 끄고 저장하거나,'
+                . ' 쓸 수 있는 템플릿을 골라 주세요.']);
+        }
         if ($saved[$event . '.alimtalk'] === '1' || $this->stringInput($input, 'tpl_code') !== '') {
             // var_map 은 여기서 tpl_code 와 **함께 통째로** 쓰인다 — 한 칸씩 지워지거나
             // 남거나 하는 일이 없으므로 위와 같은 질문이 생기지 않는다.
             $saved += $this->alimtalkSettings($event, $input, $allowed);
+        }
+        // 새로 고른 템플릿이 있으면 그쪽이 이긴다(위에서 이미 썼다) — 지우기는 고를 것을
+        // 고르지 않았을 때만 적용된다. += 는 이미 있는 키를 덮지 않으므로 순서가 아니라
+        // 이 검사가 그 우선순위를 정한다.
+        if ($clearTemplate && !array_key_exists($event . '.tpl_code', $saved)) {
+            $saved[$event . '.tpl_code'] = '';
+            $saved[$event . '.var_map'] = '[]';
         }
 
         $this->repository->save($saved);
@@ -384,6 +404,14 @@ final class NotifySettings
                 //      꺼지면 빈 문자열이므로, 이 값이 없으면 문자를 껐다 돌아온 관리자는
                 //      자기 본문이 지워진 빈 칸을 보게 된다.
                 'alimtalk_tpl_code' => (string) ($stored[$key . '.tpl_code'] ?? ''),
+                // 저장된 tpl_code 를 **지금도 쓸 수 있는가**. template 과 달리 채널
+                // 스위치를 보지 않는다 — 꺼져 있을 때 template 이 null 인 것은 isOn()
+                // 게이트 때문이지 템플릿이 죽어서가 아니라서, 그 둘을 가리려면 게이트를
+                // 지나지 않은 답이 하나 필요하다. 판정은 여전히 validTemplate() 하나가
+                // 한다(게이트를 우회하는 것이지 재확인을 우회하는 것이 아니다). 이것이
+                // 없으면 화면은 꺼진 채널의 죽은 템플릿을 두고 "켜면 이대로 나갑니다"라고
+                // 말하게 된다 — 켜면 422 로 거절당하는데도.
+                'alimtalk_template_usable' => $this->validTemplate($key, $stored) !== null,
                 'alimtalk_on' => ($stored[$key . '.alimtalk'] ?? '0') === '1',
                 'alimtalk_var_map' => self::storedMap($stored, $key),
                 'sms_body_stored' => (string) ($stored[$key . '.sms_body'] ?? ''),

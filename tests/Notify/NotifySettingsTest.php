@@ -518,6 +518,69 @@ final class NotifySettingsTest extends DatabaseTestCase
         self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
     }
 
+    /**
+     * 죽은 참조를 버리는 **명시적인** 길. 빈 tpl_code 는 뜻이 둘이라 지우기로 읽을 수
+     * 없지만(위 테스트), 그렇다고 지울 길이 없으면 쓸 템플릿이 하나도 없는 사이트에서는
+     * 그 알림의 모든 저장이 거절되고 참조가 영영 남는다. 뜻이 하나뿐인 칸이 그 매듭을 푼다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTplClearDropsADeadTemplateReference(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        $templates->setEnabled('T1', false);
+
+        $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
+
+        $values = $settings->formValues()['password_reset'];
+        self::assertSame('', $values['alimtalk_tpl_code']);
+        self::assertSame([], $values['alimtalk_var_map']);
+    }
+
+    /** 켠 채로 지우기는 앞뒤가 맞지 않는다 — 조용히 한쪽을 고르지 않고 이유를 말하며 거절한다. */
+    #[DataProvider('connectionProvider')]
+    public function testTplClearIsRefusedWhileAlimtalkIsOn(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        $templates->setEnabled('T1', false);
+
+        try {
+            $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
+            self::fail('알림톡을 켠 채로 지우기는 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('tpl_clear', $e->details());
+        }
+        self::assertSame('T1', $settings->formValues()['password_reset']['alimtalk_tpl_code']);
+    }
+
+    /**
+     * 저장된 템플릿을 지금도 쓸 수 있는지는 채널 스위치와 무관한 사실이다. templateFor()
+     * 는 isOn() 게이트 때문에 꺼져 있으면 무조건 null 이라 그 질문에 답할 수 없다 —
+     * 화면이 「꺼져 있지만 켜면 이대로 나갑니다」와 「켤 수조차 없습니다」를 가르려면
+     * 게이트를 지나지 않은 답이 하나 필요하다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTemplateUsabilityIsReportedRegardlessOfTheChannelSwitch(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+
+        // 알림톡을 꺼도 템플릿 자체는 멀쩡하다.
+        $settings->save('password_reset', ['mail' => '1']);
+        $off = $settings->formValues()['password_reset'];
+        self::assertNull($off['template']);
+        self::assertTrue($off['alimtalk_template_usable']);
+
+        // 승인이 풀리면 꺼져 있어도 "못 쓴다"가 되어야 한다.
+        $templates->setEnabled('T1', false);
+        self::assertFalse(
+            $settings->formValues()['password_reset']['alimtalk_template_usable']);
+    }
+
     /** smsBody() 도 같은 함정이 있다 — 문자를 끄면 본문은 저장소에 남지만 더는
      *  내주지 않는다. */
     #[DataProvider('connectionProvider')]

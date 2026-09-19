@@ -40,6 +40,32 @@ final class NotifySettingsScreenTest extends WebTestCase
             'fetched_at' => '2026-09-17 10:00:00']);
     }
 
+    /** 두 번째 승인 템플릿. 변수 이름이 T1 과 달라, 어느 쪽이 저장됐는지 헷갈릴 수 없다. */
+    private function seedSecondTemplate(App $app): void
+    {
+        $app->db()->insert('alimtalk_templates', ['tpl_code' => 'T2', 'senderkey' => 'SK1',
+            'name' => '두 번째 안내', 'content' => '#{받는분}께 #{주소지} 안내드립니다',
+            'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
+            'fetched_at' => '2026-09-17 10:00:00']);
+    }
+
+    /** 알림톡을 켜고 T1 을 이은 다음, 그 템플릿이 죽은 상태로 만든다. */
+    private function seedDeadTemplate(App $app, bool $leaveAlimtalkOn = true): void
+    {
+        $this->seedTemplate($app);
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크'],
+        ]);
+        if (!$leaveAlimtalkOn) {
+            $this->post($app, '/admin/settings/notifications/save', [
+                'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset', 'mail' => '1',
+            ]);
+        }
+        $app->db()->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :c', ['c' => 'T1']);
+    }
+
     /** 체크박스 하나의 마크업만 잘라 온다 — disabled·checked 를 그 칸에 대해서만 묻기 위해서다. */
     private static function checkbox(string $html, string $name): string
     {
@@ -177,6 +203,8 @@ final class NotifySettingsScreenTest extends WebTestCase
         $section = self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
         self::assertStringNotContainsString('더는 쓸 수 없습니다', $section);
+        // 멀쩡한 템플릿이므로 「켜는 순간 이대로 나갑니다」는 참이고, 적혀 있어야 한다.
+        self::assertStringContainsString('알림톡을 켜는 순간 이대로 나갑니다', $section);
         self::assertStringNotContainsString('checked', self::checkbox($section, 'alimtalk'));
         // 다시 켤 때 다시 고르지 않아도 되도록, 저장된 연결은 화면에 되살아나 있어야 한다.
         self::assertMatchesRegularExpression('/name="var_map\[고객명\]".*?<option value="이름" selected/s', $section);
@@ -403,6 +431,124 @@ final class NotifySettingsScreenTest extends WebTestCase
         $empty = self::section($html, 'welcome');
         self::assertStringContainsString('<strong>0바이트</strong>', $empty);
         self::assertStringNotContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $empty);
+    }
+
+    /**
+     * **꺼진 채널에 죽은 참조가 남은 카드가 「켜는 순간 이대로 나갑니다」라고 말하면 안
+     * 된다** — 켜면 422 로 거절당한다. 예전에는 죽었다는 문장이 「알림톡을 켜 두었을
+     * 때만」 나와서, 하필 이 상태에서 유일하게 정직한 문장이 빠져 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testADeadTemplateIsNotDescribedAsReadyToSendWhileTheChannelIsOff(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app, false);
+
+        $section = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+
+        self::assertStringNotContainsString('알림톡을 켜는 순간 이대로 나갑니다', $section);
+        self::assertStringContainsString('더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('T1', $section);
+        self::assertStringContainsString('지금 이대로는 켤 수도 없습니다', $section);
+    }
+
+    /**
+     * 죽은 참조를 버리는 길. 빈 <select> 의 뜻을 추측하지 않고 뜻이 하나뿐인 칸을 준다.
+     * 지울 길이 없으면, 쓸 템플릿이 하나도 없는 사이트에서는 그 묶음의 모든 저장이
+     * 거절되고(문자 본문을 고쳐도 함께 버려진다) 알림톡을 끄고 나면 참조가 영영 남는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testADeadTemplateReferenceCanBeDroppedExplicitly(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app, false);
+        $before = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringContainsString('name="tpl_clear"', $before);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        $values = $app->notifySettings()->formValues()['password_reset'];
+        self::assertSame('', $values['alimtalk_tpl_code']);
+        self::assertSame([], $values['alimtalk_var_map']);
+        $after = self::section(
+            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
+        self::assertStringNotContainsString('name="tpl_clear"', $after);
+        self::assertStringNotContainsString('더는 쓸 수 없습니다', $after);
+    }
+
+    /** 켠 채로 지우는 것은 앞뒤가 맞지 않는다 — 조용히 한쪽을 고르지 않고 이유를 말하며 거절한다. */
+    #[DataProvider('connectionProvider')]
+    public function testDroppingTheReferenceIsRefusedWhileAlimtalkIsOn(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다', $section);
+        self::assertStringContainsString('is-invalid', $section);
+        self::assertSame('T1',
+            $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
+    }
+
+    /** 새 템플릿을 함께 고르면 그쪽이 이긴다 — 지우기는 고를 것을 고르지 않았을 때만 적용된다. */
+    #[DataProvider('connectionProvider')]
+    public function testChoosingANewTemplateBeatsTheClearCheckbox(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);
+        $this->seedSecondTemplate($app);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => 'T2', 'tpl_clear' => '1',
+            'var_map' => ['받는분' => '이름', '주소지' => '링크'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        $values = $app->notifySettings()->formValues()['password_reset'];
+        self::assertSame('T2', $values['alimtalk_tpl_code']);
+        self::assertSame(['받는분' => '이름', '주소지' => '링크'], $values['alimtalk_var_map']);
+    }
+
+    /**
+     * 쓸 수 있는 템플릿이 하나도 없는데 알림톡이 켜진 채로 저장돼 있으면 그 묶음의 모든
+     * 저장이 422 로 거절된다. 그 화면이 아무것도 표시하지 않으면 — 예전에는 tpl_code
+     * 힌트가 `if ($noTemplates)` 의 else 안에 있어 그렸을 자리가 아예 없었다 — 관리자는
+     * 「저장하지 못했습니다」만 보고 어디를 고쳐야 할지 알 수 없다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheCardWithNoUsableTemplateMarksWhatItIsRefusing(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);
+
+        // 화면이 실제로 보내는 모양: 체크는 켜진 채 남아 있고, 고를 option 이 없어 빈 값이 나간다.
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'alimtalk' => '1', 'tpl_code' => '', 'sms_body' => '',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('is-invalid', $section);
+        self::assertStringContainsString('사용 중인 승인 템플릿을 골라 주세요', $section);
+        self::assertStringContainsString('쓸 수 있는 승인 템플릿이 없습니다', $section);
+        // 저장이 거절된 화면에서 하필 가장 중요한 사실이 사라지면 안 된다.
+        self::assertStringContainsString('더는 쓸 수 없습니다', $section);
+        // 빠져나갈 길도 같은 화면에 있어야 한다.
+        self::assertStringContainsString('name="tpl_clear"', $section);
     }
 
     /**

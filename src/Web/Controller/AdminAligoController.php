@@ -220,27 +220,25 @@ final class AdminAligoController
                 // 않아도 되는 것이 save() 가 이 값을 지우지 않는 이유다.
                 'var_map' => $value['alimtalk_var_map'],
                 'sms_body' => $value['sms_body_stored'],
-                'alimtalk_notice' => self::alimtalkNotice($value),
-                // 꺼진 채널의 칸도 고칠 수 있고, 고친 값은 실제로 저장된다
-                // (NotifySettings::save()). 그 두 사실을 다 말해야 관리자가 "지금은
-                // 안 나간다"와 "지금 고쳐 둬도 남는다"를 함께 안다.
-                // 본문이 있을 때만 말한다. 빈 칸 옆에서 「이 본문으로 나갑니다」는
-                // 가리킬 본문이 없는 문장이다 — 게다가 이제는 칸을 비워 저장하면 실제로
-                // 지워지므로(save()), 지운 직후에도 그 문장이 남아 있으면 거짓이 된다.
-                'sms_notice' => (!$on['sms'] && $value['sms_body_stored'] !== '')
-                    ? '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 여기서 고쳐 저장해 두면'
-                        . ' 그대로 보관되고, 문자를 켜는 순간 이 본문으로 나갑니다. 칸을 비우고'
-                        . ' 저장하면 지워집니다.'
-                    : null,
-                'alimtalk_off_notice' => (!$on['alimtalk'] && $value['alimtalk_tpl_code'] !== '')
-                    ? '알림톡 채널이 꺼져 있어 이 템플릿과 변수 연결은 지금 쓰이지 않습니다. 여기서'
-                        . ' 고쳐 저장해 두면 그대로 보관되고, 알림톡을 켜는 순간 이대로 나갑니다.'
-                    : null,
+                // 아래 둘은 **저장된 것**을 말한다. 422 되보여주기에서 입력으로 덮이는
+                // tpl_code 와 달리, 관리자가 방금 무엇을 골랐든 저장소에 남아 있는 참조는
+                // 그대로다 — 그래서 입력 덮어쓰기와 섞지 않는다. 안내문 셋은 덮은 **뒤에**
+                // 만든다(아래).
+                'stored_tpl_code' => $value['alimtalk_tpl_code'],
+                'tpl_dead' => $value['alimtalk_tpl_code'] !== '' && !$value['alimtalk_template_usable'],
             ];
             $row += self::bodySize($row['sms_body']);
             if ($postedEvent === $key) {
                 $row = self::withPostedInput($row, $posted ?? []);
             }
+            // 안내문은 **덮어쓴 뒤에** 만든다. 체크박스가 지금 어떤 상태로 그려지는지에
+            // 따라 문장이 달라지는데(켜 둔 채 못 나가는 것과 꺼 둔 것은 급한 정도가
+            // 다르다), 덮기 전에 만들면 422 화면에서 문장과 체크박스가 서로 다른 것을
+            // 가리킨다. 예전에는 그래서 덮을 때 문장을 통째로 지웠는데, 그러면 죽은
+            // 템플릿이라는 가장 중요한 사실이 하필 저장이 거절된 화면에서만 사라졌다.
+            $row['alimtalk_notice'] = self::alimtalkNotice($row);
+            $row['sms_notice'] = self::smsNotice($row);
+            $row['alimtalk_off_notice'] = self::alimtalkOffNotice($row);
             $rows[$key] = $row;
         }
 
@@ -268,33 +266,73 @@ final class AdminAligoController
     }
 
     /**
-     * 저장된 알림톡 설정이 지금은 쓸 수 없게 되었을 때 그 이유를 말하는 한 문장.
-     * 관리자가 켜 두지 않았으면 아무 말도 하지 않는다 — 켜 두지 않은 이벤트에서
-     * template 이 null 인 것은 templateFor() 의 isOn() 게이트 때문이지 템플릿이 죽어서가
-     * 아니라서, 그때 "이 템플릿을 쓸 수 없습니다"라고 적으면 멀쩡한 템플릿을 두고
-     * 거짓말을 하게 된다.
+     * 저장된 알림톡 템플릿을 더는 쓸 수 없을 때 그 이유를 말하는 한 문장.
+     *
+     * **채널이 꺼져 있어도 말한다.** 예전에는 켜 두었을 때만 말했는데, 그 조건이 하필
+     * 가장 거짓말하기 쉬운 상태를 침묵시켰다: 알림톡을 끄고 죽은 참조가 남은 카드가
+     * 「켜는 순간 이대로 나갑니다」라고만 적고 있었다 — 켜면 422 로 거절당하는데도.
+     * 죽었다는 사실은 스위치와 무관하므로 스위치와 무관하게 적고, 급한 정도만 가른다.
+     *
+     * 판단은 저장된 값(stored_tpl_code·tpl_dead)으로 한다 — 422 되보여주기에서 관리자가
+     * 방금 무엇을 골랐든 저장소에 남은 참조는 그대로이기 때문이다.
      */
-    private static function alimtalkNotice(array $value): ?string
+    private static function alimtalkNotice(array $row): ?string
     {
-        if (!$value['phone'] || !$value['alimtalk_on'] || $value['template'] !== null) {
+        if (!$row['phone']) {
             return null;
         }
-        if ($value['alimtalk_tpl_code'] === '') {
-            return '알림톡을 켜 두었지만 고른 템플릿이 없어 지금은 나가지 않습니다. 아래에서 템플릿을 고르고 저장해 주세요.';
+        if (!$row['tpl_dead']) {
+            return ($row['on']['alimtalk'] && $row['stored_tpl_code'] === '')
+                ? '알림톡을 켜려면 쓸 템플릿을 고르고 변수를 이어야 합니다. 아직 고른 템플릿이 없습니다.'
+                : null;
         }
 
         return sprintf(
-            '알림톡을 켜 두었지만 지금은 나가지 않습니다. 고르신 템플릿(%s)을 더는 쓸 수 없습니다 —'
-            . ' 카카오 승인이 풀렸거나, 템플릿 목록에서 사라졌거나, 본문이 바뀌어 변수 연결이 어긋났습니다.'
-            . ' 운영 → 알림톡·문자 → 템플릿에서 다시 가져오거나, 아래에서 다른 템플릿을 골라 주세요.',
-            $value['alimtalk_tpl_code']
+            '%s 저장해 두신 템플릿(%s)을 더는 쓸 수 없습니다 — 카카오 승인이 풀렸거나, 템플릿'
+            . ' 목록에서 사라졌거나, 본문이 바뀌어 변수 연결이 어긋났습니다. 운영 → 알림톡·문자 →'
+            . ' 템플릿에서 다시 가져오거나 다른 템플릿을 고르고, 이 설정을 아주 지우려면 아래'
+            . ' "고를 수 없게 된 템플릿 설정 지우기"를 체크해 저장해 주세요.',
+            $row['on']['alimtalk']
+                ? '알림톡을 켜 두었지만 지금은 나가지 않습니다.'
+                : '알림톡은 꺼져 있고, 지금 이대로는 켤 수도 없습니다.',
+            $row['stored_tpl_code']
         );
     }
 
     /**
-     * 422 로 되돌아온 묶음을 관리자가 방금 화면에서 고른 값으로 덮는다. 저장된 값이
-     * 아니므로 "지금 쓸 수 있는가"를 말하는 안내문은 지운다 — 저장되지 않은 입력을 두고
-     * 저장된 설정에 대한 문장을 붙여 두면 두 문장이 서로 다른 것을 가리키게 된다.
+     * 꺼진 문자 채널의 본문에 붙는 안내. 본문이 있을 때만 말한다 — 빈 칸 옆에서
+     * 「이 본문으로 나갑니다」는 가리킬 본문이 없는 문장이고, 이제는 칸을 비워 저장하면
+     * 실제로 지워지므로 지운 직후에 그 문장이 남아 있으면 거짓이 된다.
+     */
+    private static function smsNotice(array $row): ?string
+    {
+        if ($row['on']['sms'] || $row['sms_body'] === '') {
+            return null;
+        }
+
+        return '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 여기서 고쳐 저장해 두면'
+            . ' 그대로 보관되고, 문자를 켜는 순간 이 본문으로 나갑니다. 칸을 비우고 저장하면 지워집니다.';
+    }
+
+    /**
+     * 꺼진 알림톡 채널의 템플릿에 붙는 안내. **지금도 쓸 수 있는 템플릿일 때만** 말한다 —
+     * 죽은 참조를 두고 「켜는 순간 이대로 나갑니다」라고 적으면, 켜 봤자 422 로 거절당한다.
+     * 그 경우의 진실은 위 alimtalkNotice() 가 말한다.
+     */
+    private static function alimtalkOffNotice(array $row): ?string
+    {
+        if ($row['on']['alimtalk'] || $row['stored_tpl_code'] === '' || $row['tpl_dead']) {
+            return null;
+        }
+
+        return '알림톡 채널이 꺼져 있어 이 템플릿과 변수 연결은 지금 쓰이지 않습니다. 여기서'
+            . ' 고쳐 저장해 두면 그대로 보관되고, 알림톡을 켜는 순간 이대로 나갑니다.';
+    }
+
+    /**
+     * 422 로 되돌아온 묶음을 관리자가 방금 화면에서 고른 값으로 덮는다. 저장소를 말하는
+     * 칸(stored_tpl_code·tpl_dead)은 덮지 않는다 — 저장이 거절됐으므로 저장소는 그대로이고,
+     * 안내문 셋은 그 둘과 덮인 체크박스 상태로 이 뒤에 다시 만들어진다.
      */
     private static function withPostedInput(array $row, array $posted): array
     {
@@ -310,9 +348,6 @@ final class AdminAligoController
         }
         $row['var_map'] = $map;
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
-        $row['alimtalk_notice'] = null;
-        $row['sms_notice'] = null;
-        $row['alimtalk_off_notice'] = null;
         // 크기는 방금 들어온 본문으로 다시 잰다 — 거절당한 이유가 길이일 때 화면이
         // 저장된 옛 본문의 크기를 보여주면 관리자는 무엇을 줄여야 하는지 알 수 없다.
         $row = array_replace($row, self::bodySize($row['sms_body']));
