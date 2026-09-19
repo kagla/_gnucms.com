@@ -376,14 +376,26 @@ final class Dispatch
      * 지운다(아래 성공 분기 참고). 작업이 더는 'scheduled'가 아니게 된 뒤(전부 취소됐거나
      * 이미 나갔거나)에는 가드절이 422 로 거절한다.
      *
+     * **묶음 일부만 취소할 수도 있다**($onlyMids). 알리고에 취소를 요청하는 단위는
+     * 수신자가 아니라 접수 묶음(mid)이므로, 수신자 한 사람만 빼는 취소는 이 API 에
+     * 없다 — 그래서 "이 사람의 예약을 멈춘다"는 요구는 "그 사람이 든 묶음을 멈춘다"로만
+     * 옮길 수 있고, 그 묶음에 다른 사람이 함께 들어 있는지는 부르는 쪽이 판단한다
+     * (AligoService::cancelScheduledForUser()). 목록을 좁혀 부른 경우에는 남은 묶음이
+     * 그대로 나가므로 작업은 'cancelled'가 되지 않고 'scheduled'로 남는다.
+     *
+     * @param list<string>|null $onlyMids 이 묶음만 취소한다. null 이면 이 작업의 모든 묶음.
      * @return array{cancelled:int,failed:int,reasons:list<string>}
      */
-    public function cancel(int $jobId): array
+    public function cancel(int $jobId, ?array $onlyMids = null): array
     {
         $job = $this->db->selectOne('SELECT * FROM ' . $this->db->table('message_jobs')
             . ' WHERE id = ?', [$jobId]);
         if ($job === null || $job['status'] !== 'scheduled') {
             throw DomainError::validation(['job' => '예약된 작업만 취소할 수 있습니다.']);
+        }
+        if ($onlyMids === []) {
+            // 좁힌 목록이 비었다 = 취소할 묶음이 없다. 모든 묶음을 뜻하는 null 과 다르다.
+            return ['cancelled' => 0, 'failed' => 0, 'reasons' => []];
         }
 
         // job_id는 스케줄이 걸려 있어도 job.status 하나만으로는 어느 수신자가 실제로
@@ -391,8 +403,14 @@ final class Dispatch
         // 접수 자체가 실패(mid 없음)했을 수 있다. status = 'accepted' 로도 한 번 더
         // 좁혀 두면, 이 작업을 다시 취소하려 시도할 때(먼저 취소된 mid가 섞여 있어도)
         // 이미 성공적으로 취소된 mid 를 또 부르지 않는다.
-        $rows = $this->db->select('SELECT DISTINCT mid FROM ' . $this->db->table('message_recipients')
-            . ' WHERE job_id = ? AND mid IS NOT NULL AND status = ?', [$jobId, 'accepted']);
+        $sql = 'SELECT DISTINCT mid FROM ' . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? AND mid IS NOT NULL AND status = ?';
+        $params = [$jobId, 'accepted'];
+        if ($onlyMids !== null) {
+            $sql .= ' AND mid IN (' . implode(',', array_fill(0, count($onlyMids), '?')) . ')';
+            $params = array_merge($params, array_values($onlyMids));
+        }
+        $rows = $this->db->select($sql, $params);
         $mids = array_map(static fn (array $row): string => (string) $row['mid'], $rows);
 
         $cancelled = 0;
@@ -435,7 +453,13 @@ final class Dispatch
         // 취소한 mid 가 하나도 없거나(있을 수 없는 상황이지만 방어적으로), 하나라도
         // 실패했다면 작업은 아직 취소된 것이 아니다 — 나갈 메시지가 남아 있는데
         // 취소됐다고 적으면 거짓말이다. 상태를 그대로 둔다.
-        if ($cancelled > 0 && $failed === 0) {
+        //
+        // 접수된 채 남은 수신자가 있는지도 함께 본다. 목록을 좁혀 부른 경우
+        // ($onlyMids)에는 이번에 부른 묶음이 모두 성공해도 다른 묶음은 예정대로
+        // 나가므로, 그때 'cancelled'라고 적으면 나갈 메시지를 두고 멈췄다고 말하는 것이
+        // 된다. 목록을 좁히지 않은 평소의 취소에서는 이 조건이 늘 참이다(모든 accepted
+        // 묶음을 불렀고 전부 성공했으므로 남은 행이 없다).
+        if ($cancelled > 0 && $failed === 0 && $this->acceptedCount($jobId) === 0) {
             $this->db->update('message_jobs', [
                 'status' => 'cancelled',
                 'cancelled_at' => Clock::now(),
@@ -443,6 +467,16 @@ final class Dispatch
         }
 
         return ['cancelled' => $cancelled, 'failed' => $failed, 'reasons' => $reasons];
+    }
+
+    /** 아직 접수된 채 결과를 기다리는 수신자 수. 취소가 작업 전체를 멈췄는지 가른다. */
+    private function acceptedCount(int $jobId): int
+    {
+        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM '
+            . $this->db->table('message_recipients') . ' WHERE job_id = ? AND status = ?',
+            [$jobId, 'accepted']);
+
+        return (int) ($row['c'] ?? 0);
     }
 
     private function markChunk(array $chunk, string $status, ?string $mid, ?string $reason): void

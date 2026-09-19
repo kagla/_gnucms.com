@@ -60,10 +60,157 @@ final class AligoService
      */
     public function cancel(int $jobId): array
     {
-        $result = $this->dispatch->cancel($jobId);
+        return $this->cancelOne($jobId, null);
+    }
+
+    /**
+     * 취소 한 건. 공개 cancel() 과 내부 일괄 취소가 같은 문을 쓰되, 내부 경로만
+     * 묶음 목록을 좁힐 수 있다 — 좁히는 취소는 확장에 열어 둘 만큼 안전한 도구가
+     * 아니다(어느 묶음에 누가 들어 있는지는 이 클래스만 안다).
+     *
+     * @param list<string>|null $onlyMids
+     * @return array{cancelled:int,failed:int,reasons:list<string>}
+     */
+    private function cancelOne(int $jobId, ?array $onlyMids): array
+    {
+        $result = $this->dispatch->cancel($jobId, $onlyMids);
         $this->history->recompute($jobId);
 
         return $result;
+    }
+
+    /**
+     * 이 회원에게 아직 나가지 않은 예약을 멈춘다. 탈퇴와 차단이 부른다.
+     *
+     * **왜 필요한가.** 탈퇴는 이 시스템이 개인정보를 놓아주겠다고 약속하는 자리라
+     * users.phone 을 지우는데, 예약은 최대 30일 뒤까지 살아 있고 수신자 행은 번호를
+     * 따로 들고 있다 — 아무것도 하지 않으면 탈퇴한 사람의 전화기가 며칠 뒤에 울린다.
+     * 차단도 같다(차단은 번호를 지우지도 않는다).
+     *
+     * **어디까지 멈출 수 있는가.** 알리고의 취소 단위는 수신자가 아니라 접수
+     * 묶음(mid)이다. 500명 묶음에서 한 사람만 빼는 길은 없고, 남은 사람을 다시 접수하는
+     * 길은 이 저장소가 스스로 금지한 재발송이다(응답을 못 받은 채 다시 보내면 진짜
+     * 전화기로 두 통이 간다). 그래서 **그 사람 혼자 든 묶음만** 취소하고, 다른 수신자가
+     * 함께 든 묶음은 건드리지 않는다 — 회원 한 사람의 탈퇴가 관리자가 걸어 둔 다른
+     * 499명의 발송을 함께 지우는 편이 더 나쁘고, 탈퇴는 방문자가 스스로 누르는
+     * 버튼이라 그 길을 열어 두면 남의 발송을 지우는 도구가 된다. 멈추지 못한 건은
+     * kept 로 세어 돌려준다 — 침묵하지 않기 위해서다.
+     *
+     * 이미 나간 발송(status 가 'sending' 이상인 작업)은 취소 대상이 아니다. 알리고가
+     * 이미 내보냈으므로 멈출 것이 없다 — 이력에 남은 번호는 지우지 않는다(보존은
+     * 의도된 설계이고, 문제는 보존이 아니라 새 발송이다).
+     *
+     * @return array{cancelled:int,failed:int,reasons:list<string>,kept:int}
+     */
+    public function cancelScheduledForUser(int $userId): array
+    {
+        $midsByJob = $this->pendingBookingsForUser($userId);
+        $cancelled = 0;
+        $failed = 0;
+        $kept = 0;
+        $reasons = [];
+        foreach ($midsByJob as $jobId => $mids) {
+            $mine = [];
+            foreach ($mids as $mid) {
+                if ($this->bookingHasOtherRecipients($jobId, $mid, $userId)) {
+                    $kept++;
+                    $reasons[] = '작업 #' . $jobId . ': 같은 접수 묶음에 다른 수신자가 있어'
+                        . ' 이 예약만 따로 멈출 수 없습니다.';
+                    continue;
+                }
+                $mine[] = $mid;
+            }
+            if ($mine === []) {
+                continue;
+            }
+            try {
+                // 채널·템플릿 일괄 취소와 같은 이유로 작업 하나의 실패가 나머지를 막지
+                // 않는다(cancelJobs() 주석). 여기서는 목록을 만든 시점과 취소를 시도하는
+                // 시점 사이에 그 작업이 나가 버렸을 수 있다.
+                $result = $this->cancelOne($jobId, $mine);
+            } catch (DomainError $e) {
+                $failed++;
+                $reasons[] = '작업 #' . $jobId . ': ' . (string) ($e->details()['job'] ?? $e->getMessage());
+                continue;
+            }
+            $cancelled += $result['cancelled'];
+            $failed += $result['failed'];
+            array_push($reasons, ...$result['reasons']);
+        }
+
+        return ['cancelled' => $cancelled, 'failed' => $failed, 'reasons' => $reasons, 'kept' => $kept];
+    }
+
+    /**
+     * 탈퇴·차단이 부르는 입구. cancelScheduledForUser() 와 같은 일을 하되 **아무것도
+     * 던지지 않는다** — 부르는 쪽이 한 일(탈퇴·차단)은 이미 끝났고 되돌릴 수 없으므로,
+     * 취소가 실패했다고 예외를 올리면 그 화면은 "나갈 수 없는 사이트"가 된다.
+     *
+     * 그렇다고 조용히 삼키지도 않는다: 멈추지 못한 건이 있으면 운영자 로그에 한 줄
+     * 남긴다(AccountService::requestPasswordReset() 이 아무 데도 못 보냈을 때와 같은
+     * 자리, 같은 방식). 알리고 계층의 예외 문구에는 API 키가 실리지 않는다.
+     *
+     * @param string $what 로그에 적을 말("탈퇴한"·"차단된")
+     */
+    public function stopScheduledForUser(int $userId, string $what): void
+    {
+        try {
+            $result = $this->cancelScheduledForUser($userId);
+        } catch (\Throwable $e) {
+            error_log('[' . GNUCMS_ID . '] ' . $what . ' 회원 #' . $userId
+                . ' 의 예약 발송을 멈추지 못했습니다: ' . $e->getMessage());
+
+            return;
+        }
+        if ($result['failed'] > 0 || $result['kept'] > 0) {
+            error_log('[' . GNUCMS_ID . '] ' . $what . ' 회원 #' . $userId . ' 의 예약 발송 가운데 '
+                . ($result['failed'] + $result['kept']) . '건을 멈추지 못했습니다: '
+                . implode(' / ', $result['reasons']));
+        }
+    }
+
+    /**
+     * 이 회원 앞으로 아직 나가지 않은 접수 묶음. 예약(scheduled) 작업의, 접수된 채
+     * (accepted) 결과를 기다리는 행만 본다.
+     *
+     * @return array<int,list<string>> 작업 id => 묶음(mid) 목록
+     */
+    private function pendingBookingsForUser(int $userId): array
+    {
+        $rows = $this->db->select('SELECT DISTINCT job_id, mid FROM '
+            . $this->db->table('message_recipients')
+            . ' WHERE user_id = ? AND status = ? AND mid IS NOT NULL',
+            [(string) $userId, 'accepted']);
+        if ($rows === []) {
+            return [];
+        }
+        $jobIds = array_values(array_unique(array_map(
+            static fn (array $row): int => (int) $row['job_id'], $rows)));
+        $scheduled = $this->db->select('SELECT id FROM ' . $this->db->table('message_jobs')
+            . ' WHERE status = ? AND id IN (' . implode(',', array_fill(0, count($jobIds), '?')) . ')',
+            array_merge(['scheduled'], $jobIds));
+        $scheduledIds = array_map(static fn (array $row): int => (int) $row['id'], $scheduled);
+
+        $byJob = [];
+        foreach ($rows as $row) {
+            $jobId = (int) $row['job_id'];
+            if (in_array($jobId, $scheduledIds, true)) {
+                $byJob[$jobId][] = (string) $row['mid'];
+            }
+        }
+
+        return $byJob;
+    }
+
+    /** 이 묶음에 아직 결과를 기다리는 **다른** 수신자가 있는가(번호만 적어 보낸 행 포함). */
+    private function bookingHasOtherRecipients(int $jobId, string $mid, int $userId): bool
+    {
+        $row = $this->db->selectOne('SELECT COUNT(*) AS c FROM '
+            . $this->db->table('message_recipients')
+            . ' WHERE job_id = ? AND mid = ? AND status = ? AND (user_id IS NULL OR user_id <> ?)',
+            [$jobId, $mid, 'accepted', (string) $userId]);
+
+        return (int) ($row['c'] ?? 0) > 0;
     }
 
     /**

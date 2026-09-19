@@ -453,6 +453,8 @@ final class App
             // 반쯤 만들어진 것을 받을지언정 무한 재귀로 가지는 않는다. 위의
             // setPasswordThrottle() 과 같은 이유의 같은 차례다.
             $this->accountService->setNotifier($this->notifier());
+            // 탈퇴는 번호를 지우는 것으로 끝나지 않는다 — 이미 걸린 예약도 멈춘다.
+            $this->accountService->setAligo($this->aligo());
         }
 
         return $this->accountService;
@@ -598,6 +600,9 @@ final class App
         $this->accountService = null;
         $this->socialAuthService = null;
         $this->linkingService = null;
+        // 회원 관리(차단)도 이 서비스를 쥔다 — 끊지 않으면 차단이 가짜가 아닌 진짜
+        // 알리고로 취소를 부르러 나간다.
+        $this->adminService = null;
     }
 
     public function aligo(): AligoService
@@ -673,6 +678,9 @@ final class App
     {
         if ($this->adminService === null) {
             $this->adminService = new AdminService($this->db(), $this->users(), $this->boardService());
+            // 차단은 그 회원에게 걸린 예약 발송도 멈춘다. 게터들과 같은 차례로 new 가
+            // 끝난 뒤에 끼운다(accountService() 의 setNotifier() 주석과 같은 이유).
+            $this->adminService->setAligo($this->aligo());
         }
         return $this->adminService;
     }

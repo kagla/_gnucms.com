@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Identity;
 use GnuCms\Error\DomainError;
@@ -43,6 +44,7 @@ final class AccountService
 
     private ?PasswordThrottle $throttle = null;
     private ?Notifier $notifier = null;
+    private ?AligoService $aligo = null;
 
     public function setPasswordThrottle(PasswordThrottle $throttle): void
     {
@@ -58,6 +60,17 @@ final class AccountService
     public function setNotifier(Notifier $notifier): void
     {
         $this->notifier = $notifier;
+    }
+
+    /**
+     * 예약 발송을 멈출 수 있는 곳. 탈퇴가 쓴다 — 번호를 지우는 것만으로는 이미 걸린
+     * 예약이 멈추지 않기 때문이다(AligoService::cancelScheduledForUser()).
+     * setNotifier() 와 같은 이유로 세터다: 이 클래스는 App 말고도 여러 곳에서 조립되고,
+     * 끼우지 않으면 취소만 일어나지 않을 뿐 탈퇴는 그대로 된다.
+     */
+    public function setAligo(AligoService $aligo): void
+    {
+        $this->aligo = $aligo;
     }
 
     /**
@@ -463,6 +476,9 @@ final class AccountService
         }
         $v->check();
         $this->users->withdraw($userId, $clientIp);
+        // 탈퇴를 **먼저** 끝낸다. 취소는 알리고 왕복이라 느리거나 터질 수 있는데, 그
+        // 때문에 탈퇴 자체가 막히면 이 화면은 "나갈 수 없는 사이트"가 된다.
+        $this->aligo?->stopScheduledForUser($userId, '탈퇴한');
     }
 
     public function changePassword(int $userId, array $input): void

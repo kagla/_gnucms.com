@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\AligoService;
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Auth\Acl;
 use GnuCms\Db\Connection;
@@ -16,12 +17,24 @@ final class AdminService
     private Connection $db;
     private UserRepository $users;
     private BoardService $boards;
+    private ?AligoService $aligo = null;
 
     public function __construct(Connection $db, UserRepository $users, BoardService $boards)
     {
         $this->db = $db;
         $this->users = $users;
         $this->boards = $boards;
+    }
+
+    /**
+     * 예약 발송을 멈출 수 있는 곳. 차단이 쓴다 — 차단은 번호를 지우지도 않으므로,
+     * 아무것도 하지 않으면 차단된 사람의 전화기가 며칠 뒤에 울린다
+     * (AligoService::cancelScheduledForUser()). AccountService::setAligo() 와 같은
+     * 이유로 세터이고, 끼우지 않으면 취소만 일어나지 않을 뿐 차단은 그대로 된다.
+     */
+    public function setAligo(AligoService $aligo): void
+    {
+        $this->aligo = $aligo;
     }
 
     public function dashboard(Acl $acl): array
@@ -127,6 +140,13 @@ final class AdminService
         // AccountService::updateProfile() 과 같은 이유로 $v->check() 뒤에 본다.
         $phone = $this->phoneFromAdminInput($input, isset($user['phone']) ? (string) $user['phone'] : null);
         $this->users->updateForAdmin($id, $email, $displayName, $status);
+        if ($status === 'blocked' && $user['status'] !== 'blocked') {
+            // 막 차단된 사람이다. 걸려 있던 예약을 멈춘다 — 차단은 번호를 지우지
+            // 않으므로 그대로 두면 며칠 뒤에 그 번호로 나간다. 상태가 바뀔 때만
+            // 부른다: 이미 차단된 회원의 다른 칸(이름·메일)을 고칠 때마다 알리고를
+            // 부를 이유는 없다.
+            $this->aligo?->stopScheduledForUser($id, '차단된');
+        }
         if ($phone['write']) {
             $this->users->updatePhone($id, $phone['phone']);
         }
@@ -149,7 +169,13 @@ final class AdminService
         if ($user['status'] === 'active' && (bool) $user['is_admin'] && $this->users->countAdmins() <= 1) {
             throw DomainError::validation(['member' => '마지막 관리자는 차단할 수 없습니다.']);
         }
-        $this->users->setStatus($id, $user['status'] === 'active' ? 'blocked' : 'active');
+        $blocking = $user['status'] === 'active';
+        $this->users->setStatus($id, $blocking ? 'blocked' : 'active');
+        if ($blocking) {
+            // updateMember() 와 같은 이유, 같은 자리(상태를 바꾼 직후). 차단을 푸는
+            // 쪽은 멈출 것이 없다.
+            $this->aligo?->stopScheduledForUser($id, '차단된');
+        }
     }
 
     private function requiredUser(int $id): array

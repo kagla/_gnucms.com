@@ -141,6 +141,160 @@ final class AligoServiceTest extends DatabaseTestCase
     }
 
     /**
+     * 회원 하나에게만 걸린 예약은 그 회원이 더는 메시지를 받아서는 안 되게 됐을 때
+     * (탈퇴·차단) 멈춘다. 번호를 지우는 것만으로는 멈추지 않는다 — 알리고가 그 번호를
+     * 이미 들고 있고 최대 30일 뒤에 내보낸다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCancellingForAMemberStopsABookingThatIsOnlyTheirs(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = $this->configuredService($db, $transport);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [['phone' => '01012345678', 'user_id' => '7']]]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $result = $service->cancelScheduledForUser(7);
+
+        self::assertSame(['cancelled' => 1, 'failed' => 0, 'reasons' => [], 'kept' => 0], $result);
+        $cancelRequest = end($transport->requests);
+        self::assertStringContainsString('/cancel/', $cancelRequest['url']);
+        self::assertSame('M1', $cancelRequest['fields']['mid']);
+
+        $job = $db->selectOne('SELECT status, cancelled FROM ' . $db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('cancelled', $job['status']);
+        self::assertSame(1, (int) $job['cancelled']);
+        $row = $db->selectOne('SELECT status FROM ' . $db->table('message_recipients')
+            . ' WHERE job_id = ?', [$jobId]);
+        self::assertSame('cancelled', $row['status'], '이력에는 실패가 아니라 취소로 남아야 한다');
+    }
+
+    /**
+     * 다른 사람이 함께 든 접수 묶음은 건드리지 않는다. 알리고의 취소 단위는 수신자가
+     * 아니라 묶음이라 한 사람만 뺄 수 없고, 남은 사람을 다시 접수하는 것은 이 저장소가
+     * 금지한 재발송이다. 회원 한 사람이 스스로 누르는 탈퇴가 관리자의 다른 발송까지
+     * 지우는 도구가 되어서는 안 된다 — 대신 멈추지 못했다는 사실을 kept 로 돌려준다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCancellingForAMemberLeavesABookingSharedWithOthersAlone(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = $this->configuredService($db, $transport);
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":2,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요', 'scheduled_at' => $at,
+            'recipients' => [
+                ['phone' => '01012345678', 'user_id' => '7'],
+                ['phone' => '01098765432', 'user_id' => '8'],
+            ]]);
+        $requestsBefore = count($transport->requests);
+
+        $result = $service->cancelScheduledForUser(7);
+
+        self::assertSame(0, $result['cancelled']);
+        self::assertSame(0, $result['failed']);
+        self::assertSame(1, $result['kept']);
+        self::assertStringContainsString('다른 수신자', $result['reasons'][0]);
+        self::assertCount($requestsBefore, $transport->requests, '알리고에 취소를 부르지 않아야 한다');
+
+        $job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status']);
+    }
+
+    /**
+     * 500명 단위로 나뉜 작업에서 그 회원 혼자 든 묶음만 멈춘다. 남은 묶음은 예정대로
+     * 나가므로 작업은 'cancelled'가 아니라 'scheduled'로 남아야 하고(나갈 메시지가
+     * 남아 있는데 취소됐다고 적으면 거짓말이다), 취소된 한 명은 집계에서 사라지지 않고
+     * 취소 칸에 들어가야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAPartiallyCancelledJobStaysScheduledAndKeepsItsNumbersStraight(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = $this->configuredService($db, $transport);
+
+        // 501명 — 앞의 500명이 첫 묶음(M1), 마지막 한 사람만 둘째 묶음(M2)이 된다.
+        $recipients = [];
+        for ($i = 0; $i < 500; $i++) {
+            $recipients[] = ['phone' => '010' . str_pad((string) (11110000 + $i), 8, '0', STR_PAD_LEFT)];
+        }
+        $recipients[] = ['phone' => '01099998888', 'user_id' => '7'];
+
+        $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":500,"error_cnt":0}');
+        $transport->queue(200, '{"result_code":1,"msg_id":"M2","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '예약 발송', 'scheduled_at' => $at,
+            'recipients' => $recipients]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $result = $service->cancelScheduledForUser(7);
+
+        self::assertSame(1, $result['cancelled']);
+        self::assertSame(0, $result['kept']);
+        $cancelRequest = end($transport->requests);
+        self::assertSame('M2', $cancelRequest['fields']['mid'], '그 회원이 든 묶음만 취소해야 한다');
+
+        $job = $db->selectOne('SELECT * FROM ' . $db->table('message_jobs') . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '나머지 500명은 예정대로 나간다');
+        self::assertNull($job['cancelled_at']);
+        self::assertSame(501, (int) $job['total']);
+        self::assertSame(1, (int) $job['cancelled'], '취소된 한 명이 집계에서 사라지면 안 된다');
+        $others = $db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table('message_recipients')
+            . ' WHERE job_id = ? AND status = ?', [$jobId, 'accepted']);
+        self::assertSame(500, (int) $others['c'], '다른 수신자의 행은 그대로여야 한다');
+    }
+
+    /**
+     * 이미 나간 발송은 취소 대상이 아니다 — 알리고가 이미 내보냈으므로 멈출 것이 없고,
+     * 예약이 아닌 작업에 취소를 부르면 Dispatch 의 가드절이 422 로 거절한다. 이력에 남은
+     * 번호를 지우지도 않는다(보존은 의도된 설계다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCancellingForAMemberIgnoresSendsThatAlreadyWentOut(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $transport = new FakeAligoTransport();
+        $service = $this->configuredService($db, $transport);
+
+        $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
+        $jobId = $service->send(['channel' => 'sms', 'body' => '안녕하세요',
+            'recipients' => [['phone' => '01012345678', 'user_id' => '7']]]);
+        $requestsBefore = count($transport->requests);
+
+        $result = $service->cancelScheduledForUser(7);
+
+        self::assertSame(['cancelled' => 0, 'failed' => 0, 'reasons' => [], 'kept' => 0], $result);
+        self::assertCount($requestsBefore, $transport->requests);
+        $job = $db->selectOne('SELECT status FROM ' . $db->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('sending', $job['status']);
+        $row = $db->selectOne('SELECT phone, status FROM ' . $db->table('message_recipients')
+            . ' WHERE job_id = ?', [$jobId]);
+        self::assertSame('01012345678', $row['phone']);
+        self::assertSame('accepted', $row['status']);
+    }
+
+    /** 문자 채널이 켜진, 계정이 저장된 서비스. 취소 시험들이 같은 준비를 되풀이하지 않게 한다. */
+    private function configuredService(\GnuCms\Db\Connection $db, FakeAligoTransport $transport): AligoService
+    {
+        $service = new AligoService($db, $transport, new SecretCipher('s'));
+        $service->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $service->settings->setEnabled('sms', true);
+
+        return $service;
+    }
+
+    /**
      * 대조군. 같은 계정을 그대로 다시 저장하면 스위치는 꺼지지 않고 취소할 것도 없다 —
      * 저장이 무조건 취소를 돌리는 것이 아니라 **채널이 꺼질 때만** 돈다는 사실을 먼저
      * 못 박아 둔다. 이 시험이 없으면 아래 시험은 "저장하면 언제나 취소한다"는 훨씬 나쁜
