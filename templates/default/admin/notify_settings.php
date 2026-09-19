@@ -161,7 +161,11 @@ $noTemplates = $templates === [];
                   // 진짜 판정은 저장할 때 MessageText 가 한다. 아래 줄이 그 숫자를 미리 보여준다. ?>
                 <textarea class="textarea textarea-bordered input-block" name="sms_body" rows="4" maxlength="2000"><?= $this->e($ev['sms_body']) ?></textarea>
                 <?php if (array_key_exists('sms_body', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['sms_body']) ?></p><?php endif ?>
-                <p class="fieldset-label">지금 <strong><?= $this->e(number_format($ev['sms_bytes'])) ?>바이트</strong>를 썼습니다(최대 <?= $this->e(number_format($ev['sms_limit'])) ?>바이트). 한글은 한 자에 2바이트입니다. <?= $ev['sms_bytes'] > 90 ? 'LMS 로 나갑니다' : '90바이트까지는 SMS, 넘으면 LMS 로 나갑니다' ?> — 변수 자리에 들어갈 값만큼 더 늘어나므로 실제 발송은 이보다 깁니다.</p>
+                <?php // SMS·LMS 경계(90바이트)를 여기서 다시 세지 않는다 — 판정은 컨트롤러가
+                  // MessageText::channelFor() 로 이미 해서 sms_kind 로 넘겨 준다. 여기서 숫자를
+                  // 다시 비교하면 그 경계가 두 군데에 생긴다. 두 갈래 문장은 한쪽이 다른 쪽의
+                  // 부분 문자열이 되지 않게 적는다: 그래야 "어느 갈래가 그려졌는가"를 물을 수 있다. ?>
+                <p class="fieldset-label">지금 <strong><?= $this->e(number_format($ev['sms_bytes'])) ?>바이트</strong>를 썼습니다(최대 <?= $this->e(number_format($ev['sms_limit'])) ?>바이트). 한글은 한 자에 2바이트입니다.<?php if ($ev['sms_bytes'] > 0): ?> <?= $ev['sms_kind'] === 'lms' ? '90바이트를 넘어 LMS 로 나갑니다' : '아직 90바이트 안이라 SMS 로 나갑니다' ?> — 변수 자리에 들어갈 값만큼 더 늘어나므로 실제 발송은 이보다 깁니다.<?php endif ?></p>
                 <p class="fieldset-label">쓸 수 있는 변수: <?php foreach ($ev['vars'] as $i => $var): ?><?= $i > 0 ? ', ' : '' ?><code>#{<?= $this->e($var) ?>}</code><?php endforeach ?>. 다른 이름을 쓰면 저장할 때 거절합니다.</p>
               </fieldset>
             </div>

@@ -363,24 +363,46 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertSame('', $app->notifySettings()->formValues()['password_reset']['sms_body_stored']);
     }
 
-    /** 한계가 저장 버튼을 누른 뒤에야 나타나면 늦다 — 지금 몇 바이트인지 보여준다. */
+    /**
+     * 한계가 저장 버튼을 누른 뒤에야 나타나면 늦다 — 지금 몇 바이트인지, 그리고 SMS 와
+     * LMS 중 어느 쪽으로 나가는지(요금이 갈리는 자리다) 보여준다. 두 갈래를 **둘 다**
+     * 본다: 한쪽만 보면 화면이 어느 본문에나 같은 문장을 찍어도 통과한다.
+     */
     #[DataProvider('connectionProvider')]
-    public function testTheScreenShowsHowManyBytesTheBodyUses(array $dbConfig): void
+    public function testTheScreenShowsHowManyBytesTheBodyUsesAndWhichChannelItBecomes(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
-        // '안녕하세요'(10) + 공백(1) + '#{링크}'(#·{·}·링크 = 1+1+1+4) = 18바이트.
+        // '안녕하세요'(10) + 공백(1) + '#{링크}'(#·{·}·링크 = 1+1+1+4) = 18바이트 → SMS.
         $this->post($app, '/admin/settings/notifications/save', [
             'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
             'sms' => '1', 'sms_body' => '안녕하세요 #{링크}',
         ]);
+        // 한글 50자 = 100바이트 → 90바이트를 넘어 LMS.
+        $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_changed',
+            'sms' => '1', 'sms_body' => str_repeat('가', 50),
+        ]);
 
-        $section = self::section(
-            $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
-        self::assertStringContainsString('<strong>18바이트</strong>', $section);
-        self::assertStringContainsString('90바이트까지는 SMS', $section);
-        // 다른 묶음은 제 본문(없음)을 잰다 — 한 묶음의 숫자를 일곱 곳에 베끼지 않는다.
-        self::assertStringContainsString('<strong>0바이트</strong>', self::section(
-            $this->body($this->get($app, '/admin/settings/notifications')), 'password_changed'));
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+        $short = self::section($html, 'password_reset');
+        $long = self::section($html, 'password_changed');
+
+        self::assertStringContainsString('<strong>18바이트</strong>', $short);
+        self::assertStringContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $short);
+        self::assertStringNotContainsString('90바이트를 넘어 LMS 로 나갑니다', $short);
+
+        self::assertStringContainsString('<strong>100바이트</strong>', $long);
+        self::assertStringContainsString('90바이트를 넘어 LMS 로 나갑니다', $long);
+        self::assertStringNotContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $long);
+
+        // 한계도 화면에 적혀 있어야 한다 — 숫자만 보여 주고 어디까지인지 말하지 않으면
+        // 관리자는 여전히 저장 버튼을 눌러 봐야 안다.
+        self::assertStringContainsString('최대 2,000바이트', $short);
+
+        // 본문이 없는 묶음은 제 숫자(0)를 재고, 있지도 않은 본문의 갈래를 말하지 않는다.
+        $empty = self::section($html, 'welcome');
+        self::assertStringContainsString('<strong>0바이트</strong>', $empty);
+        self::assertStringNotContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $empty);
     }
 
     /**
