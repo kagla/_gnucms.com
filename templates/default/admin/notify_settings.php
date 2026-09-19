@@ -27,6 +27,12 @@ $noTemplates = $templates === [];
       <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div>
     <?php endif ?>
 
+    <?php // 어느 묶음에도 붙지 못한 오류(카탈로그가 모르는 이벤트 키 등). 이걸 그리지
+      // 않으면 422 인데 화면은 평소와 똑같아, 저장이 거절된 사실 자체가 보이지 않는다. ?>
+    <?php if ($error !== null): ?>
+      <div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?> 설정을 저장하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.</span></div>
+    <?php endif ?>
+
     <?php // 알리고가 없거나 채널 스위치가 꺼져 있으면 여기서 무엇을 켜든 전화로는 나가지 않는다. ?>
     <?php if (!$status['configured']): ?>
       <div class="alert alert-warning">

@@ -320,12 +320,19 @@ final class AdminAligoController
         ?array $posted, array $errors, ?string $notice = null): ResponseInterface
     {
         $view = $this->notifyRows($posted);
+        // 오류를 받아 줄 묶음이 없으면(카탈로그가 모르는 이벤트 키로 저장을 시도했을 때 —
+        // 업그레이드가 이벤트를 없앤 사이 열려 있던 폼이 그렇게 들어온다) 그 오류는 어느
+        // 카드에도 그려지지 않는다. 그대로 두면 422 인데 화면은 평소와 똑같아, 관리자는
+        // 저장이 안 된 줄도 모른다. 그럴 때는 화면 맨 위에서 말한다.
+        $orphan = ($errors !== [] && !isset($view['rows'][$view['open']]))
+            ? (string) reset($errors) : null;
 
         return View::fromRequest($request)->render($response, 'admin/notify_settings', [
             'events' => $view['rows'],
             'templates' => $view['templates'],
             'open' => $view['open'],
             'errors' => $errors,
+            'error' => $orphan,
             'notice' => $notice,
             'status' => $this->app->aligo()->status(),
         ]);

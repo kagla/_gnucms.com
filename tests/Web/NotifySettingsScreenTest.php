@@ -379,6 +379,67 @@ final class NotifySettingsScreenTest extends WebTestCase
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_changed'));
     }
 
+    /**
+     * 업그레이드가 이벤트를 없앤 사이 열려 있던 폼이 그 키로 저장을 시도하면 save() 는
+     * 422 로 거절하는데, 그 오류를 받아 줄 묶음이 화면에 없다 — 그리지 않으면 422 인데
+     * 화면은 평소와 똑같아 관리자는 저장이 안 된 줄도 모른다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnUnknownEventKeySaysWhyItWasRefused(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'promotional_sms', 'mail' => '1',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('알 수 없는 알림입니다.', $this->body($response));
+        // 정상 화면과 구별되지 않으면 안 된다 — 이 문구는 성공한 화면에는 절대 없다.
+        self::assertStringNotContainsString('알 수 없는 알림입니다.',
+            $this->body($this->get($app, '/admin/settings/notifications')));
+    }
+
+    /**
+     * 요구 3의 "이유를 함께"는 별개의 약속이다. 화면 전체를 상대로 물으면 여섯 묶음 중
+     * 하나만 적어도 통과하므로, 묶음마다 제 칸 옆에 적혔는지 따로 묻는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testEveryLockedControlCarriesItsReasonInsideItsOwnCard(array $dbConfig): void
+    {
+        $html = $this->body($this->get($this->adminApp($dbConfig), '/admin/settings/notifications'));
+
+        foreach (['password_reset', 'password_changed', 'welcome', 'comment_new',
+            'email_verify', 'signup_attempt', 'social_email_verify'] as $event) {
+            $section = self::section($html, $event);
+            $inboxLocked = $event !== 'comment_new';
+            $phoneLocked = in_array($event, ['email_verify', 'signup_attempt', 'social_email_verify'], true);
+
+            self::assertSame($inboxLocked, str_contains($section, '지금은 새 댓글·답글 알림만 받습니다'), $event);
+            self::assertSame($phoneLocked, str_contains($section, '이 알림은 이메일로만 보낼 수 있습니다'), $event);
+        }
+    }
+
+    /** 저장 안내는 방금 저장한 그 알림의 이름을 불러야 한다 — 아무 이름이나 부르면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSavedNoticeNamesTheEventThatWasActuallySaved(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'email_verify', 'mail' => '1',
+        ]);
+        self::assertStringContainsString('saved=email_verify', $response->getHeaderLine('Location'));
+
+        $html = $this->body($this->get($app, '/admin/settings/notifications', ['saved' => 'email_verify']));
+        self::assertStringContainsString('「이메일 인증」 알림 설정을 저장했습니다.', $html);
+        self::assertStringNotContainsString('「비밀번호 재설정」 알림 설정을 저장했습니다.', $html);
+
+        // 카탈로그가 모르는 키를 쿼리에 실어도 문장을 지어내지 않는다.
+        $bogus = $this->body($this->get($app, '/admin/settings/notifications', ['saved' => 'promotional_sms']));
+        self::assertStringNotContainsString('알림 설정을 저장했습니다.', $bogus);
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void
