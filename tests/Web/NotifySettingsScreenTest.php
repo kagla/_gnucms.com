@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\Aligo\MessageText;
 use GnuCms\App;
+use GnuCms\Notify\Events;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -812,6 +813,53 @@ final class NotifySettingsScreenTest extends WebTestCase
     }
 
     /**
+     * **저장소와 화면이 실제로 어긋나는 상태에서 물어야 한다.** 지난 라운드의 분리는
+     * 두 테스트 모두 평범한 GET 이라 저장소와 화면이 같은 값을 말하는 자리에서만
+     * 고정됐다 — 그래서 안내 문장과 지우기 라벨을 tpl_code(화면)로 바꿔도 초록이었다.
+     * 그러면 422 카드가 **멀쩡한** T2 를 두고 「더는 쓸 수 없습니다」라고 말하고,
+     * 파괴적인 칸이 「설정(T2) 지우기」라고 적히는데 정작 지워지는 것은 T1 이다.
+     * 지우는 칸은 **실제로 지워지는 것**에 묶여 있어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheStoredTemplateIsNamedEvenWhenTheScreenShowsADifferentOne(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);     // 저장소: T1(죽음), 알림톡 켜짐
+        $this->seedSecondTemplate($app);   // 화면에서 고를 수 있는 살아 있는 T2
+
+        // T2 를 고르되 변수 연결을 덜 한 채 저장 — 거절당하고, 저장소는 T1 그대로다.
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => 'T2', 'var_map' => ['받는분' => '이름'],
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+
+        // 화면은 T2 를 고른 채로 그려진다 — 저장소와 어긋나는 상태가 실제로 만들어졌다.
+        self::assertStringContainsString('<option value="T2" selected>', $section);
+        self::assertSame('T1',
+            $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
+
+        // 죽었다는 말은 **저장된** T1 에 대한 것이어야 한다. 살아 있는 T2 를 두고 하면 거짓이다.
+        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
+        self::assertStringNotContainsString('템플릿(T2)을 더는 쓸 수 없습니다', $section);
+
+        // 지우기 라벨도 마찬가지 — 이 칸이 지우는 것은 T1 이다.
+        self::assertStringContainsString('고를 수 없게 된 템플릿 설정(T1) 지우기', $section);
+        self::assertStringNotContainsString('설정(T2) 지우기', $section);
+
+        // 그리고 실제로 지워지는 것이 라벨이 부른 그 T1 인지 끝까지 따라가 본다.
+        $cleared = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode());
+        $values = $app->notifySettings()->formValues()['password_reset'];
+        self::assertSame('', $values['alimtalk_tpl_code']);
+        self::assertSame([], $values['alimtalk_var_map']);
+    }
+
+    /**
      * 되살아났는데 알림톡도 켜져 있으면 두 가드가 모두 걸린다. 덜 구체적인 쪽이 먼저
      * 나오면 관리자는 템플릿이 돌아왔다는 말을 듣지 못한 채 「알림톡을 끄라」는 지시만
      * 받고, 그대로 따른 뒤에야 진짜 이유를 듣는다.
@@ -834,6 +882,34 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringNotContainsString('알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다', $section);
         self::assertSame('T1',
             $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
+    }
+
+    /**
+     * 「아직 고른 템플릿이 없습니다」는 알림톡을 켠 카드에서만 할 말이다. 그 조건을
+     * 지우면 기본 상태의 **모든** 카드에 경고가 붙는데, 지금껏 아무 테스트도 그것을
+     * 보지 않았다 — 켠 쪽만 확인하고 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheChooseATemplateWarningIsSilentWhereAlimtalkIsOff(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+
+        foreach (array_keys(Events::ALL) as $event) {
+            self::assertStringNotContainsString('아직 고른 템플릿이 없습니다',
+                self::section($html, $event), $event);
+        }
+
+        // 켠 카드 하나가 422 로 되돌아와도, 옆 카드까지 함께 경고를 달지는 않는다.
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '',
+        ]);
+        $body = $this->body($response);
+        self::assertStringContainsString('아직 고른 템플릿이 없습니다',
+            self::section($body, 'password_reset'));
+        self::assertStringNotContainsString('아직 고른 템플릿이 없습니다',
+            self::section($body, 'password_changed'));
     }
 
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
