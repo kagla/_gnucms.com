@@ -811,6 +811,31 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringContainsString('is-invalid', $section);
     }
 
+    /**
+     * 되살아났는데 알림톡도 켜져 있으면 두 가드가 모두 걸린다. 덜 구체적인 쪽이 먼저
+     * 나오면 관리자는 템플릿이 돌아왔다는 말을 듣지 못한 채 「알림톡을 끄라」는 지시만
+     * 받고, 그대로 따른 뒤에야 진짜 이유를 듣는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheRevivedTemplateRefusalComesBeforeTheChannelIsOnRefusal(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);   // 알림톡은 켜진 채로 둔다
+        $app->db()->update('alimtalk_templates', ['enabled' => 1], 'tpl_code = :c', ['c' => 'T1']);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('지우려던 템플릿(T1)을 지금은 다시 쓸 수 있습니다', $section);
+        self::assertStringNotContainsString('알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다', $section);
+        self::assertSame('T1',
+            $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void

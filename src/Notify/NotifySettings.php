@@ -259,21 +259,10 @@ final class NotifySettings
         // 거절되고(문자 본문을 고쳐도 함께 버려진다), 알림톡을 끄고 나면 죽은 참조가
         // 영영 남는다.
         $clearTemplate = ($input['tpl_clear'] ?? '') === '1';
-        if ($clearTemplate && $saved[$event . '.alimtalk'] === '1'
-            && $this->stringInput($input, 'tpl_code') === '') {
-            throw DomainError::validation(['tpl_clear' =>
-                '알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다. 알림톡을 끄고 저장하거나,'
-                . ' 쓸 수 있는 템플릿을 골라 주세요.']);
-        }
-        if ($saved[$event . '.alimtalk'] === '1' || $this->stringInput($input, 'tpl_code') !== '') {
-            // var_map 은 여기서 tpl_code 와 **함께 통째로** 쓰인다 — 한 칸씩 지워지거나
-            // 남거나 하는 일이 없으므로 위와 같은 질문이 생기지 않는다.
-            $saved += $this->alimtalkSettings($event, $input, $allowed);
-        }
-        // 새로 고른 템플릿이 있으면 그쪽이 이긴다(위에서 이미 썼다) — 지우기는 고를 것을
-        // 고르지 않았을 때만 적용된다. += 는 이미 있는 키를 덮지 않으므로 순서가 아니라
-        // 이 검사가 그 우선순위를 정한다.
-        if ($clearTemplate && !array_key_exists($event . '.tpl_code', $saved)) {
+        // 새로 고른 템플릿이 있으면 그쪽이 이긴다 — 지우기는 고를 것을 고르지 않았을
+        // 때만 뜻이 있다. 이 한 줄이 그 우선순위를 담고, 아래 세 갈래가 모두 이것을 쓴다.
+        $clearApplies = $clearTemplate && $this->stringInput($input, 'tpl_code') === '';
+        if ($clearApplies) {
             // **"죽었다"를 여기서 다시 따진다.** 화면은 죽은 참조에만 이 칸을 그리지만,
             // 그 판단은 화면을 그린 순간의 것이다 — 그 사이 관리자가 템플릿을 다시
             // 사용으로 바꾸거나 Templates::fetch() 가 내용을 되돌려 놓으면(이 화면의
@@ -281,6 +270,11 @@ final class NotifySettings
             // 낡은 체크 하나가 말없이 지우게 된다. 읽는 쪽의 가드만 믿지 않는 것은
             // channelsFor() 가 저장된 행을 믿지 않고 validTemplate() 로 다시 묻는 것과
             // 같은 규칙이다. 살아 있으면 지우지 않고, 조용히 넘기지도 않고, 말한다.
+            //
+            // **이 검사가 아래 "켠 채로는 못 지운다"보다 먼저다.** 둘 다 걸리는 요청
+            // (되살아났는데 알림톡도 켜져 있다)에서 순서가 반대면, 관리자는 템플릿이
+            // 돌아왔다는 말은 듣지 못한 채 "알림톡을 끄라"는 지시만 받고, 그대로 따른
+            // 뒤에야 진짜 이유를 듣는다. 두 문장 중 더 구체적인 쪽이 먼저 나와야 한다.
             $current = $this->validTemplate($event, $this->repository->all());
             if ($current !== null) {
                 throw DomainError::validation(['tpl_clear' => sprintf(
@@ -289,6 +283,20 @@ final class NotifySettings
                     . ' 화면을 새로 고쳐 확인한 뒤 다시 정해 주세요.', $current['tpl_code']
                 )]);
             }
+            if ($saved[$event . '.alimtalk'] === '1') {
+                throw DomainError::validation(['tpl_clear' =>
+                    '알림톡을 켠 채로는 템플릿 설정을 지울 수 없습니다. 알림톡을 끄고 저장하거나,'
+                    . ' 쓸 수 있는 템플릿을 골라 주세요.']);
+            }
+        }
+        if ($saved[$event . '.alimtalk'] === '1' || $this->stringInput($input, 'tpl_code') !== '') {
+            // var_map 은 여기서 tpl_code 와 **함께 통째로** 쓰인다 — 한 칸씩 지워지거나
+            // 남거나 하는 일이 없으므로 위와 같은 질문이 생기지 않는다.
+            $saved += $this->alimtalkSettings($event, $input, $allowed);
+        }
+        // $clearApplies 는 tpl_code 가 비어 있었다는 뜻이고, 그때 위 분기는 알림톡이
+        // 켜져 있으면 이미 거절했다 — 그러므로 여기 올 때 tpl_code 키는 아직 없다.
+        if ($clearApplies) {
             $saved[$event . '.tpl_code'] = '';
             $saved[$event . '.var_map'] = '[]';
         }
