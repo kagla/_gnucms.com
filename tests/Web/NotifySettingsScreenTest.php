@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Web;
 
+use GnuCms\Aligo\MessageText;
 use GnuCms\App;
 use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -38,6 +39,12 @@ final class NotifySettingsScreenTest extends WebTestCase
             'name' => '재설정 안내', 'content' => '#{고객명}님 #{주소} 에서 재설정하세요',
             'status' => 'A', 'insp_status' => 'APR', 'enabled' => $enabled,
             'fetched_at' => '2026-09-17 10:00:00']);
+    }
+
+    /** 정확히 $bytes 바이트(EUC-KR)인 본문. 한글 한 자가 2바이트, ASCII 가 1바이트다. */
+    private static function bodyOfBytes(int $bytes): string
+    {
+        return str_repeat('가', intdiv($bytes, 2)) . ($bytes % 2 === 1 ? 'a' : '');
     }
 
     /** 두 번째 승인 템플릿. 변수 이름이 T1 과 달라, 어느 쪽이 저장됐는지 헷갈릴 수 없다. */
@@ -117,8 +124,15 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertSame(422, $response->getStatusCode());
         $html = $this->body($response);
         self::assertStringContainsString('주문번호', $html);
+        $section = self::section($html, 'password_reset');
         // 거절당한 입력이 화면에서 사라지면 관리자는 방금 쓴 본문을 다시 써야 한다.
-        self::assertStringContainsString('#{주문번호}', self::section($html, 'password_reset'));
+        // textarea 안에 있는지를 묻는다 — 화면 어딘가에 그 글자가 있는지만 물으면
+        // 되돌려 준 입력 자체가 단언을 채워, 오류 표시를 통째로 지워도 통과한다.
+        self::assertMatchesRegularExpression(
+            '/<textarea[^>]*name="sms_body"[^>]*>#\{주문번호\}<\/textarea>/', $section);
+        // 그리고 어느 칸이 왜 거절됐는지 그 칸에 표시돼 있어야 한다.
+        self::assertStringContainsString('이 알림이 제공하지 않는 변수가 있습니다', $section);
+        self::assertStringContainsString('is-invalid', $section);
     }
 
     #[DataProvider('connectionProvider')]
@@ -393,44 +407,51 @@ final class NotifySettingsScreenTest extends WebTestCase
 
     /**
      * 한계가 저장 버튼을 누른 뒤에야 나타나면 늦다 — 지금 몇 바이트인지, 그리고 SMS 와
-     * LMS 중 어느 쪽으로 나가는지(요금이 갈리는 자리다) 보여준다. 두 갈래를 **둘 다**
-     * 본다: 한쪽만 보면 화면이 어느 본문에나 같은 문장을 찍어도 통과한다.
+     * LMS 중 어느 쪽으로 나가는지(요금이 갈리는 자리다) 보여준다. 경계는 상수에서 끌어
+     * 쓴다: 기대 문장을 MessageText::SMS_BYTES 로 짓기 때문에, 화면이 그 숫자를 따로
+     * 적어 두면(상수가 바뀌는 날, 또는 지금 당장 틀린 숫자를 적으면) 어긋나 깨진다.
+     * 본문은 경계 **정확히**와 경계 **+1바이트**로 만든다 — 갈림길 위에 세워 둔다.
      */
     #[DataProvider('connectionProvider')]
     public function testTheScreenShowsHowManyBytesTheBodyUsesAndWhichChannelItBecomes(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
-        // '안녕하세요'(10) + 공백(1) + '#{링크}'(#·{·}·링크 = 1+1+1+4) = 18바이트 → SMS.
+        $boundary = MessageText::SMS_BYTES;
         $this->post($app, '/admin/settings/notifications/save', [
             'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
-            'sms' => '1', 'sms_body' => '안녕하세요 #{링크}',
+            'sms' => '1', 'sms_body' => self::bodyOfBytes($boundary),
         ]);
-        // 한글 50자 = 100바이트 → 90바이트를 넘어 LMS.
         $this->post($app, '/admin/settings/notifications/save', [
             'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_changed',
-            'sms' => '1', 'sms_body' => str_repeat('가', 50),
+            'sms' => '1', 'sms_body' => self::bodyOfBytes($boundary + 1),
         ]);
 
         $html = $this->body($this->get($app, '/admin/settings/notifications'));
-        $short = self::section($html, 'password_reset');
-        $long = self::section($html, 'password_changed');
+        $atBoundary = self::section($html, 'password_reset');
+        $overBoundary = self::section($html, 'password_changed');
+        $sms = sprintf('아직 %s바이트 안이라 SMS 로 나갑니다', number_format($boundary));
+        $lms = sprintf('%s바이트를 넘어 LMS 로 나갑니다', number_format($boundary));
 
-        self::assertStringContainsString('<strong>18바이트</strong>', $short);
-        self::assertStringContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $short);
-        self::assertStringNotContainsString('90바이트를 넘어 LMS 로 나갑니다', $short);
+        self::assertStringContainsString(
+            '<strong>' . number_format($boundary) . '바이트</strong>', $atBoundary);
+        self::assertStringContainsString($sms, $atBoundary);
+        self::assertStringNotContainsString($lms, $atBoundary);
 
-        self::assertStringContainsString('<strong>100바이트</strong>', $long);
-        self::assertStringContainsString('90바이트를 넘어 LMS 로 나갑니다', $long);
-        self::assertStringNotContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $long);
+        self::assertStringContainsString(
+            '<strong>' . number_format($boundary + 1) . '바이트</strong>', $overBoundary);
+        self::assertStringContainsString($lms, $overBoundary);
+        self::assertStringNotContainsString($sms, $overBoundary);
 
         // 한계도 화면에 적혀 있어야 한다 — 숫자만 보여 주고 어디까지인지 말하지 않으면
         // 관리자는 여전히 저장 버튼을 눌러 봐야 안다.
-        self::assertStringContainsString('최대 2,000바이트', $short);
+        self::assertStringContainsString(
+            '최대 ' . number_format(MessageText::LMS_BYTES) . '바이트', $atBoundary);
 
         // 본문이 없는 묶음은 제 숫자(0)를 재고, 있지도 않은 본문의 갈래를 말하지 않는다.
-        $empty = self::section($html, 'welcome');
+        $empty = self::section($html, 'comment_new');
         self::assertStringContainsString('<strong>0바이트</strong>', $empty);
-        self::assertStringNotContainsString('아직 90바이트 안이라 SMS 로 나갑니다', $empty);
+        self::assertStringNotContainsString($sms, $empty);
+        self::assertStringNotContainsString($lms, $empty);
     }
 
     /**

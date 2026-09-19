@@ -262,6 +262,10 @@ final class AdminAligoController
             'sms_bytes' => $body === '' ? 0 : MessageText::byteLength($body),
             'sms_kind' => $body === '' ? 'sms' : MessageText::channelFor($body),
             'sms_limit' => MessageText::LMS_BYTES,
+            // 경계 숫자도 함께 내준다. 화면이 「90바이트」라고 적어 두면 그 숫자가
+            // MessageText::SMS_BYTES 와 따로 살게 되고, 상수가 바뀌는 날 화면만 옛 숫자를
+            // 말한다 — 바로 위 sms_limit 은 이미 그렇게 하고 있었다.
+            'sms_boundary' => MessageText::SMS_BYTES,
         ];
     }
 
