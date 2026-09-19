@@ -226,6 +226,10 @@ final class AdminAligoController
                 // 만든다(아래).
                 'stored_tpl_code' => $value['alimtalk_tpl_code'],
                 'tpl_dead' => $value['alimtalk_tpl_code'] !== '' && !$value['alimtalk_template_usable'],
+                // 지우기 체크는 저장된 상태가 아니라 이번 요청의 입력이다. 저장에
+                // 성공하면 참조 자체가 사라져 칸도 없어지므로 평소에는 늘 꺼진 채로
+                // 그려지고, 422 되보여주기에서만 아래 withPostedInput() 이 되살린다.
+                'tpl_clear' => false,
             ];
             $row += self::bodySize($row['sms_body']);
             if ($postedEvent === $key) {
@@ -352,6 +356,11 @@ final class AdminAligoController
         }
         $row['var_map'] = $map;
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
+        // 이 칸이 빠지면, 「알림톡을 끄고 저장하세요」라는 422 의 지시를 그대로 따른
+        // 관리자가 303 과 「저장했습니다」를 받고도 참조는 그대로인 화면을 보게 된다 —
+        // 화면이 시킨 대로 했는데 조용히 버려지는 수정이다. 카드의 모든 칸은 422 를
+        // 건너 살아남아야 하고, 이 칸만 예외였다.
+        $row['tpl_clear'] = ($posted['tpl_clear'] ?? '') === '1';
         // 크기는 방금 들어온 본문으로 다시 잰다 — 거절당한 이유가 길이일 때 화면이
         // 저장된 옛 본문의 크기를 보여주면 관리자는 무엇을 줄여야 하는지 알 수 없다.
         $row = array_replace($row, self::bodySize($row['sms_body']));

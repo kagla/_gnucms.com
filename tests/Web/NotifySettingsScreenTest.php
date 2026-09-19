@@ -699,6 +699,52 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringNotContainsString('알림 설정을 저장했습니다.', $bogus);
     }
 
+    /**
+     * 카드의 **모든** 칸은 422 를 건너 살아남아야 한다. 지우기 체크만 예외였다: 화면이
+     * 「알림톡을 끄고 저장하거나…」라고 시키는 대로 따른 관리자가 303 과 「저장했습니다」를
+     * 받고도 참조는 그대로인 화면을 보게 된다 — 시킨 대로 했는데 조용히 버려지는 수정이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheClearTickSurvivesA422SoObeyingTheScreenActuallyWorks(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);
+
+        // 1) 켠 채로 지우려 한다 — 거절당하고, 알림톡을 끄라는 안내를 받는다.
+        $refused = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+        self::assertSame(422, $refused->getStatusCode());
+        $section = self::section($this->body($refused), 'password_reset');
+        self::assertStringContainsString('checked', self::checkbox($section, 'tpl_clear'));
+
+        // 2) 안내대로 알림톡만 끄고 다시 저장한다. 체크가 살아 있어야 실제로 지워진다.
+        $ok = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+        self::assertSame(303, $ok->getStatusCode());
+        self::assertSame('', $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
+    }
+
+    /** 체크하지 않은 422 에서 체크가 생겨나도 안 된다 — 되살리기는 되돌리기지 켜기가 아니다. */
+    #[DataProvider('connectionProvider')]
+    public function testAnUntickedClearBoxStaysUntickedOnA422(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app);
+
+        $refused = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'alimtalk' => '1', 'tpl_code' => '',
+        ]);
+
+        self::assertSame(422, $refused->getStatusCode());
+        $section = self::section($this->body($refused), 'password_reset');
+        self::assertStringNotContainsString('checked', self::checkbox($section, 'tpl_clear'));
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void

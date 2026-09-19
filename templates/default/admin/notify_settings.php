@@ -209,7 +209,7 @@ $noTemplates = $templates === [];
                 <fieldset class="fieldset<?php if (array_key_exists('tpl_clear', $rowErrors)): ?> is-invalid<?php endif ?>">
                   <legend class="fieldset-legend">고를 수 없게 된 템플릿 설정</legend>
                   <label class="label toggle-row">
-                    <input type="checkbox" name="tpl_clear" value="1">
+                    <input type="checkbox" name="tpl_clear" value="1"<?= $ev['tpl_clear'] ? ' checked' : '' ?>>
                     <span>고를 수 없게 된 템플릿 설정(<?= $this->e($ev['stored_tpl_code']) ?>) 지우기</span>
                   </label>
                   <?php if (array_key_exists('tpl_clear', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_clear']) ?></p><?php endif ?>
