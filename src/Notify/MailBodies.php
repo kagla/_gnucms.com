@@ -10,15 +10,17 @@ use GnuCms\Error\DomainError;
  * 이벤트마다 메일 제목·본문을 만든다. 문자·알림톡과 달리 메일 문구는 관리자가 고치지
  * 않는다 — 지금 코어가 보내는 문구를 그대로 쓰는 것이 이 클래스의 목적이다.
  *
- * **다섯 통은 옮겨 온 것이다.** password_reset·password_changed·email_verify·
- * signup_attempt 는 AccountService(:84, :174, :331, :369)가, social_email_verify 는
- * SocialAuthService(:55)가 지금 보내고 있는 문구를 **한 글자도 바꾸지 않고** 옮겼다.
- * 링크·유효시간·일시처럼 호출 자리에서 만들던 값만 카탈로그 변수로 빼냈으므로, 같은
- * 값을 넣으면 결과 문자열은 지금과 바이트 단위로 같다. MailBodiesTest 가 그 문자열을
- * 그대로 박아 두고 지킨다.
+ * **다섯 통은 옮겨 온 것이다.** 이 브랜치 이전에 signup_attempt 는
+ * AccountService::register() 가, password_reset 은 requestPasswordReset() 이,
+ * password_changed 는 notifyPasswordChanged() 가, email_verify 는 sendVerification() 이,
+ * social_email_verify 는 SocialAuthService::sendPendingEmail() 이 직접 메일러로
+ * 보내고 있었다. 그 문구를 **한 글자도 바꾸지 않고** 여기로 옮겼고, 그 자리들은 이제
+ * Notifier 를 부른다. 링크·유효시간·일시처럼 호출 자리에서 만들던 값만 카탈로그
+ * 변수로 빼냈으므로, 같은 값을 넣으면 결과 문자열은 옮겨 오기 전과 바이트 단위로 같다.
+ * MailBodiesTest 가 그 문자열을 그대로 박아 두고 지킨다.
  *
- * 그 값들을 어떤 모양으로 넣어야 지금과 같아지는지는 이렇다(계획 5 가 호출 자리를
- * 옮길 때 지켜야 한다):
+ * 그 값들을 어떤 모양으로 넣어야 옮겨 오기 전과 같아지는지는 이렇다 — 호출 자리는
+ * 지금 이 모양으로 넣고 있다:
  *   - 유효시간: '1시간'·'24시간'·'30분'처럼 **단위까지 포함한** 문자열. 본문은
  *     "이 링크는 {유효시간} 동안 유효합니다"로 쓴다.
  *   - 일시: Clock::now() 뒤에 ' (UTC)'까지 붙인 **화면에 보일 그대로**의 문자열.

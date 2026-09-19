@@ -375,9 +375,9 @@ final class UserRepository
     /**
      * 프로필·관리자 수정에서 번호만 바꾼다. updateDisplayName()·updateForAdmin() 과
      * 나란히 두 번째 UPDATE 로 도는 이유는 updateForAdmin() 이 상태가 바뀔 때만
-     * session_epoch 를 올리는 부수효과를 갖고 있어서다(:319-321) — 번호 저장이
-     * 그 판단에 끼어들면 상태를 안 바꿨는데도 세션이 끊기거나, 반대로 번호 칸
-     * 하나 때문에 그 메서드의 이름과 책임이 흐려진다. 세션은 건드리지 않는다.
+     * session_epoch 를 올리는 부수효과를 갖고 있어서다(그 메서드 안의 $epoch 계산) —
+     * 번호 저장이 그 판단에 끼어들면 상태를 안 바꿨는데도 세션이 끊기거나, 반대로
+     * 번호 칸 하나 때문에 그 메서드의 이름과 책임이 흐려진다. 세션은 건드리지 않는다.
      */
     public function updatePhone(int $id, ?string $phone): void
     {
