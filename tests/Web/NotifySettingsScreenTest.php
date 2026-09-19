@@ -745,6 +745,36 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringNotContainsString('checked', self::checkbox($section, 'tpl_clear'));
     }
 
+    /**
+     * 화면이 "죽었다"고 판단한 것은 화면을 그린 순간의 일이다. 그 사이 템플릿이 되살아나면
+     * (관리자가 다시 사용으로 바꾸거나 다시 가져오면 — 이 화면의 안내가 권하는 바로 그
+     * 일이다) 낡은 체크 하나가 멀쩡한 설정을 지우게 된다. 저장이 스스로 다시 따져야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAStaleClearTickForARevivedTemplateIsRefusedNotObeyed(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seedDeadTemplate($app, false);
+        // 화면을 열어 둔 사이 승인이 돌아왔다.
+        $app->db()->update('alimtalk_templates', ['enabled' => 1], 'tpl_code = :c', ['c' => 'T1']);
+
+        $response = $this->post($app, '/admin/settings/notifications/save', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+            'mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1',
+        ]);
+
+        self::assertSame(422, $response->getStatusCode());
+        $values = $app->notifySettings()->formValues()['password_reset'];
+        self::assertSame('T1', $values['alimtalk_tpl_code']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
+        $section = self::section($this->body($response), 'password_reset');
+        self::assertStringContainsString('지금은 다시 쓸 수 있습니다', $section);
+        self::assertStringContainsString('아무것도 지우지 않았습니다', $section);
+        // 되살아났으므로 지우기 칸 자체가 없다 — 그래도 422 는 무언가를 가리켜야 한다.
+        self::assertStringNotContainsString('name="tpl_clear"', $section);
+        self::assertStringContainsString('is-invalid', $section);
+    }
+
     /** 알리고가 없으면 여기서 무엇을 켜든 전화로는 나가지 않는다 — 그 사실을 화면이 말해야 한다. */
     #[DataProvider('connectionProvider')]
     public function testTheScreenSaysPhoneChannelsCannotSendWhileAligoIsNotConnected(array $dbConfig): void

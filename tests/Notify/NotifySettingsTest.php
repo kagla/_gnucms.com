@@ -581,6 +581,35 @@ final class NotifySettingsTest extends DatabaseTestCase
             $settings->formValues()['password_reset']['alimtalk_template_usable']);
     }
 
+    /**
+     * 지우기 체크가 도착했을 때 "정말 죽었는가"는 저장이 스스로 다시 따져야 한다.
+     * 화면의 가드만 믿으면, 화면을 그린 뒤 템플릿이 되살아난 사이에 도착한 낡은 체크
+     * 하나가 멀쩡한 tpl_code·var_map 을 말없이 지운다 — channelsFor() 가 저장된 행을
+     * 믿지 않고 validTemplate() 로 다시 묻는 것과 같은 자리, 같은 이유다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTplClearIsRefusedWhenTheTemplateCameBackToLife(array $config): void
+    {
+        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
+        $templates->setEnabled('T1', false);
+        $settings->save('password_reset', ['mail' => '1']);
+        // 화면을 열어 둔 사이 승인이 돌아왔다.
+        $templates->setEnabled('T1', true);
+
+        try {
+            $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
+            self::fail('되살아난 템플릿을 낡은 체크로 지워서는 안 된다');
+        } catch (DomainError $e) {
+            self::assertArrayHasKey('tpl_clear', $e->details());
+        }
+
+        $values = $settings->formValues()['password_reset'];
+        self::assertSame('T1', $values['alimtalk_tpl_code']);
+        self::assertSame(['고객명' => '이름', '주소' => '링크'], $values['alimtalk_var_map']);
+    }
+
     /** smsBody() 도 같은 함정이 있다 — 문자를 끄면 본문은 저장소에 남지만 더는
      *  내주지 않는다. */
     #[DataProvider('connectionProvider')]

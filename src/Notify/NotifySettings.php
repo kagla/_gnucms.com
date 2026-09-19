@@ -274,6 +274,21 @@ final class NotifySettings
         // 고르지 않았을 때만 적용된다. += 는 이미 있는 키를 덮지 않으므로 순서가 아니라
         // 이 검사가 그 우선순위를 정한다.
         if ($clearTemplate && !array_key_exists($event . '.tpl_code', $saved)) {
+            // **"죽었다"를 여기서 다시 따진다.** 화면은 죽은 참조에만 이 칸을 그리지만,
+            // 그 판단은 화면을 그린 순간의 것이다 — 그 사이 관리자가 템플릿을 다시
+            // 사용으로 바꾸거나 Templates::fetch() 가 내용을 되돌려 놓으면(이 화면의
+            // 안내문이 「다시 가져오거나」라고 권하는 바로 그 일이다) 살아난 설정을
+            // 낡은 체크 하나가 말없이 지우게 된다. 읽는 쪽의 가드만 믿지 않는 것은
+            // channelsFor() 가 저장된 행을 믿지 않고 validTemplate() 로 다시 묻는 것과
+            // 같은 규칙이다. 살아 있으면 지우지 않고, 조용히 넘기지도 않고, 말한다.
+            $current = $this->validTemplate($event, $this->repository->all());
+            if ($current !== null) {
+                throw DomainError::validation(['tpl_clear' => sprintf(
+                    '지우려던 템플릿(%s)을 지금은 다시 쓸 수 있습니다 — 그 사이 승인이 돌아왔거나'
+                    . ' 템플릿을 다시 가져온 것으로 보입니다. 아무것도 지우지 않았습니다.'
+                    . ' 화면을 새로 고쳐 확인한 뒤 다시 정해 주세요.', $current['tpl_code']
+                )]);
+            }
             $saved[$event . '.tpl_code'] = '';
             $saved[$event . '.var_map'] = '[]';
         }

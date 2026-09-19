@@ -181,7 +181,12 @@ $noTemplates = $templates === [];
                 // 바로 그 상태)에서 "저장하지 못했습니다"만 뜨고 어느 칸이 문제인지는 아무
                 // 데도 표시되지 않았다. 422 인데 아무것도 가리키지 않는 화면은 거절하지 않은
                 // 것과 거의 같다.
-                $tplInvalid = array_key_exists('tpl_code', $rowErrors) || array_key_exists('var_map', $rowErrors);
+                // 지우기 오류는 그 칸이 그려질 때(죽은 참조일 때)는 그 칸 옆에 붙는다.
+                // 참조가 그 사이 되살아나 칸 자체가 사라진 경우에는 붙을 곳이 없으므로
+                // 여기서 받는다 — 붙을 곳 없는 422 는 아무것도 가리키지 않는 422 다.
+                $clearOrphaned = array_key_exists('tpl_clear', $rowErrors) && !$ev['tpl_dead'];
+                $tplInvalid = array_key_exists('tpl_code', $rowErrors)
+                    || array_key_exists('var_map', $rowErrors) || $clearOrphaned;
               ?>
               <fieldset class="fieldset<?= $tplInvalid ? ' is-invalid' : '' ?>">
                 <legend class="fieldset-legend">쓸 템플릿</legend>
@@ -198,6 +203,7 @@ $noTemplates = $templates === [];
                 <?php endif ?>
                 <?php if (array_key_exists('tpl_code', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_code']) ?></p><?php endif ?>
                 <?php if (array_key_exists('var_map', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['var_map']) ?></p><?php endif ?>
+                <?php if ($clearOrphaned): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['tpl_clear']) ?></p><?php endif ?>
               </fieldset>
 
               <?php
