@@ -215,6 +215,10 @@ final class AdminAligoController
         ], $this->app->aligo()->templates->usable());
         $postedEvent = is_array($posted) && is_scalar($posted['event'] ?? null)
             ? (string) $posted['event'] : '';
+        // 가입에서 번호를 받는지는 CmsService 가 정규화한 값으로 읽는다 — 저장소를
+        // 직접 읽으면 손상된 값(라디오 밖의 값)이 그대로 올라와 세 값 가운데
+        // 무엇도 아닌 상태로 이 판단을 하게 된다.
+        $signupPhone = (string) ($this->app->cmsService()->settings()['signup_phone'] ?? 'off');
         $rows = [];
         foreach ($values as $key => $value) {
             $on = [];
@@ -259,6 +263,7 @@ final class AdminAligoController
             // 가리킨다. 예전에는 그래서 덮을 때 문장을 통째로 지웠는데, 그러면 죽은
             // 템플릿이라는 가장 중요한 사실이 하필 저장이 거절된 화면에서만 사라졌다.
             $row['alimtalk_notice'] = self::alimtalkNotice($row);
+            $row['reach_notice'] = self::reachNotice($row, $signupPhone);
             $row['sms_notice'] = self::smsNotice($row);
             $row['alimtalk_off_notice'] = self::alimtalkOffNotice($row);
             $rows[$key] = $row;
@@ -328,6 +333,41 @@ final class AdminAligoController
                 : '알림톡은 꺼져 있고, 지금 이대로는 켤 수도 없습니다.',
             $row['stored_tpl_code']
         );
+    }
+
+    /**
+     * **가입에서 번호를 받지 않는데 이 알림을 전화로만 켠** 카드에 붙는 경고.
+     *
+     * 두 화면이 각자 참을 말하면서 함께 거짓이 되는 자리다. 가입 문지기는
+     * `email_verify` 가 닿는지만 묻고(그 이벤트는 전화 채널을 쓸 수 없다), 재설정
+     * 화면은 "누구에게든 보낼 수 있는가"를 묻는다 — 문자만 켜 두면 둘 다 참이다.
+     * 그런데 가입이 번호를 받지 않으면 그 사이트의 회원에게는 번호가 없고,
+     * `password_reset` 이 전화로만 나가는 순간 그 사람은 자기 계정 밖에 갇힌다.
+     *
+     * **가입을 막지는 않는다.** 재설정 설정 때문에 가입이 거절되는 것은 더 나쁜
+     * 놀라움이다. 대신 그 조합을 **고르는 자리**인 이 화면이 말한다 — 지금까지
+     * 이 화면은 알리고 미연결·스위치 꺼짐·테스트 모드·템플릿 없음은 모두 경고하면서
+     * 이 조합만 침묵했다.
+     *
+     * 판단은 화면에 그려진 체크 상태로 한다(방금 고른 것에 대고 말해야 한다).
+     * 전화를 쓸 수 없는 이벤트는 애초에 해당이 없고, 메일이나 알림함이 하나라도
+     * 켜져 있으면 번호 없는 회원에게도 길이 남아 있으므로 말하지 않는다.
+     */
+    private static function reachNotice(array $row, string $signupPhone): ?string
+    {
+        $phoneOnly = ($row['on']['sms'] || $row['on']['alimtalk'])
+            && !$row['on']['mail'] && !$row['on']['inbox'];
+        if (!$row['phone'] || !$phoneOnly || $signupPhone !== 'off') {
+            return null;
+        }
+
+        return '가입 화면에서 휴대폰번호를 받지 않도록 해 두었는데(설정 → 회원·글쓰기) 이 알림은'
+            . ' 전화로만 나가도록 켜져 있습니다. 번호가 없는 회원에게는 이 알림이 가지 않습니다'
+            . ($row['key'] === 'password_reset'
+                ? ' — 그 회원은 비밀번호를 스스로 되찾을 수 없습니다.'
+                : '.')
+            . ' 메일을 함께 켜거나, 가입에서 번호를 받도록 바꿔 주세요. 관리자가 회원 수정에서'
+            . ' 번호를 채워 준 회원에게는 그대로 나갑니다.';
     }
 
     /**

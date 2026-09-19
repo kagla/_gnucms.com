@@ -85,6 +85,9 @@ $noTemplates = $templates === [];
             <span class="badge badge-sm badge-success badge-soft"><?= $this->e($channelLabels[$c]) ?></span>
           <?php endforeach; endif ?>
           <?php if ($ev['alimtalk_notice'] !== null): ?><span class="badge badge-sm badge-warning badge-soft">알림톡이 나가지 않음</span><?php endif ?>
+          <?php // 접힌 카드에서도 보여야 한다 — 이 조합의 문제는 카드를 펴 보지 않는
+            // 관리자에게 일어난다. ?>
+          <?php if ($ev['reach_notice'] !== null): ?><span class="badge badge-sm badge-warning badge-soft">번호 없는 회원에게 안 감</span><?php endif ?>
         </summary>
 
         <form method="post" action="<?= $this->url('admin.settings.notifications.save') ?>">
@@ -105,6 +108,15 @@ $noTemplates = $templates === [];
             <div class="alert alert-warning">
               <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
               <span><?= $this->e($ev['alimtalk_notice']) ?></span>
+            </div>
+          <?php endif ?>
+          <?php // 가입에서 번호를 받지 않는 사이트가 이 알림을 전화로만 켠 경우. 두 화면이
+            // 각자 참을 말하면서 함께 거짓이 되는 자리이고, 그 조합을 고르는 자리는
+            // 여기다(reachNotice() 주석). ?>
+          <?php if ($ev['reach_notice'] !== null): ?>
+            <div class="alert alert-warning">
+              <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
+              <span><?= $this->e($ev['reach_notice']) ?> <a href="<?= $this->url('admin.settings.writing') ?>">설정 → 회원·글쓰기</a></span>
             </div>
           <?php endif ?>
 

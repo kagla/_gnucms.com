@@ -94,6 +94,76 @@ final class NotifySettingsScreenTest extends WebTestCase
         return substr($html, $start, $end - $start);
     }
 
+    /**
+     * 가입에서 번호를 받지 않는 사이트가 비밀번호 재설정을 전화로만 켜 두면, 그
+     * 사이트의 회원은 비밀번호를 스스로 되찾을 수 없다. 가입 문지기도 재설정 화면도
+     * 각자 참을 말하므로(하나는 email_verify 만, 다른 하나는 "누구에게든"을 묻는다)
+     * 그 조합을 아는 자리는 이 화면뿐인데, 여기가 침묵하고 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testWarnsWhenTheResetNotificationIsPhoneOnlyAndSignupTakesNoNumber(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
+        $app->notifySettings()->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+
+        $reset = self::section($html, 'password_reset');
+        self::assertStringContainsString('번호가 없는 회원에게는 이 알림이 가지 않습니다', $reset);
+        self::assertStringContainsString('비밀번호를 스스로 되찾을 수 없습니다', $reset);
+        self::assertStringContainsString('/admin/settings/writing', $reset);
+        // 접힌 카드에서도 보이도록 요약 줄에 배지가 붙는다.
+        self::assertStringContainsString('번호 없는 회원에게 안 감', $html);
+        // 경고는 그 카드의 것이다 — 아무 데도 켜 두지 않은 다른 카드가 함께 경고하면,
+        // 이 화면은 설정과 무관한 문장을 늘 띄우는 화면이 된다.
+        self::assertStringNotContainsString('번호가 없는 회원에게는',
+            self::section($html, 'welcome'));
+    }
+
+    /**
+     * 대조군 둘. 가입이 번호를 받으면(선택 입력이어도) 이 경고는 뜨지 않고, 메일을
+     * 함께 켜 두어도 뜨지 않는다 — 번호 없는 회원에게도 길이 남아 있기 때문이다.
+     * 이 둘이 없으면 "늘 경고한다"는 구현으로도 위 시험이 통과한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheReachWarningIsSilentWhenSignupTakesNumbersOrMailIsOnToo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
+        $app->notifySettings()->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+        self::assertStringNotContainsString('번호가 없는 회원에게는', self::section($html, 'password_reset'));
+        self::assertStringNotContainsString('번호 없는 회원에게 안 감', $html);
+
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
+        $app->notifySettings()->save('password_reset',
+            ['mail' => '1', 'sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+        self::assertStringNotContainsString('번호가 없는 회원에게는', self::section($html, 'password_reset'));
+    }
+
+    /**
+     * 같은 셈은 전화로 보낼 수 있는 다른 알림에도 선다 — 다만 계정을 잃는 것은
+     * 재설정뿐이므로 그 한 문장은 재설정 카드에만 붙는다. 문장이 모든 카드에서 같으면
+     * 관리자는 급한 정도를 가릴 수 없다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnotherPhoneCapableEventWarnsWithoutTheLockedOutSentence(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
+        $app->notifySettings()->save('comment_new', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+
+        $html = $this->body($this->get($app, '/admin/settings/notifications'));
+
+        $comment = self::section($html, 'comment_new');
+        self::assertStringContainsString('번호가 없는 회원에게는 이 알림이 가지 않습니다', $comment);
+        self::assertStringNotContainsString('비밀번호를 스스로 되찾을 수 없습니다', $comment);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testShowsEveryEventAndLocksPhoneColumnsWhereNotPossible(array $dbConfig): void
     {
