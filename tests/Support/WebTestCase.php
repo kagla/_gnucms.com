@@ -193,15 +193,25 @@ abstract class WebTestCase extends DatabaseTestCase
         return new Acl(Identity::user((string) $id, '관리자', true));
     }
 
-    protected function get(App $app, string $path, array $query = []): ResponseInterface
+    protected function get(App $app, string $path, array $query = [], array $server = []): ResponseInterface
     {
-        return $this->request($app, 'GET', $path, $query);
+        return $this->request($app, 'GET', $path, $query, $server);
     }
 
-    protected function request(App $app, string $method, string $path, array $query = []): ResponseInterface
+    /**
+     * $server 는 post() 와 같은 $_SERVER 형태의 값이다. 진짜 SAPI 는 그중 HTTP_* 를 요청
+     * 헤더로도 만들어 주므로(Slim 의 createFromGlobals 가 하는 일) 여기서도 같이 심는다 —
+     * 헤더로 UA 를 읽는 코드(결제 페이지의 기기 판별)가 테스트에서만 빈 값을 보지 않게.
+     */
+    protected function request(App $app, string $method, string $path, array $query = [], array $server = []): ResponseInterface
     {
         $uri = $path . ($query === [] ? '' : '?' . http_build_query($query));
-        $request = (new ServerRequestFactory())->createServerRequest($method, $uri);
+        $request = (new ServerRequestFactory())->createServerRequest($method, $uri, $server);
+        foreach ($server as $name => $value) {
+            if (is_string($name) && is_string($value) && str_starts_with($name, 'HTTP_')) {
+                $request = $request->withHeader(strtr(strtolower(substr($name, 5)), '_', '-'), $value);
+            }
+        }
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }

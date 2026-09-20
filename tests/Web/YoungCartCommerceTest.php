@@ -134,6 +134,22 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertSame(404, $this->get($this->app, '/shop/pay', ['number' => $order['number']])->getStatusCode());
     }
 
+    /** 모바일 브라우저는 스크립트 결제창이 아니라 이니시스 모바일 폼(EUC-KR)을 직접 제출한다. */
+    #[DataProvider('connectionProvider')]
+    public function testPayPageRendersTheInicisMobileFormForAPhone(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $html = $this->body($this->get($this->app, '/shop/pay', ['number' => $order['number']],
+            ['HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148']));
+        self::assertStringContainsString('name="P_INI_PAYMENT" value="CARD"', $html);
+        self::assertStringContainsString('action="https://stgmobile.inicis.com/smart/payment/"', $html);
+        self::assertStringContainsString('accept-charset="EUC-KR"', $html);
+        self::assertStringContainsString('id="yc-pay-form"', $html);
+        self::assertStringContainsString('id="yc-pay-button" type="submit"', $html);
+        self::assertStringNotContainsString('INIStdPay.js', $html);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testCallbackNeedsTheOrderStateAndMarksTheOrderPaid(array $config): void
     {
