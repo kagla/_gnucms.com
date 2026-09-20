@@ -239,14 +239,24 @@ final class Orders
         return $this->markPaid($id, $actor, (int) $order['total'], ['confirmed_by' => $actor], Clock::timestamp(), '입금을 확인했습니다.');
     }
 
-    /** 환불 누계와 이력. 결제사 환불은 Payments 가 먼저 성공시키고 부른다. 상태는 바꾸지 않는다. */
-    public function recordRefund(int $id, int $amount, string $actor, string $reason): array
+    /**
+     * 환불 누계와 이력. 결제사 환불은 Payments 가 먼저 성공시키고 부른다. 상태는 바꾸지 않는다.
+     * $key 는 그 환불 요청의 고유 키다. 이미 기록한 키면 금액도 이력도 더하지 않는다 — 결제
+     * 계층도 같은 키의 재요청을 캐시된 결과로 돌려주므로(PG 를 다시 부르지 않는다) 여기서
+     * 세지 않으면 한 번의 환불이 두 번 빠진다.
+     */
+    public function recordRefund(int $id, int $amount, string $actor, string $reason, string $key): array
     {
-        $this->store->transaction(function () use ($id, $amount, $actor, $reason): void {
+        $this->store->transaction(function () use ($id, $amount, $actor, $reason, $key): void {
             $order = $this->get($id);
+            $keys = is_array($order['payment']['refund_keys'] ?? null) ? $order['payment']['refund_keys'] : [];
+            if (in_array($key, $keys, true)) return;
             $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
             if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
-            $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, updated_at = ? WHERE id = ?', [$amount, Clock::timestamp(), $id]);
+            $keys[] = $key;
+            $detail = ['refund_keys' => array_values($keys)] + $order['payment'];
+            $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, payment_detail = ?, updated_at = ? WHERE id = ?',
+                [$amount, json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id]);
             $this->history($id, $order['status'], $actor, '환불 ' . number_format($amount) . '원: ' . $reason);
         });
         return $this->get($id);

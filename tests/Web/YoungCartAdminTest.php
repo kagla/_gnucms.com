@@ -119,6 +119,20 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertStringContainsString('환불을 처리했습니다', $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id'], 'saved' => 'refund'])));
     }
 
+    /** 같은 환불 폼이 두 번 도착해도(이중 제출·새로고침) 금액은 한 번만 빠진다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSameRefundFormPostedTwiceRefundsOnce(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
+        $this->signIn(true);
+        $form = $this->csrf(['id' => $order['id'], 'action' => 'refund', 'amount' => '2000', 'reason' => '고객 요청', 'refund_key' => bin2hex(random_bytes(16))]);
+        self::assertSame(303, $this->post($this->app, '/admin/shop/orders/detail', $form)->getStatusCode());
+        self::assertSame(303, $this->post($this->app, '/admin/shop/orders/detail', $form)->getStatusCode());
+        self::assertSame(2000, (int) $this->shop->orders->get((int) $order['id'])['refunded_amount']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testRefundFormValidatesAmountAndReason(array $config): void
     {

@@ -158,7 +158,7 @@ final class Payments
             $gw = self::gatewayOrder($order);
             ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->cancel($gw, $amount, $remaining, $reason, $key));
         }
-        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason);
+        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key);
     }
 
     /** 결제사 승인이 진행 중이거나 끝난 주문인지. 만료 취소가 이런 주문을 건너뛴다. */

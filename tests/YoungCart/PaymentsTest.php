@@ -283,6 +283,35 @@ final class PaymentsTest extends YoungCartTestCase
         catch (DomainError $e) { self::assertArrayHasKey('refund', $e->details()); }
     }
 
+    /** 같은 환불 요청 키는 한 번만 센다 — 관리자가 폼을 두 번 보내거나 응답이 유실돼 다시 눌러도. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSameRefundKeyIsCountedOnce(array $config): void
+    {
+        $this->setupPayments($config);
+        $manual = $this->place('manual_transfer');
+        $paid = $this->shop->orders->confirmDeposit((int) $manual['id'], 'admin');
+        $key = bin2hex(random_bytes(16));
+        $after = $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin');
+        self::assertSame(2000, (int) $after['refunded_amount']);
+        $count = count($after['history']);
+        $again = $this->shop->payments->refund($this->shop->orders->get((int) $manual['id']), 2000, '배송비 조정', $key, 'admin');
+        self::assertSame(2000, (int) $again['refunded_amount']);
+        self::assertCount($count, $again['history'], '같은 키는 이력도 한 번이다');
+
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $this->queueApproval($card, bin2hex(random_bytes(20)));
+        $paidCard = $this->shop->payments->complete($card, $this->authCallback($card));
+        $cardKey = bin2hex(random_bytes(16));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'prtcTid' => bin2hex(random_bytes(20))]];
+        self::assertSame(2000, (int) $this->shop->payments->refund($paidCard, 2000, '부분 환불', $cardKey, 'admin')['refunded_amount']);
+        // 결제사 환불은 성공했는데 응답이 유실돼 관리자가 같은 요청을 다시 보낸 경우(주문 상태는 아직 그대로다).
+        $calls = count($this->http->calls);
+        $repeat = $this->shop->payments->refund($paidCard, 2000, '부분 환불', $cardKey, 'admin');
+        self::assertSame(2000, (int) $repeat['refunded_amount']);
+        self::assertCount($calls, $this->http->calls, '결제 계층이 캐시한 결과를 쓰므로 PG 를 다시 부르지 않는다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testOverdueUnpaidOrdersExpireAndReturnStockButApprovingOnesAreLeftAlone(array $config): void
     {
