@@ -63,7 +63,7 @@ final class AdminAligoController
             );
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result));
+        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result), 'aligo-result');
     }
 
     public function verify(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -87,7 +87,7 @@ final class AdminAligoController
         try {
             $profiles = $this->app->aligo()->profiles();
         } catch (DomainError | TransportFailure $e) {
-            return $this->render($request, $response->withStatus(502), null, [], $e->getMessage(), null, []);
+            return $this->render($request, $response->withStatus(502), null, [], $e->getMessage(), null, [], null, 'profiles');
         }
 
         return $this->render($request, $response, null, [], null, null, $profiles);
@@ -115,7 +115,28 @@ final class AdminAligoController
             return $this->render($request, $response->withStatus(422), null, $e->details(), null, null, []);
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result));
+        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result), 'aligo-result');
+    }
+
+    /**
+     * 저장된 API 키를 되돌려 준다 — 화면의 눈 버튼이 fetch 로 부른다. 메일 설정의 앱 비밀번호
+     * 보기(AdminCmsController::mailPassword())와 같은 규칙이다: 페이지 HTML 에는 키를 싣지
+     * 않고(소스 보기에 나오면 안 된다), 관리자가 눌렀을 때만 CSRF 를 확인한 POST 로 내주며,
+     * 응답은 캐시하지 않는다.
+     */
+    public function apiKey(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->assertCsrf($this->input($request));
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $account = $this->app->aligo()->settings->runtime();
+        $response->getBody()->write((string) json_encode(
+            ['api_key' => (string) ($account['api_key'] ?? '')],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     /**
@@ -512,8 +533,8 @@ final class AdminAligoController
 
     /**
      * 저장이 실패했을 때 다시 보여줄 값. 관리자가 방금 입력한 값을 그대로 돌려주되
-     * API 키 두 칸만은 절대 담지 않는다 — 입력이 잘못됐다고 해서 화면이 방금 받은
-     * 평문 키를 그대로 되비추면 안 된다. "저장됨" 표시는 실패 전 저장소 상태를 쓴다.
+     * API 키 칸만은 절대 담지 않는다 — 소스 보기에 키가 나오면 안 된다. 저장 여부 표시는
+     * 실패 전 저장소 상태를 쓴다.
      */
     private function reshow(array $input): array
     {
@@ -522,8 +543,6 @@ final class AdminAligoController
         $values = $input;
         $values['api_key'] = '';
         $values['api_key_set'] = $current['api_key_set'];
-        $values['alimtalk_api_key'] = '';
-        $values['alimtalk_api_key_set'] = $current['alimtalk_api_key_set'];
         $values['test_mode'] = !empty($input['test_mode']);
         // 채널 허용 스위치는 이 폼에 없다. 저장이 실패해도 바뀌지 않았으므로 그대로 보여준다.
         $values['sms_enabled'] = $current['sms_enabled'];
@@ -534,7 +553,7 @@ final class AdminAligoController
 
     private function render(ServerRequestInterface $request, ResponseInterface $response,
         ?array $values, array $errors, ?string $error, ?array $verified, array $profiles,
-        ?array $notice = null): ResponseInterface
+        ?array $notice = null, ?string $errorAt = null): ResponseInterface
     {
         $values ??= $this->app->aligo()->settings->formValues();
         // 발신번호는 언제나 하이픈 붙은 표시용 형태로 보여준다. PhoneNumber::format() 은
@@ -547,6 +566,9 @@ final class AdminAligoController
             'status' => $this->app->aligo()->status(),
             'errors' => $errors,
             'error' => $error,
+            // 오류를 그릴 자리. 폼마다 착지 지점이 다르므로(템플릿의 #aligo-result·#aligo-profiles)
+            // 오류는 그 폼이 착지하는 자리에 그려야 보인다. null 이면 공통 자리다.
+            'error_at' => $errorAt,
             'verified' => $verified,
             'profiles' => $profiles,
             'notice' => $notice,
@@ -570,12 +592,20 @@ final class AdminAligoController
         }
     }
 
+    /**
+     * @param string $fragment 착지할 요소의 id. 폼을 보내면 새로 고침이 일어나는데 맨 위에
+     *   착지하면 방금 누른 버튼의 결과를 보려고 다시 내려가야 한다. Location 에 조각을
+     *   실으면 브라우저가 그 요소로 내려간 채 연다.
+     */
     private function redirect(ServerRequestInterface $request, ResponseInterface $response, string $route,
-        array $query = []): ResponseInterface
+        array $query = [], string $fragment = ''): ResponseInterface
     {
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor($route);
         if ($query !== []) {
             $url .= '?' . http_build_query($query);
+        }
+        if ($fragment !== '') {
+            $url .= '#' . $fragment;
         }
 
         return $response->withHeader('Location', $url)->withStatus(303);

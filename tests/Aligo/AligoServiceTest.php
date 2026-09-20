@@ -42,7 +42,7 @@ final class AligoServiceTest extends DatabaseTestCase
         $service->settings->save(['user_id' => 'shop', 'api_key' => 'K',
             'sender' => '0212345678', 'senderkey' => 'SK1']);
 
-        $transport->queue(200, '{"code":0,"ALT_CNT":120}');
+        $transport->queue(200, '{"code":0,"message":"","list":{"SMS_CNT":50,"LMS_CNT":10,"MMS_CNT":0,"ALT_CNT":120}}');
         $transport->queue(200, '{"result_code":1,"SMS_CNT":500,"LMS_CNT":100,"MMS_CNT":0}');
 
         self::assertSame([
@@ -86,7 +86,7 @@ final class AligoServiceTest extends DatabaseTestCase
         $service->settings->save(['user_id' => 'shop', 'api_key' => 'K',
             'sender' => '0212345678', 'senderkey' => 'SK1']);
 
-        $transport->queue(200, '{"code":0,"ALT_CNT":120}');
+        $transport->queue(200, '{"code":0,"message":"","list":{"SMS_CNT":50,"LMS_CNT":10,"MMS_CNT":0,"ALT_CNT":120}}');
         $transport->queue(200, '{"result_code":"-104","message":"인증에 실패했습니다."}');
 
         $result = $service->verify();

@@ -70,7 +70,7 @@ final class Notifier
      * 알아야 한다). reason() 주석이 이유를, 여기가 범위를 정한다.
      *
      * **조각으로 맞춘다.** 앞뒤에 무엇이 붙든 이 조각이 이름 안에 있으면 가린다:
-     * key 하나로 api_key·apiKey·x-api-key·aligo_key·senderkey·alimtalk_api_key 가 모두
+     * key 하나로 api_key·apiKey·x-api-key·aligo_key·senderkey 가 모두
      * 걸리고, auth 하나로 Authorization·AUTH·auth_token·oauth 가 걸린다. 처음 규칙은
      * api[_-]?key 처럼 온전한 이름을 적어 두었는데, 정작 이 저장소에서 다음 사람이 가장
      * 쓸 법한 이름(aligo_key)이 빠져 있었다.

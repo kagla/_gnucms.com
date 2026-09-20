@@ -123,6 +123,7 @@ final class Routes
         $slim->post('/admin/aligo/verify', [$aligo, 'verify'])->setName('admin.aligo.verify');
         $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
         $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
+        $slim->post('/admin/aligo/key', [$aligo, 'apiKey'])->setName('admin.aligo.key');
         $slim->get('/admin/settings/notifications', [$aligo, 'notifications'])
             ->setName('admin.settings.notifications');
         $slim->post('/admin/settings/notifications/save', [$aligo, 'saveNotifications'])

@@ -30,7 +30,10 @@ final class AlimtalkApiTest extends DatabaseTestCase
     public function testSendsCredentialsWithEveryCall(array $config): void
     {
         $api = $this->api($config);
-        $this->transport->queue(200, '{"code":0,"ALT_CNT":120,"SMS_CNT":50,"LMS_CNT":10}');
+        // 알리고 문서의 표는 건수를 최상위처럼 적지만 예시와 실제 응답은 list 안에 넣는다
+        // (2026-09-20 라이브 계정으로 확인). 표만 보고 짠 첫 구현은 항상 0건을 보여줬다.
+        $this->transport->queue(200, '{"code":0,"message":"정상적으로 호출하였습니다.",'
+            . '"list":{"SMS_CNT":50,"LMS_CNT":10,"MMS_CNT":0,"ALT_CNT":120}}');
 
         self::assertSame(120, $api->heartInfo()['ALT_CNT']);
         $request = $this->transport->requests[0];

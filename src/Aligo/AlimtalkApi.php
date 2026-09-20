@@ -20,9 +20,15 @@ final class AlimtalkApi
         $this->settings = $settings;
     }
 
+    /**
+     * 잔여 건수(SMS_CNT·LMS_CNT·MMS_CNT·ALT_CNT …). 알리고 문서의 응답 표는 건수를 최상위
+     * 필드처럼 적지만, 예시와 실제 응답은 모두 list 안에 넣는다(2026-09-20 라이브 계정으로
+     * 확인). 표만 보고 최상위에서 읽은 첫 구현은 연결 확인에서 알림톡을 항상 0건으로 보여줬다.
+     */
     public function heartInfo(): array
     {
-        return $this->call('/akv10/heartinfo/', []);
+        $list = $this->call('/akv10/heartinfo/', [])['list'] ?? [];
+        return is_array($list) ? $list : [];
     }
 
     public function profiles(): array
@@ -68,7 +74,7 @@ final class AlimtalkApi
         }
 
         $response = $this->transport->post(self::BASE . $path, [
-            'apikey' => $account['alimtalk_api_key'],
+            'apikey' => $account['api_key'],
             'userid' => $account['user_id'],
         ] + $fields);
 

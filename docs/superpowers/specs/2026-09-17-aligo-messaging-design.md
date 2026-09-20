@@ -132,7 +132,6 @@
 |---|---|
 | `aligo.user_id` | 알리고 사용자 ID |
 | `aligo.api_key` | API 키. `Mail\SecretCipher`로 암호화. 화면에는 저장 여부만 보인다 |
-| `aligo.alimtalk_api_key` | 알림톡용 키가 다를 때만 채운다. 비어 있으면 `aligo.api_key`를 쓴다 |
 | `aligo.sender` | 발신번호 |
 | `aligo.senderkey` | 발신프로필키 |
 | `aligo.channel_name` | 고른 카카오채널 표시명 |
@@ -143,7 +142,7 @@
 | `notify.<event>.var_map` | 템플릿 변수 → 코어 변수 매핑(JSON) |
 | `notify.<event>.sms_body` | 문자 본문 |
 
-알리고는 계정당 API 키가 하나인 것으로 보이지만 확인된 사실이 아니므로 `aligo.alimtalk_api_key`를 비워 둘 수 있는 예비 칸으로 둔다.
+알리고는 계정당 API 키가 하나다. 문자 API 스펙(`admin/api/spec.html`)의 `key`와 알림톡 API 스펙(`alimapi.html`)의 `apikey`는 둘 다 "인증용 API Key"로 같은 값이다. 처음 설계는 이를 확인하지 못해 `aligo.alimtalk_api_key` 예비 칸을 두었는데, 2026-09-20에 스펙으로 확인하고 걷어냈다.
 
 ## 3. 알리고 API 연동
 

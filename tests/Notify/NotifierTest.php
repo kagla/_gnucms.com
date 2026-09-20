@@ -400,7 +400,6 @@ final class NotifierTest extends WebTestCase
     {
         $fields = [
             'aligo_key' => 'LEAK-aligo-1',            // 이 저장소가 알리고 키를 부를 법한 이름
-            'alimtalk_api_key' => 'LEAK-at-2',        // 실제 설정 칸 이름
             'senderkey' => 'LEAK-sk-3',
             'api_key' => 'LEAK-api-4',
             'apiKey' => 'LEAK-camel-5',

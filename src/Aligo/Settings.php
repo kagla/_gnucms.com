@@ -30,10 +30,8 @@ final class Settings
             'sender' => (string) ($stored['sender'] ?? ''),
             'senderkey' => (string) ($stored['senderkey'] ?? ''),
             'channel_name' => (string) ($stored['channel_name'] ?? ''),
-            'api_key' => '',
+            'api_key' => '',                                        // 페이지에는 키를 싣지 않는다
             'api_key_set' => ($stored['api_key'] ?? '') !== '',
-            'alimtalk_api_key' => '',
-            'alimtalk_api_key_set' => ($stored['alimtalk_api_key'] ?? '') !== '',
             'test_mode' => ($stored['test_mode'] ?? '0') === '1',
             'sms_enabled' => ($stored['sms_enabled'] ?? '0') === '1',
             'alimtalk_enabled' => ($stored['alimtalk_enabled'] ?? '0') === '1',
@@ -67,12 +65,18 @@ final class Settings
             throw DomainError::validation(['senderkey' => '발신프로필키를 확인해 주세요.']);
         }
 
-        $keys = [];
-        foreach (['api_key', 'alimtalk_api_key'] as $field) {
-            $keys[$field] = $this->nextSecret($field, $input, $current);
-        }
-        if ($keys['api_key'] === '' && $keys['alimtalk_api_key'] !== '') {
-            throw DomainError::validation(['api_key' => '알림톡 전용 키만 저장할 수는 없습니다. API 키를 먼저 입력해 주세요.']);
+        // 알리고는 계정당 API 키가 하나다. 문자 API 는 key, 알림톡 API 는 apikey 라는
+        // 이름으로 같은 값을 받는다. 알림톡용 키를 따로 묻는 칸은 없다.
+        // 칸은 평소 비어 있다(페이지에 키를 싣지 않는다 — 소스 보기에 나오면 안 된다). 그래서
+        // 빈 칸은 "기존 키 유지"이고, 눈 아이콘으로 저장된 키를 칸에 불러온 뒤(api_key_loaded)
+        // 비우고 저장한 것만 삭제다. 값이 있으면 그것이 새 키다. 따로 삭제 체크는 없다.
+        $given = trim((string) ($input['api_key'] ?? ''));
+        if ($given !== '') {
+            $apiKey = $this->cipher->encrypt($given);
+        } elseif (($input['api_key_loaded'] ?? '') === '1') {
+            $apiKey = '';
+        } else {
+            $apiKey = (string) ($current['api_key'] ?? '');
         }
 
         // 계정이 바뀌면 이전 계정으로 확인한 상태를 물려받지 않는다. 암호문은 매번
@@ -80,7 +84,7 @@ final class Settings
         // 비교해야 한다. 그렇지 않으면 기존 키를 그대로 재입력만 해도 두 채널이
         // 모두 꺼져버린다.
         $accountChanged = $userId !== (string) ($current['user_id'] ?? '')
-            || $this->decryptedOrEmpty($keys['api_key']) !== $this->decryptedOrEmpty((string) ($current['api_key'] ?? ''));
+            || $this->decryptedOrEmpty($apiKey) !== $this->decryptedOrEmpty((string) ($current['api_key'] ?? ''));
 
         // 지금 켜져 있는데 이 저장으로 꺼지는 채널. 끄기 버튼이 지나는 길
         // (AligoService::setChannelEnabled())과 같은 조율을 이 길에도 태우기 위해,
@@ -100,8 +104,7 @@ final class Settings
 
         $this->repository->save([
             'user_id' => $userId,
-            'api_key' => $keys['api_key'],
-            'alimtalk_api_key' => $keys['alimtalk_api_key'],
+            'api_key' => $apiKey,
             'sender' => $sender,
             'senderkey' => $senderkey,
             'channel_name' => $channelName,
@@ -111,24 +114,20 @@ final class Settings
         ]);
     }
 
-    /** 빈 문자열은 암호화하지 않고 그대로 "키 없음"으로 다룬다. */
+    /**
+     * 빈 문자열은 암호화하지 않고 그대로 "키 없음"으로 다룬다. 못 읽는 암호문(비밀키가
+     * 바뀐 뒤 등)도 빈 값으로 본다 — 화면이 열려야 관리자가 다시 입력할 수 있다.
+     */
     private function decryptedOrEmpty(string $cipherText): string
     {
-        return $cipherText === '' ? '' : $this->cipher->decrypt($cipherText);
-    }
-
-    /** 빈 입력은 기존 값을 유지하고, 삭제 체크는 지운다. 저장은 암호문으로 한다. */
-    private function nextSecret(string $field, array $input, array $current): string
-    {
-        if (($input[$field . '_delete'] ?? '') === '1') {
+        if ($cipherText === '') {
             return '';
         }
-        $given = trim((string) ($input[$field] ?? ''));
-        if ($given === '') {
-            return (string) ($current[$field] ?? '');
+        try {
+            return $this->cipher->decrypt($cipherText);
+        } catch (DomainError) {
+            return '';
         }
-
-        return $this->cipher->encrypt($given);
     }
 
     public function runtime(): ?array
@@ -137,15 +136,9 @@ final class Settings
         if (($stored['user_id'] ?? '') === '' || ($stored['api_key'] ?? '') === '') {
             return null;
         }
-        $apiKey = $this->cipher->decrypt((string) $stored['api_key']);
-        $alimtalkKey = ($stored['alimtalk_api_key'] ?? '') !== ''
-            ? $this->cipher->decrypt((string) $stored['alimtalk_api_key'])
-            : $apiKey;
-
         return [
             'user_id' => (string) $stored['user_id'],
-            'api_key' => $apiKey,
-            'alimtalk_api_key' => $alimtalkKey,
+            'api_key' => $this->cipher->decrypt((string) $stored['api_key']),
             'sender' => (string) ($stored['sender'] ?? ''),
             'senderkey' => (string) ($stored['senderkey'] ?? ''),
             'test_mode' => ($stored['test_mode'] ?? '0') === '1',
