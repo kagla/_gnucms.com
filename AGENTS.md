@@ -65,7 +65,8 @@
 
 - 커밋은 한 가지 논리 변경을 담고 `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:` 형식을 사용한다.
 - `main`은 배포 가능한 상태로 유지하고, 큰 작업은 짧게 유지되는 기능 브랜치에서 진행한다.
-- 작은 쇼핑몰과 전자결제 플러그인(이니시스·KCP·KSPay·토스페이먼츠), 공통 결제 코드는 `feat/direct-pg-payments` 브랜치에 보관한다. 사용자의 별도 요청 없이 해당 코드를 `main`에 병합하거나 다시 포함하지 않는다.
+- 쇼핑몰은 `modules/youngcart`(영카트 계열)를 코어 배포본에 내장 모듈로 싣는다(2026-09-20 결정). 새 설치에서는 켜진 채 시작하고, 기존 사이트는 관리자가 켠다. 알림톡·문자는 알리고 연동(`src/Aligo`·`src/Notify`)을 코어에 내장한다. 이 둘과 이니시스 결제 계층(`src/Payment`, `feat/initalk`에서 옮겨 온다)은 통합 브랜치 `feat/core-commerce`에서 모은 뒤 `main`에 합친다.
+- 옛 작은 쇼핑몰(`modules/shop`)과 전자결제 플러그인(KCP·KSPay·토스페이먼츠)은 `feat/direct-pg-payments` 브랜치에 보관한다. 사용자의 별도 요청 없이 해당 코드를 되살리거나 `main`에 포함하지 않는다.
 - 비즈뿌리오 플러그인 전체(설정·인증·발송·결과 수신)와 알림톡·문자 운영 모듈은 `feat/bizppurio-messaging` 브랜치에서 함께 관리한다. 사용자의 별도 요청 없이 일부 코드나 설정 화면도 `main`에 병합하거나 다시 포함하지 않는다.
 - 제품 버전은 SemVer(`MAJOR.MINOR.PATCH`)로 관리한다. 호환성 파괴는 MAJOR, 하위 호환 기능은 MINOR, 버그 수정은 PATCH를 올린다.
 - 제품 버전의 원본은 루트 `version.txt`다. 직접 수정하지 않고 Release Please가 릴리스 PR에서 갱신하게 한다.

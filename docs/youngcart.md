@@ -1,6 +1,7 @@
 # 쇼핑몰(영카트 모듈) 운영 안내
 
-영카트5의 기능을 GNUCMS 확장 모듈로 다시 만든 쇼핑몰이다. 분류·상품·옵션·이미지·재고 관리와
+영카트5의 기능을 GNUCMS 확장 모듈로 다시 만든 쇼핑몰이다. 코어 배포본에 함께 실리는 내장
+모듈이라 새 설치에서는 켜진 채 시작한다. 분류·상품·옵션·이미지·재고 관리와
 반응형 종합 쇼핑몰 화면, 장바구니, 회원·비회원 주문 접수·조회·취소, 관리자 주문 처리를 제공한다.
 온라인 결제(PG)는 아직 연결하지 않았다. 주문 접수 후 결제·배송 안내는 판매자가 별도로 진행한다.
 
@@ -8,7 +9,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 패키지 | `modules/youngcart` (작은 쇼핑몰이 `modules/shop`을 쓰는 동안 이 폴더를 유지한다) |
+| 패키지 | `modules/youngcart` — 코어 배포본에 내장된 모듈 |
 | 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호` |
 | 관리자 주소 | `/admin/shop` 현황, `/admin/shop/settings`, `/admin/shop/categories`, `/admin/shop/products`와 `new`·`edit`·`types`·`stock`·`option-stock`, 주문 목록 `/admin/shop/orders`, 주문 상세 `/admin/shop/orders/detail?id=번호` |
 | 별칭 | 없음. 설명 파일의 `aliases: false`로 `/modules/youngcart/…` 주소를 만들지 않는다 |
@@ -19,7 +20,7 @@
 
 ## 설치
 
-1. 관리자 → 모듈에서 **쇼핑몰**을 켜고 저장한다.
+1. 새 설치에서는 이미 켜져 있다. 기존 사이트를 업그레이드했다면 관리자 → 모듈에서 **쇼핑몰**을 켜고 저장한다.
 2. `/admin/shop`에서 **데이터 설치**를 누른다. GET 조회만으로는 테이블을 만들지 않는다.
    SQLite는 설치 전에 `storage/backups/extensions/`에 자동 백업을 남긴다.
 3. `/admin/shop/settings`에서 메인 배너·메인 블록·목록 크기·이미지 크기·배송/교환 안내문, 기본 배송비·무료배송 기준·주문 접수 안내를 정한다.

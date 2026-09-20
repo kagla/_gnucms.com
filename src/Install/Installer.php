@@ -8,6 +8,7 @@ use GnuCms\Account\UserRepository;
 use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
+use GnuCms\Extension\StateStore;
 use GnuCms\Support\Base64Url;
 use GnuCms\Support\Clock;
 use GnuCms\Validation\Validator;
@@ -22,6 +23,9 @@ final class Installer
 {
     private string $configPath;
     private string $storageDir;
+
+    /** 코어 배포본에 실려 오는 내장 모듈. 새 설치에서 켜진 채 시작한다. */
+    private const BUNDLED_ENABLED = ['modules/youngcart'];
     /** @var string|null install.php 경로. null 이면 스스로 지우지 않는다 */
     private ?string $installScript;
 
@@ -106,6 +110,7 @@ final class Installer
         }
 
         $this->ensureStorageDirectories();
+        $this->enableBundledPackages();
 
         // 사이트 이름 갱신·관리자 생성·config.php 쓰기를 한 트랜잭션으로 묶는다.
         // config.php 쓰기가 실패(디스크 가득 참, config/ 권한 없음 등)하면 관리자 행도 같이
@@ -212,6 +217,24 @@ final class Installer
             throw DomainError::internal('설정 파일을 쓰지 못했습니다: ' . $this->configPath);
         }
         @chmod($this->configPath, 0640);
+    }
+
+    /**
+     * 내장 모듈은 새 설치에서 켜진 채 시작한다. 확장 상태 파일이 이미 있으면(재설치·
+     * 업그레이드) 관리자의 결정이므로 건드리지 않는다 — 업그레이드했더니 쇼핑몰이 켜져 있는
+     * 것은 놀라운 일이고, 새 설치에 켜져 있는 것은 기대하는 일이다. 모듈의 표(데이터 설치)는
+     * 여기서 만들지 않는다. 그것은 관리자가 /admin/shop 에서 누르는 별도 단계다.
+     */
+    private function enableBundledPackages(): void
+    {
+        $directory = $this->storageDir . '/extensions';
+        if (file_exists($directory . '/enabled.json')) {
+            return;
+        }
+        (new StateStore($directory))->update(
+            static fn (array $enabled): array => array_merge($enabled, self::BUNDLED_ENABLED),
+            self::BUNDLED_ENABLED
+        );
     }
 
     private function ensureStorageDirectories(): void
