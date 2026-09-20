@@ -98,6 +98,7 @@ final class Schema
                 'yc_rel_related' => ['yc_product_relations', 'related_id'], 'yc_stock_product' => ['yc_stock_log', 'product_id'],
                 'yc_order_user' => ['yc_orders', 'user_id'], 'yc_order_status' => ['yc_orders', 'status'],
                 'yc_order_created' => ['yc_orders', 'created_at'], 'yc_order_pay_by' => ['yc_orders', 'pay_by'],
+                'yc_order_payment' => ['yc_orders', 'payment_id'],
                 'yc_oi_order' => ['yc_order_items', 'order_id'],
                 'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
                 'yc_history_order' => ['yc_order_history', 'order_id']];

@@ -17,7 +17,7 @@ final class SchemaTest extends YoungCartTestCase
         'yc_img_product' => 'yc_product_images', 'yc_opt_product' => 'yc_options',
         'yc_rel_related' => 'yc_product_relations', 'yc_stock_product' => 'yc_stock_log',
         'yc_order_user' => 'yc_orders', 'yc_order_status' => 'yc_orders', 'yc_order_created' => 'yc_orders',
-        'yc_order_pay_by' => 'yc_orders',
+        'yc_order_pay_by' => 'yc_orders', 'yc_order_payment' => 'yc_orders',
         'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items', 'yc_history_order' => 'yc_order_history'];
 
     #[DataProvider('connectionProvider')]
@@ -36,7 +36,7 @@ final class SchemaTest extends YoungCartTestCase
         $status = $schema->status(Schema::KEY);
         self::assertSame('ready', $status['state']);
         self::assertSame(3, (int) $status['schema_version']);
-        self::assertSame(20, count(self::INDEXES));
+        self::assertSame(21, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['code' => '10', 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
             'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
@@ -58,7 +58,7 @@ final class SchemaTest extends YoungCartTestCase
         self::assertSame(3, (int) $status['schema_version']);
         foreach (Schema::TABLES as $table) self::assertTrue($schema->exists($table), $table);
         self::assertSame(12, count(Schema::TABLES));
-        self::assertSame(20, count(self::INDEXES));
+        self::assertSame(21, count(self::INDEXES));
         $this->assertIndexesExist();
     }
 
@@ -69,8 +69,10 @@ final class SchemaTest extends YoungCartTestCase
         $this->setupShop($config);
         $db = $this->app->db();
         self::assertSame(3, (int) $this->shop->schema()->status(Schema::KEY)['schema_version']);
-        // pay_by 는 인덱스가 있어 SQLite 가 컬럼을 바로 지우지 못한다 — 2판에는 그 인덱스도 없었으므로 먼저 지운다.
-        $db->execute('DROP INDEX ' . $db->index('yc_order_pay_by') . ($db->dialect()->name() === 'mysql' ? ' ON ' . $db->table('yc_orders') : ''));
+        // pay_by·payment_id 는 인덱스가 있어 SQLite 가 컬럼을 바로 지우지 못한다 — 2판에는 그 인덱스도 없었으므로 먼저 지운다.
+        foreach (['yc_order_pay_by', 'yc_order_payment'] as $index) {
+            $db->execute('DROP INDEX ' . $db->index($index) . ($db->dialect()->name() === 'mysql' ? ' ON ' . $db->table('yc_orders') : ''));
+        }
         foreach (array_keys(Schema::PAYMENT_COLUMNS) as $column) {
             $db->execute('ALTER TABLE ' . $db->table('yc_orders') . ' DROP COLUMN ' . $column);
         }
