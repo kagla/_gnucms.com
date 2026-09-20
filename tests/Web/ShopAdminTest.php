@@ -339,6 +339,11 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('id="yc-category-delete-' . $top['id'] . '"', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
         self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
+        // 목록 위·아래 HTML 은 코어 편집기(CKEditor)로 쓴다. 분류에는 이미지 보관 키가 없으므로 업로드 주소는 배선하지 않는다.
+        self::assertStringContainsString('id="yc-head-html" name="head_html" rows="6" data-cms-editor', $edit);
+        self::assertStringContainsString('id="yc-tail-html" name="tail_html" rows="6" data-cms-editor', $edit);
+        self::assertStringContainsString('/vendor/ckeditor4/ckeditor.js', $edit);
+        self::assertStringNotContainsString('/admin/editor/images', $edit);
         $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
         self::assertSame(303, $response->getStatusCode());
         self::assertSame(0, (int) $this->shop->categories->byCode('1010')['active']);

@@ -11,11 +11,13 @@
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <?php if ($id !== null): ?><input type="hidden" name="id" value="<?= $id ?>"><?php endif ?>
   <section class="card" id="category-basic"><div class="card-body"><h2 class="card-title">분류 기본 설정</h2>
+    <div class="yc-fields yc-fields-title">
     <fieldset class="fieldset<?= isset($errors['code']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">분류 코드 <span class="legend-hint">단계당 2자, 영문 소문자·숫자</span></legend>
       <?php if ($id === null): ?><input class="input input-bordered" type="text" name="code" value="<?= $this->e($v('code')) ?>" maxlength="10" pattern="[0-9a-zA-Z]{2,10}" required>
       <?php else: ?><input class="input input-bordered" type="text" value="<?= $this->e($v('code')) ?>" readonly><?php endif ?>
       <?php if (isset($errors['code'])): ?><p class="validator-hint"><?= $this->e($errors['code']) ?></p><?php endif ?></fieldset>
-    <fieldset class="fieldset<?= isset($errors['name']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">분류명</legend><input class="input input-bordered input-block" type="text" name="name" value="<?= $this->e($v('name')) ?>" maxlength="100" required></fieldset>
+    <fieldset class="fieldset yc-field-wide<?= isset($errors['name']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">분류명</legend><input class="input input-bordered input-block" type="text" name="name" value="<?= $this->e($v('name')) ?>" maxlength="100" required></fieldset>
+    </div>
     <div class="yc-fields">
       <fieldset class="fieldset"><legend class="fieldset-legend">순서</legend><input class="input input-bordered input-sm" type="number" name="sort_order" value="<?= $this->e($v('sort_order')) ?>"></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">한 행 상품 수</legend><input class="input input-bordered input-sm" type="number" name="list_columns" value="<?= $this->e($v('list_columns')) ?>" min="1" max="12" required></fieldset>
@@ -23,13 +25,15 @@
       <fieldset class="fieldset"><legend class="fieldset-legend">이미지 너비</legend><input class="input input-bordered input-sm" type="number" name="image_width" value="<?= $this->e($v('image_width')) ?>" min="0" max="2000" required></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">이미지 높이(0 = 비율)</legend><input class="input input-bordered input-sm" type="number" name="image_height" value="<?= $this->e($v('image_height')) ?>" min="0" max="2000" required></fieldset>
     </div>
+    <div class="yc-checks">
     <label class="label cursor-pointer"><input type="hidden" name="active" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="active" value="1"<?= $v('active') === '1' ? ' checked' : '' ?>> 판매가능</label>
     <label class="label cursor-pointer"><input type="hidden" name="no_coupon" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="no_coupon" value="1"<?= $v('no_coupon') === '1' ? ' checked' : '' ?>> 쿠폰 대상에서 제외</label>
     <?php if ($id !== null): ?><label class="label cursor-pointer"><input class="checkbox checkbox-sm" type="checkbox" name="apply_children" value="1"> 판매·쿠폰·목록·이미지 설정을 하위 분류에도 적용</label><?php endif ?>
+    </div>
   </div></section>
   <details class="yc-advanced" id="category-html"<?= $errors !== [] ? ' open' : '' ?>><summary>목록 위·아래 HTML<small>분류 목록 상단·하단에 표시할 내용</small></summary><div class="card-body">
-    <fieldset class="fieldset"><legend class="fieldset-legend">목록 위</legend><textarea class="textarea textarea-bordered textarea-block" name="head_html" rows="4"><?= $this->e($v('head_html')) ?></textarea></fieldset>
-    <fieldset class="fieldset"><legend class="fieldset-legend">목록 아래</legend><textarea class="textarea textarea-bordered textarea-block" name="tail_html" rows="4"><?= $this->e($v('tail_html')) ?></textarea></fieldset>
+    <fieldset class="fieldset"><legend class="fieldset-legend">목록 위</legend><textarea class="textarea textarea-bordered textarea-block" id="yc-head-html" name="head_html" rows="6" data-cms-editor><?= $this->e($v('head_html')) ?></textarea></fieldset>
+    <fieldset class="fieldset"><legend class="fieldset-legend">목록 아래</legend><textarea class="textarea textarea-bordered textarea-block" id="yc-tail-html" name="tail_html" rows="6" data-cms-editor><?= $this->e($v('tail_html')) ?></textarea></fieldset>
   </div></details>
   <details class="yc-advanced" id="category-extra"<?= $errors !== [] ? ' open' : '' ?>><summary>여분필드<small>테마·외부 연동을 위한 추가 항목</small></summary><div class="card-body">
     <div class="yc-fields"><?php foreach ($extra as $i => $field): ?><fieldset class="fieldset"><legend class="fieldset-legend">여분 <?= $i ?></legend>
@@ -38,4 +42,5 @@
   </div></details>
   <?php $this->insert('admin/_save_bar', ['save_label' => '분류 저장', 'back_url' => $admin_url . '/categories']) ?>
 </form>
+<?php $this->insert('admin/_editor', ['editor_images' => false, 'editor_required' => false, 'editor_height' => 220]) ?>
 <?php $this->stop() ?>

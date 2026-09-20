@@ -1,14 +1,19 @@
 <?php
 // GNUCMS_ID|capitalize: 첫 글자만 대문자, 나머지는 소문자.
 $gnucmsCap = mb_strtoupper(mb_substr(GNUCMS_ID, 0, 1)) . mb_strtolower(mb_substr(GNUCMS_ID, 1));
-$editor_upload_url = $this->url('admin.editor.images') . '?csrf_token=' . rawurlencode((string) $csrf_token) . '&image_key=' . rawurlencode((string) $values['image_key']);
-$editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token=' . rawurlencode((string) $csrf_token) . '&image_key=' . rawurlencode((string) $values['image_key']);
+// editor_images: 사진 올리기 단추와 업로드 주소를 배선한다(기본 켬). 이미지 보관 키(image_key)가 없는
+// 화면(분류의 목록 위·아래 HTML 등)은 false 로 넘겨 편집기만 쓴다. data-cms-editor 가 붙은 textarea 는
+// 몇 개든 각각 편집기가 되며, 닫힌 <details> 안의 것은 펼칠 때 만든다(숨긴 채 만들면 폭이 0 으로 잡힌다).
+$editor_images = $editor_images ?? true;
+$editor_upload_url = $editor_images ? $this->url('admin.editor.images') . '?csrf_token=' . rawurlencode((string) $csrf_token) . '&image_key=' . rawurlencode((string) $values['image_key']) : '';
+$editor_discard_url = $editor_images ? $this->url('admin.editor.images.discard') . '?csrf_token=' . rawurlencode((string) $csrf_token) . '&image_key=' . rawurlencode((string) $values['image_key']) : '';
 ?>
 <script src="<?= $this->e($this->base) ?>/vendor/ckeditor4/ckeditor.js"></script>
 <script>
 (function(){
-  var textarea=document.querySelector('[data-cms-editor]');
-  if(!textarea||!window.CKEDITOR){return}
+  var textareas=Array.prototype.slice.call(document.querySelectorAll('[data-cms-editor]'));
+  if(!textareas.length||!window.CKEDITOR){return}
+  var textarea=textareas[0],images=<?= $this->json((bool) $editor_images) ?>;
   var root=document.documentElement,media=window.matchMedia('(prefers-color-scheme: dark)'),uploading=0,committed=false,discarded=false;
   var uploadUrl=<?= $this->json($editor_upload_url) ?>,discardUrl=<?= $this->json($editor_discard_url) ?>;
   var uploadedInput=textarea.form&&textarea.form.querySelector('[data-uploaded-images]'),uploadedFiles={};
@@ -19,7 +24,7 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
     if(uploadedInput){uploadedInput.value=Object.keys(uploadedFiles).join(',')}
   }
   function discardUploads(){
-    if(committed||discarded){return}var files=Object.keys(uploadedFiles);if(!files.length){return}
+    if(!images||committed||discarded){return}var files=Object.keys(uploadedFiles);if(!files.length){return}
     discarded=true;var body=new URLSearchParams();files.forEach(function(file){body.append('files[]',file)});
     if(navigator.sendBeacon&&navigator.sendBeacon(discardUrl,body)){return}
     fetch(discardUrl,{method:'POST',body:body,credentials:'same-origin',keepalive:true,
@@ -108,19 +113,20 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
     });
     document.body.appendChild(input);input.click();
   }
-  CKEDITOR.plugins.add('<?= $this->e(GNUCMS_ID) ?>imageupload',{init:function(editor){
+  if(images){CKEDITOR.plugins.add('<?= $this->e(GNUCMS_ID) ?>imageupload',{init:function(editor){
     editor.addCommand('<?= $this->e(GNUCMS_ID) ?>ImageUpload',{exec:function(){chooseImages(editor)}});
     editor.ui.addButton('<?= $this->e($gnucmsCap) ?>Images',{label:'사진 올리기',command:'<?= $this->e(GNUCMS_ID) ?>ImageUpload',toolbar:'insert,5'});
-  }});
+  }})}
+  function mount(textarea){
   var editor=CKEDITOR.replace(textarea.id,{
     language:'ko',height:<?= max(120, min(800, (int) ($editor_height ?? 360))) ?>,versionCheck:false,resize_minWidth:0,
     /* 글·댓글 편집기와 같게, 엔터는 줄바꿈 하나다. 문단 사이를 벌리려면 엔터를 두 번 친다. */
     enterMode:CKEDITOR.ENTER_BR,shiftEnterMode:CKEDITOR.ENTER_BR,autoParagraph:false,
     contentsCss:[<?= $this->json($this->base . '/vendor/ckeditor4/contents.css') ?>,<?= $this->json($this->base . '/assets/editor-content.css?v=20260902-1') ?>],
     bodyClass:'<?= $this->e(GNUCMS_ID) ?>-editor-content',
-    uploadUrl:uploadUrl,
-    filebrowserImageUploadUrl:<?= $this->json($editor_upload_url . '&responseType=json') ?>,
-    extraPlugins:'uploadimage,notification,<?= $this->e(GNUCMS_ID) ?>imageupload',
+    uploadUrl:images?uploadUrl:undefined,
+    filebrowserImageUploadUrl:images?<?= $this->json($editor_upload_url === '' ? '' : $editor_upload_url . '&responseType=json') ?>:undefined,
+    extraPlugins:images?'uploadimage,notification,<?= $this->e(GNUCMS_ID) ?>imageupload':'notification',
     extraAllowedContent:'img[alt,src,title]',
     removePlugins:'exportpdf,flash,forms,iframe,newpage,preview,print,save,scayt,sourcearea,templates',
     removeDialogTabs:'image:advanced;link:advanced',format_tags:'p;h2;h3;h4;pre',
@@ -129,7 +135,7 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
       {name:'basicstyles',items:['Bold','Italic','Underline','Strike','RemoveFormat']},
       {name:'paragraph',items:['NumberedList','BulletedList','Blockquote','JustifyLeft','JustifyCenter','JustifyRight']},
       {name:'links',items:['Link','Unlink']},
-      {name:'insert',items:['<?= $this->e($gnucmsCap) ?>Images','Table','HorizontalRule','SpecialChar']},
+      {name:'insert',items:[<?= $editor_images ? "'" . $this->e($gnucmsCap) . "Images'," : '' ?>'Table','HorizontalRule','SpecialChar']},
       {name:'history',items:['Undo','Redo']},
       {name:'tools',items:['Maximize']}
     ]
@@ -138,15 +144,26 @@ $editor_discard_url = $this->url('admin.editor.images.discard') . '?csrf_token='
   editor.on('fileUploadResponse',function(event){
     try{var data=JSON.parse(event.data.fileLoader.xhr.responseText||'{}');if(data.uploaded&&data.url){rememberUpload(data.url)}}catch(error){}
   });
-  window.addEventListener('pagehide',discardUploads);
   new MutationObserver(function(){syncTheme(editor)}).observe(root,{attributes:true,attributeFilter:['data-theme']});
   if(media.addEventListener){media.addEventListener('change',function(){syncTheme(editor)})}
+  return editor;
+  }
+  var editors=[];
+  textareas.forEach(function(area){
+    var details=area.closest('details');
+    if(details&&!details.open){details.addEventListener('toggle',function(){if(details.open&&!area.dataset.cmsMounted){area.dataset.cmsMounted='1';editors.push(mount(area))}})}
+    else{area.dataset.cmsMounted='1';editors.push(mount(area))}
+  });
+  window.addEventListener('pagehide',discardUploads);
   if(textarea.form){textarea.form.addEventListener('submit',function(event){
-    if(uploading){event.preventDefault();editor.showNotification('사진 업로드가 끝난 뒤 저장해 주세요.','warning');return}
-    restoreImageUrls(editor);
-    editor.updateElement();
-    var text=editor.document.getBody().getText().replace(/\u00a0/g,' ').trim();
-    if(<?= $this->json($editor_required ?? true) ?>&&!text&&editor.document.find('img').count()===0){event.preventDefault();editor.focus();alert('내용을 입력해 주세요.');return}
+    if(uploading){event.preventDefault();editors[0].showNotification('사진 업로드가 끝난 뒤 저장해 주세요.','warning');return}
+    for(var i=0;i<editors.length;i++){
+      var editor=editors[i];
+      restoreImageUrls(editor);
+      editor.updateElement();
+      var text=editor.document.getBody().getText().replace(/\u00a0/g,' ').trim();
+      if(<?= $this->json($editor_required ?? true) ?>&&!text&&editor.document.find('img').count()===0){event.preventDefault();editor.focus();alert('내용을 입력해 주세요.');return}
+    }
     committed=true;
   })}
 })();
