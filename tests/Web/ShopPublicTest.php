@@ -74,6 +74,33 @@ final class ShopPublicTest extends WebTestCase
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
     }
 
+    /** 공개를 꺼도 관리자 화면이 끼워 넣는 상품 이미지는 관리자에게 그대로 나온다. 손님에게는 없는 주소다. */
+    #[DataProvider('connectionProvider')]
+    public function testHiddenShopStillServesProductImagesToAdmins(array $config): void
+    {
+        $this->setupShop($config);
+        $seed = $this->seed();
+        $file = $this->shop->products->get($seed['ids']['A'])['images'][0]['filename'];
+        $query = ['p' => (string) $seed['ids']['A'], 'f' => $file, 's' => 'list'];
+        self::assertSame(200, $this->get($this->app, '/shop/image', $query)->getStatusCode());
+        $settings = $this->shop->settings->all();
+        $settings['visible'] = false;
+        $this->saveSettings($settings);
+        self::assertSame(404, $this->get($this->app, '/shop/image', $query)->getStatusCode());
+
+        $adminId = $this->app->users()->create('image-admin@example.test', '', '이미지 관리자', true);
+        $this->get($this->app, '/login');
+        session_start(); $_SESSION['user_id'] = $adminId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $image = $this->get($this->app, '/shop/image', $query);
+        self::assertSame(200, $image->getStatusCode());
+        self::assertSame('image/png', $image->getHeaderLine('Content-Type'));
+        // 상품 편집 화면이 실제로 그 주소를 끼워 넣는다.
+        self::assertStringContainsString('/shop/image?p=' . $seed['ids']['A'] . '&amp;f=' . $file,
+            $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['ids']['A']])));
+        // 나머지 화면은 관리자에게도 준비 중이다.
+        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop')));
+    }
+
     /** yc_settings 행이 없으면 만들고, 있으면 덮어쓴다. */
     private function saveSettings(array $settings): void
     {

@@ -36,8 +36,9 @@ final class ShopController
         $data['settings'] = $this->service->settings->all();
         $response = $response->withHeader('Cache-Control', 'no-store');
         if (!$data['settings']['visible']) {
-            if (in_array($page, ['image', 'banner-image'], true)) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
-            return $view->render($response, 'closed', $data);
+            // 관리자 화면이 이 공개 주소로 상품·배너 그림을 끼워 넣는다. 관리자는 평소 처리로 흘려보낸다.
+            if (!in_array($page, ['image', 'banner-image'], true)) return $view->render($response, 'closed', $data);
+            if (!$admin) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
         }
         $data['menu'] = $this->service->categories->children('', true);
         $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'] ?? [], 'quantity'));

@@ -258,6 +258,45 @@ final class ShopCommerceTest extends WebTestCase
         self::assertStringContainsString('온라인 결제 내역이 없는 주문입니다', $page);
     }
 
+    /** 쇼핑몰 공개를 끈다. */
+    private function hideShop(): void
+    {
+        $settings = $this->shop->settings->all();
+        $settings['visible'] = false;
+        $db = $this->app->db();
+        $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($db->selectOne('SELECT id FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'") === null) {
+            $db->insert('yc_settings', ['id' => 'settings', 'payload' => $payload]);
+        } else {
+            $db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
+        }
+    }
+
+    /** 공개를 꺼도 이미 받은 주문의 영수증은 열린다. 결제 콜백도 준비 중 안내로 떨어지지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testHiddenShopKeepsTheOrderReceiptAndTheCallbackReachable(array $config): void
+    {
+        $this->setupShop($config);
+        $this->add();
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout());
+        self::assertSame(303, $response->getStatusCode());
+        $number = $this->numberFrom($response);
+        self::assertNotSame('', $number);
+
+        $this->hideShop();
+        $receipt = $this->get($this->app, '/shop/order', ['number' => $number]);
+        self::assertSame(200, $receipt->getStatusCode());
+        self::assertStringContainsString($number, $this->body($receipt));
+        self::assertStringNotContainsString('쇼핑몰을 준비 중입니다', $this->body($receipt));
+        // 주문 조회 폼처럼 새로 시작하는 화면은 그대로 닫힌다.
+        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop/orders')));
+
+        // 콜백은 ExternalRequests 가 본문 파싱 전에 인증한다. 닫힌 안내가 아니라 인증 실패다.
+        $callback = $this->externalPost('/shop/pay/callback', [], []);
+        self::assertSame(403, $callback->getStatusCode());
+        self::assertStringNotContainsString('쇼핑몰을 준비 중입니다', $this->body($callback));
+    }
+
     #[DataProvider('connectionProvider')]
     public function testCheckoutOffersMethodsAndSendsCardOrdersToThePayPage(array $config): void
     {
