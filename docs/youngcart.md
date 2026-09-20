@@ -3,17 +3,18 @@
 영카트5의 기능을 GNUCMS 확장 모듈로 다시 만든 쇼핑몰이다. 코어 배포본에 함께 실리는 내장
 모듈이라 새 설치에서는 켜진 채 시작한다. 분류·상품·옵션·이미지·재고 관리와
 반응형 종합 쇼핑몰 화면, 장바구니, 회원·비회원 주문 접수·조회·취소, 관리자 주문 처리를 제공한다.
-온라인 결제(PG)는 아직 연결하지 않았다. 주문 접수 후 결제·배송 안내는 판매자가 별도로 진행한다.
+온라인 결제는 코어 결제 계층(설정 → 결제, `docs/payments.md`)의 KG이니시스로 한다. 결제 수단이
+하나도 켜져 있지 않으면 예전처럼 접수만 받고 판매자가 결제를 따로 안내한다.
 
 ## 주소와 패키지
 
 | 항목 | 값 |
 |---|---|
 | 패키지 | `modules/youngcart` — 코어 배포본에 내장된 모듈 |
-| 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호` |
+| 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호`, 결제 `/shop/pay?number=주문번호`, 결제 콜백 `/shop/pay/callback`(이니시스가 부른다, 세션 없음) |
 | 관리자 주소 | `/admin/shop` 현황, `/admin/shop/settings`, `/admin/shop/categories`, `/admin/shop/products`와 `new`·`edit`·`types`·`stock`·`option-stock`, 주문 목록 `/admin/shop/orders`, 주문 상세 `/admin/shop/orders/detail?id=번호` |
 | 별칭 | 없음. 설명 파일의 `aliases: false`로 `/modules/youngcart/…` 주소를 만들지 않는다 |
-| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (모듈 스키마 2판) |
+| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (모듈 스키마 3판 — 3판이 `yc_orders`에 결제 칸을 더한다) |
 
 작은 쇼핑몰(`modules/shop`)도 `/shop`을 기본 주소로 쓰므로 둘 중 하나만 켤 수 있다. 둘 다 켜면
 나중에 등록되는 패키지가 "기본 주소가 다른 경로와 겹칩니다" 오류로 실행되지 않는다.
@@ -35,6 +36,32 @@
 등록된 주문 테이블은 GNUCMS의 확장 데이터 백업·복원에도 포함된다. 코어 DB 판 번호와 제품
 `version.txt`는 이 변경으로 올리지 않는다. 갱신 전에는 공개 쇼핑몰이 준비 중 화면을 보여 준다.
 기존 관리자 재고·일괄 편집 템플릿을 재정의했다면 아래의 `original_stock` 필드도 반영한다.
+
+## 결제
+
+주문서는 켜진 결제 수단만 보여 준다. 카드 결제는 쇼핑몰 설정의 **결제 환경**(운영·테스트)이
+설정 → 결제에서 저장되고 실행이 허용돼 있을 때, 무통장입금은 쇼핑몰 설정에 계좌를 적고 켰을 때
+나타난다. 접수는 지금처럼 재고를 차감하며 주문 상태는 **주문 접수(결제 대기)** 다.
+
+| 수단 | 흐름 |
+|---|---|
+| 카드 | 접수 → `/shop/pay`가 이니시스 결제창을 연다 → 이니시스가 `/shop/pay/callback`을 부른다 → 승인·조회 → **결제 완료** |
+| 무통장입금 | 접수 → 주문 화면이 계좌·입금자명·기한을 안내 → 관리자가 주문 상세에서 **입금 확인** → **결제 완료** |
+
+주문 상태 흐름: 주문 접수 → 결제 완료 → 상품 준비 → 배송 중 → 배송 완료, 그리고 취소. 결제
+완료는 결제 확인으로만 들어가며 상태 변경 셀렉트에는 없다. 고객은 결제 전에만 스스로 취소한다.
+결제된 카드 주문을 취소하려면 관리자가 먼저 **환불**(부분 가능, 결제사 요청 뒤 기록)해야 하고,
+무통장은 계좌로 돌려준 뒤 기록만 한다. 환불 폼의 "전액 환불이면 주문도 취소"가 켜져 있으면
+전액 환불과 함께 취소되고 재고가 돌아간다.
+
+결제 기한(쇼핑몰 설정, 카드 1시간·무통장 72시간 기본)이 지난 미결제 주문은 관리자 주문 화면과
+주문서(접수 직전)를 열 때 자동으로 취소되고 재고가 돌아간다. cron 은 없다. 이니시스 승인이
+진행 중이거나 끝난 주문은 만료로 취소하지 않는다 — 관리자의 **결제 조회**가 원장과 주문을
+맞춘 뒤 처리한다.
+
+결제창은 사이트 주소(`app.url`)가 공개 HTTPS 여야 열린다. 콜백 주소에는 주문의 결제 원장 키와
+그 주문·결제사·설정 판의 HMAC 이 실려 있어, 다른 주문의 콜백으로는 승인되지 않는다. 카드번호와
+PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시용 정보만 남는다.
 
 ## 분류
 

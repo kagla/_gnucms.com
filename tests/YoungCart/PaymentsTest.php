@@ -210,6 +210,33 @@ final class PaymentsTest extends YoungCartTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testOverdueUnpaidOrdersExpireAndReturnStockButApprovingOnesAreLeftAlone(array $config): void
+    {
+        $this->setupPayments($config);
+        $manual = $this->place('manual_transfer');
+        $card = $this->place('card');
+        $approving = $this->place('card');
+        $this->shop->payments->checkout($approving, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $db = $this->app->db();
+        foreach ([$manual, $card, $approving] as $order) $db->update('yc_orders', ['pay_by' => Clock::timestamp() - 60], 'id = :id', ['id' => (int) $order['id']]);
+        // 승인 요청 중인 주문: 승인 응답이 없는 채 complete() 가 던지면 원장은 pending 으로 남는다(결제 계층의 규칙).
+        $this->http->responses[] = new \RuntimeException('timeout');
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']];
+        try { $this->shop->payments->complete($approving, $this->authCallback($approving)); } catch (\Throwable) {}
+        self::assertSame('pending', $this->app->inicisGateway()->approvalState(Payments::gatewayOrder($this->shop->orders->get((int) $approving['id']))));
+
+        $productId = (int) $manual['items'][0]['product_id'];
+        $stockBefore = (int) $this->shop->products->get($productId)['stock'];
+        self::assertSame(2, $this->shop->payments->expireOverdue());
+        self::assertSame('cancelled', $this->shop->orders->get((int) $manual['id'])['status']);
+        self::assertSame('cancelled', $this->shop->orders->get((int) $card['id'])['status']);
+        self::assertSame('pending', $this->shop->orders->get((int) $approving['id'])['status']);
+        self::assertSame($stockBefore + 1, (int) $this->shop->products->get($productId)['stock']);
+        self::assertStringContainsString('결제 기한이 지나', end($this->shop->orders->get((int) $card['id'])['history'])['note']);
+        self::assertSame(0, $this->shop->payments->expireOverdue(), '두 번째 호출은 할 일이 없다');
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testRefundGoesThroughThePgForCardAndIsOnlyRecordedForManualTransfer(array $config): void
     {
         $this->setupPayments($config);

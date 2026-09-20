@@ -135,10 +135,11 @@ final class Payments
         return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason);
     }
 
-    /** 결제사 승인이 진행 중이거나 끝난 주문인지. 만료 취소가 이런 주문을 건너뛴다. 작업 9 가 원장 상태를 읽게 한다. */
+    /** 결제사 승인이 진행 중이거나 끝난 주문인지. 만료 취소가 이런 주문을 건너뛴다. */
     public function inProgress(array $order): bool
     {
-        return false;
+        if (!$this->isPgOrder($order)) return false;
+        return in_array($this->app->inicisGateway()->approvalState(self::gatewayOrder($order)), ['pending', 'confirmed'], true);
     }
 
     public function expireOverdue(): int

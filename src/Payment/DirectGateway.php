@@ -120,6 +120,17 @@ abstract class DirectGateway implements Gateway
         return $result;
     }
 
+    /**
+     * 원장의 승인 단계. none(결제창을 연 적 없음)·ready·pending(승인 요청 중)·confirmed. PG 를
+     * 부르지 않는다. 미결제 만료가 pending·confirmed 주문을 건너뛰는 데 쓴다.
+     */
+    public function approvalState(array $order): string
+    {
+        if (!preg_match('/^[a-f0-9]{32}$/D', (string) ($order['id'] ?? ''))) return 'none';
+        $state = $this->journal->read($order['id']);
+        return (string) ($state['approval'] ?? 'none');
+    }
+
     /** 아직 결과를 확인하지 못한 환불 신청. 읽기 전용이라 상태를 바꾸지 않고 PG에 묻지도 않는다.
      *  @return array<string,array{amount:int,remaining:int,reason:string,at:int}> */
     public function pendingRefunds(array $order): array

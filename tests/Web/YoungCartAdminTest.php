@@ -132,6 +132,23 @@ final class YoungCartAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testReceiptOnlyPaidOrderCanBeRefunded(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
+        $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
+        $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
+            'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1'];
+        $order = $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+            $this->shop->cart->quote($cart, [], true)['fingerprint'], []);
+        self::assertSame('', $order['payment_method']);
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
+        self::assertStringContainsString('name="refund_key"', $page);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testOrderListShowsTheMethodAndFiltersPaid(array $config): void
     {
         $this->setupModule($config); $this->enablePayments();

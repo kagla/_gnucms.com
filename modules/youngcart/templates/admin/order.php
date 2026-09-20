@@ -22,7 +22,7 @@
 <?php endif ?>
 <?php if ($order['status'] === 'pending' && ($order['payment_method'] === '' || $order['payment_method'] === 'manual_transfer')): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="confirm-deposit"><button class="btn btn-primary btn-sm" type="submit">입금 확인</button></form><?php endif ?>
 <?php if ($is_pg): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-outline btn-sm" type="submit">결제 조회</button></form><?php endif ?>
-<?php if ($order['payment_method'] !== ''): ?><?php $this->insert('admin/_refund_form') ?><?php endif ?>
+<?php $this->insert('admin/_refund_form') ?>
 </section>
 <?php if ($next !== []): ?><form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail">
 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="from" value="<?= $this->e($order['status']) ?>">

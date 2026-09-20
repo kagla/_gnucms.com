@@ -197,6 +197,18 @@ final class GatewayTest extends DatabaseTestCase
         self::assertTrue($verified['valid']); self::assertSame(0, $verified['open_cancellations']); self::assertSame(13000, $verified['cancelled']);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testApprovalStateReadsTheJournalWithoutCallingThePg(array $db): void
+    {
+        $this->setupGateway($db);
+        self::assertSame('none', $this->gateway->approvalState($this->order));
+        $this->checkout();
+        self::assertSame('ready', $this->gateway->approvalState($this->order));
+        $this->approve();
+        self::assertSame('confirmed', $this->gateway->approvalState($this->order));
+        self::assertSame([], array_filter($this->http->calls, static fn (array $call): bool => str_contains($call['url'], 'inquiry')));
+    }
+
     public function testTransportOnlyAllowsDocumentedPgHttpsDestinations(): void
     {
         self::assertTrue(StreamTransport::allowed('https://iniapi.inicis.com/v2/pg/inquiry'));
