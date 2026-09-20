@@ -85,7 +85,13 @@ final class Kernel
         $view->addGlobal('consent_documents', $consentDocuments);
         $view->addGlobal('legal_pages', $legalPages);
         $view->addGlobal('site_menu', $app->cmsService()->menu());
-        $view->addGlobal('shop_visible', (bool) $app->shop()->settings->all()['visible']);
+        $shopVisible = false;
+        try {
+            $shopVisible = (bool) $app->shop()->settings->all()['visible'];
+        } catch (DomainError $e) {
+            // 표가 아직 없는 반쯤 적용된 DB 에서 모든 화면이 죽으면 안 된다.
+        }
+        $view->addGlobal('shop_visible', $shopVisible);
         // 실제 목록은 SessionGuard 가 로그인 신원을 복원한 뒤 채운다.
         $view->addGlobal('header_boards', []);
         $view->addGlobal('base_path', $basePath);
