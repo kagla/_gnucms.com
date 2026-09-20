@@ -97,6 +97,8 @@ final class YoungCartCommerceTest extends WebTestCase
         $response = $this->post($this->app, '/shop/checkout', $this->checkout());
         self::assertSame(303, $response->getStatusCode());
         self::assertStringContainsString('/shop/order?number=', $response->getHeaderLine('Location'));
+        $page = $this->body($this->get($this->app, $response->getHeaderLine('Location')));
+        self::assertStringContainsString('온라인 결제 내역이 없는 주문입니다', $page);
     }
 
     #[DataProvider('connectionProvider')]
@@ -145,6 +147,22 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertStringContainsString('국민은행 123-45 (예금주 상점)', $page);
         self::assertStringContainsString('홍길동', $page);
         self::assertStringNotContainsString('결제하기', $page);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testConfirmedManualTransferOrderShowsPaymentCompleteAndHidesOtherNotices(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $this->add();
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout(['payment_method' => 'manual_transfer', 'depositor' => '홍길동']));
+        $number = $this->numberFrom($response);
+        $id = (int) $this->app->db()->selectOne('SELECT id FROM ' . $this->app->db()->table('yc_orders') . ' WHERE number = ?', [$number])['id'];
+        $this->shop->orders->confirmDeposit($id, 'admin');
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $number]));
+        self::assertStringContainsString('결제 완료', $page);
+        self::assertStringContainsString('무통장입금', $page);
+        self::assertStringNotContainsString('온라인 결제 내역이 없는 주문입니다', $page);
+        self::assertStringNotContainsString('입금 안내', $page);
     }
 
     #[DataProvider('connectionProvider')]
