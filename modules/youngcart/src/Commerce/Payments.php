@@ -161,6 +161,37 @@ final class Payments
         return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key);
     }
 
+    /**
+     * 결과를 확인하지 못한 환불 요청. 결제 계층은 응답을 받지 못한 요청을 보류로 잠그고 자동
+     * 재전송하지 않으므로, 관리자가 결제사 기록과 대조할 때까지 여기 남는다. PG 를 부르지 않는다.
+     * @return array<string,array{amount:int,remaining:int,reason:string,at:int}>
+     */
+    public function pendingRefunds(array $order): array
+    {
+        if (!$this->isPgOrder($order)) return [];
+        return $this->app->inicisGateway()->pendingRefunds(self::gatewayOrder($order));
+    }
+
+    /** 보류 중인 환불을 결제사 조회에서 확인한 취소 거래번호에 연결하고 주문에 기록한다. */
+    public function confirmRefund(array $order, string $key, string $reference, string $actor): array
+    {
+        if (!$this->isPgOrder($order)) throw DomainError::validation(['refund' => '결제사 결제가 아닌 주문입니다.']);
+        $gateway = $this->app->inicisGateway();
+        $gw = self::gatewayOrder($order);
+        $pending = $gateway->pendingRefunds($gw)[$key] ?? null;
+        if ($pending === null) throw DomainError::validation(['refund' => '대조할 환불 요청이 없습니다. 화면을 새로고침해 주세요.']);
+        $gateway->confirmRefund($gw, $key, $reference);
+        return $this->orders->recordRefund((int) $order['id'], (int) $pending['amount'], $actor, '결제사 확인: ' . $reference, $key);
+    }
+
+    /** 결제사가 처리하지 않은 것으로 확인된 환불 요청을 닫는다. 주문 금액은 그대로다. */
+    public function dismissRefund(array $order, string $key): array
+    {
+        if (!$this->isPgOrder($order)) throw DomainError::validation(['refund' => '결제사 결제가 아닌 주문입니다.']);
+        $this->app->inicisGateway()->confirmUnprocessedRefund(self::gatewayOrder($order), $key);
+        return $this->orders->get((int) $order['id']);
+    }
+
     /** 결제사 승인이 진행 중이거나 끝난 주문인지. 만료 취소가 이런 주문을 건너뛴다. */
     public function inProgress(array $order): bool
     {

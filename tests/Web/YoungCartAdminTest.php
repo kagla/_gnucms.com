@@ -68,15 +68,32 @@ final class YoungCartAdminTest extends WebTestCase
         }
     }
 
-    private function placeManualOrder(): array
+    private function placeManualOrder(): array { return $this->placeOrder('manual_transfer', ['depositor' => '홍길동']); }
+
+    private function placeOrder(string $method, array $extra = []): array
     {
         $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
         $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
-        $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
+        $input = $extra + ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1',
-            'payment_method' => 'manual_transfer', 'depositor' => '홍길동'];
+            'payment_method' => $method];
         return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
             $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
+    }
+
+    /** 카드 주문을 결제창 → 승인 → 조회까지 밀어 결제 완료로 만든다. */
+    private function payCardOrder(array $order): array
+    {
+        $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = 'StdpayCARD' . bin2hex(random_bytes(6));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'MOID' => $order['payment_id'],
+            'TotPrice' => (string) $order['total'], 'payMethod' => 'Card', 'tid' => $tid, 'currency' => 'WON']];
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => 'SUCCESS', 'transactionStatus' => 'APPROVAL', 'mid' => $this->payConfig['merchant_id'],
+            'oid' => $order['payment_id'], 'price' => (string) $order['total'], 'tid' => $tid, 'paymethod' => 'Card', 'approvedDate' => '20260920', 'approvedTime' => '120000',
+            'cardInfo' => ['currencyCode' => 'WON'], 'partCancelTransInfo' => []]];
+        return $this->shop->payments->complete($order, ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'orderNumber' => $order['payment_id'],
+            'idc_name' => 'stg', 'authToken' => bin2hex(random_bytes(32)), 'authUrl' => 'https://stgstdpay.inicis.com/api/payAuth',
+            'netCancelUrl' => 'https://stgstdpay.inicis.com/api/netCancel']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -143,6 +160,38 @@ final class YoungCartAdminTest extends WebTestCase
         $response = $this->post($this->app, '/admin/shop/orders/detail', $this->csrf(['id' => $order['id'], 'action' => 'refund', 'amount' => '0', 'reason' => '', 'refund_key' => bin2hex(random_bytes(16))]));
         self::assertSame(422, $response->getStatusCode());
         self::assertSame(0, (int) $this->shop->orders->get((int) $order['id'])['refunded_amount']);
+    }
+
+    /** 환불 응답을 받지 못한 요청은 관리자 화면에 남고, 결제사 취소 거래번호로 대조해 정리한다. */
+    #[DataProvider('connectionProvider')]
+    public function testAdminMatchesARefundWhosePgResponseWasLost(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $paid = $this->payCardOrder($this->placeOrder('card'));
+        $key = bin2hex(random_bytes(16));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $this->shop->payments->refund($paid, 2000, '고객 요청', $key, 'admin'); self::fail('환불 응답을 받지 못했다'); }
+        catch (\RuntimeException) {}
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $paid['id']]));
+        self::assertStringContainsString('결과를 확인하지 못한 환불 요청', $page);
+        self::assertStringContainsString('2,000원', $page);
+        self::assertStringContainsString('고객 요청', $page);
+        self::assertStringContainsString('value="refund-confirm"', $page);
+        self::assertStringContainsString('value="refund-unprocessed"', $page);
+
+        $reference = 'StdpayCANCEL' . bin2hex(random_bytes(6));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => 'SUCCESS', 'transactionStatus' => 'PART_CANCEL', 'mid' => $this->payConfig['merchant_id'],
+            'oid' => $paid['payment_id'], 'price' => (string) $paid['total'], 'tid' => $paid['payment']['tid'], 'paymethod' => 'Card',
+            'approvedDate' => '20260920', 'approvedTime' => '120000', 'cardInfo' => ['currencyCode' => 'WON'],
+            'availablePartCancelPrice' => (string) ((int) $paid['total'] - 2000),
+            'partCancelTransInfo' => [['tid' => $reference, 'requestPrice' => '2000', 'requestDate' => '20260921', 'requestTime' => '090000']]]];
+        $response = $this->post($this->app, '/admin/shop/orders/detail', $this->csrf(['id' => $paid['id'], 'action' => 'refund-confirm', 'refund_key' => $key, 'reference' => $reference]));
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        self::assertSame(2000, (int) $this->shop->orders->get((int) $paid['id'])['refunded_amount']);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $paid['id'], 'saved' => 'refund-confirm']));
+        self::assertStringContainsString('환불을 결제사 기록과 맞췄습니다', $page);
+        self::assertStringNotContainsString('결과를 확인하지 못한 환불 요청', $page);
     }
 
     #[DataProvider('connectionProvider')]

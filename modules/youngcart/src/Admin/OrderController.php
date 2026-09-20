@@ -35,6 +35,9 @@ final class OrderController extends AdminBase
                     'confirm-deposit' => $this->service->orders->confirmDeposit($id, $data['actor']),
                     'sync' => $this->service->payments->sync($order),
                     'refund' => $this->refund($order, $data),
+                    'refund-confirm' => $this->service->payments->confirmRefund($order, self::refundKey($data),
+                        Input::text($data['input']['reference'] ?? '', 'reference', 100, false), $data['actor']),
+                    'refund-unprocessed' => $this->service->payments->dismissRefund($order, self::refundKey($data)),
                     default => $this->service->orders->transition($id, Input::text($data['input']['from'] ?? '', 'from', 20),
                         Input::text($data['input']['status'] ?? '', 'status', 20), $data['actor'], $data['input']),
                 };
@@ -45,10 +48,18 @@ final class OrderController extends AdminBase
         $data['next'] = array_values(array_diff(Orders::NEXT[$data['order']['status']], ['paid']));
         $data['is_pg'] = $this->service->payments->isPgOrder($data['order']);
         $data['refund_key'] = bin2hex(random_bytes(16));
+        $data['pending_refunds'] = $this->service->payments->pendingRefunds($data['order']);
         $data['notice'] = match ($data['input']['saved'] ?? '') {
-            '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 조회했습니다.', 'refund' => '환불을 처리했습니다.', default => '',
+            '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 조회했습니다.', 'refund' => '환불을 처리했습니다.',
+            'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.', default => '',
         };
         return $this->render($request, $response, 'order', $data);
+    }
+
+    /** 대조·정리 폼이 돌려주는 결제 원장의 환불 요청 키. 화면에 뿌린 값 그대로 온다. */
+    private static function refundKey(array $data): string
+    {
+        return Input::text($data['input']['refund_key'] ?? '', 'refund_key', 100, false);
     }
 
     /** 환불. 전액 환불이고 cancel_order 가 켜져 있으면 주문도 취소한다(재고 복원은 transition 이 한다). */

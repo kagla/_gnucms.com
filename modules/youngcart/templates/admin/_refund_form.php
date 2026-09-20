@@ -1,4 +1,17 @@
 <?php $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount']; ?>
+<?php if ($pending_refunds !== []): ?>
+<div class="alert alert-warning">결과를 확인하지 못한 환불 요청이 있습니다. 결제사 관리자 화면에서 취소 내역을 확인한 뒤 아래에서 정리해 주세요.</div>
+<?php foreach ($pending_refunds as $key => $pending): ?>
+<div class="yc-pending-refund"><p><strong><?= number_format((int) $pending['amount']) ?>원</strong> · <?= $this->e((string) $pending['reason']) ?> · 요청 <?= $this->e(date('Y-m-d H:i', (int) $pending['at'])) ?></p>
+<form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail">
+<input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="refund-confirm"><input type="hidden" name="refund_key" value="<?= $this->e((string) $key) ?>">
+<label class="yc-field"><span>결제사 취소 거래번호 <small>조회 화면의 취소 TID</small></span><input class="input input-bordered" name="reference" maxlength="100" required></label>
+<button class="btn btn-outline btn-sm" type="submit">환불 대조</button></form>
+<form method="post" action="<?= $this->e($admin_url) ?>/orders/detail">
+<input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="refund-unprocessed"><input type="hidden" name="refund_key" value="<?= $this->e((string) $key) ?>">
+<button class="btn btn-ghost btn-sm" type="submit">결제사 미처리로 정리</button></form></div>
+<?php endforeach ?>
+<?php endif ?>
 <?php if ((int) $order['paid_at'] > 0 && $remaining > 0 && in_array($order['status'], ['paid', 'confirmed'], true)): ?>
 <details class="yc-refund"><summary>환불</summary>
 <form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail">

@@ -79,6 +79,20 @@ final class PaymentsTest extends YoungCartTestCase
             'cardInfo' => ['currencyCode' => 'WON'], 'partCancelTransInfo' => []]];
     }
 
+    /**
+     * 부분 취소가 잡혀 있는 조회 응답. $rows 는 [취소 거래번호, 금액] 목록이고 합이 취소 누계다.
+     * @param list<array{0:string,1:int}> $rows
+     */
+    private function queuePartialCancelInquiry(array $order, string $tid, array $rows): void
+    {
+        $cancelled = array_sum(array_column($rows, 1));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => 'SUCCESS', 'transactionStatus' => 'PART_CANCEL', 'mid' => $this->config['merchant_id'],
+            'oid' => $order['payment_id'], 'price' => (string) $order['total'], 'tid' => $tid, 'paymethod' => 'Card', 'approvedDate' => '20260920', 'approvedTime' => '120000',
+            'cardInfo' => ['currencyCode' => 'WON'], 'availablePartCancelPrice' => (string) ((int) $order['total'] - $cancelled),
+            'partCancelTransInfo' => array_map(static fn (array $row): array => ['tid' => $row[0], 'requestPrice' => (string) $row[1],
+                'requestDate' => '20260921', 'requestTime' => '090000'], $rows)]];
+    }
+
     #[DataProvider('connectionProvider')]
     public function testMethodsFollowThePaymentSettingsAndTheManualAccount(array $config): void
     {
@@ -310,6 +324,57 @@ final class PaymentsTest extends YoungCartTestCase
         $repeat = $this->shop->payments->refund($paidCard, 2000, '부분 환불', $cardKey, 'admin');
         self::assertSame(2000, (int) $repeat['refunded_amount']);
         self::assertCount($calls, $this->http->calls, '결제 계층이 캐시한 결과를 쓰므로 PG 를 다시 부르지 않는다');
+    }
+
+    /**
+     * 환불 요청은 보냈는데 응답을 받지 못한 경우. 결제 계층은 그 요청을 보류로 잠그고 자동
+     * 재전송을 하지 않으므로, 관리자가 결제사 기록과 대조하거나 미처리를 확인해 풀어 준다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testARefundWhosePgResponseWasLostIsMatchedOrDismissed(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($card, $tid);
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+        self::assertSame([], $this->shop->payments->pendingRefunds($paid));
+        self::assertSame([], $this->shop->payments->pendingRefunds($this->place('manual_transfer')), '결제사 주문이 아니면 대조할 것이 없다');
+
+        $key = bin2hex(random_bytes(16));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin'); self::fail('환불 응답을 받지 못했다'); }
+        catch (\RuntimeException) {}
+        self::assertSame(0, (int) $this->shop->orders->get((int) $card['id'])['refunded_amount']);
+        $pending = $this->shop->payments->pendingRefunds($paid);
+        self::assertArrayHasKey($key, $pending);
+        self::assertSame(2000, $pending[$key]['amount']);
+        self::assertSame('배송비 조정', $pending[$key]['reason']);
+
+        // 결제사 기록에 같은 금액의 취소가 있으면 그 취소에 연결하고 주문에 한 번만 적는다.
+        $reference = bin2hex(random_bytes(20));
+        $this->queuePartialCancelInquiry($paid, $tid, [[$reference, 2000]]);
+        $matched = $this->shop->payments->confirmRefund($paid, $key, $reference, 'admin');
+        self::assertSame(2000, (int) $matched['refunded_amount']);
+        self::assertSame([], $this->shop->payments->pendingRefunds($matched));
+        self::assertStringContainsString('결제사 확인: ' . $reference, end($matched['history'])['note']);
+
+        // 결제사가 아예 처리하지 않은 요청은 2시간 뒤 정리한다. 금액은 그대로다.
+        $stuck = bin2hex(random_bytes(16));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $this->shop->payments->refund($matched, 1000, '추가 환불', $stuck, 'admin'); self::fail('환불 응답을 받지 못했다'); }
+        catch (\RuntimeException) {}
+        self::assertArrayHasKey($stuck, $this->shop->payments->pendingRefunds($matched));
+        try {
+            Clock::freeze(gmdate('Y-m-d H:i:s', time() + 7300));
+            $this->queuePartialCancelInquiry($matched, $tid, [[$reference, 2000]]);
+            $this->shop->payments->dismissRefund($matched, $stuck);
+        } finally {
+            Clock::unfreeze();
+        }
+        self::assertSame([], $this->shop->payments->pendingRefunds($matched));
+        self::assertSame(2000, (int) $this->shop->orders->get((int) $card['id'])['refunded_amount']);
     }
 
     #[DataProvider('connectionProvider')]
