@@ -109,7 +109,9 @@ final class CommerceController
             $overdue = (int) $order['pay_by'] > 0 && (int) $order['pay_by'] <= \GnuCms\Support\Clock::timestamp();
             $data['pay_url'] = $pgPending && !$overdue ? $url . '/pay?number=' . rawurlencode($number) : null;
             $data['pay_expired'] = $pgPending && $overdue;
-            $data['pay_in_progress'] = $this->service->payments->inProgress($order);
+            // 원장을 읽지 못하면(표 없음·키 교체) 진행 중 표시만 포기한다. 주문 상세 자체는 열려야 한다.
+            try { $data['pay_in_progress'] = $this->service->payments->inProgress($order); }
+            catch (\Throwable) { $data['pay_in_progress'] = false; }
             $data['method_labels'] = \GnuCms\Modules\YoungCart\Commerce\Payments::METHODS;
             $data['just_ordered'] = ($_SESSION['yc_just_ordered'] ?? null) === $number;
             unset($_SESSION['yc_just_ordered']);

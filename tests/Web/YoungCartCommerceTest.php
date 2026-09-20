@@ -224,6 +224,19 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertStringNotContainsString('전체 주문 취소하기', $page);
     }
 
+    /** 결제 원장을 읽지 못해도(표 없음·키 교체) 주문 상세는 열려야 한다 — 결제 진행 표시만 포기한다. */
+    #[DataProvider('connectionProvider')]
+    public function testOrderPageStaysUpWhenThePaymentJournalCannotBeRead(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $db = $this->app->db();
+        $db->execute('DROP TABLE ' . $db->table('pay_inicis_transactions'));
+        $response = $this->get($this->app, '/shop/order', ['number' => $order['number']]);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('결제하기', $this->body($response));
+    }
+
     /** 기한이 지난 미결제 결제사 주문은 결제창 링크 대신 다시 접수하라고 안내한다. */
     #[DataProvider('connectionProvider')]
     public function testExpiredCardOrderShowsTheDeadlineNoticeInsteadOfThePayLink(array $config): void

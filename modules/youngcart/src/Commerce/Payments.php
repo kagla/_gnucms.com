@@ -120,10 +120,13 @@ final class Payments
             $this->recordOrphanApproval($order, $payment);
             throw DomainError::validation(['payment' => '결제사에는 승인이 남아 있지만 주문은 결제 완료가 아닙니다. 환불이 필요합니다.']);
         }
-        // 결제사 화면에서 직접 취소한 금액을 주문의 환불 누계에 맞춘다. 요청 키가 취소 누계를 담고 있어 반복 조회는 더하지 않는다.
-        if ((int) $order['paid_at'] > 0 && (int) $payment['cancelled'] > (int) $order['refunded_amount']) {
-            $this->orders->recordRefund((int) $order['id'], (int) $payment['cancelled'] - (int) $order['refunded_amount'],
-                'pg:' . self::PROVIDER, '결제사 조회로 확인한 취소', 'sync-' . $payment['transaction_id'] . '-' . $payment['cancelled']);
+        // 결제사 화면에서 직접 취소한 금액을 주문의 환불 누계에 맞춘다. 결과를 기다리는 환불 요청의
+        // 금액은 빼고 센다 — 그 돈은 환불 대조가 자기 요청 키로 적을 몫이라, 여기서 먼저 적으면 같은
+        // 취소가 두 번 빠진다. 요청 키가 확정 취소 누계를 담고 있어 반복 조회는 더하지 않는다.
+        $settled = (int) $payment['cancelled'] - array_sum(array_column($this->pendingRefunds($order), 'amount'));
+        if ((int) $order['paid_at'] > 0 && $settled > (int) $order['refunded_amount']) {
+            $this->orders->recordRefund((int) $order['id'], $settled - (int) $order['refunded_amount'],
+                'pg:' . self::PROVIDER, '결제사 조회로 확인한 취소', 'sync-' . $payment['transaction_id'] . '-' . $settled);
         }
         if ((int) ($payment['open_cancellations'] ?? 0) > 0) {
             throw DomainError::validation(['refund' => '결제사에서 아직 확정되지 않은 환불 요청이 있습니다. 환불 대조를 진행해 주세요.']);

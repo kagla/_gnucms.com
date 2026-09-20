@@ -405,6 +405,71 @@ final class PaymentsTest extends YoungCartTestCase
         self::assertCount($count, $again['history']);
     }
 
+    /**
+     * 응답을 받지 못한 환불이 결제사 조회에는 이미 취소로 보일 수 있다. 그 금액은 아직 확정되지
+     * 않았으므로 조회가 먼저 적어 버리면 나중의 환불 대조가 같은 돈을 두 번 적게 된다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testSyncLeavesAPendingRefundToTheMatchingStep(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($card, $tid);
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+
+        $key = bin2hex(random_bytes(16));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin'); self::fail('환불 응답을 받지 못했다'); }
+        catch (\RuntimeException) {}
+
+        $reference = bin2hex(random_bytes(20));
+        $this->queuePartialCancelInquiry($paid, $tid, [[$reference, 2000]]);
+        try { $this->shop->payments->sync($paid); self::fail('확정되지 않은 환불이 있으면 오류로 알린다'); }
+        catch (DomainError $e) { self::assertArrayHasKey('refund', $e->details()); }
+        self::assertSame(0, (int) $this->shop->orders->get((int) $card['id'])['refunded_amount'], '확정 전에는 적지 않는다');
+
+        $this->queuePartialCancelInquiry($paid, $tid, [[$reference, 2000]]);
+        $matched = $this->shop->payments->confirmRefund($paid, $key, $reference, 'admin');
+        self::assertSame(2000, (int) $matched['refunded_amount']);
+        $count = count($matched['history']);
+        $this->queuePartialCancelInquiry($matched, $tid, [[$reference, 2000]]);
+        $synced = $this->shop->payments->sync($matched);
+        self::assertSame(2000, (int) $synced['refunded_amount'], '대조로 적은 금액을 조회가 다시 더하지 않는다');
+        self::assertCount($count, $synced['history']);
+    }
+
+    /** 응답만 유실된 환불을 같은 키로 다시 보내면 결제 계층의 캐시된 결과로 한 번만 적힌다. */
+    #[DataProvider('connectionProvider')]
+    public function testRetryingALostRefundWithTheSameKeyRecordsItOnce(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $this->queueApproval($card, bin2hex(random_bytes(20)));
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+
+        $key = bin2hex(random_bytes(16));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin'); self::fail('환불 응답을 받지 못했다'); }
+        catch (\RuntimeException) {}
+        // 결제 계층은 응답을 받지 못한 요청을 재전송하지 않는다 — 같은 키의 재시도는 503 으로 막힌다.
+        try { $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin'); self::fail('자동 재전송은 없다'); }
+        catch (DomainError $e) { self::assertSame(503, $e->status()); }
+        self::assertSame(0, (int) $this->shop->orders->get((int) $card['id'])['refunded_amount']);
+
+        // 결제사에서 처리된 것을 확인해 원장이 성공으로 닫히면, 같은 키의 재시도는 캐시된 결과로 한 번만 적는다.
+        $reference = bin2hex(random_bytes(20));
+        $this->queuePartialCancelInquiry($paid, $paid['payment']['tid'], [[$reference, 2000]]);
+        $this->app->inicisGateway()->confirmRefund(Payments::gatewayOrder($paid), $key, $reference);
+        $calls = count($this->http->calls);
+        $after = $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin');
+        self::assertSame(2000, (int) $after['refunded_amount']);
+        self::assertCount($calls, $this->http->calls, '캐시된 결과를 쓰므로 PG 를 다시 부르지 않는다');
+        self::assertSame(2000, (int) $this->shop->payments->refund($paid, 2000, '배송비 조정', $key, 'admin')['refunded_amount']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testOverdueUnpaidOrdersExpireAndReturnStockButApprovingOnesAreLeftAlone(array $config): void
     {
