@@ -24,7 +24,8 @@ final class Context
         public readonly string $key,
         private array $availableServices,
         ?string $routePrefix = null,
-        public readonly ?string $adminRoutePrefix = null
+        public readonly ?string $adminRoutePrefix = null,
+        public readonly bool $aliases = true
     ) {
         if ($routePrefix !== null && !RoutePrefix::valid($routePrefix)) {
             throw new InvalidArgumentException('확장 기본 주소가 올바르지 않습니다.');
@@ -40,7 +41,8 @@ final class Context
     /** 기존 폼·북마크·외부 콜백도 동일한 권한·인증 검사를 거친다. */
     private function paths(string $path): array
     {
-        $paths = [$this->path($path), '/' . $this->key . $path];
+        $paths = [$this->path($path)];
+        if ($this->aliases) $paths[] = '/' . $this->key . $path;
         if ($path === '/') $paths[] = $this->routePrefix . '/';
         return array_values(array_unique($paths));
     }
@@ -69,6 +71,7 @@ final class Context
         }
         $paths = $this->paths($legacyPath ?? $path);
         if ($admin && $this->adminRoutePrefix !== null) {
+            if (!$this->aliases) $paths = [];
             array_unshift($paths, RoutePrefix::path($this->adminRoutePrefix, $path));
             if ($path === '/') $paths[] = $this->adminRoutePrefix . '/';
         }
