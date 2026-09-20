@@ -92,6 +92,10 @@ final class CommerceController
             $order = $this->service->orders->owned($number, $userId, $_SESSION['yc_guest_orders']);
             if ($page === 'order/cancel') {
                 try {
+                    // 승인이 오가는 중인 주문은 돈이 움직였을 수 있다. 결과가 확정된 뒤에 취소한다.
+                    if ($this->service->payments->inProgress($order)) {
+                        throw DomainError::validation(['status' => '결제 결과를 확인하는 중입니다. 잠시 후 다시 시도하거나 상점에 문의해 주세요.']);
+                    }
                     $this->service->orders->transition((int) $order['id'], $order['status'], 'cancelled', $userId === null ? 'guest' : 'user:' . $userId,
                         ['note' => '구매자가 주문을 취소했습니다.'], true);
                     return $this->redirect($response, $url . '/order?number=' . rawurlencode($number));
@@ -101,8 +105,11 @@ final class CommerceController
             $data['order'] = $order;
             $payState = $input['pay'] ?? '';
             $data['pay_state'] = in_array($payState, ['closed', 'failed'], true) ? $payState : '';
-            $data['pay_url'] = $order['status'] === 'pending' && $this->service->payments->isPgOrder($order) && ((int) $order['pay_by'] === 0 || (int) $order['pay_by'] > \GnuCms\Support\Clock::timestamp())
-                ? $url . '/pay?number=' . rawurlencode($number) : null;
+            $pgPending = $order['status'] === 'pending' && $this->service->payments->isPgOrder($order);
+            $overdue = (int) $order['pay_by'] > 0 && (int) $order['pay_by'] <= \GnuCms\Support\Clock::timestamp();
+            $data['pay_url'] = $pgPending && !$overdue ? $url . '/pay?number=' . rawurlencode($number) : null;
+            $data['pay_expired'] = $pgPending && $overdue;
+            $data['pay_in_progress'] = $this->service->payments->inProgress($order);
             $data['method_labels'] = \GnuCms\Modules\YoungCart\Commerce\Payments::METHODS;
             $data['just_ordered'] = ($_SESSION['yc_just_ordered'] ?? null) === $number;
             unset($_SESSION['yc_just_ordered']);

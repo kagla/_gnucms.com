@@ -148,6 +148,21 @@ final class YoungCartAdminTest extends WebTestCase
         self::assertStringContainsString('name="refund_key"', $page);
     }
 
+    /** 결제 대기가 아닌 주문에 결제사 승인이 남아 있으면 관리자 화면이 환불 필요를 알린다. */
+    #[DataProvider('connectionProvider')]
+    public function testOrphanApprovalWarnsTheAdminToRefund(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $this->shop->orders->recordOrphanApproval((int) $order['id'], 'pg:inicis', 'StdpayCARD0001', '카드 결제');
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
+        self::assertStringContainsString('환불이 필요합니다', $page);
+        self::assertStringContainsString('결제사에서 환불한 뒤 처리 메모를 남겨 주세요', $page);
+        self::assertStringContainsString('StdpayCARD0001', $page);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testOrderListShowsTheMethodAndFiltersPaid(array $config): void
     {

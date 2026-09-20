@@ -165,6 +165,80 @@ final class PaymentsTest extends YoungCartTestCase
         self::assertCount(2, $again['history']);
     }
 
+    /**
+     * 결제 대기가 아닌 주문(예: 이미 취소됨)에 결제사 승인이 도착하면 결제 완료로 적지 않되,
+     * 주문에 「환불 필요」 표시와 이력을 남겨 관리자가 찾을 수 있게 한다. 예외는 그대로 올라간다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testApprovalOnACancelledOrderIsRecordedForReviewInsteadOfPaid(array $config): void
+    {
+        $this->setupPayments($config);
+        $order = $this->place('card');
+        $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($order, $tid);
+        try { $this->shop->payments->complete($order, $this->authCallback($order)); self::fail('결제 대기가 아닌 주문은 결제 완료가 되지 않는다'); }
+        catch (DomainError $e) { self::assertArrayHasKey('status', $e->details()); }
+        $after = $this->shop->orders->get((int) $order['id']);
+        self::assertSame('cancelled', $after['status']);
+        self::assertSame(0, (int) $after['paid_at']);
+        self::assertSame(0, (int) $after['paid_amount']);
+        self::assertTrue($after['payment']['needs_review']);
+        self::assertSame($tid, $after['payment']['tid']);
+        self::assertStringContainsString('환불이 필요합니다', end($after['history'])['note']);
+        self::assertSame('cancelled', end($after['history'])['status']);
+
+        // 콜백이 다시 와도 같은 승인을 두 번 적지 않는다(조회만 한 번 더 한다).
+        $count = count($after['history']);
+        $this->queueInquiry($after, $tid);
+        try { $this->shop->payments->complete($after, $this->authCallback($order)); } catch (DomainError) {}
+        self::assertCount($count, $this->shop->orders->get((int) $order['id'])['history']);
+    }
+
+    /** 관리자 결제 조회도 같은 어긋남을 찾아낸다 — 성공 안내 대신 오류로 알리고 한 번만 기록한다. */
+    #[DataProvider('connectionProvider')]
+    public function testSyncFlagsAnApprovalLeftOnANonPendingOrder(array $config): void
+    {
+        $this->setupPayments($config);
+        $order = $this->place('card');
+        $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        // 승인 요청이 통신 실패로 끝나 원장은 pending 으로 남는다. 결제사에는 승인이 남아 있을 수 있다.
+        $this->http->responses[] = new \RuntimeException('timeout');
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']];
+        try { $this->shop->payments->complete($order, $this->authCallback($order)); } catch (\Throwable) {}
+        $cancelled = $this->shop->orders->get((int) $order['id']);
+
+        $tid = bin2hex(random_bytes(20));
+        $this->queueInquiry($cancelled, $tid);
+        try { $this->shop->payments->sync($cancelled); self::fail('환불이 필요한 주문은 성공으로 끝나면 안 된다'); }
+        catch (DomainError $e) { self::assertArrayHasKey('payment', $e->details()); }
+        $after = $this->shop->orders->get((int) $order['id']);
+        self::assertSame('cancelled', $after['status']);
+        self::assertTrue($after['payment']['needs_review']);
+        self::assertStringContainsString('환불이 필요합니다', end($after['history'])['note']);
+
+        $count = count($after['history']);
+        $this->queueInquiry($after, $tid);
+        try { $this->shop->payments->sync($after); self::fail('두 번째 조회도 오류다'); } catch (DomainError) {}
+        self::assertCount($count, $this->shop->orders->get((int) $order['id'])['history']);
+    }
+
+    /** 결제창을 여는 순간 기한이 코앞이면, 결제 도중 만료되지 않게 기한을 늘린다. */
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutExtendsAnImminentDeadline(array $config): void
+    {
+        $this->setupPayments($config);
+        $order = $this->place('card');
+        $this->app->db()->update('yc_orders', ['pay_by' => Clock::timestamp() + 60], 'id = :id', ['id' => (int) $order['id']]);
+        $order = $this->shop->orders->get((int) $order['id']);
+        $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $after = $this->shop->orders->get((int) $order['id']);
+        self::assertGreaterThanOrEqual(Clock::timestamp() + 800, (int) $after['pay_by']);
+        self::assertCount(1, $after['history'], '기한 연장은 이력을 남기지 않는다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testConfirmDepositOnlyForManualTransferAndOnlyOnce(array $config): void
     {

@@ -85,6 +85,10 @@ final class Payments
     {
         if ($order['status'] !== 'pending' || !$this->isPgOrder($order)) throw DomainError::validation(['payment' => '결제할 수 있는 주문이 아닙니다.']);
         if ((int) $order['pay_by'] > 0 && (int) $order['pay_by'] < Clock::timestamp()) throw DomainError::validation(['payment' => '결제 기한이 지났습니다. 주문을 다시 접수해 주세요.']);
+        // 결제창을 여는 순간 기한이 코앞이면, 고객이 카드 정보를 넣는 사이에 만료 취소되지 않게 민다.
+        if ((int) $order['pay_by'] > 0 && (int) $order['pay_by'] - Clock::timestamp() < 900) {
+            $order = $this->orders->extendDeadline((int) $order['id'], Clock::timestamp() + 900);
+        }
         $gateway = $this->app->inicisGateway();
         $customer = ['name' => $order['buyer_name'], 'phone' => preg_replace('/\D/', '', $order['phone']) ?? '', 'email' => $order['email']];
         $callbackUrl = $this->callbackUrl($order, $callbackBase);
@@ -108,17 +112,39 @@ final class Payments
     {
         if (!$this->isPgOrder($order)) throw DomainError::validation(['payment' => '결제사 결제가 아닌 주문입니다.']);
         $payment = $this->app->inicisGateway()->fetch(self::gatewayOrder($order));
-        if (($payment['status'] ?? '') === 'NOT_FOUND') return $order;
+        if (($payment['status'] ?? '') === 'NOT_FOUND') throw DomainError::validation(['payment' => '결제사에 이 주문의 결제 기록이 없습니다.']);
         if (!($payment['valid'] ?? false)) throw DomainError::serviceUnavailable('결제사 조회 결과가 주문과 맞지 않습니다. PG 관리자 화면에서 확인해 주세요.');
         if ($order['status'] === 'pending' && $payment['status'] === 'PAID') return $this->applyFetched($order, $payment, '결제 조회로 승인을 확인했습니다.');
+        // 결제사에는 승인이 남아 있는데 주문은 결제 완료가 아니다(취소·만료된 주문의 승인). 환불이 필요하다.
+        if ($payment['status'] === 'PAID' && (int) $order['paid_at'] === 0) {
+            $this->recordOrphanApproval($order, $payment);
+            throw DomainError::validation(['payment' => '결제사에는 승인이 남아 있지만 주문은 결제 완료가 아닙니다. 환불이 필요합니다.']);
+        }
         return $this->orders->get((int) $order['id']);
     }
 
     private function applyFetched(array $order, array $payment, string $note): array
     {
         if (($payment['status'] ?? '') !== 'PAID' || !($payment['valid'] ?? false)) throw DomainError::serviceUnavailable('승인 결과를 확인하지 못했습니다. 관리자에게 문의해 주세요.');
-        return $this->orders->markPaid((int) $order['id'], 'pg:' . self::PROVIDER, (int) $order['total'],
-            ['tid' => (string) $payment['transaction_id'], 'label' => self::METHODS[$order['payment_method']] ?? $order['payment_method']], (int) $payment['paid_at'], $note);
+        try {
+            return $this->orders->markPaid((int) $order['id'], 'pg:' . self::PROVIDER, (int) $order['total'],
+                ['tid' => (string) $payment['transaction_id'], 'label' => self::label($order)], (int) $payment['paid_at'], $note);
+        } catch (DomainError $e) {
+            // 결제 대기가 아닌 주문에 승인이 도착했다. 주문은 그대로 두고 환불 필요만 적은 뒤 그대로 올린다.
+            if (!array_key_exists('status', $e->details())) throw $e;
+            $this->recordOrphanApproval($order, $payment);
+            throw $e;
+        }
+    }
+
+    private function recordOrphanApproval(array $order, array $payment): void
+    {
+        $this->orders->recordOrphanApproval((int) $order['id'], 'pg:' . self::PROVIDER, (string) $payment['transaction_id'], self::label($order));
+    }
+
+    private static function label(array $order): string
+    {
+        return self::METHODS[$order['payment_method']] ?? (string) $order['payment_method'];
     }
 
     /** 환불. 결제사 주문은 PG 환불이 먼저 성공해야 기록하고, 무통장은 밖에서 돌려준 돈을 기록만 한다. */

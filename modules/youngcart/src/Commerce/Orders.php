@@ -199,6 +199,33 @@ final class Orders
     }
 
     /**
+     * 결제 대기가 아닌 주문(취소·만료 뒤)에 결제사 승인이 확인됐을 때. 상태·결제 금액은 건드리지
+     * 않고 거래번호와 「환불 필요」 표시만 남겨 관리자가 찾을 수 있게 한다. 같은 거래번호로 두 번
+     * 불려도(콜백 재전송·반복 조회) 이력은 한 번만 쌓인다.
+     */
+    public function recordOrphanApproval(int $id, string $actor, string $tid, string $label): array
+    {
+        $this->store->transaction(function () use ($id, $actor, $tid, $label): void {
+            $order = $this->get($id);
+            if (($order['payment']['needs_review'] ?? false) === true && (string) ($order['payment']['tid'] ?? '') === $tid) return;
+            $detail = ['tid' => $tid, 'label' => $label, 'needs_review' => true] + $order['payment'];
+            $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET payment_detail = ?, updated_at = ? WHERE id = ?',
+                [json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id]);
+            $this->history($id, $order['status'], $actor,
+                '결제사 승인이 확인됐지만 주문이 결제 대기 상태가 아닙니다. 환불이 필요합니다. 거래번호 ' . $tid);
+        });
+        return $this->get($id);
+    }
+
+    /** 결제창을 여는 동안 기한이 지나지 않게 미는 것뿐이다. 상태도 이력도 바꾸지 않는다. */
+    public function extendDeadline(int $id, int $until): array
+    {
+        $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET pay_by = ?, updated_at = ? WHERE id = ? AND status = ? AND pay_by > 0 AND pay_by < ?',
+            [$until, Clock::timestamp(), $id, 'pending', $until]);
+        return $this->get($id);
+    }
+
+    /**
      * 무통장입금과 접수 전용(결제 수단이 아예 없는) 주문의 입금 확인. 관리자만 부른다.
      * 결제사(PG) 주문은 카드사 승인으로만 결제 완료가 되므로 여기서 거절한다.
      */

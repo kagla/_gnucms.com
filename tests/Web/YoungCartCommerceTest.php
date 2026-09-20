@@ -175,6 +175,49 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
     }
 
+    /**
+     * 결제창만 연 주문(원장 ready)은 아직 승인이 진행 중이 아니므로 고객이 취소할 수 있다.
+     * 승인 요청이 끝나지 않은 주문(원장 pending)은 돈이 움직였을 수 있어 취소를 막는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testApprovalInFlightBlocksTheCustomerCancelAndThePayLink(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $ready = $this->placeCardOrder();
+        $this->get($this->app, '/shop/pay', ['number' => $ready['number']]);
+        $cancel = $this->post($this->app, '/shop/order/cancel', $this->form(['number' => $ready['number']]));
+        self::assertSame(303, $cancel->getStatusCode(), $this->body($cancel));
+        self::assertSame('cancelled', $this->shop->orders->get((int) $ready['id'])['status']);
+
+        $order = $this->placeCardOrder();
+        $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+        $this->http->responses[] = new \RuntimeException('timeout');
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']]; // 망취소 응답
+        $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => $state], $this->callbackFor($order));
+
+        $blocked = $this->post($this->app, '/shop/order/cancel', $this->form(['number' => $order['number']]));
+        self::assertSame(422, $blocked->getStatusCode());
+        self::assertStringContainsString('결제 결과를 확인하는 중', $this->body($blocked));
+        self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $order['number']]));
+        self::assertStringContainsString('결제 결과를 확인하는 중', $page);
+        self::assertStringNotContainsString('결제하기', $page);
+        self::assertStringNotContainsString('전체 주문 취소하기', $page);
+    }
+
+    /** 기한이 지난 미결제 결제사 주문은 결제창 링크 대신 다시 접수하라고 안내한다. */
+    #[DataProvider('connectionProvider')]
+    public function testExpiredCardOrderShowsTheDeadlineNoticeInsteadOfThePayLink(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $this->app->db()->update('yc_orders', ['pay_by' => time() - 60], 'id = :id', ['id' => (int) $order['id']]);
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $order['number']]));
+        self::assertStringContainsString('결제 기한이 지났습니다', $page);
+        self::assertStringNotContainsString('결제하기', $page);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testCheckoutStaysReceiptOnlyWhenNoMethodIsEnabled(array $config): void
     {
