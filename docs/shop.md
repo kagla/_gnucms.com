@@ -1,7 +1,7 @@
-# 쇼핑몰(영카트 모듈) 운영 안내
+# 쇼핑몰 운영 안내
 
-영카트5의 기능을 GNUCMS 확장 모듈로 다시 만든 쇼핑몰이다. 코어 배포본에 함께 실리는 내장
-모듈이라 새 설치에서는 켜진 채 시작한다. 분류·상품·옵션·이미지·재고 관리와
+영카트5의 기능을 GNUCMS 코어 기능으로 다시 만든 쇼핑몰이다. 게시판·회원처럼 처음부터 있으며
+켜고 끄는 스위치나 데이터 설치는 없다. 분류·상품·옵션·이미지·재고 관리와
 반응형 종합 쇼핑몰 화면, 장바구니, 회원·비회원 주문 접수·조회·취소, 관리자 주문 처리를 제공한다.
 온라인 결제는 코어 결제 계층(설정 → 결제, `docs/payments.md`)의 KG이니시스로 한다. 결제 수단이
 하나도 켜져 있지 않으면 예전처럼 접수만 받고 판매자가 결제를 따로 안내한다.
@@ -10,34 +10,23 @@
 
 | 항목 | 값 |
 |---|---|
-| 패키지 | `modules/youngcart` — 코어 배포본에 내장된 모듈 |
+| 코드 | `src/Shop` (`GnuCms\Shop`), 템플릿 `templates/default/shop/`, 테마 덮어쓰기 `templates/<테마>/shop/` |
 | 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호`, 결제 `/shop/pay?number=주문번호`, 결제 콜백 `/shop/pay/callback`(이니시스가 부른다, 세션 없음) |
 | 관리자 주소 | `/admin/shop` 현황, `/admin/shop/settings`, `/admin/shop/categories`, `/admin/shop/products`와 `new`·`edit`·`types`·`stock`·`option-stock`, 주문 목록 `/admin/shop/orders`, 주문 상세 `/admin/shop/orders/detail?id=번호` |
-| 별칭 | 없음. 설명 파일의 `aliases: false`로 `/modules/youngcart/…` 주소를 만들지 않는다 |
-| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (모듈 스키마 3판 — 3판이 `yc_orders`에 결제 칸을 더한다) |
+| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (코어 스키마 27판이 만든다) |
 
-작은 쇼핑몰(`modules/shop`)도 `/shop`을 기본 주소로 쓰므로 둘 중 하나만 켤 수 있다. 둘 다 켜면
-나중에 등록되는 패키지가 "기본 주소가 다른 경로와 겹칩니다" 오류로 실행되지 않는다.
+`/shop`은 코어 주소다. 같은 기본 주소를 선언한 모듈은 실행되지 않는다.
 
-## 설치
+## 설치와 업그레이드
 
-1. 새 설치에서는 이미 켜져 있다. 기존 사이트를 업그레이드했다면 관리자 → 모듈에서 **쇼핑몰**을 켜고 저장한다.
-2. `/admin/shop`에서 **데이터 설치**를 누른다. GET 조회만으로는 테이블을 만들지 않는다.
-   SQLite는 설치 전에 `storage/backups/extensions/`에 자동 백업을 남긴다.
-3. `/admin/shop/settings`에서 메인 배너·메인 블록·목록 크기·이미지 크기·배송/교환 안내문, 기본 배송비·무료배송 기준·주문 접수 안내를 정한다.
-4. 분류를 만들고 상품을 등록한다. 사이트 상단 메뉴에 **쇼핑몰**이 자동으로 나타난다.
+설치할 것이 없다. 코어 스키마가 표를 만들고, 관리자 메뉴의 **쇼핑몰**(`/admin/shop`)이 바로 열린다.
+모듈(`modules/youngcart`) 시절에 설치한 사이트는 업그레이드 때 코어 스키마 27판이 그 표를 그대로
+넘겨받고 확장 스키마 기록을 지운다. 확장 상태 파일에 남은 `modules/youngcart`는 무시되고 다음
+저장 때 빠진다. 업로드(`uploads/youngcart/`)와 설정(`yc_settings`)은 그대로다.
 
-설치 전에는 모든 공개 주소가 "쇼핑몰을 준비 중입니다" 안내를 보여 준다.
-
-### 기존 설치에서 갱신
-
-모듈 데이터 판이 올라가면(1판 → 2판 → 3판) `/admin/shop`의 **데이터 설치**(또는 데이터 갱신)를
-한 번 실행해야 한다. 어느 판에서 올라오든 같은 단추다. 1판에서는 주문 테이블 3개와 인덱스가,
-2판에서는 주문의 결제 칸(결제 수단·원장 키·결제 시각·금액·환불 누계·기한)과 그 인덱스가 더해진다.
-기존 카탈로그·주문 테이블과 데이터는 그대로 둔다. 중간 실패 후 다시 실행해도 안전하다.
-등록된 주문 테이블은 GNUCMS의 확장 데이터 백업·복원에도 포함된다. 코어 DB 판 번호와 제품
-`version.txt`는 이 변경으로 올리지 않는다. 갱신 전에는 공개 쇼핑몰이 준비 중 화면을 보여 준다.
-기존 관리자 재고·일괄 편집 템플릿을 재정의했다면 아래의 `original_stock` 필드도 반영한다.
+판매를 하지 않는 사이트는 쇼핑몰 설정의 **쇼핑몰 공개**를 끈다. 상단 메뉴의 탭이 사라지고
+`/shop` 화면은 "준비 중" 안내를 보인다. 관리자 화면과 진행 중인 결제(`/shop/pay/callback`)는
+영향을 받지 않는다.
 
 ## 결제
 
@@ -124,7 +113,7 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 
 ## 화면 재정의
 
-테마의 `extensions/youngcart/` 아래에 같은 이름의 템플릿을 두면 조각 단위로 재정의된다.
+테마의 `templates/<테마>/shop/` 아래에 같은 이름의 템플릿을 두면 조각 단위로 재정의된다.
 정적 자산은 `www/themes/{테마}/youngcart.css`, `youngcart.js`, `youngcart-admin.css`, `youngcart-admin.js`이며 테마에 없으면 기본 테마 파일을 쓴다.
 주문서 주소 검색은 `_postcode.php` 조각과 주문서에서만 읽는 `youngcart-postcode.js`로 재정의한다.
 조각의 `data-yc-postcode-*` 요소와 `yc-postcode`, `yc-address`, `yc-address_detail` 입력칸 ID를 유지한다.
@@ -188,7 +177,7 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
   설정은 기존 `yc_settings`에, 업로드는 `uploads/youngcart/0/`에 저장되어 전체 백업에 포함된다.
   `/shop/banner-image?f=파일명`은 현재 저장된 파일만 제공한다. 비표시 상태나 다른 이미지 방식일 때는 관리자만 조회할 수 있다.
 - 기본 공개 테마는 `_banner.php`, 관리자 폼은 `admin/_banner_settings.php`를 사용한다.
-  테마의 `extensions/youngcart/`에서 두 조각을 재정의할 수 있다. 기존 `index.php` 재정의에는
+  테마의 `templates/<테마>/shop/`에서 두 조각을 재정의할 수 있다. 기존 `index.php` 재정의에는
   새 `banner` 뷰 데이터와 `_banner` 삽입을 반영해야 설정이 표시된다.
   기존 설정 폼에 배너 필드가 없으면 저장된 배너를 보존한다. 업로드를 사용하는 재정의 폼에는
   `enctype="multipart/form-data"`와 `banner_image` 파일 입력이 필요하다.
@@ -197,7 +186,6 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 
 - 현황에는 상품 설정별 수량, 전체 기간의 현재 주문 상태, 최근 주문 최대 5건과 재고 통보 기준 이하의
   상품·옵션 최대 6건을 표시한다. 주문 수를 누르면 해당 상태의 주문 목록으로 이동한다.
-  데이터 설치는 준비되지 않았을 때 표시하며, 설치 후에는 하단 **데이터 준비 완료 → 설치 정보**에서 갱신한다.
 - 상품 목록에서는 상품명·가격·재고·판매 상태를 편집하고 **목록 변경사항 저장**을 누른다.
   저장은 현재 페이지의 모든 입력에 적용되고, 체크박스는 **선택 삭제**에만 쓰인다.
   분류 삭제는 각 행에서 처리하며, 상품 복사는 목록 아래 접힌 영역에 있다.
@@ -273,7 +261,7 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 
 ## 영카트5 데이터 대응표
 
-| 영카트5 | 이 모듈 |
+| 영카트5 | 이 쇼핑몰 |
 |---|---|
 | `ca_id` | `yc_categories.code` |
 | `it_id` | `yc_products.code` |

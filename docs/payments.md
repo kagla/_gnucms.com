@@ -1,6 +1,6 @@
 # 결제 설정 (설정 → 결제)
 
-쇼핑몰(`modules/youngcart`) 주문의 온라인 결제는 코어의 결제 계층(`src/Payment`)이 KG이니시스와
+쇼핑몰(`src/Shop`) 주문의 온라인 결제는 코어의 결제 계층(`src/Payment`)이 KG이니시스와
 연동한다. 관리자는 **설정 → 결제**(`/admin/settings/payment`)에서 테스트·운영 환경마다 상점
 정보를 저장하고 실행을 허용한다.
 
