@@ -28,4 +28,13 @@ final class View
         }
         return $view->forExtension($name, $templates);
     }
+
+    public static function forShop(ServerRequestInterface $request): PhpView
+    {
+        $view = self::fromRequest($request);
+        if (!$view instanceof PhpView) {
+            throw new RuntimeException('쇼핑몰 화면에는 PHP 템플릿 뷰가 필요합니다.');
+        }
+        return $view->forShop();
+    }
 }

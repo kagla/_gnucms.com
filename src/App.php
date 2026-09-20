@@ -165,6 +165,8 @@ final class App
 
     private ?\GnuCms\Payment\InicisGateway $inicisGateway = null;
 
+    private ?\GnuCms\Shop\Service $shop = null;
+
     private ?string $configFile;
 
     /** @var Identity */
@@ -620,6 +622,11 @@ final class App
         }
 
         return $this->aligoService;
+    }
+
+    public function shop(): \GnuCms\Shop\Service
+    {
+        return $this->shop ??= new \GnuCms\Shop\Service($this);
     }
 
     public function paymentSettings(): \GnuCms\Payment\Settings
