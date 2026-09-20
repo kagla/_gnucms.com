@@ -77,11 +77,6 @@
 .yc-admin-page .yc-quick-links strong{font-size:13px;display:block}
 .yc-admin-page .yc-quick-links small{display:block;font-size:11px;margin-top:.3rem;line-height:1.5}
 .yc-admin-page .yc-quick-links>a>svg{margin-left:auto;flex:none;color:var(--yc-muted)}
-.yc-admin-page .yc-maintenance{border:1px solid var(--yc-line);border-radius:10px;padding:1rem 1.25rem;font-size:12px}
-.yc-admin-page .yc-maintenance summary{display:flex;align-items:center;gap:.5rem;font-weight:500;cursor:pointer;list-style:none}
-.yc-admin-page .yc-maintenance summary>.muted{margin-left:auto;text-decoration:underline;text-underline-offset:3px}
-.yc-admin-page .yc-maintenance>div{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-top:1rem}
-.yc-admin-page .yc-setup .card-body{align-items:flex-start;gap:.75rem;padding:2rem}
 /* Filters and editable lists. Horizontal scrolling is confined to the table region. */
 .yc-admin-page .yc-filter{display:flex;gap:.65rem;align-items:flex-end;flex-wrap:wrap;padding:1rem 1.25rem;border:1px solid var(--yc-line);border-radius:12px;background:var(--yc-paper);margin:0 0 1rem}
 .yc-admin-page .yc-filter>label{min-width:0;font-size:12px;font-weight:650;flex:1 1 10rem}

@@ -18,7 +18,7 @@ final class ShopPublicTest extends WebTestCase
     private Service $shop;
     private string $root;
 
-    private function setupShop(array $config, bool $install = true): void
+    private function setupShop(array $config): void
     {
         session_name(GNUCMS_ID . '_session');
         session_start(); $_SESSION = []; session_write_close();
@@ -27,7 +27,6 @@ final class ShopPublicTest extends WebTestCase
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'],
             'app' => ['url' => 'https://shop.example.test']]);
         $this->shop = new Service($this->app);
-        if ($install) $this->shop->install();
     }
 
     private function seed(): array
@@ -99,13 +98,9 @@ final class ShopPublicTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testNotInstalledShowsPreparingPageAndNoAliasPaths(array $config): void
+    public function testNoAliasPaths(array $config): void
     {
-        $this->setupShop($config, false);
-        $response = $this->get($this->app, '/shop');
-        self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($response));
-        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop/list', ['ca' => '10'])));
+        $this->setupShop($config);
         self::assertSame(404, $this->get($this->app, '/shop/image', ['p' => '1', 'f' => 'x.png', 's' => 'list'])->getStatusCode());
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
         self::assertSame(404, $this->get($this->app, '/shop/admin')->getStatusCode());

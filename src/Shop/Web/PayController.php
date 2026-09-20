@@ -28,7 +28,6 @@ final class PayController
         $url = $base . $this->routePrefix;
         $view = View::forShop($request);
         $response = $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
-        $this->service->requireReady();
         $identity = $this->service->app->guestAcl()->identity();
         $userId = $identity->isGuest() ? null : (int) $identity->sub();
         $_SESSION['yc_guest_orders'] ??= [];

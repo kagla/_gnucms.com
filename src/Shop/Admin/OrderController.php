@@ -16,7 +16,6 @@ final class OrderController extends AdminBase
     public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $data = $this->context($request, $page);
-        if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $data['statuses'] = Orders::STATUSES;
         $data['payment_methods'] = Payments::METHODS;
         $this->service->payments->expireOverdue();

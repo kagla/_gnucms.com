@@ -21,7 +21,7 @@ final class ShopAdminTest extends WebTestCase
     private FakeTransport $http;
     private array $payConfig;
 
-    private function setupShop(array $config, bool $install = true): void
+    private function setupShop(array $config): void
     {
         session_name(GNUCMS_ID . '_session');
         session_start(); $_SESSION = []; session_write_close();
@@ -29,7 +29,6 @@ final class ShopAdminTest extends WebTestCase
         $config['prefix'] = 'ya' . bin2hex(random_bytes(4)) . '_';
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'app' => ['url' => 'https://shop.example.test']]);
         $this->shop = new Service($this->app);
-        if ($install) $this->shop->install();
     }
 
     private function signIn(bool $admin): int
@@ -234,27 +233,15 @@ final class ShopAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testGuardsInstallAndSettings(array $config): void
+    public function testGuardsSettings(array $config): void
     {
-        $this->setupShop($config, false);
+        $this->setupShop($config);
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop/settings'), '/admin/shop/settings');
-        $this->assertLoginRedirect($this->post($this->app, '/admin/shop', ['action' => 'install']));
         $this->signIn(false);
         self::assertSame(403, $this->get($this->app, '/admin/shop')->getStatusCode());
         $this->signIn(true);
-        $dashboard = $this->body($this->get($this->app, '/admin/shop'));
-        self::assertStringContainsString('데이터 설치', $dashboard);
-        self::assertStringContainsString('설치 또는 갱신이 필요합니다', $dashboard);
-        self::assertSame(403, $this->post($this->app, '/admin/shop', ['action' => 'install'])->getStatusCode());
-        self::assertFalse($this->shop->ready());
-        $response = $this->post($this->app, '/admin/shop', $this->csrf(['action' => 'install']));
-        self::assertSame(303, $response->getStatusCode());
-        self::assertSame('/admin/shop?installed=1', $response->getHeaderLine('Location'));
-        self::assertTrue($this->shop->ready());
-        $dashboard = $this->body($this->get($this->app, '/admin/shop', ['installed' => '1']));
-        self::assertStringContainsString('설치했습니다', $dashboard);
-        self::assertStringContainsString('상품 0', $dashboard);
+        self::assertStringContainsString('상품 0', $this->body($this->get($this->app, '/admin/shop')));
         $settings = $this->body($this->get($this->app, '/admin/shop/settings'));
         self::assertStringContainsString('name="main_hit_use"', $settings);
         self::assertStringContainsString('name="category_columns" value="3"', $settings);
@@ -323,16 +310,6 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame(303, $hidden->getStatusCode());
         self::assertStringNotContainsString('class="yc-hero"', $this->body($this->get($this->app, '/shop')));
         self::assertSame(200, $this->get($this->app, '/shop/banner-image', ['f' => $filename])->getStatusCode());
-    }
-
-    #[DataProvider('connectionProvider')]
-    public function testNotInstalledAdminPagesRedirectToDashboard(array $config): void
-    {
-        $this->setupShop($config, false);
-        $this->signIn(true);
-        $response = $this->get($this->app, '/admin/shop/settings');
-        self::assertSame(303, $response->getStatusCode());
-        self::assertSame('/admin/shop?install=1', $response->getHeaderLine('Location'));
     }
 
     #[DataProvider('connectionProvider')]

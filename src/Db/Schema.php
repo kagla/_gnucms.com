@@ -20,6 +20,7 @@ final class Schema
         'extension_schemas',
         'message_jobs', 'message_recipients', 'alimtalk_templates',
         'pay_inicis_settings', 'pay_inicis_transactions',
+        ...\GnuCms\Shop\Schema::TABLES,
     ];
 
     private const INDEXES = [
@@ -62,7 +63,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '26';
+    public const VERSION = '27';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -137,6 +138,7 @@ final class Schema
         $this->migrateAligoMessaging();
         $this->migratePayments();
         $this->migrateExtensionSchemas();
+        $this->migrateShop();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('system.schema_version', $stamp);
         $this->db->execute(
@@ -158,6 +160,7 @@ final class Schema
         foreach ($this->statements() as $sql) {
             $this->db->execute($this->expand($sql));
         }
+        \GnuCms\Shop\Schema::migrate($this->db);
 
         // 새로 만든 스키마는 이미 최신이다. 첫 요청에서 헛돌지 않게 표시해 둔다.
         $this->ensureSiteSetting('system.schema_version', $this->stamp());
@@ -299,6 +302,15 @@ final class Schema
         foreach ($this->paymentStatements() as $sql) {
             preg_match('/^CREATE TABLE (\w+)/', $sql, $m);
             if (!$this->tableExists($m[1])) $this->db->execute($this->expand($sql));
+        }
+    }
+
+    /** 27판: 쇼핑몰 표. 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
+    public function migrateShop(): void
+    {
+        \GnuCms\Shop\Schema::migrate($this->db);
+        if ($this->tableExists('extension_schemas')) {
+            $this->db->execute('DELETE FROM ' . $this->db->table('extension_schemas') . ' WHERE package_key = ?', ['modules/youngcart']);
         }
     }
 

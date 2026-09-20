@@ -20,7 +20,6 @@ final class ProductFormController extends AdminBase
     public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $data = $this->context($request, $page);
-        if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $input = $data['input'];
         $id = $page === 'products/edit' ? Input::id($input['id'] ?? '') : null;
         $product = $id === null ? null : $this->service->products->get($id);

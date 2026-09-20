@@ -14,7 +14,6 @@ final class CategoryController extends AdminBase
     public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $data = $this->context($request, $page);
-        if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $input = $data['input'];
         $categories = $this->service->categories;
         try {

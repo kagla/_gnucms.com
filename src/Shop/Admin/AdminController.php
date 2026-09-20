@@ -7,7 +7,6 @@ namespace GnuCms\Shop\Admin;
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Shop\HomeBanner;
-use GnuCms\Shop\Schema;
 use GnuCms\Shop\Settings;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -25,29 +24,19 @@ final class AdminController extends AdminBase
 
     private function dashboard(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
-        if ($request->getMethod() === 'POST') {
-            if (($data['input']['action'] ?? '') !== 'install') throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
-            $this->service->install();
-            return $this->redirect($response, $data['admin_url'] . '?installed=1');
-        }
-        $data['status'] = $this->service->schema()->status(Schema::KEY);
-        $data['version'] = Schema::VERSION;
-        $data['stats'] = $data['ready'] ? $this->service->products->stats() : null;
+        $data['stats'] = $this->service->products->stats();
         $data['order_stats'] = [];
-        if ($data['ready']) foreach ($this->service->store->select('SELECT status, COUNT(*) AS count FROM ' . $this->service->store->table('yc_orders') . ' GROUP BY status') as $row) {
+        foreach ($this->service->store->select('SELECT status, COUNT(*) AS count FROM ' . $this->service->store->table('yc_orders') . ' GROUP BY status') as $row) {
             $data['order_stats'][$row['status']] = (int) $row['count'];
         }
-        $data['low_stock'] = $data['ready'] ? $this->service->products->lowStock() : ['products' => [], 'options' => []];
-        $data['recent_orders'] = $data['ready'] ? array_slice($this->service->orders->listing(null, '', 1, true)['items'], 0, 5) : [];
+        $data['low_stock'] = $this->service->products->lowStock();
+        $data['recent_orders'] = array_slice($this->service->orders->listing(null, '', 1, true)['items'], 0, 5);
         $data['statuses'] = Orders::STATUSES;
-        if (($data['input']['installed'] ?? '') === '1') $data['notice'] = '쇼핑몰 데이터를 설치했습니다.';
-        if (($data['input']['install'] ?? '') === '1') $data['notice'] = '먼저 쇼핑몰 데이터를 설치해 주세요.';
         return $this->render($request, $response, 'dashboard', $data);
     }
 
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
-        if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $data['types'] = Settings::TYPE_LABELS;
         $current = $this->service->settings->all();
         $data['banner_modes'] = HomeBanner::MODES;

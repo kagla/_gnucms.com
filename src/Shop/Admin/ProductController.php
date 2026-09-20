@@ -16,10 +16,8 @@ final class ProductController extends AdminBase
     {
         $data = $this->context($request, $page);
         if ($page === 'products/search') {
-            if ($redirect = $this->requireReady($response, $data)) return $redirect;
             return $this->searchJson($response, $data['input']);
         }
-        if ($redirect = $this->requireReady($response, $data)) return $redirect;
         $input = $data['input'];
         $products = $this->service->products;
         $post = $request->getMethod() === 'POST';

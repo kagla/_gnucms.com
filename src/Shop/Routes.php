@@ -59,7 +59,6 @@ final class Routes
         $map('GET', '/pay', static fn ($request, $response) => $pay->show($request, $response));
 
         $map('GET', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), true)->setName('admin.shop');
-        $map('POST', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), true);
         // 모듈 시절에는 끝에 빗금이 붙은 주소도 같은 화면이었다. 남은 즐겨찾기를 한 주소로 모은다.
         foreach ([Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX] as $prefix) {
             $slim->map(['GET'], $prefix . '/', static fn ($request, $response) => $response->withStatus(301)->withHeader('Location', $slim->getBasePath() . $prefix));

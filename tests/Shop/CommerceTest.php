@@ -234,15 +234,14 @@ final class CommerceTest extends ShopTestCase
         $this->reject(fn () => $this->shop->orders->transition((int) $order['id'], 'pending', 'confirmed', 'admin'));
     }
 
+    /** 주문 표가 없던 시절의 설치: 마이그레이션이 표만 새로 만들고 상품은 그대로 둔다. */
     #[DataProvider('connectionProvider')]
-    public function testV1UpgradePreservesCatalogAndRegistersOrderBackupTables(array $config): void
+    public function testMigrateRestoresMissingOrderTablesAndKeepsTheCatalog(array $config): void
     {
         $this->setupShop($config); $product = $this->product();
         foreach (['yc_orders', 'yc_order_items', 'yc_order_history'] as $table) $this->shop->store->execute('DROP TABLE ' . $this->shop->store->table($table));
-        $this->app->db()->update('extension_schemas', ['schema_version' => 1], 'package_key = :key', ['key' => Schema::KEY]);
-        self::assertFalse($this->shop->ready()); $this->shop->install(); $this->shop->install();
+        Schema::migrate($this->app->db()); Schema::migrate($this->app->db());
         self::assertSame($product['name'], $this->shop->products->get((int) $product['id'])['name']);
-        self::assertContains('yc_orders', $this->shop->schema()->backupTables());
         self::assertSame(1, $this->place($this->cart($product))['items'][0]['quantity']);
     }
 }

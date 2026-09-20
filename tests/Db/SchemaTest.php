@@ -19,7 +19,7 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
-        self::assertCount(20, Schema::TABLES);
+        self::assertCount(32, Schema::TABLES);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
@@ -28,6 +28,21 @@ final class SchemaTest extends WebTestCase
                 $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );
         }
+    }
+
+    /** 쇼핑몰 표는 코어가 만든다. 모듈 시절(modules/youngcart)에 만든 표는 그대로 두고 확장 스키마 기록만 지운다. */
+    #[DataProvider('connectionProvider')]
+    public function testShopTablesAreCoreTablesAndTheModuleRecordIsRetired(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $schema = new Schema($db);
+        $schema->create();
+        self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table('yc_orders')));
+        $db->insert('extension_schemas', ['package_key' => 'modules/youngcart', 'schema_version' => 3, 'table_names' => json_encode(\GnuCms\Shop\Schema::TABLES), 'state' => 'ready']);
+        $schema->migrateAll();
+        self::assertNull($db->selectOne('SELECT package_key FROM ' . $db->table('extension_schemas') . " WHERE package_key = 'modules/youngcart'"));
+        $schema->migrateAll(); // 멱등
+        self::assertSame('27', explode('.', $schema->stamp())[0]);
     }
 
     #[DataProvider('connectionProvider')]

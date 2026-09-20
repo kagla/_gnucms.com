@@ -2,17 +2,9 @@
 <?php $this->start('title') ?>쇼핑몰 현황 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>shop<?php $this->stop() ?>
 <?php $this->start('extension_body') ?>
-<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => '쇼핑몰 현황', 'description' => '주문부터 상품까지, 지금 필요한 업무를 한눈에 확인하세요.', 'actions' => $ready ? [['url' => $admin_url . '/products/new', 'label' => '상품 등록']] : []]) ?>
+<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => '쇼핑몰 현황', 'description' => '주문부터 상품까지, 지금 필요한 업무를 한눈에 확인하세요.', 'actions' => [['url' => $admin_url . '/products/new', 'label' => '상품 등록']]]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
-<?php if (!$ready): ?>
-<section class="card yc-setup"><div class="card-body">
-  <span class="yc-admin-symbol"><?= $this->icon('cog', 26) ?></span>
-  <h2 class="card-title">쇼핑몰 운영을 준비해 주세요</h2>
-  <p class="muted">쇼핑몰 데이터 설치 또는 갱신이 필요합니다. 기존 상품과 분류를 유지하며 필요한 데이터를 준비합니다.</p>
-  <form method="post" action="<?= $this->e($admin_url) ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="install"><button class="btn btn-primary" type="submit">데이터 설치</button></form>
-</div></section>
-<?php else: ?>
 <section class="yc-operation-summary" aria-label="상품 현황">
   <?php foreach (['products' => ['전체 상품', 'tag'], 'active' => ['판매 가능', 'check-circle'], 'sold_out' => ['품절 표시', 'warning'], 'categories' => ['상품 분류', 'grid']] as $key => [$label, $icon]): ?>
     <div class="yc-metric" aria-label="<?= $label ?> <?= (int) $stats[$key] ?>개"><div><span><?= $label ?></span><?= $this->icon($icon, 19) ?></div><strong><?= number_format((int) $stats[$key]) ?><small>개</small></strong></div>
@@ -45,6 +37,4 @@
 <section class="yc-quick-links" aria-label="빠른 관리">
   <?php foreach ([['/products/new', 'plus', '새 상품 등록', '상품 정보와 판매 조건 입력'], ['/categories', 'grid', '분류 관리', '상품을 찾기 쉬운 카테고리 구성'], ['/settings#settings-shipping', 'cog', '배송·주문 설정', '배송비와 고객 안내문 관리']] as [$path, $icon, $label, $hint]): ?><a href="<?= $this->e($admin_url . $path) ?>"><span class="yc-admin-symbol"><?= $this->icon($icon, 21) ?></span><div><strong><?= $label ?></strong><small><?= $hint ?></small></div><?= $this->icon('chevron-right', 16) ?></a><?php endforeach ?>
 </section>
-<details class="yc-maintenance"><summary><?= $this->icon('check-circle', 16) ?> 데이터 준비 완료 <span class="muted">설치 정보</span></summary><div><p class="muted">스키마 <?= (int) $status['schema_version'] ?>판 · 갱신은 기존 상품과 주문을 유지합니다.</p><form method="post" action="<?= $this->e($admin_url) ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="install"><button class="btn btn-sm" type="submit">데이터 갱신</button></form></div></details>
-<?php endif ?>
 <?php $this->stop() ?>

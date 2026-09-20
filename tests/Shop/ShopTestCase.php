@@ -15,7 +15,7 @@ abstract class ShopTestCase extends DatabaseTestCase
     protected Service $shop;
     protected string $root;
 
-    protected function setupShop(array $config, bool $install = true): void
+    protected function setupShop(array $config): void
     {
         $this->root = sys_get_temp_dir() . '/gnucms-yc-' . bin2hex(random_bytes(8));
         mkdir($this->root, 0700, true);
@@ -25,17 +25,11 @@ abstract class ShopTestCase extends DatabaseTestCase
             'auth' => ['secret' => bin2hex(random_bytes(32))]]);
         (new CoreSchema($this->app->db()))->create();
         $this->shop = new Service($this->app);
-        if ($install) $this->shop->install();
     }
 
     protected function tearDown(): void
     {
-        if (isset($this->app) && $this->app->db()->dialect()->name() === 'mysql') {
-            foreach (\GnuCms\Shop\Schema::TABLES as $table) {
-                $this->app->db()->execute('DROP TABLE IF EXISTS ' . $this->app->db()->table($table));
-            }
-            $this->app->db()->execute('DELETE FROM ' . $this->app->db()->table('extension_schemas'));
-        }
+        if (isset($this->app) && $this->app->db()->dialect()->name() === 'mysql') (new CoreSchema($this->app->db()))->drop();
         if (isset($this->root) && is_dir($this->root)) {
             $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
             foreach ($files as $file) $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());

@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace GnuCms\Shop;
 
 use GnuCms\App;
-use GnuCms\Error\DomainError;
-use GnuCms\Extension\PackageSchema;
 use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Catalog\Options;
 
@@ -41,9 +39,4 @@ final class Service
         $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
         $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
     }
-
-    public function ready(): bool { return $this->schema()->current(Schema::KEY, Schema::VERSION); }
-    public function install(): void { Schema::install($this->schema()); }
-    public function schema(): PackageSchema { return new PackageSchema($this->app->db(), $this->app->storageDir()); }
-    public function requireReady(): void { if (!$this->ready()) throw DomainError::serviceUnavailable('쇼핑몰 데이터를 먼저 설치해 주세요.'); }
 }

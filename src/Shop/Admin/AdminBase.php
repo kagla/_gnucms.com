@@ -19,7 +19,7 @@ abstract class AdminBase
         $base = RouteContext::fromRequest($request)->getBasePath();
         $identity = $this->service->app->guestAcl()->identity();
         return ['base' => $base, 'admin_url' => $base . ($this->adminRoutePrefix ?? '/admin/shop'), 'public_url' => $base . $this->routePrefix,
-            'csrf_token' => $_SESSION['csrf_token'] ?? '', 'page' => $page, 'ready' => $this->service->ready(), 'errors' => [], 'notice' => '',
+            'csrf_token' => $_SESSION['csrf_token'] ?? '', 'page' => $page, 'errors' => [], 'notice' => '',
             'input' => $this->input($request), 'actor' => (string) ($identity->displayName() ?? $identity->sub() ?? 'admin')];
     }
 
@@ -43,11 +43,6 @@ abstract class AdminBase
     protected function redirect(ResponseInterface $response, string $url): ResponseInterface
     {
         return $response->withStatus(303)->withHeader('Location', $url);
-    }
-
-    protected function requireReady(ResponseInterface $response, array $context): ?ResponseInterface
-    {
-        return $context['ready'] ? null : $this->redirect($response, $context['admin_url'] . '?install=1');
     }
 
     protected function page(mixed $value): int
