@@ -124,6 +124,9 @@ final class Routes
         $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
         $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
         $slim->post('/admin/aligo/key', [$aligo, 'apiKey'])->setName('admin.aligo.key');
+        $payment = new \GnuCms\Payment\SettingsController($app->paymentSettings());
+        $slim->get('/admin/settings/payment', [$payment, 'handle'])->setName('admin.settings.payment');
+        $slim->post('/admin/settings/payment', [$payment, 'handle']);
         $slim->get('/admin/settings/notifications', [$aligo, 'notifications'])
             ->setName('admin.settings.notifications');
         $slim->post('/admin/settings/notifications/save', [$aligo, 'saveNotifications'])

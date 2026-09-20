@@ -161,6 +161,10 @@ final class App
 
     private ?Notifier $notifier = null;
 
+    private ?\GnuCms\Payment\Settings $paymentSettings = null;
+
+    private ?\GnuCms\Payment\InicisGateway $inicisGateway = null;
+
     private ?string $configFile;
 
     /** @var Identity */
@@ -616,6 +620,22 @@ final class App
         }
 
         return $this->aligoService;
+    }
+
+    public function paymentSettings(): \GnuCms\Payment\Settings
+    {
+        return $this->paymentSettings ??= new \GnuCms\Payment\Settings($this, 'inicis');
+    }
+
+    public function inicisGateway(): \GnuCms\Payment\InicisGateway
+    {
+        return $this->inicisGateway ??= new \GnuCms\Payment\InicisGateway($this->paymentSettings());
+    }
+
+    /** 테스트에서 모의 전송기를 가진 게이트웨이로 바꾼다. */
+    public function setInicisGateway(\GnuCms\Payment\InicisGateway $gateway): void
+    {
+        $this->inicisGateway = $gateway;
     }
 
     /**

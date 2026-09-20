@@ -19,6 +19,7 @@ final class Schema
         'password_attempts', 'login_events', 'write_rate_limits',
         'extension_schemas',
         'message_jobs', 'message_recipients', 'alimtalk_templates',
+        'pay_inicis_settings', 'pay_inicis_transactions',
     ];
 
     private const INDEXES = [
@@ -61,7 +62,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '25';
+    public const VERSION = '26';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
@@ -134,6 +135,7 @@ final class Schema
         $this->migrateWriteRateLimits();
         $this->migrateProfileImages();
         $this->migrateAligoMessaging();
+        $this->migratePayments();
         $this->migrateExtensionSchemas();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('system.schema_version', $stamp);
@@ -280,6 +282,24 @@ final class Schema
             $this->createIndexIfMissing($m[1], $sql);
         }
         $this->addColumnIfMissing('users', 'phone', 'VARCHAR(20) NULL');
+    }
+
+    /** 쇼핑몰 결제(docs/payments.md). 설정과 원장은 암호문이라 칸이 둘뿐이다. */
+    private function paymentStatements(): array
+    {
+        return [
+            'CREATE TABLE pay_inicis_settings (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
+            'CREATE TABLE pay_inicis_transactions (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
+        ];
+    }
+
+    /** 26판. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migratePayments(): void
+    {
+        foreach ($this->paymentStatements() as $sql) {
+            preg_match('/^CREATE TABLE (\w+)/', $sql, $m);
+            if (!$this->tableExists($m[1])) $this->db->execute($this->expand($sql));
+        }
     }
 
     private function aligoStatements(): array
@@ -656,7 +676,7 @@ final class Schema
             $this->consentUseStatements(), $this->consentsGivenStatements(),
             $this->notificationStatements(),
             $this->passwordThrottleStatements(), $this->loginEventStatements(),
-            $this->writeRateLimitStatements(), $this->extensionSchemaStatements(),
+            $this->writeRateLimitStatements(), $this->extensionSchemaStatements(), $this->paymentStatements(),
             $this->aligoStatements());
     }
 
