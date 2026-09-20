@@ -2,16 +2,14 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\App;
 use GnuCms\Db\Schema as CoreSchema;
-use GnuCms\Modules\YoungCart\Service;
+use GnuCms\Shop\Service;
 use GnuCms\Tests\Support\DatabaseTestCase;
 
-require_once dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
-
-abstract class YoungCartTestCase extends DatabaseTestCase
+abstract class ShopTestCase extends DatabaseTestCase
 {
     protected App $app;
     protected Service $shop;
@@ -33,7 +31,7 @@ abstract class YoungCartTestCase extends DatabaseTestCase
     protected function tearDown(): void
     {
         if (isset($this->app) && $this->app->db()->dialect()->name() === 'mysql') {
-            foreach (\GnuCms\Modules\YoungCart\Schema::TABLES as $table) {
+            foreach (\GnuCms\Shop\Schema::TABLES as $table) {
                 $this->app->db()->execute('DROP TABLE IF EXISTS ' . $this->app->db()->table($table));
             }
             $this->app->db()->execute('DELETE FROM ' . $this->app->db()->table('extension_schemas'));

@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\HomeBanner;
-use GnuCms\Modules\YoungCart\Settings;
+use GnuCms\Shop\HomeBanner;
+use GnuCms\Shop\Settings;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Slim\Psr7\Factory\StreamFactory;
 use Slim\Psr7\Response;
 use Slim\Psr7\UploadedFile;
 
-final class HomeBannerTest extends YoungCartTestCase
+final class HomeBannerTest extends ShopTestCase
 {
     /** 기존 테마의 설정 폼: 배너 필드는 없다. */
     public static function form(array $overrides = []): array

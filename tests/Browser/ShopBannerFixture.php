@@ -3,15 +3,14 @@
 declare(strict_types=1);
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
-require dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
 
-use GnuCms\Modules\YoungCart\HomeBanner;
-use GnuCms\Modules\YoungCart\Settings;
+use GnuCms\Shop\HomeBanner;
+use GnuCms\Shop\Settings;
+use GnuCms\Tests\Shop\HomeBannerTest;
+use GnuCms\Tests\Shop\ImagesTest;
 use GnuCms\Tests\Support\AdminViewFixture;
-use GnuCms\Tests\YoungCart\HomeBannerTest;
-use GnuCms\Tests\YoungCart\ImagesTest;
 
-$view = AdminViewFixture::view('/cms')->forExtension('youngcart', dirname(__DIR__, 2) . '/modules/youngcart/templates');
+$view = AdminViewFixture::view('/cms')->forShop();
 $settings = Settings::defaults();
 $globals = ['url' => '/cms/shop', 'public_url' => '/cms/shop', 'admin_url' => '/cms/admin/shop', 'admin' => true, 'menu' => [], 'cart_count' => 0,
     'type_labels' => Settings::TYPE_LABELS, 'types' => Settings::TYPE_LABELS, 'settings' => $settings];

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\Images;
+use GnuCms\Shop\Images;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Slim\Psr7\Factory\StreamFactory;
 use Slim\Psr7\Response;
 use Slim\Psr7\UploadedFile;
 
-final class ImagesTest extends YoungCartTestCase
+final class ImagesTest extends ShopTestCase
 {
     #[DataProvider('connectionProvider')]
     public function testSaveResizeCopyAndDelete(array $config): void

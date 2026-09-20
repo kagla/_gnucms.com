@@ -5,20 +5,15 @@ declare(strict_types=1);
 namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
-use GnuCms\Extension\Catalog;
-use GnuCms\Extension\Manager;
-use GnuCms\Extension\StateStore;
-use GnuCms\Modules\YoungCart\Service;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Shop\Service;
 use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
+use GnuCms\Tests\Shop\ImagesTest;
 use GnuCms\Tests\Support\WebTestCase;
-use GnuCms\Tests\YoungCart\ImagesTest;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-require_once dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
-
-final class YoungCartAdminTest extends WebTestCase
+final class ShopAdminTest extends WebTestCase
 {
     private App $app;
     private Service $shop;
@@ -26,14 +21,13 @@ final class YoungCartAdminTest extends WebTestCase
     private FakeTransport $http;
     private array $payConfig;
 
-    private function setupModule(array $config, bool $install = true): void
+    private function setupShop(array $config, bool $install = true): void
     {
         session_name(GNUCMS_ID . '_session');
         session_start(); $_SESSION = []; session_write_close();
         $this->root = sys_get_temp_dir() . '/gnucms-yc-admin-' . bin2hex(random_bytes(8));
         $config['prefix'] = 'ya' . bin2hex(random_bytes(4)) . '_';
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'app' => ['url' => 'https://shop.example.test']]);
-        (new Manager(new Catalog(dirname(__DIR__, 2)), new StateStore($this->root . '/extensions')))->setEnabledMany(['modules/youngcart' => true]);
         $this->shop = new Service($this->app);
         if ($install) $this->shop->install();
     }
@@ -99,7 +93,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testAdminConfirmsADepositAndSeesThePaymentPanel(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->signIn(true);
         $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
@@ -120,7 +114,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testAdminRefundsAndCancelsAPaidManualOrder(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
         $this->signIn(true);
@@ -140,7 +134,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testTheSameRefundFormPostedTwiceRefundsOnce(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
         $this->signIn(true);
@@ -153,7 +147,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testRefundFormValidatesAmountAndReason(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
         $this->signIn(true);
@@ -166,7 +160,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testAdminMatchesARefundWhosePgResponseWasLost(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $paid = $this->payCardOrder($this->placeOrder('card'));
         $key = bin2hex(random_bytes(16));
         $this->http->responses[] = new \RuntimeException('timeout');
@@ -197,7 +191,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testReceiptOnlyPaidOrderCanBeRefunded(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
         $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
         $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
@@ -215,7 +209,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testOrphanApprovalWarnsTheAdminToRefund(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
         $this->shop->orders->recordOrphanApproval((int) $order['id'], 'pg:inicis', 'StdpayCARD0001', '카드 결제');
@@ -229,7 +223,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testOrderListShowsTheMethodAndFiltersPaid(array $config): void
     {
-        $this->setupModule($config); $this->enablePayments();
+        $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
         $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
         $this->signIn(true);
@@ -242,7 +236,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testGuardsInstallAndSettings(array $config): void
     {
-        $this->setupModule($config, false);
+        $this->setupShop($config, false);
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop/settings'), '/admin/shop/settings');
         $this->assertLoginRedirect($this->post($this->app, '/admin/shop', ['action' => 'install']));
@@ -290,7 +284,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testMainBannerEditorAndUploadGuards(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $this->signIn(false);
         self::assertSame(403, $this->postWithFiles($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['banner_mode' => 'upload'])), ['banner_image' => ImagesTest::png(20, 20)])->getStatusCode());
         $this->signIn(true);
@@ -334,7 +328,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testNotInstalledAdminPagesRedirectToDashboard(array $config): void
     {
-        $this->setupModule($config, false);
+        $this->setupShop($config, false);
         $this->signIn(true);
         $response = $this->get($this->app, '/admin/shop/settings');
         self::assertSame(303, $response->getStatusCode());
@@ -344,7 +338,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testCategoryScreens(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $this->signIn(true);
         $form = $this->body($this->get($this->app, '/admin/shop/categories/new'));
         self::assertStringContainsString('name="code" value="10"', $form);
@@ -386,7 +380,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testCategoryListDeleteConfirmIsStatic(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $this->signIn(true);
         $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => "잡화'); alert(1);//", 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         $list = $this->body($this->get($this->app, '/admin/shop/categories'));
@@ -412,7 +406,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testProductCodePatternEscapesTheHyphen(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $this->seedProducts();
         $this->signIn(true);
 
@@ -423,7 +417,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testProductListBulkCopyTypesStockAndSearch(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seedProducts();
         $this->signIn(true);
         $list = $this->body($this->get($this->app, '/admin/shop/products'));
@@ -481,7 +475,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testProductFormCombineSaveEditImagesAndConflicts(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seedProducts();
         $this->signIn(true);
         $form = $this->body($this->get($this->app, '/admin/shop/products/new'));
@@ -530,14 +524,14 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testSavedOptionValuesReappearInEditFormWithoutLosingDraftInput(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seedProducts();
         $this->signIn(true);
         $input = $this->productForm((int) $seed['top']['id'], [
             'code' => 'CSV1', 'option_group' => [1 => '색상', 2 => '사이즈', 3 => '재질'],
             'option_values' => [1 => '파랑,빨강', 2 => '0,XL', 3 => '면,실크'],
         ]);
-        $input['options'] = \GnuCms\Modules\YoungCart\Catalog\Options::draft($input, [])['rows'];
+        $input['options'] = \GnuCms\Shop\Catalog\Options::draft($input, [])['rows'];
         $input['options'][0]['stock'] = 0;
         $input['options'][0]['price'] = 500;
         foreach ($input['options'] as &$row) if ($row['value1'] === '빨강') $row['active'] = 0;
@@ -573,7 +567,7 @@ final class YoungCartAdminTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testProductFormCombinePrefersSubmittedOptionValuesOverStoredOnes(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seedProducts();
         $this->signIn(true);
         $product = $this->shop->products->get($seed['a']);

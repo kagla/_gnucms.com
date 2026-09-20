@@ -1,4 +1,4 @@
-// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/YoungCartCart.cjs
+// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/ShopCart.cjs
 // Render the actual cart template; requests and submissions stay inside this browser fixture.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +6,7 @@ const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const root = path.resolve(__dirname, '../..');
-const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php')], {cwd: root, encoding: 'utf8'});
+const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], {cwd: root, encoding: 'utf8'});
 
 (async () => {
   const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
@@ -122,6 +122,6 @@ const html = execFileSync('php', [path.join(__dirname, 'YoungCartCartFixture.php
     await submit(save);
     assert.equal(posts.at(-1).data.get('quantities[10:101]'), '4');
     assert.deepEqual(errors, []);
-    console.log('YoungCart cart browser checks passed: compact header/search, quantity buttons, independent rows, limits, keyboard/direct input, save/delete, mobile/dark alignment and no-JS fallback.');
+    console.log('Shop cart browser checks passed: compact header/search, quantity buttons, independent rows, limits, keyboard/direct input, save/delete, mobile/dark alignment and no-JS fallback.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\Commerce\Orders;
-use GnuCms\Modules\YoungCart\Schema;
+use GnuCms\Shop\Commerce\Orders;
+use GnuCms\Shop\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class CommerceTest extends YoungCartTestCase
+final class CommerceTest extends ShopTestCase
 {
     private function buyer(array $extra = []): array
     {

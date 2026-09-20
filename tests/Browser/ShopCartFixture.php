@@ -6,7 +6,7 @@ require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use GnuCms\Tests\Support\AdminViewFixture;
 
-$view = AdminViewFixture::view('/cms')->forExtension('youngcart', dirname(__DIR__, 2) . '/modules/youngcart/templates');
+$view = AdminViewFixture::view('/cms')->forShop();
 $items = [];
 foreach (['화이트 / S', '화이트 / M'] as $index => $label) {
     $items[] = ['key' => '10:' . (101 + $index), 'product_id' => 10, 'code' => 'SHIRT', 'image' => null,

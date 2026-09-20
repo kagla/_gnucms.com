@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class ProductsTest extends YoungCartTestCase
+final class ProductsTest extends ShopTestCase
 {
     private function fullInput(int $category, array $overrides = []): array
     {

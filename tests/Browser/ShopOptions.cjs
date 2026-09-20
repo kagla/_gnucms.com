@@ -1,12 +1,12 @@
 // Render the actual purchase partial and intercept all requests; no running shop or database required.
-// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/YoungCartOptions.cjs
+// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/ShopOptions.cjs
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const root = path.resolve(__dirname, '../..');
-const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOptionsFixture.php'), String(count)], {cwd: root, encoding: 'utf8'});
+const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFixture.php'), String(count)], {cwd: root, encoding: 'utf8'});
 
 (async () => {
   const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
@@ -177,6 +177,6 @@ const render = count => execFileSync('php', [path.join(__dirname, 'YoungCartOpti
     assert.equal(posts.at(-1).data.get('option_id'), '101');
     assert.equal(posts.at(-1).data.has('option_step[1]'), false);
     assert.deepEqual(errors, []);
-    console.log('YoungCart option browser checks passed: multiple combinations, per-row quantity/removal, stock and combined limits, totals/submission, dependent fields, mobile/dark and no-JS fallback.');
+    console.log('Shop option browser checks passed: multiple combinations, per-row quantity/removal, stock and combined limits, totals/submission, dependent fields, mobile/dark and no-JS fallback.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

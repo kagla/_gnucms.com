@@ -6,7 +6,7 @@ require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use GnuCms\Tests\Support\AdminViewFixture;
 
-$view = AdminViewFixture::view('/cms')->forExtension('youngcart', dirname(__DIR__, 2) . '/modules/youngcart/templates');
+$view = AdminViewFixture::view('/cms')->forShop();
 ?>
 <!doctype html><html lang="ko" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/vendor/daisyui/daisyui.css"><link rel="stylesheet" href="/themes/default/theme.css"><link rel="stylesheet" href="/themes/default/youngcart.css">

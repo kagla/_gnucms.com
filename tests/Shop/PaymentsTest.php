@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\Commerce\Orders;
-use GnuCms\Modules\YoungCart\Commerce\Payments;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Shop\Commerce\Orders;
+use GnuCms\Shop\Commerce\Payments;
 use GnuCms\Support\Clock;
 use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class PaymentsTest extends YoungCartTestCase
+final class PaymentsTest extends ShopTestCase
 {
     private FakeTransport $http;
     private array $config;

@@ -1,11 +1,11 @@
-// PUPPETEER_MODULE=/path/to/puppeteer-core node tests/Browser/YoungCartBanner.cjs
+// PUPPETEER_MODULE=/path/to/puppeteer-core node tests/Browser/ShopBanner.cjs
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const root = path.resolve(__dirname, '../..');
-const render = (...args) => execFileSync('php', [path.join(__dirname, 'YoungCartBannerFixture.php'), ...args], {cwd: root, encoding: 'utf8'});
+const render = (...args) => execFileSync('php', [path.join(__dirname, 'ShopBannerFixture.php'), ...args], {cwd: root, encoding: 'utf8'});
 
 (async () => {
   const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
@@ -78,6 +78,6 @@ const render = (...args) => execFileSync('php', [path.join(__dirname, 'YoungCart
     await page.reload();
     assert.equal(await page.$('.yc-promo-grid'), null);
     assert.deepEqual(errors, []);
-    console.log('YoungCart banner browser checks passed: mode switching, retained fields, mobile/dark layouts, no-JS editing and hidden banner.');
+    console.log('Shop banner browser checks passed: mode switching, retained fields, mobile/dark layouts, no-JS editing and hidden banner.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

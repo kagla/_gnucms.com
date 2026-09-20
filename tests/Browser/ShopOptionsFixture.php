@@ -3,9 +3,8 @@
 declare(strict_types=1);
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
-require dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
 
-use GnuCms\Modules\YoungCart\Catalog\Options;
+use GnuCms\Shop\Catalog\Options;
 use GnuCms\Tests\Support\AdminViewFixture;
 
 $count = (int) ($argv[1] ?? 3);
@@ -28,7 +27,7 @@ $options = [
     'extra' => [['id' => 201, 'value1' => '포장', 'value2' => '선물 포장', 'value3' => '', 'price' => 2000, 'stock' => 4, 'active' => 1]],
 ];
 $product = ['id' => 10, 'price' => 10000, 'stock' => 10, 'buy_min' => 1, 'buy_max' => 10, 'options' => $options];
-$view = AdminViewFixture::view('/cms')->forExtension('youngcart', dirname(__DIR__, 2) . '/modules/youngcart/templates');
+$view = AdminViewFixture::view('/cms')->forShop();
 ?>
 <!doctype html>
 <html lang="ko" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

@@ -1,4 +1,4 @@
-// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/YoungCartPostcode.cjs
+// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/ShopPostcode.cjs
 // Use the real partial/assets and mock only Kakao's external service; never submit a live order.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +6,7 @@ const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const root = path.resolve(__dirname, '../..');
-const html = execFileSync('php', [path.join(__dirname, 'YoungCartPostcodeFixture.php')], {cwd: root, encoding: 'utf8'});
+const html = execFileSync('php', [path.join(__dirname, 'ShopPostcodeFixture.php')], {cwd: root, encoding: 'utf8'});
 const sdk = 'https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
 const stub = `window.kakao={Postcode:function(options){this.embed=function(host,settings={}){window.embeds=(window.embeds||0)+1;const frame=document.createElement('div');frame.textContent='카카오 주소 검색';host.appendChild(frame);window.postcodeCallbacks={...options,oncomplete(data){options.oncomplete(data);if(settings.autoClose!==false)host.removeChild(frame);}};options.onresize({height:520});}}};`;
 
@@ -95,6 +95,6 @@ const stub = `window.kakao={Postcode:function(options){this.embed=function(host,
     await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
     assert.equal(posts.at(-1).get('postcode'), '12345'); assert.equal(posts.at(-1).get('address'), '이전 주소');
     assert.deepEqual(errors, []);
-    console.log('YoungCart postcode browser checks passed: button alignment, lazy SDK, road/jibun selection, detail focus, cancel/retry, mobile/dark and manual no-JS submission.');
+    console.log('Shop postcode browser checks passed: button alignment, lazy SDK, road/jibun selection, detail focus, cancel/retry, mobile/dark and manual no-JS submission.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

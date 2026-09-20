@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
-use GnuCms\Modules\YoungCart\Schema;
+use GnuCms\Shop\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class SchemaTest extends YoungCartTestCase
+final class SchemaTest extends ShopTestCase
 {
     /** Schema::install() 의 DDL 클로저가 만드는 인덱스 목록과 그대로 맞춰 둔다. */
     private const INDEXES = ['yc_cat_parent' => 'yc_categories', 'yc_cat_order' => 'yc_categories',

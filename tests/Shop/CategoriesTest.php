@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class CategoriesTest extends YoungCartTestCase
+final class CategoriesTest extends ShopTestCase
 {
     #[DataProvider('connectionProvider')]
     public function testCodeSuggestionValidationAndTree(array $config): void

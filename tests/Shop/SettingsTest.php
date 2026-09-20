@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class SettingsTest extends YoungCartTestCase
+final class SettingsTest extends ShopTestCase
 {
     #[DataProvider('connectionProvider')]
     public function testDefaultsValidationAndRoundTrip(array $config): void

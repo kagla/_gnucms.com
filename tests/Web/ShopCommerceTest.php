@@ -5,11 +5,8 @@ declare(strict_types=1);
 namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
-use GnuCms\Extension\Catalog;
-use GnuCms\Extension\Manager;
-use GnuCms\Extension\StateStore;
-use GnuCms\Modules\YoungCart\Service;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Shop\Service;
 use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Support\WebTestCase;
@@ -17,9 +14,7 @@ use GnuCms\Web\Kernel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Slim\Psr7\Factory\ServerRequestFactory;
 
-require_once dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
-
-final class YoungCartCommerceTest extends WebTestCase
+final class ShopCommerceTest extends WebTestCase
 {
     private App $app;
     private Service $shop;
@@ -34,7 +29,6 @@ final class YoungCartCommerceTest extends WebTestCase
         $this->root = sys_get_temp_dir() . '/gnucms-yc-commerce-' . bin2hex(random_bytes(8));
         $config['prefix'] = 'ycweb' . bin2hex(random_bytes(4)) . '_';
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'app' => ['url' => 'https://shop.example.test']]);
-        (new Manager(new Catalog(dirname(__DIR__, 2)), new StateStore($this->root . '/extensions')))->setEnabledMany(['modules/youngcart' => true]);
         $this->shop = new Service($this->app); $this->shop->install();
         $category = $this->shop->categories->save(['code' => '10', 'name' => '생활용품', 'active' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '300', 'image_height' => '0']);
         $id = $this->shop->products->save(['code' => 'DEMO', 'name' => '테스트 상품', 'category_id' => $category, 'price' => '12000', 'stock' => '10', 'active' => '1', 'is_hit' => '1'], []);
@@ -156,7 +150,7 @@ final class YoungCartCommerceTest extends WebTestCase
         $this->setupShop($config); $this->enablePayments();
         $order = $this->placeCardOrder();
         $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
-        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Shop\Commerce\Payments::gatewayOrder($order));
 
         self::assertSame(403, $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => str_repeat('0', 64)], $this->callbackFor($order))->getStatusCode());
         self::assertSame(403, $this->externalPost('/shop/pay/callback', ['order' => str_repeat('a', 32), 'state' => $state], $this->callbackFor($order))->getStatusCode());
@@ -184,7 +178,7 @@ final class YoungCartCommerceTest extends WebTestCase
         $this->setupShop($config); $this->enablePayments();
         $order = $this->placeCardOrder();
         $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
-        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Shop\Commerce\Payments::gatewayOrder($order));
         $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '9999', 'resultMsg' => '거절']];
         $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']]; // 망취소 응답
         $response = $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => $state], $this->callbackFor($order));
@@ -209,7 +203,7 @@ final class YoungCartCommerceTest extends WebTestCase
 
         $order = $this->placeCardOrder();
         $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
-        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Shop\Commerce\Payments::gatewayOrder($order));
         $this->http->responses[] = new \RuntimeException('timeout');
         $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']]; // 망취소 응답
         $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => $state], $this->callbackFor($order));

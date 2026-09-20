@@ -2,16 +2,14 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\Catalog\Pricing;
-use GnuCms\Modules\YoungCart\Input;
-use GnuCms\Modules\YoungCart\ProductInfo;
+use GnuCms\Shop\Catalog\Pricing;
+use GnuCms\Shop\Input;
+use GnuCms\Shop\ProductInfo;
 use PHPUnit\Framework\TestCase;
-
-require_once dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
 
 final class HelpersTest extends TestCase
 {

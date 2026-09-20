@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
-use GnuCms\Modules\YoungCart\Catalog\Options;
+use GnuCms\Shop\Catalog\Options;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class OptionsTest extends YoungCartTestCase
+final class OptionsTest extends ShopTestCase
 {
     public function testCombineDraftAndValidation(): void
     {
@@ -39,9 +39,9 @@ final class OptionsTest extends YoungCartTestCase
         self::assertSame(1, $normalized['extra'][0]['active']);
     }
 
-    private function stubStore(): \GnuCms\Modules\YoungCart\Store
+    private function stubStore(): \GnuCms\Shop\Store
     {
-        return new \GnuCms\Modules\YoungCart\Store(\GnuCms\Db\Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]));
+        return new \GnuCms\Shop\Store(\GnuCms\Db\Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]));
     }
 
     #[DataProvider('connectionProvider')]

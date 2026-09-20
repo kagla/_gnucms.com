@@ -5,25 +5,20 @@ declare(strict_types=1);
 namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
-use GnuCms\Extension\Catalog;
-use GnuCms\Extension\Manager;
-use GnuCms\Extension\StateStore;
-use GnuCms\Modules\YoungCart\Service;
+use GnuCms\Shop\Service;
+use GnuCms\Tests\Shop\ImagesTest;
 use GnuCms\Tests\Support\WebTestCase;
-use GnuCms\Tests\YoungCart\ImagesTest;
 use GnuCms\Web\Kernel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Slim\Psr7\Factory\ServerRequestFactory;
 
-require_once dirname(__DIR__, 2) . '/modules/youngcart/autoload.php';
-
-final class YoungCartPublicTest extends WebTestCase
+final class ShopPublicTest extends WebTestCase
 {
     private App $app;
     private Service $shop;
     private string $root;
 
-    private function setupModule(array $config, bool $install = true): void
+    private function setupShop(array $config, bool $install = true): void
     {
         session_name(GNUCMS_ID . '_session');
         session_start(); $_SESSION = []; session_write_close();
@@ -31,8 +26,6 @@ final class YoungCartPublicTest extends WebTestCase
         $config['prefix'] = 'yw' . bin2hex(random_bytes(4)) . '_';
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'],
             'app' => ['url' => 'https://shop.example.test']]);
-        $manager = new Manager(new Catalog(dirname(__DIR__, 2)), new StateStore($this->root . '/extensions'));
-        $manager->setEnabledMany(['modules/youngcart' => true]);
         $this->shop = new Service($this->app);
         if ($install) $this->shop->install();
     }
@@ -51,11 +44,24 @@ final class YoungCartPublicTest extends WebTestCase
         return ['top' => $top, 'child' => $child, 'ids' => $ids];
     }
 
+    /** 쇼핑몰은 모듈이 아니라 코어다: 확장 상태 파일 없이도 /shop 과 /admin/shop 이 열리고, 이름 붙은 라우트가 있다. */
+    #[DataProvider('connectionProvider')]
+    public function testShopRoutesAreCoreRoutes(array $config): void
+    {
+        $this->setupShop($config);
+        self::assertSame(200, $this->get($this->app, '/shop')->getStatusCode());
+        self::assertFileDoesNotExist($this->root . '/extensions/enabled.json');
+        $parser = \GnuCms\Web\Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '')->getRouteCollector()->getRouteParser();
+        self::assertSame('/shop', $parser->urlFor('shop.index'));
+        self::assertSame('/admin/shop', $parser->urlFor('admin.shop'));
+        $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testBannerImagesVisibilityAndSubdirectory(array $config): void
     {
-        $this->setupModule($config);
-        $form = \GnuCms\Tests\YoungCart\HomeBannerTest::form(['banner_mode' => 'upload', 'banner_button_url' => '/shop/search', 'banner_image_url' => '/shop/type?t=new']);
+        $this->setupShop($config);
+        $form = \GnuCms\Tests\Shop\HomeBannerTest::form(['banner_mode' => 'upload', 'banner_button_url' => '/shop/search', 'banner_image_url' => '/shop/type?t=new']);
         $banner = $this->shop->banner->saveSettings($form, ImagesTest::png(80, 80))['banner'];
         $response = $this->get($this->app, '/shop/banner-image', ['f' => $banner['image']]);
         self::assertSame(200, $response->getStatusCode());
@@ -81,9 +87,9 @@ final class YoungCartPublicTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testRandomBannerRendersMatchingProductAndUncachedResponse(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $this->seed();
-        $this->shop->banner->saveSettings(\GnuCms\Tests\YoungCart\HomeBannerTest::form(['banner_mode' => 'random']));
+        $this->shop->banner->saveSettings(\GnuCms\Tests\Shop\HomeBannerTest::form(['banner_mode' => 'random']));
         $response = $this->get($this->app, '/shop');
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         // A는 이미지가 있는 유일한 공개 진열 상품이다. B는 이미지 없음, C는 비공개다.
@@ -95,14 +101,12 @@ final class YoungCartPublicTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testNotInstalledShowsPreparingPageAndNoAliasPaths(array $config): void
     {
-        $this->setupModule($config, false);
+        $this->setupShop($config, false);
         $response = $this->get($this->app, '/shop');
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($response));
         self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop/list', ['ca' => '10'])));
         self::assertSame(404, $this->get($this->app, '/shop/image', ['p' => '1', 'f' => 'x.png', 's' => 'list'])->getStatusCode());
-        self::assertSame(404, $this->get($this->app, '/modules/youngcart')->getStatusCode());
-        self::assertSame(404, $this->get($this->app, '/modules/youngcart/')->getStatusCode());
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
         self::assertSame(404, $this->get($this->app, '/shop/admin')->getStatusCode());
     }
@@ -110,7 +114,7 @@ final class YoungCartPublicTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testMainListTypeAndSearchPages(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seed();
         $home = $this->body($this->get($this->app, '/shop'));
         self::assertStringContainsString('히트상품', $home);
@@ -154,7 +158,7 @@ final class YoungCartPublicTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testItemPageImageAndAdminPreview(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seed();
         $response = $this->get($this->app, '/shop/item', ['id' => 'A']);
         $item = $this->body($response);
@@ -205,7 +209,7 @@ final class YoungCartPublicTest extends WebTestCase
     #[DataProvider('connectionProvider')]
     public function testCategoryManagementShortcutAndSubdirectoryLinks(array $config): void
     {
-        $this->setupModule($config);
+        $this->setupShop($config);
         $seed = $this->seed();
         $response = Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '/cms')->handle((new ServerRequestFactory())->createServerRequest('GET', '/cms/shop/list?ca=10'));
         $body = $this->body($response);

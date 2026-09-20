@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace GnuCms\Tests\YoungCart;
+namespace GnuCms\Tests\Shop;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 
-final class ListingTest extends YoungCartTestCase
+final class ListingTest extends ShopTestCase
 {
     #[DataProvider('connectionProvider')]
     public function testCategoryPrefixSlotsVisibilitySortAndPaging(array $config): void
