@@ -27,14 +27,14 @@ final class Orders
         return $row;
     }
 
-    public function place(array $lines, array $input, string $key, string $owner, ?int $userId, string $fingerprint, array $shipping = []): array
+    public function place(array $lines, array $input, string $key, string $owner, ?int $userId, string $fingerprint, array $shipping = [], array $payment = []): array
     {
         if (!preg_match('/^[a-f0-9]{64}$/D', $key) || !preg_match('/^[a-f0-9]{64}$/D', $owner)) throw DomainError::forbidden('주문서를 다시 열어 주세요.');
         if ($existing = $this->submitted($key, $owner, $userId)) return $this->get((int) $existing['id']);
         $buyer = $this->validate($input, $userId === null);
         if ($lines === []) throw DomainError::validation(['cart' => '주문할 상품을 담아 주세요.']);
         try {
-            $id = $this->store->transaction(function () use ($lines, $buyer, $key, $owner, $userId, $fingerprint, $shipping): int {
+            $id = $this->store->transaction(function () use ($lines, $buyer, $key, $owner, $userId, $fingerprint, $shipping, $payment): int {
                 // 관리자의 상품/옵션 편집과 주문을 상품 ID 순으로 직렬화한다.
                 $ids = array_values(array_unique(array_column($lines, 'product_id'))); sort($ids, SORT_NUMERIC);
                 foreach ($ids as $id) $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $id]);
@@ -46,7 +46,12 @@ final class Orders
                 $id = $this->store->insert('yc_orders', $buyer + ['number' => $number, 'checkout_key' => $key, 'owner_key' => $owner,
                     'user_id' => $userId, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
                     'cod_fee' => $quote['cod_fee'], 'total' => $quote['total'], 'shipping_detail' => json_encode($quote['shipping'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                    'order_notice' => $this->settings->all()['order_notice'], 'carrier' => '', 'tracking_number' => '', 'created_at' => $now, 'updated_at' => $now]);
+                    'order_notice' => $this->settings->all()['order_notice'], 'carrier' => '', 'tracking_number' => '',
+                    'payment_method' => (string) ($payment['method'] ?? ''), 'payment_id' => (string) ($payment['id'] ?? ''),
+                    'payment_environment' => (string) ($payment['environment'] ?? ''), 'payment_revision' => (string) ($payment['revision'] ?? ''),
+                    'paid_at' => 0, 'paid_amount' => 0, 'refunded_amount' => 0, 'pay_by' => (int) ($payment['pay_by'] ?? 0),
+                    'payment_detail' => $payment === [] ? '' : json_encode($payment['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'created_at' => $now, 'updated_at' => $now]);
                 foreach ($quote['items'] as $item) {
                     $optionId = $item['option_id'] ?: null;
                     $table = $optionId === null ? 'yc_products' : 'yc_options';
@@ -132,6 +137,12 @@ final class Orders
         if (!in_array($to, self::NEXT[$from] ?? [], true) || ($customer && ($from !== 'pending' || $to !== 'cancelled'))) {
             throw DomainError::validation(['status' => '현재 주문 상태에서는 이 작업을 할 수 없습니다.']);
         }
+        if ($to === 'cancelled' && $from !== 'pending') {
+            $current = $this->get($id);
+            if (in_array($current['payment_method'], self::PG_METHODS, true) && (int) $current['refunded_amount'] < (int) $current['paid_amount']) {
+                throw DomainError::validation(['refund' => '결제된 주문은 환불을 먼저 처리해 주세요.']);
+            }
+        }
         $carrier = $to === 'shipped' ? Input::text($input['carrier'] ?? '', 'carrier', 100, false) : null;
         $tracking = $to === 'shipped' ? Input::text($input['tracking_number'] ?? '', 'tracking_number', 100, false) : null;
         $note = Input::text($input['note'] ?? '', 'note', 500);
@@ -159,6 +170,82 @@ final class Orders
             $this->history($id, $to, $actor, $note);
         });
         return $this->get($id);
+    }
+
+    public function byPaymentId(string $paymentId): ?array
+    {
+        if (!preg_match('/^[a-f0-9]{32}$/D', $paymentId)) return null;
+        $row = $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE payment_id = ?', [$paymentId]);
+        return $row === null ? null : $this->get((int) $row['id']);
+    }
+
+    /**
+     * 결제 완료. 콜백 재전송이나 통보 중복으로 두 번 불려도 한 번만 기록한다. 금액은 주문
+     * 총액과 같아야 한다 — 결제 계층도 검사하지만 무통장 입금 확인은 여기만 지난다.
+     */
+    public function markPaid(int $id, string $actor, int $amount, array $detail, int $paidAt, string $note): array
+    {
+        $this->store->transaction(function () use ($id, $actor, $amount, $detail, $paidAt, $note): void {
+            $order = $this->get($id);
+            if ($order['status'] === 'paid' && (int) $order['paid_amount'] === $amount) return;
+            if ($order['status'] !== 'pending') throw DomainError::validation(['status' => '결제 대기 중인 주문이 아닙니다.']);
+            if ($amount !== (int) $order['total']) throw DomainError::validation(['amount' => '결제 금액이 주문 금액과 다릅니다.']);
+            $changed = $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET status = ?, paid_at = ?, paid_amount = ?, payment_detail = ?, updated_at = ? WHERE id = ? AND status = ?',
+                ['paid', $paidAt, $amount, json_encode($detail + $order['payment'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id, 'pending']);
+            if ($changed !== 1) throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
+            $this->history($id, 'paid', $actor, $note);
+        });
+        return $this->get($id);
+    }
+
+    /**
+     * 무통장입금과 접수 전용(결제 수단이 아예 없는) 주문의 입금 확인. 관리자만 부른다.
+     * 결제사(PG) 주문은 카드사 승인으로만 결제 완료가 되므로 여기서 거절한다.
+     */
+    public function confirmDeposit(int $id, string $actor): array
+    {
+        $order = $this->get($id);
+        if (in_array($order['payment_method'], self::PG_METHODS, true)) throw DomainError::validation(['payment' => '무통장입금 주문만 입금을 확인합니다.']);
+        // markPaid() 는 결제사 콜백 재전송처럼 같은 결과가 두 번 오면 조용히 넘어간다. 관리자의
+        // 입금 확인은 사람이 다시 누른 것이므로 이미 처리된 주문이면 여기서 먼저 거절한다.
+        if ($order['status'] !== 'pending') throw DomainError::validation(['status' => '이미 처리된 주문입니다.']);
+        return $this->markPaid($id, $actor, (int) $order['total'], ['confirmed_by' => $actor], Clock::timestamp(), '입금을 확인했습니다.');
+    }
+
+    /** 환불 누계와 이력. 결제사 환불은 Payments 가 먼저 성공시키고 부른다. 상태는 바꾸지 않는다. */
+    public function recordRefund(int $id, int $amount, string $actor, string $reason): array
+    {
+        $this->store->transaction(function () use ($id, $amount, $actor, $reason): void {
+            $order = $this->get($id);
+            $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
+            if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
+            $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, updated_at = ? WHERE id = ?', [$amount, Clock::timestamp(), $id]);
+            $this->history($id, $order['status'], $actor, '환불 ' . number_format($amount) . '원: ' . $reason);
+        });
+        return $this->get($id);
+    }
+
+    /**
+     * 결제 기한이 지난 미결제 주문을 취소하고 재고를 돌려놓는다. cron 없이 관리자 주문 화면과
+     * 주문서(접수 직전)에서 부른다. $inProgress 가 참인 주문(결제사 승인이 진행·완료됨)은
+     * 건드리지 않는다 — 돈이 움직였을 수 있으므로 관리자의 결제 조회가 먼저다.
+     * @param callable(array):bool $inProgress
+     */
+    public function expire(int $now, callable $inProgress, int $limit = 50): int
+    {
+        $rows = $this->store->select('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE status = ? AND pay_by > 0 AND pay_by < ? ORDER BY pay_by LIMIT ' . $limit, ['pending', $now]);
+        $count = 0;
+        foreach ($rows as $row) {
+            $order = $this->get((int) $row['id']);
+            if ($inProgress($order)) continue;
+            try {
+                $this->transition((int) $row['id'], 'pending', 'cancelled', 'system', ['note' => '결제 기한이 지나 자동으로 취소했습니다.']);
+                $count++;
+            } catch (DomainError) {
+                // 경합으로 이미 바뀐 주문은 건너뛴다.
+            }
+        }
+        return $count;
     }
 
     private function history(int $id, string $status, string $actor, string $note): void

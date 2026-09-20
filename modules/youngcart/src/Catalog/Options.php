@@ -160,7 +160,7 @@ final class Options
             }
             foreach ($existing as $old) {
                 if ($this->store->selectOne('SELECT i.id FROM ' . $this->store->table('yc_order_items') . ' i JOIN ' . $this->store->table('yc_orders')
-                    . " o ON o.id = i.order_id WHERE i.option_id = ? AND o.status IN ('pending', 'confirmed') LIMIT 1", [(int) $old['id']]) !== null) {
+                    . " o ON o.id = i.order_id WHERE i.option_id = ? AND o.status IN ('pending', 'paid', 'confirmed') LIMIT 1", [(int) $old['id']]) !== null) {
                     throw DomainError::validation(['options' => '처리 중인 주문에 포함된 옵션은 삭제할 수 없습니다. 사용 여부를 꺼 주세요.']);
                 }
                 if ((int) $old['stock'] !== 0) $this->store->logStock($productId, (int) $old['id'], -(int) $old['stock'], 'admin', 'option-removed', $actor);

@@ -176,15 +176,14 @@ final class CommerceTest extends YoungCartTestCase
         self::assertSame(1, $this->shop->orders->listing(42)['total']); self::assertSame(0, $this->shop->orders->listing(43)['total']);
         $this->reject(fn () => $this->shop->orders->owned($order['number'], 43, [$id]));
         $this->reject(fn () => $this->shop->orders->transition($id, 'pending', 'completed', 'admin'));
-        // 결제 완료는 결제 확인(작업 4)만이 들어갈 수 있으므로, 여기서는 직접 표를 갱신해 흉내낸다.
-        $this->shop->store->update('yc_orders', $id, ['status' => 'paid']);
+        $this->shop->orders->confirmDeposit($id, 'admin');
         $this->shop->orders->transition($id, 'paid', 'confirmed', 'admin');
         $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'cancelled', 'user:42', [], true));
         $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin'));
         $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin', ['carrier' => '테스트택배', 'tracking_number' => '123456']);
         $this->shop->orders->transition($id, 'shipped', 'completed', 'admin');
         self::assertSame(1, (int) $this->shop->products->get((int) $p['id'])['sold_qty']);
-        self::assertSame(4, count($this->shop->orders->get($id)['history']));
+        self::assertSame(5, count($this->shop->orders->get($id)['history']));
         self::assertSame('123456', $this->shop->orders->get($id)['tracking_number']);
     }
 

@@ -22,6 +22,7 @@ final class Service
     public readonly Catalog\Listing $listing;
     public readonly Commerce\Cart $cart;
     public readonly Commerce\Orders $orders;
+    public readonly Commerce\Payments $payments;
 
     public function __construct(public readonly App $app)
     {
@@ -35,6 +36,7 @@ final class Service
         $this->listing = new Catalog\Listing($this->store, $this->settings, $this->options);
         $this->cart = new Commerce\Cart($this->products, $this->settings);
         $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
+        $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
     }
 
     public function ready(): bool { return $this->schema()->current(Schema::KEY, Schema::VERSION); }

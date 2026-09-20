@@ -365,8 +365,7 @@ final class YoungCartCommerceTest extends WebTestCase
         self::assertSame(422, $invalid->getStatusCode());
         self::assertStringContainsString('<option value="cancelled" selected>', $this->body($invalid));
         self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
-        // 결제 완료는 결제 확인(작업 4)만이 들어갈 수 있으므로, 여기서는 직접 표를 갱신해 흉내낸다.
-        $this->shop->store->update('yc_orders', (int) $order['id'], ['status' => 'paid']);
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
         $status = $this->form(['id' => $order['id'], 'from' => 'paid', 'status' => 'confirmed']);
         self::assertSame(303, $this->post($this->app, '/admin/shop/orders/detail', $status)->getStatusCode());
         self::assertSame(422, $this->post($this->app, '/admin/shop/orders/detail', $status)->getStatusCode());
