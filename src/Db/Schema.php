@@ -66,17 +66,22 @@ final class Schema
     public const VERSION = '27';
 
     /**
-     * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
+     * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
      *
      * 판 번호만 적어 두면, 판을 올린 뒤 마이그레이션을 더 손볼 때 그 사이 들어온 요청이
      * '다 됐다' 도장을 먼저 찍어 버린다. 그러면 나중에 추가한 칸은 영영 건너뛴다.
      * 파일이 바뀌면 도장도 달라지므로 그런 어긋남이 스스로 풀린다.
      * migrate* 는 모두 멱등이라 한 번 더 도는 값은 싸다.
+     *
+     * 이 파일과 쇼핑몰 스키마 파일(src/Shop/Schema.php)을 함께 해시한다. 쇼핑몰은 표를
+     * 만드는 몸통이 이 파일 밖에 있는 유일한 마이그레이션이라, 섞지 않으면 그 파일만
+     * 고친 변경이 도장을 그대로 두고 기존 사이트를 건너뛴다.
      */
     public function stamp(): string
     {
-        $hash = hash_file('xxh128', __FILE__);
-        return self::VERSION . '.' . substr($hash === false ? '' : $hash, 0, 12);
+        $hash = hash('xxh128', (string) file_get_contents(__FILE__)
+            . (string) file_get_contents(dirname(__DIR__) . '/Shop/Schema.php'));
+        return self::VERSION . '.' . substr($hash, 0, 12);
     }
 
     /** DB 에 적힌 도장. site_settings 가 없는 아주 오래된 설치면 null. */

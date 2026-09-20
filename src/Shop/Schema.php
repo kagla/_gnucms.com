@@ -10,6 +10,9 @@ use GnuCms\Error\DomainError;
 /**
  * 쇼핑몰 표. 코어 스키마(Db\Schema::migrateShop())가 부른다. 모듈 시절의 표 이름을 그대로 쓰므로
  * 그때 만든 데이터를 넘겨받는다. 멱등이다 — 표는 IF NOT EXISTS, 칸은 없을 때만, 인덱스는 없을 때만.
+ *
+ * 이 파일이 바뀌면 코어 스키마 도장(Db\Schema::stamp())도 바뀐다. 판 번호를 올리지 않아도
+ * 기존 사이트에서 갱신이 한 번 더 돈다.
  */
 final class Schema
 {

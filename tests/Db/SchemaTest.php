@@ -45,6 +45,16 @@ final class SchemaTest extends WebTestCase
         self::assertSame('27', explode('.', $schema->stamp())[0]);
     }
 
+    /** 도장은 쇼핑몰 스키마 파일까지 덮는다. src/Shop/Schema.php 만 고쳐도 판 번호 없이 갱신이 돈다. */
+    #[DataProvider('connectionProvider')]
+    public function testStampCoversTheShopSchemaFile(array $config): void
+    {
+        $stamp = (new Schema(Connection::create($config)))->stamp();
+        self::assertMatchesRegularExpression('/^27\.[0-9a-f]{12}$/D', $stamp);
+        $coreOnly = '27.' . substr((string) hash_file('xxh128', dirname(__DIR__, 2) . '/src/Db/Schema.php'), 0, 12);
+        self::assertNotSame($coreOnly, $stamp, '쇼핑몰 스키마 파일이 도장에 섞여 있어야 한다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testMigrationMovesMailSettingsIntoNamespacedSiteSettings(array $config): void
     {
