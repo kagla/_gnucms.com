@@ -377,6 +377,32 @@ final class PaymentsTest extends YoungCartTestCase
         self::assertSame(2000, (int) $this->shop->orders->get((int) $card['id'])['refunded_amount']);
     }
 
+    /** 결제사 화면에서 직접 취소한 금액도 결제 조회가 주문에 맞춰 적는다. 같은 조회를 반복해도 한 번만. */
+    #[DataProvider('connectionProvider')]
+    public function testSyncRecordsACancellationMadeOutsideTheShop(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($card, $tid);
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+        self::assertSame(0, (int) $paid['refunded_amount']);
+
+        $reference = bin2hex(random_bytes(20));
+        $this->queuePartialCancelInquiry($paid, $tid, [[$reference, 2000]]);
+        $synced = $this->shop->payments->sync($paid);
+        self::assertSame(2000, (int) $synced['refunded_amount']);
+        self::assertSame('paid', $synced['status']);
+        self::assertStringContainsString('결제사 조회로 확인한 취소', end($synced['history'])['note']);
+
+        $count = count($synced['history']);
+        $this->queuePartialCancelInquiry($synced, $tid, [[$reference, 2000]]);
+        $again = $this->shop->payments->sync($synced);
+        self::assertSame(2000, (int) $again['refunded_amount']);
+        self::assertCount($count, $again['history']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testOverdueUnpaidOrdersExpireAndReturnStockButApprovingOnesAreLeftAlone(array $config): void
     {
