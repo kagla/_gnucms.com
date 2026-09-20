@@ -369,11 +369,9 @@ DB 비밀번호는 명령 인자에 직접 넣지 말고 프롬프트 또는 MyS
 
 ## 쇼핑몰·전자결제 별도 브랜치
 
-작은 쇼핑몰과 전자결제 플러그인의 코드·화면·테스트·운영 문서는 `feat/direct-pg-payments` 브랜치에 보관한다. 이니시스·KCP·KSPay·토스페이먼츠 플러그인과 공통 결제 코드를 포함하며, 해당 브랜치의 `docs/shop.md`와 각 플러그인의 `README.md`에서 연동 범위를 확인할 수 있다.
+쇼핑몰(`src/Shop`, `docs/shop.md`)과 KG이니시스 결제 계층(`src/Payment`, `docs/payments.md`)은 코어 기능이다. 예전의 작은 쇼핑몰(`modules/shop`)과 KCP·KSPay·토스페이먼츠 플러그인, 그 공통 결제 코드만 `feat/direct-pg-payments` 브랜치에 따로 보관하며 사용자의 별도 요청 없이 `main`에 병합하지 않는다. 연동 범위는 해당 브랜치의 `docs/shop.md`와 각 플러그인의 `README.md`에서 확인할 수 있다.
 
-`main` 배포본에는 쇼핑몰 모듈·전용 자산, `/shop`·`/admin/shop` 화면과 주문 메뉴, 전자결제 플러그인·설정 화면·공통 결제 코드를 포함하지 않는다. 쇼핑몰·전자결제는 별도로 개발하며 사용자의 별도 요청 없이 `main`에 병합하지 않는다.
-
-기존 설치에서 사용했다면 관리자 모듈·플러그인 목록에서 해당 기능의 사용을 끈다. 파일을 덮어쓰는 방식으로 배포할 때는 이전 `modules/shop/`, `plugins/payment-inicis/`, `plugins/payment-kcp/`, `plugins/payment-kspay/`, `plugins/payment-toss/`, `src/Payment/` 폴더도 제거해야 한다. 쇼핑몰 주문·상품과 결제 설정·거래 기록 DB, 업로드 데이터는 자동 삭제하지 않는다.
+예전 작은 쇼핑몰이나 위 플러그인을 쓰던 사이트는 관리자 모듈·플러그인 목록에서 해당 기능의 사용을 끈다. `/shop`을 기본 주소로 선언한 모듈은 `/shop`이 코어 주소이므로 더는 실행되지 않는다. 파일을 덮어쓰는 방식으로 배포할 때는 이전 `modules/shop/`, `plugins/payment-inicis/`(코어 결제 계층 `src/Payment`와는 다른 예전 플러그인), `plugins/payment-kcp/`, `plugins/payment-kspay/`, `plugins/payment-toss/` 폴더도 제거해야 한다. 쇼핑몰 주문·상품과 결제 설정·거래 기록 DB, 업로드 데이터는 자동 삭제하지 않는다.
 
 ## 라이선스
 
