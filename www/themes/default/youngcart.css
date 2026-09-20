@@ -1,6 +1,6 @@
 /* YoungCart: shared theme colors remain the source for light/dark surfaces. */
 /* Match the core's 14px body, 13px buttons, 19px section headings and 25px page titles. */
-.yc-shop,.yc-admin,.extension-admin{--yc-accent:#be493e;--yc-button:#b94236;--yc-ink:var(--color-base-content,#25292e);--yc-paper:var(--color-base-100,#fff);--yc-muted:color-mix(in srgb,var(--yc-ink) 66%,var(--yc-paper));--yc-line:color-mix(in srgb,var(--yc-ink) 13%,var(--yc-paper));--yc-soft:color-mix(in srgb,var(--yc-ink) 3%,var(--yc-paper));--yc-tint:color-mix(in srgb,#d26e57 10%,var(--yc-paper))}
+.yc-shop,.yc-admin,.extension-admin{--yc-accent:#be493e;--yc-button:#b94236;--yc-ink:var(--color-base-content,#25292e);--yc-paper:var(--color-base-100,#fff);--yc-muted:color-mix(in srgb,var(--yc-ink) 76%,var(--yc-paper));--yc-line:color-mix(in srgb,var(--yc-ink) 13%,var(--yc-paper));--yc-soft:color-mix(in srgb,var(--yc-ink) 3%,var(--yc-paper));--yc-tint:color-mix(in srgb,#d26e57 10%,var(--yc-paper))}
 [data-theme=dark] .yc-shop,[data-theme=dark] .yc-admin{--yc-accent:#ff9d8e}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]) .yc-shop,:root:not([data-theme=light]) .yc-admin{--yc-accent:#ff9d8e}}
 .yc-page{background:var(--color-base-100,#fff)}
@@ -9,7 +9,7 @@
 .yc-shop a{text-decoration:none}.yc-shop button,.yc-shop input,.yc-shop select,.yc-shop textarea{font-family:inherit}
 .yc-shop :is(a,button,input,select,summary,textarea):focus-visible{outline:3px solid var(--yc-accent);outline-offset:4px}
 .yc-shop .muted,.yc-admin .muted{color:var(--yc-muted);opacity:1}
-.yc-shop :is(.input,.select,.textarea){border:1px solid var(--yc-line);border-radius:8px;background:var(--yc-paper);color:var(--yc-ink);box-shadow:none;min-height:44px;max-width:100%}
+.yc-shop :is(.input,.select,.textarea){border:var(--field-border-width,1px) solid var(--field-border,var(--yc-line));border-radius:8px;background:var(--yc-paper);color:var(--yc-ink);box-shadow:none;min-height:44px;max-width:100%}
 .yc-shop .input{padding:.6rem .8rem}.yc-shop .select{padding:.6rem 2rem .6rem .8rem}
 .yc-header{display:flex;flex-direction:column;border-bottom:1px solid var(--yc-line)}
 .yc-header-main{display:flex;align-items:center;gap:2rem;padding:1.65rem 0 1.25rem}

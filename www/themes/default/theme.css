@@ -113,7 +113,7 @@
   --color-warning-content:#2a2005;
   --color-error:#fca5a5;
   --color-error-content:#2e0c0c;
-  --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
+  --field-border:color-mix(in srgb,var(--color-base-content) 45%,transparent);
   --field-border-width:var(--border);
 
   --brand-vivid:#8da4ff;
@@ -154,7 +154,7 @@
     --color-warning-content:#2a2005;
     --color-error:#fca5a5;
     --color-error-content:#2e0c0c;
-    --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
+    --field-border:color-mix(in srgb,var(--color-base-content) 45%,transparent);
     --field-border-width:var(--border);
     --brand-vivid:#8da4ff;
     --brand-deep:#bdc9ff;
@@ -672,6 +672,11 @@ select.select:-webkit-autofill:focus{
 /* 토글·체크박스는 daisyUI 것을 쓴다.
    다만 --radius-selector 가 9999px 이라 체크박스까지 동그래지므로 각을 돌려준다. */
 .checkbox{border-radius:.375rem}
+/* daisyUI 는 체크박스·라디오·파일 입력의 테두리를 --input-color(기본 본문색 20%) 로 그려
+   라이트 1.5:1, 다크 1.8:1 로 거의 보이지 않는다. 입력 상자와 같은 --field-border 를 쓰되
+   --input-color 를 전역으로 두지는 않는다 — 그 값은 체크된 상자의 채움색이기도 해서
+   체크 표시가 회색 상자 위에 얹힌다. checkbox-primary 같은 색 변형은 제 --input-color 를 지킨다. */
+.checkbox,.radio,.file-input{border-color:var(--input-color,var(--field-border))}
 .check-row{align-items:flex-start;font-size:13.5px}
 .check-row.is-invalid .checkbox{border-color:var(--color-error)}
 .consent{gap:.5rem;padding:1rem;border-radius:var(--radius-box);background:var(--color-base-200)}
