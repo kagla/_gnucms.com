@@ -208,4 +208,30 @@ final class PaymentsTest extends YoungCartTestCase
         try { $this->shop->orders->transition((int) $card['id'], 'paid', 'cancelled', 'admin'); self::fail('결제된 카드 주문은 환불이 먼저다'); }
         catch (DomainError $e) { self::assertArrayHasKey('refund', $e->details()); }
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testRefundGoesThroughThePgForCardAndIsOnlyRecordedForManualTransfer(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($card, $tid);
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'prtcTid' => bin2hex(random_bytes(20))]];
+        $after = $this->shop->payments->refund($paid, 2000, '배송비 조정', bin2hex(random_bytes(16)), 'admin');
+        self::assertSame(2000, (int) $after['refunded_amount']);
+        self::assertSame('paid', $after['status']);
+        self::assertSame('https://stginiapi.inicis.com/v2/pg/partialRefund', end($this->http->calls)['url']);
+        self::assertStringContainsString('환불 2,000원: 배송비 조정', end($after['history'])['note']);
+
+        $manual = $this->place('manual_transfer');
+        $paidManual = $this->shop->orders->confirmDeposit((int) $manual['id'], 'admin');
+        $calls = count($this->http->calls);
+        $after = $this->shop->payments->refund($paidManual, (int) $paidManual['total'], '고객 요청', bin2hex(random_bytes(16)), 'admin');
+        self::assertSame((int) $paidManual['total'], (int) $after['refunded_amount']);
+        self::assertCount($calls, $this->http->calls, '무통장 환불은 PG 를 부르지 않는다');
+        $cancelled = $this->shop->orders->transition((int) $after['id'], 'paid', 'cancelled', 'admin', ['note' => '환불 완료']);
+        self::assertSame('cancelled', $cancelled['status']);
+    }
 }

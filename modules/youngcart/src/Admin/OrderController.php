@@ -51,9 +51,16 @@ final class OrderController extends AdminBase
         return $this->render($request, $response, 'order', $data);
     }
 
-    /** 작업 8 이 채운다. */
+    /** 환불. 전액 환불이고 cancel_order 가 켜져 있으면 주문도 취소한다(재고 복원은 transition 이 한다). */
     private function refund(array $order, array $data): void
     {
-        throw DomainError::validation(['refund' => '아직 지원하지 않는 작업입니다.']);
+        $amount = Input::int($data['input']['amount'] ?? null, 'amount', 1, 999999999);
+        $reason = Input::text($data['input']['reason'] ?? '', 'reason', 200, false);
+        $key = Input::text($data['input']['refund_key'] ?? '', 'refund_key', 40, false);
+        if (!preg_match('/^[a-f0-9]{32}$/D', $key)) throw DomainError::validation(['refund' => '환불 요청을 다시 열어 주세요.']);
+        $after = $this->service->payments->refund($order, $amount, $reason, $key, $data['actor']);
+        if (($data['input']['cancel_order'] ?? '') === '1' && (int) $after['refunded_amount'] >= (int) $after['paid_amount'] && in_array('cancelled', Orders::NEXT[$after['status']], true)) {
+            $this->service->orders->transition((int) $after['id'], $after['status'], 'cancelled', $data['actor'], ['note' => '환불 뒤 주문을 취소했습니다.']);
+        }
     }
 }

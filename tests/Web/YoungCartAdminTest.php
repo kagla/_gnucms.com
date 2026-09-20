@@ -101,6 +101,37 @@ final class YoungCartAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testAdminRefundsAndCancelsAPaidManualOrder(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
+        preg_match('/name="refund_key" value="([a-f0-9]{32})"/', $page, $m);
+        self::assertArrayHasKey(1, $m, '환불 폼이 있어야 한다');
+
+        $response = $this->post($this->app, '/admin/shop/orders/detail', $this->csrf(['id' => $order['id'], 'action' => 'refund', 'amount' => (string) $order['total'], 'reason' => '고객 요청', 'refund_key' => $m[1], 'cancel_order' => '1']));
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        $after = $this->shop->orders->get((int) $order['id']);
+        self::assertSame((int) $order['total'], (int) $after['refunded_amount']);
+        self::assertSame('cancelled', $after['status']);
+        self::assertStringContainsString('환불을 처리했습니다', $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id'], 'saved' => 'refund'])));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRefundFormValidatesAmountAndReason(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
+        $this->signIn(true);
+        $response = $this->post($this->app, '/admin/shop/orders/detail', $this->csrf(['id' => $order['id'], 'action' => 'refund', 'amount' => '0', 'reason' => '', 'refund_key' => bin2hex(random_bytes(16))]));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame(0, (int) $this->shop->orders->get((int) $order['id'])['refunded_amount']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testOrderListShowsTheMethodAndFiltersPaid(array $config): void
     {
         $this->setupModule($config); $this->enablePayments();
