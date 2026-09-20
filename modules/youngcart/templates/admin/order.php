@@ -9,8 +9,21 @@
 <div class="yc-admin yc-commerce-grid"><div class="yc-checkout-sections"><?php $this->insert('_order_detail') ?>
 <section class="yc-panel"><h2>처리 이력</h2><ol class="yc-order-timeline"><?php foreach ($order['history'] as $event): ?><li><div><strong><?= $this->e($statuses[$event['status']]) ?></strong><p class="muted"><?= $this->e($event['actor']) ?><?= $event['note'] !== '' ? ' · ' . $this->e($event['note']) : '' ?></p></div><time><?= date('Y.m.d H:i', (int) $event['created_at']) ?></time></li><?php endforeach ?></ol></section></div>
 <aside class="yc-order-summary"><div class="yc-section-heading"><h2>주문 처리</h2><span class="yc-status" data-status="<?= $this->e($order['status']) ?>"><?= $this->e($statuses[$order['status']]) ?></span></div>
-<?php $this->insert('_totals', ['quote' => $order]) ?><p class="yc-help">온라인 결제 내역이 없는 주문입니다. 결제 안내와 확인은 별도로 진행해 주세요.</p>
-<?php $next = array_values(array_diff($next, ['paid'])); ?>
+<?php $this->insert('_totals', ['quote' => $order]) ?>
+<section class="yc-panel yc-payment-panel"><h2>결제</h2>
+<?php if ($order['payment_method'] === ''): ?><p class="yc-help">온라인 결제 내역이 없는 주문입니다. 결제 안내와 확인은 별도로 진행해 주세요.</p>
+<?php else: ?><dl class="yc-detail-list">
+<div><dt>수단</dt><dd><?= $this->e($payment_methods[$order['payment_method']] ?? $order['payment_method']) ?></dd></div>
+<div><dt>상태</dt><dd><?= (int) $order['paid_at'] > 0 ? '결제 완료 · ' . $this->e(date('Y-m-d H:i', (int) $order['paid_at'])) . ' · ' . number_format((int) $order['paid_amount']) . '원' : '결제 대기 · 기한 ' . $this->e(date('Y-m-d H:i', (int) $order['pay_by'])) ?></dd></div>
+<?php if ((int) $order['refunded_amount'] > 0): ?><div><dt>환불</dt><dd><?= number_format((int) $order['refunded_amount']) ?>원</dd></div><?php endif ?>
+<?php if ($order['payment_method'] === 'manual_transfer'): ?><div><dt>입금자명</dt><dd><?= $this->e(($order['payment']['depositor'] ?? '') !== '' ? $order['payment']['depositor'] : $order['buyer_name']) ?></dd></div><div><dt>안내 계좌</dt><dd><?= $this->e(($order['payment']['bank'] ?? '') . ' ' . ($order['payment']['account'] ?? '') . ' ' . ($order['payment']['holder'] ?? '')) ?></dd></div><?php endif ?>
+<?php if (($order['payment']['tid'] ?? '') !== ''): ?><div><dt>거래번호</dt><dd><?= $this->e($order['payment']['tid']) ?></dd></div><?php endif ?>
+</dl>
+<?php endif ?>
+<?php if ($order['status'] === 'pending' && ($order['payment_method'] === '' || $order['payment_method'] === 'manual_transfer')): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="confirm-deposit"><button class="btn btn-primary btn-sm" type="submit">입금 확인</button></form><?php endif ?>
+<?php if ($is_pg): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-outline btn-sm" type="submit">결제 조회</button></form><?php endif ?>
+<?php if ($order['payment_method'] !== ''): ?><?php $this->insert('admin/_refund_form') ?><?php endif ?>
+</section>
 <?php if ($next !== []): ?><form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail">
 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="from" value="<?= $this->e($order['status']) ?>">
 <label class="yc-field"><span>변경할 상태</span><select class="select select-bordered" name="status" required><?php foreach ($next as $status): ?><option value="<?= $this->e($status) ?>"<?= ($input['status'] ?? '') === $status ? ' selected' : '' ?>><?= $this->e($statuses[$status]) ?></option><?php endforeach ?></select></label>

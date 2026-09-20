@@ -9,6 +9,9 @@ use GnuCms\Extension\Catalog;
 use GnuCms\Extension\Manager;
 use GnuCms\Extension\StateStore;
 use GnuCms\Modules\YoungCart\Service;
+use GnuCms\Payment\InicisGateway;
+use GnuCms\Tests\Payment\FakeTransport;
+use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Support\WebTestCase;
 use GnuCms\Tests\YoungCart\ImagesTest;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,6 +23,8 @@ final class YoungCartAdminTest extends WebTestCase
     private App $app;
     private Service $shop;
     private string $root;
+    private FakeTransport $http;
+    private array $payConfig;
 
     private function setupModule(array $config, bool $install = true): void
     {
@@ -42,6 +47,71 @@ final class YoungCartAdminTest extends WebTestCase
     }
 
     private function csrf(array $body = []): array { return $body + ['csrf_token' => $_SESSION['csrf_token']]; }
+
+    /** 이니시스 테스트 환경을 켜고 쇼핑몰이 그 환경을 쓰게 한다. 무통장 계좌도 켠다. */
+    private function enablePayments(): void
+    {
+        $this->payConfig = Fixtures::config();
+        $this->app->paymentSettings()->save('test', $this->payConfig);
+        $this->app->paymentSettings()->enable('test', true);
+        $this->http = new FakeTransport();
+        $this->app->setInicisGateway(new InicisGateway($this->app->paymentSettings(), $this->http));
+        $settings = $this->shop->settings->all();
+        $settings['payment'] = ['environment' => 'test', 'manual' => ['enabled' => true, 'bank' => '국민은행', 'account' => '123-45', 'holder' => '상점'],
+            'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]];
+        $db = $this->app->db();
+        $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($db->selectOne('SELECT id FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'") === null) {
+            $db->insert('yc_settings', ['id' => 'settings', 'payload' => $payload]);
+        } else {
+            $db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
+        }
+    }
+
+    private function placeManualOrder(): array
+    {
+        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
+        $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
+        $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
+            'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1',
+            'payment_method' => 'manual_transfer', 'depositor' => '홍길동'];
+        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+            $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminConfirmsADepositAndSeesThePaymentPanel(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
+        self::assertStringContainsString('무통장입금', $page);
+        self::assertStringContainsString('홍길동', $page);
+        self::assertStringContainsString('value="confirm-deposit"', $page);
+        self::assertStringNotContainsString('<option value="paid"', $page);
+
+        $response = $this->post($this->app, '/admin/shop/orders/detail', $this->csrf(['id' => $order['id'], 'action' => 'confirm-deposit']));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('paid', $this->shop->orders->get((int) $order['id'])['status']);
+        $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id'], 'saved' => 'confirm-deposit']));
+        self::assertStringContainsString('입금을 확인했습니다', $page);
+        self::assertStringContainsString('결제 완료', $page);
+        self::assertStringNotContainsString('value="confirm-deposit"', $page);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOrderListShowsTheMethodAndFiltersPaid(array $config): void
+    {
+        $this->setupModule($config); $this->enablePayments();
+        $order = $this->placeManualOrder();
+        $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
+        $this->signIn(true);
+        $list = $this->body($this->get($this->app, '/admin/shop/orders', ['status' => 'paid']));
+        self::assertStringContainsString($order['number'], $list);
+        self::assertStringContainsString('무통장입금', $list);
+        self::assertStringNotContainsString('주문 상태는 결제 완료를 의미하지 않습니다', $list);
+    }
 
     #[DataProvider('connectionProvider')]
     public function testGuardsInstallAndSettings(array $config): void
