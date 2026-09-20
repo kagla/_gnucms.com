@@ -9,6 +9,9 @@ use GnuCms\Extension\Catalog;
 use GnuCms\Extension\Manager;
 use GnuCms\Extension\StateStore;
 use GnuCms\Modules\YoungCart\Service;
+use GnuCms\Payment\InicisGateway;
+use GnuCms\Tests\Payment\FakeTransport;
+use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Support\WebTestCase;
 use GnuCms\Web\Kernel;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -22,6 +25,8 @@ final class YoungCartCommerceTest extends WebTestCase
     private Service $shop;
     private array $product;
     private string $root;
+    private FakeTransport $http;
+    private array $payConfig;
 
     private function setupShop(array $config): void
     {
@@ -51,6 +56,95 @@ final class YoungCartCommerceTest extends WebTestCase
         return $this->form($overrides + ['checkout_token' => $m[1], 'flow' => 'cart', 'action' => 'place', 'buyer_name' => '테스트 주문자', 'email' => 'order@example.test',
             'phone' => '010-0000-0000', 'recipient' => '테스트 수령인', 'recipient_phone' => '010-0000-0000', 'postcode' => '04524',
             'address' => '테스트 배송 주소', 'address_detail' => '101호', 'delivery_note' => '<script>alert(1)</script>', 'password' => bin2hex(random_bytes(12)), 'agree' => '1']);
+    }
+
+    /** 이니시스 테스트 환경을 켜고 쇼핑몰이 그 환경을 쓰게 한다. 무통장 계좌도 켠다. */
+    private function enablePayments(): void
+    {
+        $this->payConfig = Fixtures::config();
+        $this->app->paymentSettings()->save('test', $this->payConfig);
+        $this->app->paymentSettings()->enable('test', true);
+        $this->http = new FakeTransport();
+        $this->app->setInicisGateway(new InicisGateway($this->app->paymentSettings(), $this->http));
+        $settings = $this->shop->settings->all();
+        $settings['payment'] = ['environment' => 'test', 'manual' => ['enabled' => true, 'bank' => '국민은행', 'account' => '123-45', 'holder' => '상점'],
+            'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]];
+        $db = $this->app->db();
+        $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($db->selectOne('SELECT id FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'") === null) {
+            $db->insert('yc_settings', ['id' => 'settings', 'payload' => $payload]);
+        } else {
+            $db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
+        }
+    }
+
+    /** 303 Location 의 number= 값. */
+    private function numberFrom(\Psr\Http\Message\ResponseInterface $response): string
+    {
+        $location = $response->getHeaderLine('Location');
+        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        return (string) ($query['number'] ?? '');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutStaysReceiptOnlyWhenNoMethodIsEnabled(array $config): void
+    {
+        $this->setupShop($config);
+        $this->add();
+        $html = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertStringNotContainsString('name="payment_method"', $html);
+        self::assertStringContainsString('주문 접수 안내', $html);
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout());
+        self::assertSame(303, $response->getStatusCode());
+        self::assertStringContainsString('/shop/order?number=', $response->getHeaderLine('Location'));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutOffersMethodsAndSendsCardOrdersToThePayPage(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $this->add();
+        $html = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertStringContainsString('name="payment_method" value="card"', $html);
+        self::assertStringContainsString('name="payment_method" value="manual_transfer"', $html);
+        self::assertStringContainsString('국민은행 123-45', $html);
+        self::assertStringNotContainsString('이 화면에서는 결제되지 않습니다', $html);
+
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout(['payment_method' => 'card']));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertStringContainsString('/shop/pay?number=', $response->getHeaderLine('Location'));
+        $number = $this->numberFrom($response);
+        $order = $this->shop->orders->get((int) $this->app->db()->selectOne('SELECT id FROM ' . $this->app->db()->table('yc_orders') . ' WHERE number = ?', [$number])['id']);
+        self::assertSame('card', $order['payment_method']);
+        self::assertSame('pending', $order['status']);
+
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $number, 'pay' => 'closed']));
+        self::assertStringContainsString('결제창이 닫혔습니다', $page);
+        self::assertStringContainsString('/shop/pay?number=' . rawurlencode($number), $page);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutRejectsAMissingMethodAndKeepsTheForm(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $this->add();
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout(['payment_method' => '']));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('결제 수단을 선택해 주세요', $this->body($response));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testManualTransferOrderShowsTheAccountAndDeadline(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $this->add();
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout(['payment_method' => 'manual_transfer', 'depositor' => '홍길동']));
+        self::assertStringContainsString('/shop/order?number=', $response->getHeaderLine('Location'));
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $this->numberFrom($response)]));
+        self::assertStringContainsString('입금 안내', $page);
+        self::assertStringContainsString('국민은행 123-45 (예금주 상점)', $page);
+        self::assertStringContainsString('홍길동', $page);
+        self::assertStringNotContainsString('결제하기', $page);
     }
 
     #[DataProvider('connectionProvider')]

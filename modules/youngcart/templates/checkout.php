@@ -23,10 +23,19 @@
 <section class="yc-panel"><h2>주문 상품 <small><?= count($quote['items']) ?>개 항목</small></h2><?php foreach ($quote['items'] as $item): ?><div class="yc-order-line"><div><strong><?= $this->e($item['name']) ?></strong><p class="muted"><?= $item['kind'] === 'extra' ? '추가 구성 · ' : '' ?><?= $this->e($item['label']) ?> · <?= $item['quantity'] ?>개</p></div><strong><?= number_format($item['total']) ?>원</strong></div><?php endforeach ?></section>
 <section class="yc-panel"><h2>배송비</h2><?php $selectable = false; foreach ($quote['shipping'] as $delivery): ?><div class="yc-shipping-line"><div><strong><?= $this->e($delivery['name']) ?></strong><p class="muted"><?= $delivery['shared'] ? '상점 기본배송 · 같은 결제 방식끼리 묶음' : '상품별 배송' ?></p></div><div><?php if ($delivery['selectable']): $selectable = true; ?><select class="select select-bordered" name="shipping[<?= (int) $delivery['product_id'] ?>]" aria-label="<?= $this->e($delivery['name']) ?> 배송비 결제 방식"><option value="prepaid"<?= $delivery['mode'] === 'prepaid' ? ' selected' : '' ?>>선불</option><option value="cod"<?= $delivery['mode'] === 'cod' ? ' selected' : '' ?>>착불</option></select><?php else: ?><span><?= $delivery['mode'] === 'cod' ? '착불' : '선불' ?></span><?php endif ?> <strong><?= number_format($delivery['fee']) ?>원</strong></div></div><?php endforeach ?>
 <?php if ($selectable): ?><button class="yc-button yc-button-small" type="submit" name="action" value="refresh" formnovalidate>배송비 반영하기</button><p class="yc-help">배송 방식을 변경하면 배송비를 반영한 뒤 주문해 주세요. 비회원 비밀번호는 다시 입력해야 합니다.</p><?php endif ?></section>
+<?php if ($payment_methods !== []): ?>
+<section class="yc-panel" id="yc-payment"><h2>결제 수단</h2><div class="yc-form-stack">
+<?php $picked = $input['payment_method'] ?? array_key_first($payment_methods); foreach ($payment_methods as $key => $label): ?>
+<label class="yc-choice"><input class="radio radio-sm" type="radio" name="payment_method" value="<?= $this->e($key) ?>" required<?= $picked === $key ? ' checked' : '' ?>><span><?= $this->e($label) ?></span></label>
+<?php endforeach ?>
+<?php if (isset($payment_methods['manual_transfer'])): ?><div class="yc-manual-transfer"><p class="yc-help">무통장입금 계좌: <?= $this->e($payment['manual']['bank'] . ' ' . $payment['manual']['account']) ?> (예금주 <?= $this->e($payment['manual']['holder']) ?>). 접수 후 <?= (int) $payment['deadline_hours']['manual_transfer'] ?>시간 안에 입금해 주세요.</p>
+<label class="yc-field" for="yc-depositor"><span>입금자명 <small class="muted">선택</small></span><input class="input input-bordered" id="yc-depositor" name="depositor" maxlength="100" value="<?= $this->e($input['depositor'] ?? '') ?>"></label></div><?php endif ?>
+</div></section>
+<?php endif ?>
 </div>
-<aside class="yc-order-summary"><h2>최종 주문 금액</h2><?php $this->insert('_totals') ?><div class="yc-order-notice"><strong>주문 접수 안내</strong><p><?= nl2br($this->e($settings['order_notice'])) ?></p><p>온라인 결제는 진행되지 않습니다.</p></div>
+<aside class="yc-order-summary"><h2>최종 주문 금액</h2><?php $this->insert('_totals') ?><?php if ($payment_methods === []): ?><div class="yc-order-notice"><strong>주문 접수 안내</strong><p><?= nl2br($this->e($settings['order_notice'])) ?></p><p>온라인 결제는 진행되지 않습니다.</p></div><?php endif ?>
 <label class="yc-consent"><input class="checkbox checkbox-sm" type="checkbox" name="agree" value="1" required<?= ($input['agree'] ?? '') === '1' ? ' checked' : '' ?>><span>상품·수량·금액을 확인했으며, 주문 처리와 배송에 필요한 이름·연락처·주소 제공에 동의합니다.</span></label>
-<button class="yc-button yc-button-primary yc-button-block" type="submit" name="action" value="place"<?= $quote['errors'] !== [] ? ' disabled' : '' ?>><?= number_format($quote['total']) ?>원 주문 접수</button><a class="yc-continue" href="<?= $this->e($url) ?>/cart">장바구니로 돌아가기</a>
+<button class="yc-button yc-button-primary yc-button-block" type="submit" name="action" value="place"<?= $quote['errors'] !== [] ? ' disabled' : '' ?>><?= number_format($quote['total']) ?>원 <?= $payment_methods === [] ? '주문 접수' : '주문하고 결제하기' ?></button><a class="yc-continue" href="<?= $this->e($url) ?>/cart">장바구니로 돌아가기</a>
 </aside></form>
 </div>
 <?php $this->stop() ?>

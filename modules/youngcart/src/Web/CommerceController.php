@@ -99,6 +99,11 @@ final class CommerceController
                 $order = $this->service->orders->owned($number, $userId, $_SESSION['yc_guest_orders']);
             }
             $data['order'] = $order;
+            $payState = $input['pay'] ?? '';
+            $data['pay_state'] = in_array($payState, ['closed', 'failed'], true) ? $payState : '';
+            $data['pay_url'] = $order['status'] === 'pending' && $this->service->payments->isPgOrder($order) && ((int) $order['pay_by'] === 0 || (int) $order['pay_by'] > \GnuCms\Support\Clock::timestamp())
+                ? $url . '/pay?number=' . rawurlencode($number) : null;
+            $data['method_labels'] = \GnuCms\Modules\YoungCart\Commerce\Payments::METHODS;
             $data['just_ordered'] = ($_SESSION['yc_just_ordered'] ?? null) === $number;
             unset($_SESSION['yc_just_ordered']);
             return $view->render($response, 'order', $data);
@@ -124,17 +129,21 @@ final class CommerceController
         $choices = $post ? ($input['shipping'] ?? []) : ($_SESSION['yc_shipping_' . $flow] ?? []);
         if (!is_array($choices)) throw DomainError::validation(['shipping' => '배송 방식을 확인해 주세요.']);
         $quote = $this->service->cart->quote($cart, $choices, true);
+        $methods = $this->service->payments->methods();
         $_SESSION['yc_shipping_' . $flow] = $choices;
         if ($post && ($input['action'] ?? '') !== 'refresh') {
             try {
                 $ip = $request->getServerParams()['REMOTE_ADDR'] ?? null;
                 (new \GnuCms\Spam\WriteRateLimiter($this->service->app->db(), ['yc_order' => [[600, 20]]]))
                     ->consume('yc_order', $this->service->app->guestAcl(), is_string($ip) ? $ip : null);
-                $order = $this->service->orders->place($cart, $input, $token, $_SESSION['yc_owner'], $userId, $issued['fingerprint'], $choices);
+                $this->service->payments->expireOverdue();
+                $payment = $this->service->payments->forPlacing($input);
+                $order = $this->service->orders->place($cart, $input, $token, $_SESSION['yc_owner'], $userId, $issued['fingerprint'], $choices, $payment);
                 if ($userId === null) $this->grantGuest((int) $order['id']);
                 $_SESSION['yc_' . $flow] = [];
                 $_SESSION['yc_just_ordered'] = $order['number'];
-                return $this->redirect($response, $data['url'] . '/order?number=' . rawurlencode($order['number']));
+                $next = $payment !== [] && $this->service->payments->isPgOrder($order) ? '/pay' : '/order';
+                return $this->redirect($response, $data['url'] . $next . '?number=' . rawurlencode($order['number']));
             } catch (DomainError $e) {
                 if ($e->status() >= 500) throw $e;
                 $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status());
@@ -143,7 +152,7 @@ final class CommerceController
         } elseif ($post) $data['notice'] = '배송비를 반영했습니다. 주문 금액을 확인해 주세요.';
         $_SESSION['yc_checkout'][$token] = ['flow' => $flow, 'user_id' => $userId, 'fingerprint' => $quote['fingerprint']];
         $_SESSION['yc_checkout'] = array_slice($_SESSION['yc_checkout'], -12, null, true);
-        $data += ['flow' => $flow, 'checkout_token' => $token, 'quote' => $quote];
+        $data += ['flow' => $flow, 'checkout_token' => $token, 'quote' => $quote, 'payment_methods' => $methods, 'payment' => $this->service->settings->all()['payment']];
         $data['errors'] += $quote['errors'];
         $data['input'] = $this->safeValues($input);
         // Prefill only when opening the form; preserve edits and intentionally empty values on POST.
