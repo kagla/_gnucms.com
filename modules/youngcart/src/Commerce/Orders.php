@@ -274,7 +274,13 @@ final class Orders
         $count = 0;
         foreach ($rows as $row) {
             $order = $this->get((int) $row['id']);
-            if ($inProgress($order)) continue;
+            // 진행 여부를 확인하지 못하면(원장·PG 설정 오류) 진행 중으로 본다. 만료 취소는 나중에 다시 할 수 있지만
+            // 승인된 주문을 잘못 취소하면 돈이 남는다. 이 호출은 주문 화면을 여는 길목이라 던져서도 안 된다.
+            try {
+                if ($inProgress($order)) continue;
+            } catch (\Throwable) {
+                continue;
+            }
             try {
                 $this->transition((int) $row['id'], 'pending', 'cancelled', 'system', ['note' => '결제 기한이 지나 자동으로 취소했습니다.']);
                 $count++;

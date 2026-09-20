@@ -216,6 +216,8 @@ final class PaymentsTest extends YoungCartTestCase
     {
         $this->setupPayments($config);
         $order = $this->place('card');
+        try { $this->shop->payments->sync($order); self::fail('결제 기록이 없으면 성공 안내가 아니다'); }
+        catch (DomainError $e) { self::assertStringContainsString('결제 기록이 없습니다', implode(' ', $e->details())); }
         $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
         $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
         // 승인 요청이 통신 실패로 끝나 원장은 pending 으로 남는다. 결제사에는 승인이 남아 있을 수 있다.
@@ -428,6 +430,12 @@ final class PaymentsTest extends YoungCartTestCase
         self::assertSame($stockBefore + 1, (int) $this->shop->products->get($productId)['stock']);
         self::assertStringContainsString('결제 기한이 지나', end($this->shop->orders->get((int) $card['id'])['history'])['note']);
         self::assertSame(0, $this->shop->payments->expireOverdue(), '두 번째 호출은 할 일이 없다');
+
+        // 승인 진행 여부를 확인하다 실패하면(원장 읽기 오류 등) 그 주문은 건드리지 않는다.
+        $unknown = $this->place('manual_transfer');
+        $db->update('yc_orders', ['pay_by' => Clock::timestamp() - 60], 'id = :id', ['id' => (int) $unknown['id']]);
+        self::assertSame(0, $this->shop->orders->expire(Clock::timestamp(), static fn (array $order): bool => throw new \RuntimeException('원장을 읽지 못했습니다')));
+        self::assertSame('pending', $this->shop->orders->get((int) $unknown['id'])['status']);
     }
 
     #[DataProvider('connectionProvider')]
