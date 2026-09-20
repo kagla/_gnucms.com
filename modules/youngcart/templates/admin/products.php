@@ -44,7 +44,7 @@ $sort = function (string $key, string $label) use ($sortLink, $filters): void { 
 <form method="post" action="<?= $this->e($admin_url) ?>/products/copy" class="yc-copy-form">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <label>복사할 상품 <select class="select select-bordered select-sm" name="id"><?php foreach ($list['items'] as $row): ?><option value="<?= (int) $row['id'] ?>"><?= $this->e($row['code'] . ' ' . $row['name']) ?></option><?php endforeach ?></select></label>
-  <label>새 상품 코드 <input class="input input-bordered input-sm" type="text" name="code" value="<?= time() ?>" maxlength="20" pattern="[A-Za-z0-9_-]{1,20}" required></label>
+  <label>새 상품 코드 <input class="input input-bordered input-sm" type="text" name="code" value="<?= time() ?>" maxlength="20" pattern="[A-Za-z0-9_\-]{1,20}" required></label>
   <button class="btn btn-sm" type="submit">상품 복사</button>
 </form></details>
 <?php endif ?>

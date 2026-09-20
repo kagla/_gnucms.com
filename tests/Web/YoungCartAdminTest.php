@@ -209,6 +209,21 @@ final class YoungCartAdminTest extends WebTestCase
         return ['top' => $top, 'other' => $other, 'a' => $a, 'b' => $b];
     }
 
+    /**
+     * 복사 폼의 상품 코드 pattern 은 브라우저가 v 플래그로 컴파일하므로 문자 클래스 안의 하이픈을
+     * 이스케이프해야 한다. 안 하면 크롬이 정규식을 버려 검증이 조용히 사라진다(2026-09-08 수동 테스트).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testProductCodePatternEscapesTheHyphen(array $config): void
+    {
+        $this->setupModule($config);
+        $this->seedProducts();
+        $this->signIn(true);
+
+        $list = $this->body($this->get($this->app, '/admin/shop/products'));
+        self::assertStringContainsString('pattern="[A-Za-z0-9_\\-]{1,20}"', $list);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testProductListBulkCopyTypesStockAndSearch(array $config): void
     {
