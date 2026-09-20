@@ -174,6 +174,8 @@ final class YoungCartCommerceTest extends WebTestCase
         $page = $this->body($this->get($this->app, '/shop/order', ['number' => $order['number']]));
         self::assertStringContainsString('결제 완료', $page);
         self::assertStringNotContainsString('주문 취소', $page);
+        // 원장은 승인 완료(confirmed)로 남지만, 끝난 주문에 "확인 중"을 보여 주면 안 된다.
+        self::assertStringNotContainsString('결제 결과를 확인하는 중', $page);
     }
 
     #[DataProvider('connectionProvider')]
