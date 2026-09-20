@@ -84,6 +84,10 @@ final class AdminController extends AdminBase
         $flat['shipping_free_minimum'] = (string) $settings['shipping']['free_minimum'];
         $flat['order_notice'] = $settings['order_notice'];
         $flat['exchange_content'] = $settings['exchange']['content'];
+        $flat['payment_environment'] = $settings['payment']['environment'];
+        $flat['payment_manual_enabled'] = $settings['payment']['manual']['enabled'] ? '1' : '0';
+        foreach (['bank', 'account', 'holder'] as $key) $flat['payment_manual_' . $key] = $settings['payment']['manual'][$key];
+        foreach ($settings['payment']['deadline_hours'] as $key => $hours) $flat['payment_deadline_' . $key] = (string) $hours;
         return $flat;
     }
 }

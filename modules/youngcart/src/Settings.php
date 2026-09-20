@@ -32,6 +32,9 @@ final class Settings
             'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0],
             'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
+            'payment' => ['environment' => 'live',
+                'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
+                'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]],
         ];
     }
 
@@ -89,6 +92,21 @@ final class Settings
             $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];
         }
         $settings['order_notice'] = Input::text($input['order_notice'] ?? $previous['order_notice'], 'order_notice', 2000, false);
+        // 결제: 폼에 없는 값은 이전 값을 지킨다(다른 테마의 옛 폼과 같은 규칙).
+        $payment = $previous['payment'];
+        $environment = $input['payment_environment'] ?? null;
+        if (in_array($environment, ['test', 'live'], true)) $payment['environment'] = $environment;
+        if (array_key_exists('payment_manual_enabled', $input) || array_key_exists('payment_manual_account', $input)) {
+            $payment['manual'] = ['enabled' => $bool('payment_manual_enabled'),
+                'bank' => Input::text($input['payment_manual_bank'] ?? '', 'payment_manual_bank', 50),
+                'account' => Input::text($input['payment_manual_account'] ?? '', 'payment_manual_account', 50),
+                'holder' => Input::text($input['payment_manual_holder'] ?? '', 'payment_manual_holder', 50)];
+            if ($payment['manual']['enabled'] && $payment['manual']['account'] === '') $errors['payment_manual_account'] = '무통장입금을 켜려면 계좌번호를 입력해 주세요.';
+        }
+        foreach (['card' => 72, 'virtual_account' => 720, 'manual_transfer' => 720] as $key => $max) {
+            if (array_key_exists('payment_deadline_' . $key, $input)) $payment['deadline_hours'][$key] = $int('payment_deadline_' . $key, 1, $max);
+        }
+        $settings['payment'] = $payment;
         if ($errors !== []) throw DomainError::validation($errors);
         $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->store->transaction(function () use ($payload): void {
