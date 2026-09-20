@@ -27,6 +27,9 @@ return static function (Context $context): void {
     foreach (['cart/add', 'order/cancel'] as $page) {
         $context->route('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
     }
+    $pay = new \GnuCms\Modules\YoungCart\Web\PayController($service, $context->routePrefix, $context->adminRoutePrefix);
+    $context->route('GET', '/pay', static fn ($request, $response) => $pay->show($request, $response));
+    $context->externalPost('/pay/callback', [$pay, 'callbackAuthenticate'], [$pay, 'callback'], 65536, 'application/x-www-form-urlencoded');
     $orders = new \GnuCms\Modules\YoungCart\Admin\OrderController($service, $context->routePrefix, $context->adminRoutePrefix);
     $context->route('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), admin: true);
     foreach (['GET', 'POST'] as $method) $context->route($method, '/orders/detail', static fn ($request, $response) => $orders->handle('orders/detail', $request, $response), admin: true);

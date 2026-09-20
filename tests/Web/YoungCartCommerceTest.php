@@ -86,6 +86,95 @@ final class YoungCartCommerceTest extends WebTestCase
         return (string) ($query['number'] ?? '');
     }
 
+    private function placeCardOrder(): array
+    {
+        $this->add();
+        $response = $this->post($this->app, '/shop/checkout', $this->checkout(['payment_method' => 'card']));
+        $number = $this->numberFrom($response);
+        return $this->shop->orders->get((int) $this->app->db()->selectOne('SELECT id FROM ' . $this->app->db()->table('yc_orders') . ' WHERE number = ?', [$number])['id']);
+    }
+
+    private function callbackFor(array $order): array
+    {
+        return ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'orderNumber' => $order['payment_id'], 'idc_name' => 'stg',
+            'authToken' => bin2hex(random_bytes(32)), 'authUrl' => 'https://stgstdpay.inicis.com/api/payAuth', 'netCancelUrl' => 'https://stgstdpay.inicis.com/api/netCancel'];
+    }
+
+    private function queueApproval(array $order, string $tid): void
+    {
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'MOID' => $order['payment_id'],
+            'TotPrice' => (string) $order['total'], 'payMethod' => 'Card', 'tid' => $tid, 'currency' => 'WON']];
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => 'SUCCESS', 'transactionStatus' => 'APPROVAL', 'mid' => $this->payConfig['merchant_id'],
+            'oid' => $order['payment_id'], 'price' => (string) $order['total'], 'tid' => $tid, 'paymethod' => 'Card', 'approvedDate' => '20260920', 'approvedTime' => '120000',
+            'cardInfo' => ['currencyCode' => 'WON'], 'partCancelTransInfo' => []]];
+    }
+
+    /** 세션 없는 외부 요청. 폼 본문과 쿼리를 그대로 싣는다. */
+    private function externalPost(string $path, array $query, array $body): \Psr\Http\Message\ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', $path . '?' . http_build_query($query))
+            ->withHeader('Content-Type', 'application/x-www-form-urlencoded')
+            ->withBody((new \Slim\Psr7\Factory\StreamFactory())->createStream(http_build_query($body)));
+        return Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPayPageOpensTheInicisWindowForTheOrderOwnerOnly(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $html = $this->body($this->get($this->app, '/shop/pay', ['number' => $order['number']]));
+        self::assertStringContainsString('INIStdPay.js', $html);
+        self::assertStringContainsString('name="oid" value="' . $order['payment_id'] . '"', $html);
+        self::assertStringContainsString('name="price" value="' . $order['total'] . '"', $html);
+        self::assertStringContainsString('name="returnUrl" value="https://shop.example.test/shop/pay/callback?order=' . $order['payment_id'], $html);
+        self::assertStringContainsString('name="closeUrl" value="https://shop.example.test/shop/order?number=' . rawurlencode($order['number']) . '&amp;pay=closed"', $html);
+
+        session_start(); $_SESSION['yc_guest_orders'] = []; session_write_close();
+        self::assertSame(404, $this->get($this->app, '/shop/pay', ['number' => $order['number']])->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCallbackNeedsTheOrderStateAndMarksTheOrderPaid(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+
+        self::assertSame(403, $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => str_repeat('0', 64)], $this->callbackFor($order))->getStatusCode());
+        self::assertSame(403, $this->externalPost('/shop/pay/callback', ['order' => str_repeat('a', 32), 'state' => $state], $this->callbackFor($order))->getStatusCode());
+        self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
+
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($order, $tid);
+        $response = $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => $state], $this->callbackFor($order));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame('https://shop.example.test/shop/order?number=' . rawurlencode($order['number']), $response->getHeaderLine('Location'));
+        $paid = $this->shop->orders->get((int) $order['id']);
+        self::assertSame('paid', $paid['status']);
+        self::assertSame($tid, $paid['payment']['tid']);
+
+        $page = $this->body($this->get($this->app, '/shop/order', ['number' => $order['number']]));
+        self::assertStringContainsString('결제 완료', $page);
+        self::assertStringNotContainsString('주문 취소', $page);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testFailedApprovalSendsTheCustomerBackWithAFailureNote(array $config): void
+    {
+        $this->setupShop($config); $this->enablePayments();
+        $order = $this->placeCardOrder();
+        $this->get($this->app, '/shop/pay', ['number' => $order['number']]);
+        $state = \GnuCms\Payment\CallbackToken::create($this->app, \GnuCms\Modules\YoungCart\Commerce\Payments::gatewayOrder($order));
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '9999', 'resultMsg' => '거절']];
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']]; // 망취소 응답
+        $response = $this->externalPost('/shop/pay/callback', ['order' => $order['payment_id'], 'state' => $state], $this->callbackFor($order));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertStringEndsWith('&pay=failed', $response->getHeaderLine('Location'));
+        self::assertSame('pending', $this->shop->orders->get((int) $order['id'])['status']);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testCheckoutStaysReceiptOnlyWhenNoMethodIsEnabled(array $config): void
     {
