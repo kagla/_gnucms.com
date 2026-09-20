@@ -17,6 +17,7 @@ final class SchemaTest extends YoungCartTestCase
         'yc_img_product' => 'yc_product_images', 'yc_opt_product' => 'yc_options',
         'yc_rel_related' => 'yc_product_relations', 'yc_stock_product' => 'yc_stock_log',
         'yc_order_user' => 'yc_orders', 'yc_order_status' => 'yc_orders', 'yc_order_created' => 'yc_orders',
+        'yc_order_pay_by' => 'yc_orders',
         'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items', 'yc_history_order' => 'yc_order_history'];
 
     #[DataProvider('connectionProvider')]
@@ -34,8 +35,8 @@ final class SchemaTest extends YoungCartTestCase
         self::assertSame([], array_diff(Schema::TABLES, $schema->backupTables()));
         $status = $schema->status(Schema::KEY);
         self::assertSame('ready', $status['state']);
-        self::assertSame(2, (int) $status['schema_version']);
-        self::assertSame(19, count(self::INDEXES));
+        self::assertSame(3, (int) $status['schema_version']);
+        self::assertSame(20, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['code' => '10', 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
             'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
@@ -54,11 +55,32 @@ final class SchemaTest extends YoungCartTestCase
         Schema::install($schema);
         self::assertTrue($this->shop->ready());
         $status = $schema->status(Schema::KEY);
-        self::assertSame(2, (int) $status['schema_version']);
+        self::assertSame(3, (int) $status['schema_version']);
         foreach (Schema::TABLES as $table) self::assertTrue($schema->exists($table), $table);
         self::assertSame(12, count(Schema::TABLES));
-        self::assertSame(19, count(self::INDEXES));
+        self::assertSame(20, count(self::INDEXES));
         $this->assertIndexesExist();
+    }
+
+    /** 3판은 주문에 결제 칸을 더한다. 2판 설치에도 칸이 생겨야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testVersionThreeAddsPaymentColumnsToExistingOrders(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        self::assertSame(3, (int) $this->shop->schema()->status(Schema::KEY)['schema_version']);
+        // pay_by 는 인덱스가 있어 SQLite 가 컬럼을 바로 지우지 못한다 — 2판에는 그 인덱스도 없었으므로 먼저 지운다.
+        $db->execute('DROP INDEX ' . $db->index('yc_order_pay_by') . ($db->dialect()->name() === 'mysql' ? ' ON ' . $db->table('yc_orders') : ''));
+        foreach (array_keys(Schema::PAYMENT_COLUMNS) as $column) {
+            $db->execute('ALTER TABLE ' . $db->table('yc_orders') . ' DROP COLUMN ' . $column);
+        }
+        $db->update('extension_schemas', ['schema_version' => 2], 'package_key = :key', ['key' => Schema::KEY]);
+        Schema::install($this->shop->schema());
+        self::assertSame(3, (int) $this->shop->schema()->status(Schema::KEY)['schema_version']);
+        $db->execute('INSERT INTO ' . $db->table('yc_orders') . ' (number, checkout_key, owner_key, user_id, guest_password, status, buyer_name, email, phone, recipient, recipient_phone, postcode, address, address_detail, delivery_note, subtotal, shipping_fee, cod_fee, total, shipping_detail, order_notice, carrier, tracking_number, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 1, ?, ?, ?, ?, 1, 1)',
+            ['N1', str_repeat('a', 64), str_repeat('b', 64), '', 'pending', '이름', 'a@b.c', '010', '받는분', '010', '04524', '주소', '', '', '[]', '', '', '']);
+        $row = $db->selectOne('SELECT payment_method, payment_id, pay_by, paid_at, refunded_amount, payment_detail FROM ' . $db->table('yc_orders') . " WHERE number = 'N1'");
+        self::assertSame(['', '', 0, 0, 0, ''], [$row['payment_method'], $row['payment_id'], (int) $row['pay_by'], (int) $row['paid_at'], (int) $row['refunded_amount'], $row['payment_detail']]);
     }
 
     private function assertIndexesExist(): void

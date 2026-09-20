@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Tests\YoungCart;
 
 use GnuCms\Error\DomainError;
+use GnuCms\Modules\YoungCart\Commerce\Orders;
 use GnuCms\Modules\YoungCart\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -175,7 +176,9 @@ final class CommerceTest extends YoungCartTestCase
         self::assertSame(1, $this->shop->orders->listing(42)['total']); self::assertSame(0, $this->shop->orders->listing(43)['total']);
         $this->reject(fn () => $this->shop->orders->owned($order['number'], 43, [$id]));
         $this->reject(fn () => $this->shop->orders->transition($id, 'pending', 'completed', 'admin'));
-        $this->shop->orders->transition($id, 'pending', 'confirmed', 'admin');
+        // 결제 완료는 결제 확인(작업 4)만이 들어갈 수 있으므로, 여기서는 직접 표를 갱신해 흉내낸다.
+        $this->shop->store->update('yc_orders', $id, ['status' => 'paid']);
+        $this->shop->orders->transition($id, 'paid', 'confirmed', 'admin');
         $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'cancelled', 'user:42', [], true));
         $this->reject(fn () => $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin'));
         $this->shop->orders->transition($id, 'confirmed', 'shipped', 'admin', ['carrier' => '테스트택배', 'tracking_number' => '123456']);
@@ -216,6 +219,20 @@ final class CommerceTest extends YoungCartTestCase
         $this->reject(fn () => $this->shop->store->transaction(fn () => $this->shop->options->replace((int) $p['id'], $empty, 'admin')), '처리 중인 주문');
         $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'admin');
         self::assertSame(5, (int) $this->shop->store->get('yc_options', $optionId)['stock']);
+    }
+
+    /** 결제 완료는 상태 흐름에 들어 있되 일반 전이로는 못 간다 — 결제 확인만이 그 자리를 채운다. */
+    #[DataProvider('connectionProvider')]
+    public function testPaidIsAStatusThatOnlyPaymentConfirmationCanReach(array $config): void
+    {
+        $this->setupShop($config);
+        self::assertSame(['pending', 'paid', 'confirmed', 'shipped', 'completed', 'cancelled'], array_keys(Orders::STATUSES));
+        self::assertSame(['paid', 'cancelled'], Orders::NEXT['pending']);
+        self::assertSame(['confirmed', 'cancelled'], Orders::NEXT['paid']);
+        $order = $this->place($this->cart($this->product()));
+        self::assertSame([], $order['payment']);
+        $this->reject(fn () => $this->shop->orders->transition((int) $order['id'], 'pending', 'paid', 'admin'), '결제 확인');
+        $this->reject(fn () => $this->shop->orders->transition((int) $order['id'], 'pending', 'confirmed', 'admin'));
     }
 
     #[DataProvider('connectionProvider')]

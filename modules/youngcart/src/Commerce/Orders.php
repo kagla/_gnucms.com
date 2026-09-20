@@ -13,8 +13,10 @@ use GnuCms\Support\Clock;
 
 final class Orders
 {
-    public const STATUSES = ['pending' => '주문 접수', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
-    public const NEXT = ['pending' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
+    public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
+    public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
+    /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
+    public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account'];
 
     public function __construct(private Store $store, private Cart $cart, private Settings $settings) {}
 
@@ -74,6 +76,8 @@ final class Orders
         $order['items'] = $this->store->select('SELECT * FROM ' . $this->store->table('yc_order_items') . ' WHERE order_id = ? ORDER BY id', [$id]);
         $order['history'] = $this->store->select('SELECT * FROM ' . $this->store->table('yc_order_history') . ' WHERE order_id = ? ORDER BY id', [$id]);
         $order['shipping'] = json_decode($order['shipping_detail'], true, 8, JSON_THROW_ON_ERROR);
+        $decoded = ($order['payment_detail'] ?? '') === '' ? [] : json_decode((string) $order['payment_detail'], true, 8);
+        $order['payment'] = is_array($decoded) ? $decoded : [];
         return $order;
     }
 
@@ -124,6 +128,7 @@ final class Orders
 
     public function transition(int $id, string $from, string $to, string $actor, array $input = [], bool $customer = false): array
     {
+        if ($to === 'paid') throw DomainError::validation(['status' => '결제 완료는 결제 확인으로만 바뀝니다.']);
         if (!in_array($to, self::NEXT[$from] ?? [], true) || ($customer && ($from !== 'pending' || $to !== 'cancelled'))) {
             throw DomainError::validation(['status' => '현재 주문 상태에서는 이 작업을 할 수 없습니다.']);
         }

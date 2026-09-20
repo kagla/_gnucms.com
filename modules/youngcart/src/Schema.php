@@ -5,14 +5,28 @@ declare(strict_types=1);
 namespace GnuCms\Modules\YoungCart;
 
 use GnuCms\Db\Connection;
+use GnuCms\Error\DomainError;
 use GnuCms\Extension\PackageSchema;
 
 final class Schema
 {
     public const KEY = 'modules/youngcart';
-    public const VERSION = 2;
+    public const VERSION = 3;
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
         'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history'];
+
+    /** 3판이 yc_orders 에 더한 결제 칸. 새 설치는 CREATE 문에, 기존 설치는 addColumn() 이 넣는다. */
+    public const PAYMENT_COLUMNS = [
+        'payment_method' => 'VARCHAR(20) NOT NULL DEFAULT \'\'',
+        'payment_id' => 'VARCHAR(32) NOT NULL DEFAULT \'\'',
+        'payment_environment' => 'VARCHAR(8) NOT NULL DEFAULT \'\'',
+        'payment_revision' => 'VARCHAR(32) NOT NULL DEFAULT \'\'',
+        'paid_at' => 'BIGINT NOT NULL DEFAULT 0',
+        'paid_amount' => 'BIGINT NOT NULL DEFAULT 0',
+        'refunded_amount' => 'BIGINT NOT NULL DEFAULT 0',
+        'payment_detail' => 'VARCHAR(2000) NOT NULL DEFAULT \'\'',
+        'pay_by' => 'BIGINT NOT NULL DEFAULT 0',
+    ];
 
     public static function install(PackageSchema $schema): void
     {
@@ -28,7 +42,7 @@ final class Schema
                     subtotal BIGINT NOT NULL, shipping_fee BIGINT NOT NULL, cod_fee BIGINT NOT NULL, total BIGINT NOT NULL,
                     shipping_detail {TEXT} NOT NULL, order_notice {TEXT} NOT NULL,
                     carrier VARCHAR(100) NOT NULL, tracking_number VARCHAR(100) NOT NULL,
-                    created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
+                    created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, ' . self::paymentColumnSql(),
                 'yc_order_items' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, product_id BIGINT NOT NULL, option_id BIGINT NULL,
                     kind VARCHAR(8) NOT NULL, product_code VARCHAR(20) NOT NULL, product_name VARCHAR(250) NOT NULL,
                     option_label VARCHAR(350) NOT NULL, image VARCHAR(100) NOT NULL,
@@ -75,6 +89,7 @@ final class Schema
             foreach ($definitions as $table => $definition) {
                 $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
             }
+            foreach (self::PAYMENT_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
             $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
                 'yc_prod_category' => ['yc_products', 'category_id'], 'yc_prod_name' => ['yc_products', 'name'],
                 'yc_prod_order' => ['yc_products', 'sort_order'], 'yc_prod_updated' => ['yc_products', 'updated_at'],
@@ -82,7 +97,8 @@ final class Schema
                 'yc_img_product' => ['yc_product_images', 'product_id'], 'yc_opt_product' => ['yc_options', 'product_id'],
                 'yc_rel_related' => ['yc_product_relations', 'related_id'], 'yc_stock_product' => ['yc_stock_log', 'product_id'],
                 'yc_order_user' => ['yc_orders', 'user_id'], 'yc_order_status' => ['yc_orders', 'status'],
-                'yc_order_created' => ['yc_orders', 'created_at'], 'yc_oi_order' => ['yc_order_items', 'order_id'],
+                'yc_order_created' => ['yc_orders', 'created_at'], 'yc_order_pay_by' => ['yc_orders', 'pay_by'],
+                'yc_oi_order' => ['yc_order_items', 'order_id'],
                 'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
                 'yc_history_order' => ['yc_order_history', 'order_id']];
             foreach ($indexes as $index => [$table, $column]) {
@@ -94,5 +110,23 @@ final class Schema
                 if ($exists === null) $db->execute('CREATE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
             }
         });
+    }
+
+    private static function paymentColumnSql(): string
+    {
+        $parts = [];
+        foreach (self::PAYMENT_COLUMNS as $column => $definition) $parts[] = $column . ' ' . $definition;
+        return implode(', ', $parts);
+    }
+
+    /** 기존 표에 칸을 더한다. 이미 있으면 아무것도 하지 않는다 — 코어 Schema::addColumnIfMissing() 과 같은 방식. */
+    private static function addColumn(Connection $db, string $table, string $column, string $definition): void
+    {
+        try {
+            $db->selectOne('SELECT ' . $column . ' FROM ' . $db->table($table) . ' LIMIT 1');
+            return;
+        } catch (DomainError) {
+        }
+        $db->execute('ALTER TABLE ' . $db->table($table) . ' ADD COLUMN ' . $column . ' ' . strtr($definition, $db->dialect()->typeMap()));
     }
 }
