@@ -305,6 +305,36 @@ PHP;
         self::assertStringNotContainsString('href="/store"', $body);
     }
 
+    /** `/shop` 을 기본 주소로 선언한 모듈은 실행되지 않는다. 코어 쇼핑몰이 그 주소의 주인이다. */
+    #[DataProvider('connectionProvider')]
+    public function testAModuleDeclaringTheShopPrefixDoesNotTakeOver(array $dbConfig): void
+    {
+        $bootstrap = <<<'PHP'
+<?php
+file_put_contents(__DIR__ . '/ran', 'unexpected');
+return static function ($context): void {
+    $context->route('GET', '/', static fn ($request, $response) => $response);
+};
+PHP;
+        $this->package('modules/yc', ['route_prefix' => '/shop', 'public_path' => '/'], $bootstrap);
+        $app = $this->makeApp($dbConfig, [], 'default');
+        $manager = new Manager(new Catalog($this->extensionRoot), new StateStore($app->storageDir() . '/extensions'));
+        $manager->setEnabled('modules/yc', true);
+
+        $shop = $this->get($app, '/shop');
+        self::assertSame(200, $shop->getStatusCode());
+        self::assertStringContainsString('youngcart.css', $this->body($shop));
+        self::assertStringContainsString('data-yc-search-menu', $this->body($shop));
+        self::assertFileDoesNotExist($this->extensionRoot . '/modules/yc/ran');
+
+        $adminId = $app->users()->create('shop-prefix@example.test', '', '관리자', true);
+        $this->get($app, '/login');
+        $this->sessionUser($adminId);
+        $body = $this->body($this->get($app, '/admin/modules'));
+        self::assertStringContainsString('기본 주소가 다른 경로와 겹칩니다: /shop', $body);
+        self::assertStringContainsString('실행 불가', $body);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testBulkFormHasTwoSaveButtonsAndSortsByActualToggleOrder(array $dbConfig): void
     {

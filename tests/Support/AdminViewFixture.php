@@ -20,6 +20,7 @@ final class AdminViewFixture
                 $path = match ($routeName) {
                     'boards.index' => '/', 'admin.index' => '/admin', 'auth.login' => '/login', 'auth.logout' => '/logout',
                     'auth.register' => '/register', 'account.edit' => '/account', 'seo.rss' => '/rss.xml',
+                    'shop.index' => '/shop', 'admin.shop' => '/admin/shop',
                     default => '/' . str_replace('.', '/', $routeName),
                 };
                 return $path . ($data ? '/' . implode('/', array_map('rawurlencode', $data)) : '') . ($queryParams ? '?' . http_build_query($queryParams) : '');
