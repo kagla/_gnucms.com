@@ -16,7 +16,7 @@
   <section class="card" id="settings-visible"><div class="card-body"><h2 class="card-title">공개</h2>
     <input type="hidden" name="visible_form" value="1">
     <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="visible" value="1"<?= ($values['visible'] ?? '1') === '1' ? ' checked' : '' ?>> 쇼핑몰 공개</label>
-    <p class="muted">끄면 상단 메뉴의 쇼핑몰 탭이 사라지고 쇼핑몰 화면은 "준비 중" 안내를 보입니다. 관리자 화면과 진행 중인 결제는 영향을 받지 않습니다.</p>
+    <p class="muted">끄면 상단 메뉴의 쇼핑몰 탭이 사라지고 쇼핑몰 화면은 "준비 중" 안내를 보입니다. 관리자 화면과 그 화면에 쓰이는 이미지, 이미 받은 주문의 영수증, 진행 중인 결제는 영향을 받지 않습니다.</p>
   </div></section>
   <?php $this->insert('admin/_banner_settings') ?>
   <section class="card" id="settings-shipping"><div class="card-body"><h2 class="card-title">배송비와 주문 안내</h2><p class="muted">상점 기본배송 상품은 선불·착불별로 묶어 한 번 계산합니다. 무료 기준 0원은 금액에 따른 무료배송을 적용하지 않습니다.</p>

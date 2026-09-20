@@ -25,8 +25,9 @@
 저장 때 빠진다. 업로드(`uploads/youngcart/`)와 설정(`yc_settings`)은 그대로다.
 
 판매를 하지 않는 사이트는 쇼핑몰 설정의 **쇼핑몰 공개**를 끈다. 상단 메뉴의 탭이 사라지고
-`/shop` 화면은 "준비 중" 안내를 보인다. 관리자 화면과 진행 중인 결제(`/shop/pay/callback`)는
-영향을 받지 않는다.
+`/shop` 화면은 "준비 중" 안내를 보인다. 관리자 화면과 그 화면이 끼워 넣는 이미지
+(`/shop/image`·`/shop/banner-image`, 관리자만 조회할 수 있다), 이미 받은 주문의 영수증
+(`/shop/order?number=…`), 진행 중인 결제(`/shop/pay`와 `/shop/pay/callback`)는 영향을 받지 않는다.
 
 ## 결제
 
