@@ -34,6 +34,7 @@ final class ShopController
             'img' => static fn (int $productId, ?string $file, string $size): ?string => $file === null ? null : Images::url($url, $productId, $file, $size),
             'type_labels' => Settings::TYPE_LABELS, 'sort_labels' => Listing::SORT_LABELS];
         $data['settings'] = $this->service->settings->all();
+        $response = $response->withHeader('Cache-Control', 'no-store');
         if (!$data['settings']['visible']) {
             if (in_array($page, ['image', 'banner-image'], true)) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
             return $view->render($response, 'closed', $data);
@@ -45,7 +46,6 @@ final class ShopController
         if (preg_match('/^([a-z]+)_(asc|desc)$/D', $query['sortdir'] ?? '', $m)) { $sort = $m[1]; $dir = $m[2]; }
         $pageNo = preg_match('/^[1-9][0-9]{0,5}$/D', $query['page'] ?? '') ? (int) $query['page'] : 1;
         $data += ['sort' => $sort, 'dir' => $dir];
-        $response = $response->withHeader('Cache-Control', 'no-store');
         switch ($page) {
             case 'index':
                 $data['blocks'] = $this->service->listing->main();

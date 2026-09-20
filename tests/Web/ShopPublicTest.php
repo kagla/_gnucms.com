@@ -69,6 +69,7 @@ final class ShopPublicTest extends WebTestCase
         $closed = $this->get($this->app, '/shop');
         self::assertSame(200, $closed->getStatusCode());
         self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($closed));
+        self::assertSame('no-store', $closed->getHeaderLine('Cache-Control'));
         self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop/cart')));
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
     }
