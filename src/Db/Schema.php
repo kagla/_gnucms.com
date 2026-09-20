@@ -63,7 +63,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '27';
+    public const VERSION = '28';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -310,7 +310,7 @@ final class Schema
         }
     }
 
-    /** 27판: 쇼핑몰 표. 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
+    /** 27판: 쇼핑몰 표, 28판: 분류의 편집기 사진 키(yc_categories.image_key). 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
     public function migrateShop(): void
     {
         \GnuCms\Shop\Schema::migrate($this->db);

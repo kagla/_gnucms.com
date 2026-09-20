@@ -11,6 +11,7 @@ use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Shop\ImagesTest;
 use GnuCms\Tests\Support\WebTestCase;
+use Slim\Psr7\UploadedFile;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class ShopAdminTest extends WebTestCase
@@ -27,7 +28,8 @@ final class ShopAdminTest extends WebTestCase
         session_start(); $_SESSION = []; session_write_close();
         $this->root = sys_get_temp_dir() . '/gnucms-yc-admin-' . bin2hex(random_bytes(8));
         $config['prefix'] = 'ya' . bin2hex(random_bytes(4)) . '_';
-        $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'app' => ['url' => 'https://shop.example.test']]);
+        $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'editor' => ['dir' => $this->root . '/editor'],
+            'app' => ['url' => 'https://shop.example.test']]);
         $this->shop = new Service($this->app);
     }
 
@@ -339,11 +341,29 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('id="yc-category-delete-' . $top['id'] . '"', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
         self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
-        // 목록 위·아래 HTML 은 코어 편집기(CKEditor)로 쓴다. 분류에는 이미지 보관 키가 없으므로 업로드 주소는 배선하지 않는다.
+        // 목록 위·아래 HTML 은 코어 편집기(CKEditor)로 쓰고, 사진은 분류의 이미지 키 아래로 올린다.
         self::assertStringContainsString('id="yc-head-html" name="head_html" rows="6" data-cms-editor', $edit);
         self::assertStringContainsString('id="yc-tail-html" name="tail_html" rows="6" data-cms-editor', $edit);
         self::assertStringContainsString('/vendor/ckeditor4/ckeditor.js', $edit);
-        self::assertStringNotContainsString('/admin/editor/images', $edit);
+        self::assertSame(1, preg_match('/name="image_key" value="([a-f0-9]{32})"/', $edit, $keyMatch));
+        self::assertStringContainsString('\\/admin\\/editor\\/images?csrf_token=', $edit); // JSON 으로 찍혀 빗금이 이스케이프된다
+        self::assertStringContainsString("items:['GnucmsImages'", $edit);
+        self::assertStringContainsString('data-uploaded-images', $edit);
+        $imageKey = $keyMatch[1];
+        $png = tempnam(sys_get_temp_dir(), 'yc-png-');
+        file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true));
+        $upload = $this->upload($this->app, '/admin/editor/images?csrf_token=' . rawurlencode($_SESSION['csrf_token']) . '&image_key=' . $imageKey,
+            ['upload' => new UploadedFile($png, 'pixel.png', 'image/png', filesize($png))]);
+        self::assertSame(200, $upload->getStatusCode());
+        $image = json_decode($this->body($upload), true, 512, JSON_THROW_ON_ERROR);
+        $stored = $this->root . '/editor' . substr($image['url'], strlen('/media/editor'));
+        self::assertFileExists($stored);
+        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5',
+            'image_width' => '200', 'image_height' => '0', 'image_key' => $imageKey, 'head_html' => '<p><img src="' . $image['url'] . '" alt=""></p>']));
+        self::assertSame(303, $response->getStatusCode());
+        self::assertSame($imageKey, $this->shop->categories->get((int) $top['id'])['image_key']);
+        self::assertFileExists($stored);
+        self::assertStringContainsString('name="image_key" value="' . $imageKey . '"', $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']])));
         $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
         self::assertSame(303, $response->getStatusCode());
         self::assertSame(0, (int) $this->shop->categories->byCode('1010')['active']);

@@ -47,6 +47,33 @@ final class CategoriesTest extends ShopTestCase
         self::assertStringStartsWith('의류 > ', $this->shop->categories->options()[(int) $child['id']]);
     }
 
+    /** 목록 위·아래 HTML 의 편집기 사진은 분류마다 하나인 이미지 키 아래에 두고, 저장 때 본문에 없는 파일은 지우며 분류를 지우면 폴더째 없앤다. */
+    #[DataProvider('connectionProvider')]
+    public function testImageKeyIsKeptAndEditorImagesFollowTheHtml(array $config): void
+    {
+        $this->setupShop($config);
+        $key = str_repeat('ab', 16);
+        $dir = $this->root . '/editor/' . $key;
+        mkdir($dir, 0700, true);
+        $used = str_repeat('1', 32) . '.png'; $stale = str_repeat('2', 32) . '.png';
+        file_put_contents($dir . '/' . $used, 'x'); file_put_contents($dir . '/' . $stale, 'x');
+        $form = ['name' => '의류', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'active' => '1'];
+        $id = $this->shop->categories->save($form + ['code' => '10', 'image_key' => $key, 'head_html' => '<p><img src="/media/editor/' . $key . '/' . $used . '" alt=""></p>']);
+        self::assertSame($key, $this->shop->categories->get($id)['image_key']);
+        self::assertFileExists($dir . '/' . $used); self::assertFileDoesNotExist($dir . '/' . $stale);
+        // 폼이 키를 안 보내거나 엉뚱한 값을 보내도 저장된 키는 그대로이고, 본문에서 빠진 사진은 지운다.
+        $this->shop->categories->save($form + ['image_key' => 'nope', 'head_html' => ''], $id);
+        self::assertSame($key, $this->shop->categories->get($id)['image_key']);
+        self::assertDirectoryDoesNotExist($dir);
+        // 새 분류에 잘못된 키는 빈 값이다.
+        $other = $this->shop->categories->save($form + ['code' => '20', 'image_key' => 'zz']);
+        self::assertSame('', $this->shop->categories->get($other)['image_key']);
+        // 분류를 지우면 폴더째 없앤다.
+        mkdir($dir, 0700, true); file_put_contents($dir . '/' . $used, 'x');
+        $this->shop->categories->delete($id);
+        self::assertDirectoryDoesNotExist($dir);
+    }
+
     #[DataProvider('connectionProvider')]
     public function testUpdateApplyChildrenDeleteGuardsAndBulk(array $config): void
     {

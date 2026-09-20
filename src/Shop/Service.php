@@ -29,7 +29,7 @@ final class Service
     {
         $this->store = new Store($app->db());
         $this->settings = new Settings($this->store, $app->htmlSanitizer());
-        $this->categories = new Categories($this->store, $app->htmlSanitizer(), $this->settings);
+        $this->categories = new Categories($this->store, $app->htmlSanitizer(), $this->settings, $app->contentImages());
         $this->options = new Options($this->store);
         $this->images = new Images($app, $this->settings);
         $this->banner = new HomeBanner($this->store, $this->settings, $this->images);

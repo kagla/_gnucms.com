@@ -9,6 +9,8 @@
 <?php $this->insert('admin/_form_nav', ['sections' => ['category-basic' => '기본 설정', 'category-html' => '목록 꾸미기', 'category-extra' => '여분필드']]) ?>
 <form class="yc-edit-form" method="post" action="<?= $this->e($admin_url) ?>/categories/<?= $id === null ? 'new' : 'edit' ?>">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+  <input type="hidden" name="image_key" value="<?= $this->e($v('image_key')) ?>">
+  <input type="hidden" name="uploaded_images" value="" data-uploaded-images>
   <?php if ($id !== null): ?><input type="hidden" name="id" value="<?= $id ?>"><?php endif ?>
   <section class="card" id="category-basic"><div class="card-body"><h2 class="card-title">분류 기본 설정</h2>
     <div class="yc-fields yc-fields-title">
@@ -42,5 +44,5 @@
   </div></details>
   <?php $this->insert('admin/_save_bar', ['save_label' => '분류 저장', 'back_url' => $admin_url . '/categories']) ?>
 </form>
-<?php $this->insert('admin/_editor', ['editor_images' => false, 'editor_required' => false, 'editor_height' => 220]) ?>
+<?php $this->insert('admin/_editor', ['values' => ['image_key' => $values['image_key']], 'editor_required' => false, 'editor_height' => 220]) ?>
 <?php $this->stop() ?>
