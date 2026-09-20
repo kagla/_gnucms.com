@@ -56,6 +56,35 @@ final class ShopPublicTest extends WebTestCase
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
     }
 
+    /** 공개를 끄면 상단 탭이 사라지고 /shop 은 준비 중 안내, 관리자와 결제 콜백 경로는 그대로다. */
+    #[DataProvider('connectionProvider')]
+    public function testHiddenShopShowsTheClosedPageAndNoTab(array $config): void
+    {
+        $this->setupShop($config);
+        self::assertStringContainsString('>쇼핑몰</a>', $this->body($this->get($this->app, '/')));
+        $settings = $this->shop->settings->all();
+        $settings['visible'] = false;
+        $this->saveSettings($settings);
+        self::assertStringNotContainsString('>쇼핑몰</a>', $this->body($this->get($this->app, '/')));
+        $closed = $this->get($this->app, '/shop');
+        self::assertSame(200, $closed->getStatusCode());
+        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($closed));
+        self::assertStringContainsString('쇼핑몰을 준비 중입니다', $this->body($this->get($this->app, '/shop/cart')));
+        $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
+    }
+
+    /** yc_settings 행이 없으면 만들고, 있으면 덮어쓴다. */
+    private function saveSettings(array $settings): void
+    {
+        $db = $this->app->db();
+        $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($db->selectOne('SELECT id FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'") === null) {
+            $db->insert('yc_settings', ['id' => 'settings', 'payload' => $payload]);
+        } else {
+            $db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testBannerImagesVisibilityAndSubdirectory(array $config): void
     {

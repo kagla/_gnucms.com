@@ -60,6 +60,18 @@ final class ManagerTest extends TestCase
         self::assertFileExists($this->extensionRoot . '/plugins/one/bootstrap.php');
     }
 
+    /** 코어로 옮겨간 모듈 키는 오류 카드로 보이지 않고, 다음 저장 때 조용히 빠진다. */
+    public function testRetiredModuleKeyIsHiddenAndDroppedOnTheNextSave(): void
+    {
+        $this->package('plugins/one');
+        $this->state->update(static fn (array $enabled): array => [...$enabled, 'modules/youngcart']);
+        self::assertArrayNotHasKey('modules/youngcart', $this->manager->packages());
+        $first = array_key_first($this->manager->packages());
+        $this->manager->setEnabledMany([$first => true]);
+        self::assertNotContains('modules/youngcart', $this->state->read());
+        self::assertContains($first, $this->state->read());
+    }
+
     public function testPublicNavigationIncludesOnlyEnabledBootedRoutes(): void
     {
         $route = '<?php return static function ($context): void { $context->route("GET", "/catalog", static fn ($request, $response) => $response); };';

@@ -85,6 +85,7 @@ final class Kernel
         $view->addGlobal('consent_documents', $consentDocuments);
         $view->addGlobal('legal_pages', $legalPages);
         $view->addGlobal('site_menu', $app->cmsService()->menu());
+        $view->addGlobal('shop_visible', (bool) $app->shop()->settings->all()['visible']);
         // 실제 목록은 SessionGuard 가 로그인 신원을 복원한 뒤 채운다.
         $view->addGlobal('header_boards', []);
         $view->addGlobal('base_path', $basePath);

@@ -119,6 +119,7 @@
           <nav class="tabs tabs-border" aria-label="주요 메뉴">
             <a class="tab<?php if (trim($this->block('nav_section')) === 'home'): ?> tab-active<?php endif ?>" href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> aria-current="page"<?php endif ?>>홈</a>
             <a class="tab<?php if (trim($this->block('nav_section')) === 'all'): ?> tab-active<?php endif ?>" href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> aria-current="page"<?php endif ?>>전체 글</a>
+            <?php if ($shop_visible ?? false): $shopActive = trim($this->block('nav_section')) === 'shop'; ?><a class="tab<?= $shopActive ? ' tab-active' : '' ?>" href="<?= $this->url('shop.index') ?>"<?= $shopActive ? ' aria-current="page"' : '' ?>>쇼핑몰</a><?php endif ?>
             <?php foreach ($public_extensions ?? [] as $key => $extension): $selected = trim($this->block('nav_section')) === $key; ?>
               <a class="tab<?= $selected ? ' tab-active' : '' ?>" href="<?= $this->e($extension['url']) ?>"<?= $selected ? ' aria-current="page"' : '' ?>><?= $this->e($extension['name']) ?></a>
             <?php endforeach ?>
@@ -250,6 +251,7 @@
       <ul class="menu">
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
+        <?php if ($shop_visible ?? false): ?><li><a href="<?= $this->url('shop.index') ?>"><?= $this->icon('gift', 18) ?> 쇼핑몰</a></li><?php endif ?>
         <?php foreach ($public_extensions ?? [] as $extension): ?><li><a href="<?= $this->e($extension['url']) ?>"><?= $this->icon('gift', 18) ?> <?= $this->e($extension['name']) ?></a></li><?php endforeach ?>
         <?php foreach (($boards ?? []) as $navBoard): ?>
           <li><a href="<?= $this->url('posts.index', ['key' => $navBoard['board_key']]) ?>"><?= $this->icon('board', 18) ?> <?= $this->e($navBoard['name']) ?></a></li>

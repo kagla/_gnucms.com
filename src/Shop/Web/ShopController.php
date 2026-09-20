@@ -34,6 +34,10 @@ final class ShopController
             'img' => static fn (int $productId, ?string $file, string $size): ?string => $file === null ? null : Images::url($url, $productId, $file, $size),
             'type_labels' => Settings::TYPE_LABELS, 'sort_labels' => Listing::SORT_LABELS];
         $data['settings'] = $this->service->settings->all();
+        if (!$data['settings']['visible']) {
+            if (in_array($page, ['image', 'banner-image'], true)) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
+            return $view->render($response, 'closed', $data);
+        }
         $data['menu'] = $this->service->categories->children('', true);
         $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'] ?? [], 'quantity'));
         $sort = $query['sort'] ?? '';

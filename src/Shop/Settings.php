@@ -21,6 +21,7 @@ final class Settings
         $main = [];
         foreach (self::TYPES as $type) $main[$type] = ['use' => $type !== 'popular'] + $block;
         return [
+            'visible' => true,
             'banner' => HomeBanner::defaults(),
             'main' => $main,
             'category' => ['columns' => 3, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
@@ -92,6 +93,7 @@ final class Settings
             $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];
         }
         $settings['order_notice'] = Input::text($input['order_notice'] ?? $previous['order_notice'], 'order_notice', 2000, false);
+        $settings['visible'] = array_key_exists('visible_form', $input) ? $bool('visible') : $previous['visible'];
         // 결제: 폼에 없는 값은 이전 값을 지킨다(다른 테마의 옛 폼과 같은 규칙).
         $payment = $previous['payment'];
         $environment = $input['payment_environment'] ?? null;

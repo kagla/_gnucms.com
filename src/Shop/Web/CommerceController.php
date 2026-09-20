@@ -35,6 +35,7 @@ final class CommerceController
             'statuses' => Orders::STATUSES, 'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'img' => static fn (int $id, ?string $file, string $size): ?string => $file === null || $file === '' ? null : Images::url($url, $id, $file, $size)];
         $data['settings'] = $this->service->settings->all();
+        if (!$data['settings']['visible']) return $view->render($response, 'closed', $data);
         $data['menu'] = $this->service->categories->children('', true);
         $_SESSION['yc_cart'] ??= [];
         $_SESSION['yc_owner'] ??= bin2hex(random_bytes(32));

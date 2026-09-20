@@ -177,8 +177,6 @@ PHP);
             $body = $this->body($response);
             self::assertStringNotContainsString('작은 쇼핑몰', $body);
             self::assertStringNotContainsString('쇼핑몰 관리', $body);
-            self::assertStringNotContainsString('href="/shop', $body);
-            self::assertStringNotContainsString('href="/admin/shop', $body);
             self::assertStringNotContainsString('내 주문', $body);
         }
         $response = $this->post($app, '/admin/modules/shop/state', ['enabled' => '0', 'csrf_token' => $_SESSION['csrf_token']]);

@@ -81,6 +81,20 @@ final class SettingsTest extends ShopTestCase
         }
     }
 
+    /** 쇼핑몰 공개: 기본 켜짐, 폼이 보낸 값으로 끄고 켠다. 폼에 없으면 이전 값. */
+    #[DataProvider('connectionProvider')]
+    public function testVisibilityDefaultsOnAndFollowsTheForm(array $config): void
+    {
+        $this->setupShop($config);
+        self::assertTrue($this->shop->settings->all()['visible']);
+        $this->shop->settings->save($this->settingsInput() + ['visible_form' => '1']);
+        self::assertFalse($this->shop->settings->all()['visible']);
+        $this->shop->settings->save($this->settingsInput());
+        self::assertFalse($this->shop->settings->all()['visible'], '폼에 없으면 이전 값');
+        $this->shop->settings->save($this->settingsInput() + ['visible_form' => '1', 'visible' => '1']);
+        self::assertTrue($this->shop->settings->all()['visible']);
+    }
+
     private function flat(array $settings): array
     {
         $flat = [];

@@ -33,7 +33,7 @@ final class AdminViewFixture
             'site' => ['site_name' => 'GNUCMS 테스트', 'site_tagline' => '운영 화면 검증', 'timezone' => 'Asia/Seoul'],
             'current_user' => ['is_guest' => false, 'is_admin' => true, 'display_name' => '운영자', 'avatar_file' => null],
             'csrf_token' => $_SESSION['csrf_token'] ?? 'browser-test-csrf', 'unread_notifications' => 0,
-            'registration_available' => true, 'header_boards' => [], 'site_menu' => [], 'legal_pages' => [],
+            'registration_available' => true, 'header_boards' => [], 'site_menu' => [], 'legal_pages' => [], 'shop_visible' => true,
             'site_url' => 'https://gnucms.test' . $base, 'base_path' => $base, 'active_theme' => 'default', 'available_themes' => ['default'],
         ] as $key => $value) $view->addGlobal($key, $value);
         return $view;

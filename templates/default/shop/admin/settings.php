@@ -10,9 +10,14 @@
     <input class="input input-bordered input-sm" type="number" id="yc-setting-<?= $this->e($name) ?>" name="<?= $this->e($name) ?>" value="<?= $this->e((string) ($values[$name] ?? '')) ?>" min="<?= $min ?>" max="<?= $max ?>" required>
     <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
 <?php }; ?>
-<?php $this->insert('admin/_form_nav', ['sections' => ['settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-payment' => '결제', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
+<?php $this->insert('admin/_form_nav', ['sections' => ['settings-visible' => '공개', 'settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-payment' => '결제', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
 <form class="yc-edit-form" method="post" enctype="multipart/form-data" action="<?= $this->e($admin_url) ?>/settings">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+  <section class="card" id="settings-visible"><div class="card-body"><h2 class="card-title">공개</h2>
+    <input type="hidden" name="visible_form" value="1">
+    <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="visible" value="1"<?= ($values['visible'] ?? '1') === '1' ? ' checked' : '' ?>> 쇼핑몰 공개</label>
+    <p class="muted">끄면 상단 메뉴의 쇼핑몰 탭이 사라지고 쇼핑몰 화면은 "준비 중" 안내를 보입니다. 관리자 화면과 진행 중인 결제는 영향을 받지 않습니다.</p>
+  </div></section>
   <?php $this->insert('admin/_banner_settings') ?>
   <section class="card" id="settings-shipping"><div class="card-body"><h2 class="card-title">배송비와 주문 안내</h2><p class="muted">상점 기본배송 상품은 선불·착불별로 묶어 한 번 계산합니다. 무료 기준 0원은 금액에 따른 무료배송을 적용하지 않습니다.</p>
     <div class="yc-fields"><?php $num('shipping_fee', '기본 배송비 (원)', 0, 9999999); $num('shipping_free_minimum', '무료배송 기준 금액 (원)', 0, 9999999); ?></div>

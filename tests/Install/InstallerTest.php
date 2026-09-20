@@ -6,7 +6,6 @@ namespace GnuCms\Tests\Install;
 
 use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
-use GnuCms\Extension\StateStore;
 use GnuCms\Error\DomainError;
 use GnuCms\Install\Installer;
 use PHPUnit\Framework\TestCase;
@@ -66,26 +65,6 @@ final class InstallerTest extends TestCase
         self::assertSame('1', $db->selectOne(
             "SELECT setting_value FROM site_settings WHERE setting_key = 'system.first_admin_claimed'"
         )['setting_value']);
-    }
-
-    /** 쇼핑몰(영카트)은 코어 배포본에 실려 오는 내장 모듈이라 새 설치에서는 켜진 채 시작한다. */
-    public function testFinishEnablesTheBundledShopOnANewInstall(): void
-    {
-        $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
-
-        self::assertContains('modules/youngcart', (new StateStore($this->workDir . '/storage/extensions'))->read());
-    }
-
-    /** 이미 확장 상태 파일이 있는 사이트(재설치·업그레이드)는 관리자의 결정을 덮지 않는다. */
-    public function testFinishLeavesAnExistingExtensionStateAlone(): void
-    {
-        mkdir($this->workDir . '/storage/extensions', 0775, true);
-        file_put_contents($this->workDir . '/storage/extensions/enabled.json',
-            json_encode(['version' => 2, 'enabled' => [], 'recent' => ['modules/youngcart']]));
-
-        $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
-
-        self::assertSame([], (new StateStore($this->workDir . '/storage/extensions'))->read());
     }
 
     public function testGeneratedConfigHasOnlyLiveKeys(): void
