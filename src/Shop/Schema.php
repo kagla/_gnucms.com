@@ -123,11 +123,14 @@ final class Schema
         } !== null;
     }
 
-    /** 분류 표. 부모 id 트리: path 는 /1/5/12/ 처럼 조상부터 자기까지의 id, slug 는 공개 주소, legacy_code 는 29판 이전의 2자 코드(새 분류는 NULL). */
+    /**
+     * 분류 표. 부모 id 트리: path 는 /1/5/12/ 처럼 조상부터 자기까지의 id, slug 는 공개 주소, legacy_code 는 29판 이전의 2자 코드(새 분류는 NULL).
+     * slug·path 의 기본값 '' 는 29판 갱신이 MySQL 에 붙이는 칸과 모양을 맞춘 것이다 — 새로 깐 곳과 갱신한 곳의 표가 같아야 한다.
+     */
     private static function categoriesDefinition(string $bin): string
     {
         return 'id {AUTO_PK}, parent_id BIGINT NULL, depth SMALLINT NOT NULL, name VARCHAR(100) NOT NULL,
-            slug VARCHAR(200)' . $bin . ' NOT NULL, path VARCHAR(255) NOT NULL, legacy_code VARCHAR(10)' . $bin . ' NULL,
+            slug VARCHAR(200)' . $bin . " NOT NULL DEFAULT '', path VARCHAR(255) NOT NULL DEFAULT '', legacy_code VARCHAR(10)" . $bin . ' NULL,
             sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
             head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL,
             image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL';
@@ -167,21 +170,31 @@ final class Schema
         }
     }
 
-    /** 부모 사슬로 path·depth 를, 이름으로 slug 를 채운다(겹치면 -2, -3…, 이름에서 못 만들면 c<id>). path 가 빈 행이 있을 때만 돈다. */
+    /**
+     * 부모 사슬로 path·depth 를, 이름으로 slug 를 채운다(겹치면 -2, -3…, 이름에서 못 만들면 c<id>).
+     * 채우는 것은 path 가 빈 행뿐이다 — 이미 채워진 행의 slug 는 공개 주소라 이름에서 다시 만들면 안 된다.
+     * 부모는 모든 행에서 찾고, 겹침은 그대로 두는 행의 slug 까지 세어 피한다.
+     */
     private static function fillCategoryTree(Connection $db): void
     {
         $table = $db->table('yc_categories');
         $rows = [];
-        foreach ($db->select('SELECT id, parent_id, name FROM ' . $table . ' ORDER BY id') as $row) $rows[(int) $row['id']] = $row;
+        foreach ($db->select('SELECT id, parent_id, name, slug, path FROM ' . $table . ' ORDER BY id') as $row) $rows[(int) $row['id']] = $row;
         $paths = [];
-        $pathOf = static function (int $id) use (&$pathOf, &$paths, $rows): string {
+        $walking = [];
+        $pathOf = static function (int $id) use (&$pathOf, &$paths, &$walking, $rows): string {
             if (isset($paths[$id])) return $paths[$id];
             $parent = $rows[$id]['parent_id'];
-            $above = $parent === null || !isset($rows[(int) $parent]) ? '/' : $pathOf((int) $parent);
+            $walking[$id] = true;
+            // 들여온 자료의 부모 사슬이 고리를 이루면(a→b→a) 고리를 만난 행을 뿌리로 보고 끊는다 — 끝없이 되돌지 않게.
+            $above = $parent === null || !isset($rows[(int) $parent]) || isset($walking[(int) $parent]) ? '/' : $pathOf((int) $parent);
+            unset($walking[$id]);
             return $paths[$id] = $above . $id . '/';
         };
         $taken = [];
+        foreach ($rows as $row) if ((string) $row['path'] !== '' && (string) $row['slug'] !== '') $taken[(string) $row['slug']] = true;
         foreach ($rows as $id => $row) {
+            if ((string) $row['path'] !== '') continue;
             $base = Input::slug((string) $row['name'], 'c' . $id);
             $slug = $base;
             for ($n = 2; isset($taken[$slug]); $n++) $slug = $base . '-' . $n;

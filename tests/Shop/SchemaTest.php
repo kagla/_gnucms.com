@@ -96,10 +96,14 @@ final class SchemaTest extends ShopTestCase
         self::assertNull($this->shop->categories->byLegacyCode('99'));
         self::assertSame((int) $child, (int) $this->shop->categories->byLegacyCode('1010')['id']);
         // 갱신이 중간에 끊겨 path 가 빈 행이 남으면(MySQL 은 ALTER·UPDATE 가 하나씩 확정된다) 다음 갱신이 마저 채운다.
+        // 이때 다 채워진 행은 건드리지 않는다 — 손으로 고친 슬러그(공개 주소)가 이름에서 다시 만들어지면 안 된다.
+        $db->execute('UPDATE ' . $db->table('yc_categories') . ' SET slug = ? WHERE id = ?', ['custom', $grand]);
         $db->execute('UPDATE ' . $db->table('yc_categories') . " SET path = '', slug = ? WHERE id = ?", ['c' . $child, $child]);
         Schema::migrate($db);
         $healed = $db->selectOne('SELECT slug, path FROM ' . $db->table('yc_categories') . ' WHERE id = ?', [$child]);
         self::assertSame(['셔츠', '/' . $top . '/' . $child . '/'], [$healed['slug'], $healed['path']]);
+        $kept = $db->selectOne('SELECT slug, path FROM ' . $db->table('yc_categories') . ' WHERE id = ?', [$grand]);
+        self::assertSame(['custom', '/' . $top . '/' . $child . '/' . $grand . '/'], [$kept['slug'], $kept['path']]);
     }
 
     private function assertIndexesExist(): void
