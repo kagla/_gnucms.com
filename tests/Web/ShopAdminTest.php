@@ -428,6 +428,34 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('&#039;', $list);
     }
 
+    /**
+     * 29판 이전의 분류 코드는 영문·숫자 섞인 값이었다(1a, zz). 북마크나 메일에 남은 그 값이 ?ca= 로 들어와도
+     * 관리자 화면이 404 로 죽지 않고 "거르지 않음" 으로 내려가야 한다(?parent= 도 같다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testNonNumericCategoryValuesAreIgnoredInsteadOfRaising(array $config): void
+    {
+        $this->setupShop($config);
+        $this->seedProducts();
+        $this->signIn(true);
+        foreach (['1a', 'zz'] as $ca) {
+            $list = $this->get($this->app, '/admin/shop/products', ['ca' => $ca]);
+            self::assertSame(200, $list->getStatusCode(), $ca);
+            $body = $this->body($list);
+            self::assertStringContainsString('파란 셔츠', $body, $ca);
+            self::assertStringContainsString('가방', $body, $ca);
+            // 분류 거르개는 아무것도 고르지 않은 채다(전체 분류).
+            self::assertSame(1, preg_match('#name="ca">(.*?)</select>#s', $body, $select), $ca);
+            self::assertStringNotContainsString(' selected', $select[1], $ca);
+        }
+        $json = $this->get($this->app, '/admin/shop/products/search', ['q' => '셔츠', 'ca' => '1a']);
+        self::assertSame(200, $json->getStatusCode());
+        self::assertSame(['파란 셔츠'], array_column(json_decode($this->body($json), true, 512, JSON_THROW_ON_ERROR)['items'], 'name'));
+        $form = $this->get($this->app, '/admin/shop/categories/new', ['parent' => '1a']);
+        self::assertSame(200, $form->getStatusCode());
+        self::assertStringContainsString('<option value="" selected>최상위</option>', $this->body($form));
+    }
+
     private function seedProducts(): array
     {
         $top = $this->shop->categories->get($this->shop->categories->save(['name' => '의류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));

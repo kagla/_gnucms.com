@@ -52,7 +52,7 @@ final class CategoryController extends AdminBase
     /** 새 분류의 첫 값. 목록의 "하위 추가" 가 ?parent=<id> 로 상위 분류를 미리 고른다. */
     private function defaults(array $input): array
     {
-        $parent = Input::optionalId($input['parent'] ?? '');
+        $parent = Input::filterId($input['parent'] ?? '');
         $block = $this->service->settings->block('category');
         return ['name' => '', 'slug' => '', 'parent_id' => $parent === null ? '' : (string) $parent, 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0',
             'head_html' => '', 'tail_html' => '', 'list_columns' => (string) $block['columns'], 'list_rows' => (string) $block['rows'],

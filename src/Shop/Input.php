@@ -53,6 +53,15 @@ final class Input
         return $value === null || $value === '' ? null : self::id($value);
     }
 
+    /**
+     * 목록 필터나 폼의 첫 값처럼 "고르지 않음" 이 정상인 자리의 id. id 가 아닌 값은 못 찾았다고 하지 않고 그냥 고르지 않은 것으로 본다.
+     * 29판 이전의 분류 코드는 1a·zz 같은 영문·숫자였다 — 그 값이 든 옛 북마크(?ca=1a)로 화면이 404 가 되면 안 된다.
+     */
+    public static function filterId(mixed $value): ?int
+    {
+        return (is_string($value) || is_int($value)) && preg_match('/^[1-9][0-9]{0,15}$/D', (string) $value) ? (int) $value : null;
+    }
+
     public static function code(mixed $value, string $field, string $pattern, string $message): string
     {
         if (!is_string($value) || !preg_match($pattern, $value)) throw DomainError::validation([$field => $message]);

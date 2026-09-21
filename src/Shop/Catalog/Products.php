@@ -313,7 +313,7 @@ final class Products
             $field = in_array($filters['field'] ?? '', self::SEARCH_FIELDS, true) ? $filters['field'] : 'name';
             $where[] = 'p.' . $field . ' LIKE ? ESCAPE \'!\''; $params[] = '%' . self::like($q) . '%';
         }
-        $category = ($caId = Input::optionalId($filters['ca'] ?? '')) === null ? null : $this->categories->find($caId);
+        $category = ($caId = Input::filterId($filters['ca'] ?? '')) === null ? null : $this->categories->find($caId);
         if ($category !== null) {
             [$sub, $subParams] = Categories::subtreeWhere($category, 'c2');
             $where[] = 'EXISTS (SELECT 1 FROM ' . $this->store->table('yc_product_categories') . ' pc JOIN ' . $this->store->table('yc_categories') . ' c2 ON c2.id = pc.category_id WHERE pc.product_id = p.id AND ' . $sub . ')';
@@ -407,7 +407,7 @@ final class Products
     {
         $where = ['p.id <> ?']; $params = [$exclude ?? 0];
         if ($q !== '') { $where[] = '(p.name LIKE ? ESCAPE \'!\' OR p.code LIKE ? ESCAPE \'!\')'; $params[] = '%' . self::like($q) . '%'; $params[] = '%' . self::like($q) . '%'; }
-        $category = ($caId = Input::optionalId($ca)) === null ? null : $this->categories->find($caId);
+        $category = ($caId = Input::filterId($ca)) === null ? null : $this->categories->find($caId);
         if ($category !== null) { [$sub, $subParams] = Categories::subtreeWhere($category, 'c'); $where[] = $sub; array_push($params, ...$subParams); }
         return $this->store->select('SELECT p.id, p.code, p.name, p.price, c.name AS category_name FROM ' . $this->store->table('yc_products') . ' p LEFT JOIN ' . $this->store->table('yc_categories')
             . ' c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name, p.id LIMIT ' . $limit, $params);
