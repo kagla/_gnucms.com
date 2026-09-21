@@ -165,4 +165,35 @@ final class SchemaTest extends ShopTestCase
         self::assertSame($migrated, $this->shop->settings->all()['migrated_types']);
         self::assertSame(['B', 'A'], array_column($this->shop->listing->category($hit, '', '', 1)['items'], 'code'));
     }
+
+    /**
+     * 31판: 칸 삭제가 듣지 않아 갱신이 또 돌아도 분류는 늘지 않는다. 지난 이전이 만든 분류를 다시 쓴다 —
+     * 옛 SQLite·ALTER 권한이 없는 MySQL·잠금 대기로 DROP COLUMN 이 실패하면 다음 요청이 또 여기로 온다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateReusesTheCategoriesAnEarlierRunCreated(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $flags = function () use ($db): void {
+            foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $c) $db->execute('ALTER TABLE ' . $db->table('yc_products') . ' ADD COLUMN ' . $c . ' SMALLINT NOT NULL DEFAULT 0');
+            $db->execute('UPDATE ' . $db->table('yc_products') . ' SET is_hit = 1');
+        };
+        $flags();
+        $cat = $this->category('의류');
+        $a = $this->product(['category_id' => (string) $cat['id'], 'code' => 'A']); $b = $this->product(['category_id' => (string) $cat['id'], 'code' => 'B']);
+        $db->execute('UPDATE ' . $db->table('yc_products') . ' SET is_hit = 1');
+        Schema::migrate($db);
+        $hit = $this->shop->categories->bySlug('히트상품');
+        self::assertNotNull($hit);
+        // 칸 삭제가 실패한 갱신을 흉내 낸다: 깃발이 그대로 남은 채 다음 요청이 온다.
+        $flags();
+        Schema::migrate($db);
+        self::assertSame(['히트상품'], array_column($db->select('SELECT slug FROM ' . $db->table('yc_categories') . " WHERE name = '히트상품' ORDER BY id"), 'slug'), '분류를 또 만들지 않는다');
+        self::assertSame((int) $hit['id'], $this->shop->settings->all()['migrated_types']['hit'], '기록도 그대로다');
+        foreach ([$a, $b] as $product) {
+            self::assertSame([1 => (int) $cat['id'], 2 => (int) $hit['id']],
+                array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get((int) $product['id'])['categories']), '상품도 한 번만 걸린다');
+        }
+    }
 }

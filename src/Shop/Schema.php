@@ -130,16 +130,22 @@ final class Schema
         if (self::columnExists($db, 'yc_products', 'is_hit')) {
             $db->transaction(function () use ($db, $products, $categories, $links): void {
                 $now = time();
+                $recorded = self::recordedTypes($db);
                 $moved = [];
                 foreach (['is_hit' => ['hit', '히트상품'], 'is_recommended' => ['recommend', '추천상품'], 'is_popular' => ['popular', '인기상품']] as $flag => [$type, $name]) {
                     $ids = array_map('intval', array_column($db->select('SELECT id FROM ' . $products . ' WHERE ' . $flag . ' = 1 ORDER BY id'), 'id'));
                     if ($ids === []) continue;
-                    $slug = $name;
-                    for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
-                    $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
-                        'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
-                        'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
-                    $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
+                    // 지난 이전이 만든 분류가 아직 있으면 그것에 마저 건다. 칸 삭제가 실패해(옛 SQLite·ALTER 권한·잠금)
+                    // 갱신이 또 여기로 와도 히트상품-2, -3 이 생기지 않게 — 자료 옮기기를 DDL 과 따로 멱등하게 둔다.
+                    $categoryId = isset($recorded[$type]) && $db->selectOne('SELECT id FROM ' . $categories . ' WHERE id = ?', [$recorded[$type]]) !== null ? $recorded[$type] : 0;
+                    if ($categoryId === 0) {
+                        $slug = $name;
+                        for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
+                        $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
+                            'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
+                            'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
+                        $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
+                    }
                     foreach ($ids as $productId) {
                         if ($db->selectOne('SELECT 1 AS x FROM ' . $links . ' WHERE product_id = ? AND category_id = ?', [$productId, $categoryId]) !== null) continue;
                         $slot = (int) $db->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $links . ' WHERE product_id = ?', [$productId])['s'] + 1;
@@ -152,6 +158,19 @@ final class Schema
         }
         // DDL 은 스스로 확정되므로(SQLite·MySQL 모두) 트랜잭션 밖에서 지운다. 없는 칸은 dropColumn() 이 건너뛴다.
         foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $column) self::dropColumn($db, 'yc_products', $column);
+    }
+
+    /** 지난 이전이 적어 둔 유형별 분류 id. 설정이 없거나 깨졌으면 빈 배열이다. */
+    private static function recordedTypes(Connection $db): array
+    {
+        $row = $db->selectOne('SELECT payload FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'");
+        $payload = $row === null ? null : json_decode((string) $row['payload'], true);
+        $types = is_array($payload) && is_array($payload['migrated_types'] ?? null) ? $payload['migrated_types'] : [];
+        $recorded = [];
+        foreach ($types as $type => $id) {
+            if (is_int($id) || (is_string($id) && ctype_digit($id))) $recorded[(string) $type] = (int) $id;
+        }
+        return $recorded;
     }
 
     /** 옛 유형 주소(/shop/type?t=hit)가 어느 분류로 갔는지 설정에 적어 둔다. 이름·슬러그가 겹쳐 -2 가 붙어도 찾을 수 있게. */
