@@ -389,7 +389,9 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('id="yc-tail-html" name="tail_html" rows="6" data-cms-editor', $edit);
         self::assertStringContainsString('/vendor/ckeditor4/ckeditor.js', $edit);
         self::assertStringContainsString('name="image_key" value="categories/' . $top['id'] . '"', $edit);
-        self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98">쇼핑몰에서 보기', $edit);
+        // 도구 막대의 "쇼핑몰 보기"는 수정 중인 분류의 공개 화면으로 간다.
+        self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98" target="_blank"', $edit);
+        self::assertStringContainsString('href="/shop" target="_blank"', $form);
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);
         self::assertStringContainsString('data-uploaded-images', $edit);
@@ -597,6 +599,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="apply_scope" value="category" checked', $this->body($response));
         self::assertStringContainsString('name="apply_fields[]" value="active" checked', $this->body($response));
         $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $product['id']]));
+        self::assertStringContainsString('href="/shop/item?id=' . rawurlencode($product['code']) . '" target="_blank"', $edit); // 도구 막대의 "쇼핑몰 보기"
         self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
         self::assertStringContainsString('image_delete[]', $edit); self::assertStringContainsString($product['images'][0]['filename'], $edit);
         $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '0', 'name' => '수정됨', 'image_delete' => [(string) $product['images'][0]['id']]])));

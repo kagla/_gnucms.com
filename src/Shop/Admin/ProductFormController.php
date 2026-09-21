@@ -107,6 +107,8 @@ final class ProductFormController extends AdminBase
         $data['relations'] = [];
         foreach ($relationIds as $relatedId) { $row = $this->service->products->find($relatedId); if ($row !== null) $data['relations'][] = ['id' => (int) $row['id'], 'code' => $row['code'], 'name' => $row['name']]; }
         // 편집기 사진 폴더 키. 저장된 상품은 제 폴더(products/<id>), 새 상품은 저장 때 옮길 임시 폴더다(입력 오류로 다시 그릴 때는 폼이 보낸 것을 지킨다).
+        // 저장된 상품의 공개 주소 — 도구 막대의 "쇼핑몰 보기"가 여기로 간다.
+        $data['public_view_url'] = $product === null ? '' : $data['public_url'] . '/item?id=' . rawurlencode((string) $product['code']);
         $data['values']['image_key'] = $product !== null ? 'products/' . (int) $product['id']
             : (is_string($values['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $values['image_key']) ? $values['image_key'] : 'tmp/' . bin2hex(random_bytes(16)));
         return $this->render($request, $response, 'product_form', $data);
