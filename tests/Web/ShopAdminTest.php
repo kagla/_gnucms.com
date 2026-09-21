@@ -328,6 +328,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringNotContainsString('name="code"', $form);
         self::assertStringContainsString('name="slug"', $form);
         self::assertStringContainsString('name="parent_id"', $form);
+        self::assertStringContainsString('name="menu_hidden"', $form);
         // 새 분류의 편집기 사진은 임시 폴더(tmp/<키>)로 올라갔다가 저장하면서 categories/<id> 로 옮겨진다.
         self::assertSame(1, preg_match('#name="image_key" value="(tmp/[a-f0-9]{32})"#', $form, $keyMatch));
         $tmpKey = $keyMatch[1];
@@ -378,6 +379,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="rows[' . $top['id'] . '][name]"', $list);
         self::assertStringContainsString('form="yc-category-delete-' . $top['id'] . '"', $list);
         self::assertStringContainsString('id="yc-category-delete-' . $top['id'] . '"', $list);
+        self::assertStringNotContainsString('메뉴 숨김', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
         self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
         // 상위 분류 선택에는 자기 자신도, 자기 하위 분류도 없다.
@@ -399,9 +401,14 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);
         self::assertStringContainsString('data-uploaded-images', $edit);
-        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'parent_id' => '', 'slug' => '의류', 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
+        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'parent_id' => '', 'slug' => '의류', 'name' => '의류(수정)', 'active' => '0', 'menu_hidden' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
         self::assertSame(303, $response->getStatusCode());
         self::assertSame(0, (int) $this->shop->categories->get((int) $child['id'])['active']);
+        // 메뉴 숨김은 저장되고, 목록에 표시가 붙는다. "하위 분류에 적용"은 이 값을 내리지 않는다.
+        self::assertSame(1, (int) $this->shop->categories->get((int) $top['id'])['menu_hidden']);
+        self::assertSame(0, (int) $this->shop->categories->get((int) $child['id'])['menu_hidden']);
+        self::assertStringContainsString('메뉴 숨김', $this->body($this->get($this->app, '/admin/shop/categories')));
+        self::assertStringContainsString('name="menu_hidden" value="1" checked', $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']])));
         $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'bulk', 'rows' => [$child['id'] => ['name' => '셔츠(일괄)', 'sort_order' => '1', 'active' => '1', 'list_columns' => '2', 'list_rows' => '2', 'image_width' => '100', 'image_height' => '0']]]));
         self::assertSame('/admin/shop/categories?saved=1', $response->getHeaderLine('Location'));
         self::assertSame('셔츠(일괄)', $this->shop->categories->get((int) $child['id'])['name']);

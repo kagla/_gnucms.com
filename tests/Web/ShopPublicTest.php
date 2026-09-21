@@ -298,4 +298,37 @@ final class ShopPublicTest extends WebTestCase
         $memberList = $this->body($this->get($this->app, '/shop/c/' . rawurlencode($seed['top']['slug'])));
         self::assertStringNotContainsString('yc-category-edit', $memberList);
     }
+
+    /** 메뉴에서 숨긴 분류는 상단 메뉴와 상위 분류의 하위 칩에서 빠지지만, 주소로는 그대로 열리고 상품도 보인다. */
+    #[DataProvider('connectionProvider')]
+    public function testMenuHiddenCategoriesLeaveTheMenuButKeepTheirAddress(array $config): void
+    {
+        $this->setupShop($config);
+        $seed = $this->seed();
+        $form = ['active' => '1', 'menu_hidden' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0'];
+        $event = $this->shop->categories->get($this->shop->categories->save($form + ['parent_id' => '', 'name' => '봄 세일']));
+        $eventChild = $this->shop->categories->get($this->shop->categories->save($form + ['parent_id' => (string) $seed['top']['id'], 'name' => '숨은 기획']));
+        $this->shop->products->save(['code' => 'EV', 'name' => '세일 셔츠', 'category_id' => (string) $event['id'], 'price' => '900', 'stock' => '3', 'active' => '1'], []);
+        $eventLink = 'href="/shop/c/' . rawurlencode($event['slug']) . '"';
+        $childLink = 'href="/shop/c/' . rawurlencode($eventChild['slug']) . '"';
+        // 홈의 상단 메뉴·바로가기에는 보이는 분류만 남는다.
+        $home = $this->body($this->get($this->app, '/shop'));
+        self::assertStringContainsString('href="/shop/c/' . rawurlencode($seed['top']['slug']) . '"', $home);
+        self::assertStringNotContainsString($eventLink, $home);
+        // 상위 분류 화면: 상단 메뉴에도, 하위 분류 칩에도 없다. 보이는 하위 분류는 그대로다.
+        $list = $this->body($this->get($this->app, '/shop/c/' . rawurlencode($seed['top']['slug'])));
+        self::assertStringNotContainsString($eventLink, $list);
+        self::assertStringNotContainsString($childLink, $list);
+        self::assertStringContainsString('href="/shop/c/' . rawurlencode($seed['child']['slug']) . '"', $list);
+        // 주소로는 열린다 — 상품도 보인다.
+        $page = $this->get($this->app, '/shop/c/' . rawurlencode($event['slug']));
+        self::assertSame(200, $page->getStatusCode());
+        self::assertStringContainsString('세일 셔츠', $this->body($page));
+        // 숨긴 하위 분류도 열리고, 빵부스러기에는 상위 분류와 자기 이름이 그대로 남는다.
+        $childPage = $this->get($this->app, '/shop/c/' . rawurlencode($eventChild['slug']));
+        self::assertSame(200, $childPage->getStatusCode());
+        self::assertSame(1, preg_match('#<div class="breadcrumbs">.*?</div>#s', $this->body($childPage), $crumbs));
+        self::assertStringContainsString('>' . $seed['top']['name'] . '</a>', $crumbs[0]);
+        self::assertStringContainsString('>숨은 기획</a>', $crumbs[0]);
+    }
 }

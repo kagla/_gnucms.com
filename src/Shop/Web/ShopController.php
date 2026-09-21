@@ -40,7 +40,7 @@ final class ShopController
             if (!in_array($page, ['image', 'banner-image'], true)) return $view->render($response, 'closed', $data);
             if (!$admin) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
         }
-        $data['menu'] = $this->service->categories->children(null, true);
+        $data['menu'] = $this->service->categories->children(null, true, true);
         $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'] ?? [], 'quantity'));
         $sort = $query['sort'] ?? '';
         $dir = ($query['dir'] ?? '') === 'asc' ? 'asc' : 'desc';
@@ -59,7 +59,7 @@ final class ShopController
                 if ($category === null || (int) $category['active'] !== 1) throw DomainError::notFound('분류를 찾을 수 없습니다.');
                 $data['category'] = $category;
                 $data['path'] = $this->service->categories->ancestors($category);
-                $data['children'] = $this->service->categories->children((int) $category['id'], true);
+                $data['children'] = $this->service->categories->children((int) $category['id'], true, true);
                 $data['list'] = $this->service->listing->category($category, $sort, $dir, $pageNo);
                 return $view->render($response, 'list', $data);
             case 'list':

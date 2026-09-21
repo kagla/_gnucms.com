@@ -32,6 +32,9 @@ final class Schema
         'pay_by' => 'BIGINT NOT NULL DEFAULT 0',
     ];
 
+    /** 30판: 이벤트·기획전 분류를 메뉴에서 감춘다. 새 설치는 CREATE 문에, 그 전에 만든 yc_categories 에는 addColumn() 이 넣는다. */
+    public const CATEGORY_COLUMNS = ['menu_hidden' => 'SMALLINT NOT NULL DEFAULT 0'];
+
     public static function migrate(Connection $db): void
     {
         $bin = $db->dialect()->name() === 'mysql' ? ' COLLATE utf8mb4_bin' : '';
@@ -92,6 +95,8 @@ final class Schema
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
         self::dropColumn($db, 'yc_categories', 'image_key');
         self::migrateCategoryTree($db, $bin);
+        // 트리 갱신이 표를 다시 만든 뒤에 둔다 — 그렇게 만들어진 표에도 이 칸이 있어야 한다.
+        foreach (self::CATEGORY_COLUMNS as $column => $definition) self::addColumn($db, 'yc_categories', $column, $definition);
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
             'yc_cat_path' => ['yc_categories', 'path'],
             'yc_prod_category' => ['yc_products', 'category_id'], 'yc_prod_name' => ['yc_products', 'name'],
@@ -132,6 +137,7 @@ final class Schema
         return 'id {AUTO_PK}, parent_id BIGINT NULL, depth SMALLINT NOT NULL, name VARCHAR(100) NOT NULL,
             slug VARCHAR(200)' . $bin . " NOT NULL DEFAULT '', path VARCHAR(255) NOT NULL DEFAULT '', legacy_code VARCHAR(10)" . $bin . ' NULL,
             sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
+            menu_hidden SMALLINT NOT NULL DEFAULT 0,
             head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL,
             image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL';
     }

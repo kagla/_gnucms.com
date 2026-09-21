@@ -37,7 +37,7 @@ final class CommerceController
         $data['settings'] = $this->service->settings->all();
         // 영수증(order)은 예외다. 공개를 끄기 전에 받은 주문과 진행 중인 결제가 돌아올 곳이다.
         if (!$data['settings']['visible'] && $page !== 'order') return $view->render($response, 'closed', $data);
-        $data['menu'] = $this->service->categories->children(null, true);
+        $data['menu'] = $this->service->categories->children(null, true, true);
         $_SESSION['yc_cart'] ??= [];
         $_SESSION['yc_owner'] ??= bin2hex(random_bytes(32));
         $_SESSION['yc_guest_orders'] ??= [];

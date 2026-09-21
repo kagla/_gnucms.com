@@ -62,6 +62,19 @@ final class SchemaTest extends ShopTestCase
         self::assertSame(['', '', 0, 0, 0, ''], [$row['payment_method'], $row['payment_id'], (int) $row['pay_by'], (int) $row['paid_at'], (int) $row['refunded_amount'], $row['payment_detail']]);
     }
 
+    /** 30판: 분류의 메뉴 숨김 칸. 없던 표에는 migrate() 가 넣는다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateAddsTheMenuHiddenColumnToCategories(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $db->execute('ALTER TABLE ' . $db->table('yc_categories') . ' DROP COLUMN menu_hidden');
+        Schema::migrate($db);
+        Schema::migrate($db);
+        self::assertSame(0, (int) $this->category('의류')['menu_hidden']);
+        self::assertSame(1, (int) $this->category('기획전', null, ['menu_hidden' => '1'])['menu_hidden']);
+    }
+
     /** 29판: 2자 코드 계층을 부모 id 트리로. 옛 표를 새 모양으로 바꾸고 slug·path·legacy_code 를 채운다. 두 번 돌려도 같다. */
     #[DataProvider('connectionProvider')]
     public function testMigrateTurnsCodedCategoriesIntoATree(array $config): void

@@ -54,7 +54,7 @@ final class CategoryController extends AdminBase
     {
         $parent = Input::filterId($input['parent'] ?? '');
         $block = $this->service->settings->block('category');
-        return ['name' => '', 'slug' => '', 'parent_id' => $parent === null ? '' : (string) $parent, 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0',
+        return ['name' => '', 'slug' => '', 'parent_id' => $parent === null ? '' : (string) $parent, 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0', 'menu_hidden' => '0',
             'head_html' => '', 'tail_html' => '', 'list_columns' => (string) $block['columns'], 'list_rows' => (string) $block['rows'],
             'image_width' => (string) $block['image_width'], 'image_height' => (string) $block['image_height'], 'extra' => []];
     }

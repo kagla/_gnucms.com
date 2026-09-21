@@ -53,6 +53,12 @@ final class CategoriesTest extends ShopTestCase
         self::assertSame('여름 [summer-tees]', $details[(int) $summer['id']]['text']);
         self::assertSame(array_keys($this->shop->categories->parentOptions(null)), array_keys($this->shop->categories->parentOptionDetails(null)));
         self::assertSame(['c.path LIKE ?', [$top['path'] . '%']], Categories::subtreeWhere($top, 'c'));
+        // 메뉴 숨김: 메뉴용 children() 에서만 빠지고 나머지는 그대로다.
+        $hidden = $this->category('기획전', null, ['menu_hidden' => '1']);
+        self::assertSame(1, (int) $hidden['menu_hidden']);
+        self::assertContains('기획전', array_column($this->shop->categories->children(null, true), 'name'));
+        self::assertNotContains('기획전', array_column($this->shop->categories->children(null, true, true), 'name'));
+        self::assertSame('기획전', $this->shop->categories->bySlug('기획전')['name']);
     }
 
     #[DataProvider('connectionProvider')]

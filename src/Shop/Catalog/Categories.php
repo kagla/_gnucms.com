@@ -49,6 +49,7 @@ final class Categories
             'sort_order' => Input::int($input['sort_order'] ?? '', 'sort_order', -999999, 999999, 0),
             'active' => Input::bool($input['active'] ?? '0'),
             'no_coupon' => Input::bool($input['no_coupon'] ?? '0'),
+            'menu_hidden' => Input::bool($input['menu_hidden'] ?? '0'),
             'head_html' => Input::html($input['head_html'] ?? '', 'head_html', $this->sanitizer),
             'tail_html' => Input::html($input['tail_html'] ?? '', 'tail_html', $this->sanitizer),
             'list_columns' => Input::int($input['list_columns'] ?? '', 'list_columns', 1, 12, $defaults['columns']),
@@ -214,10 +215,11 @@ final class Categories
         return $rows;
     }
 
-    public function children(?int $parentId, bool $activeOnly): array
+    /** $menuOnly 는 상단 메뉴·바로가기·하위 분류 칩용이다 — 메뉴에서 숨긴 분류를 뺀다(주소·빵부스러기·검색은 그대로다). */
+    public function children(?int $parentId, bool $activeOnly, bool $menuOnly = false): array
     {
         $rows = $this->store->select('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE ' . ($parentId === null ? 'parent_id IS NULL' : 'parent_id = ?')
-            . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY sort_order, name, id', $parentId === null ? [] : [$parentId]);
+            . ($activeOnly ? ' AND active = 1' : '') . ($menuOnly ? ' AND menu_hidden = 0' : '') . ' ORDER BY sort_order, name, id', $parentId === null ? [] : [$parentId]);
         return array_map($this->decode(...), $rows);
     }
 
