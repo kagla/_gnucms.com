@@ -11,7 +11,7 @@
 | 항목 | 값 |
 |---|---|
 | 코드 | `src/Shop` (`GnuCms\Shop`), 템플릿 `templates/default/shop/`, 테마 덮어쓰기 `templates/<테마>/shop/` |
-| 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호`, 결제 `/shop/pay?number=주문번호`, 결제 콜백 `/shop/pay/callback`(이니시스가 부른다, 세션 없음) |
+| 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/c/슬러그`(옛 `/shop/list?ca=코드`는 새 주소로 넘긴다), 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호`, 결제 `/shop/pay?number=주문번호`, 결제 콜백 `/shop/pay/callback`(이니시스가 부른다, 세션 없음) |
 | 관리자 주소 | `/admin/shop` 현황, `/admin/shop/settings`, `/admin/shop/categories`, `/admin/shop/products`와 `new`·`edit`·`types`·`stock`·`option-stock`, 주문 목록 `/admin/shop/orders`, 주문 상세 `/admin/shop/orders/detail?id=번호` |
 | 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (코어 스키마 27판이 만든다) |
 
@@ -66,10 +66,14 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 ## 분류
 
 - 관리자로 로그인하면 분류 목록 상단의 분류 경로 오른쪽에 **분류 관리** 링크가 표시되며 현재 분류의 수정 화면으로 이동한다.
-- 코드는 단계당 2자, 최대 5단계다. 새 분류 폼이 형제 코드의 다음 값(`10`, `20`, … `z0`)을 제안하며
-  직접 입력할 수도 있다. 생성 후에는 바꿀 수 없다.
-- 목록은 요청한 분류 코드로 시작하는 모든 활성 하위 분류의 상품을 보여 준다. 상품의 대표 분류와
-  추가 분류(최대 2개) 어느 쪽에 연결되어도 나온다.
+- 분류는 상위 분류를 골라 만드는 트리다. 단계 제한은 없고 화면과 저장은 10단계까지 받는다. 수정 화면에서
+  상위 분류를 바꾸면 자기와 하위 전체가 함께 옮겨진다. 자기 하위 분류 아래로는 옮길 수 없다.
+- 주소는 슬러그다(`/shop/c/셔츠`). 슬러그는 상품과 같은 규칙으로 이름에서 만들고(한글 그대로, 공백은 `-`),
+  직접 정할 수도 있으며 전체에서 하나여야 한다. 이름이 같은 분류는 `-2`, `-3`이 붙는다. 슬러그를 바꾸면 주소가
+  바뀌므로 옛 주소는 더 이상 열리지 않는다.
+- 29판 이전에 쓰던 2자 코드는 `legacy_code`로 남아 옛 링크 `/shop/list?ca=코드`를 새 주소로 넘기는 데만 쓴다.
+- 목록은 그 분류와 모든 활성 하위 분류의 상품을 보여 준다. 상품의 대표 분류와 추가 분류(최대 2개) 어느 쪽에
+  연결되어도 나온다.
 - 판매가능을 끄면 목록·검색·상세에서 숨겨진다. 관리자는 상세를 미리보기로 열 수 있다.
 - 하위 분류나 연결된 상품이 있으면 삭제할 수 없다.
 - 수정 화면의 **하위 분류에 적용**은 판매·쿠폰·목록 크기·이미지 크기를 하위 분류에 함께 반영한다.
@@ -271,7 +275,7 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 
 | 영카트5 | 이 쇼핑몰 |
 |---|---|
-| `ca_id` | `yc_categories.code` |
+| `ca_id` | `yc_categories.legacy_code`(주소는 `slug`, 계층은 `parent_id`·`path`) |
 | `it_id` | `yc_products.code` |
 | `ca_id`, `ca_id2`, `ca_id3` | `yc_product_categories` slot 1~3 |
 | `it_type1~5` | `is_hit`, `is_recommended`, `is_new`, `is_popular`, `is_discount` |
