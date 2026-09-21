@@ -10,7 +10,7 @@
 .yc-shop :is(a,button,input,select,summary,textarea):focus-visible{outline:3px solid var(--yc-accent);outline-offset:4px}
 .yc-shop .muted,.yc-admin .muted{color:var(--yc-muted);opacity:1}
 .yc-shop :is(.input,.select,.textarea){border:var(--field-border-width,1px) solid var(--field-border,var(--yc-line));border-radius:8px;background:var(--yc-paper);color:var(--yc-ink);box-shadow:none;min-height:44px;max-width:100%}
-.yc-shop .input{padding:.6rem .8rem}.yc-shop .select{padding:.6rem 2rem .6rem .8rem}
+.yc-shop .input{padding:.6rem .8rem}.yc-shop .select{padding:0 2rem 0 .8rem}/* 위아래 여백을 두면 테마의 2.5rem 줄높이와 44px 높이가 겹쳐 글자 아래가 잘린다 */
 .yc-header{display:flex;flex-direction:column;border-bottom:1px solid var(--yc-line)}
 .yc-header-main{display:flex;align-items:center;gap:2rem;padding:1.65rem 0 1.25rem}
 .yc-brand{display:flex;align-items:center;gap:.6rem;font-size:1.55rem;font-weight:800;letter-spacing:-.07em;white-space:nowrap}
