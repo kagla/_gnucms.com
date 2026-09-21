@@ -35,7 +35,7 @@
 
 ## 3. 메인 화면
 
-`main` 설정은 세 자동 블록 + 분류 블록 목록이 된다.
+`main` 설정은 네 자동 블록 + 분류 블록 목록이 된다.
 
 ```
 main.new      = {use, columns, rows, image_width, image_height, source, source_category_id}   (기본 use true, source auto)
