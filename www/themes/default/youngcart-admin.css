@@ -158,6 +158,10 @@
 .yc-admin-page .yc-option-enabled>.checkbox{flex:none;width:20px;height:20px}
 .yc-admin-page .yc-edit-form .yc-checks{display:grid;gap:.65rem;padding:.4rem 0 .8rem}
 .yc-admin-page .yc-edit-form .yc-checks .label{margin:0}
+/* 체크 한 줄: 항목은 왼쪽, "다른 상품에도 적용"은 오른쪽 끝. 접두어만 있는 줄(포인트·구매수량·배송비)은 왼쪽에 둔다. */
+.yc-admin-page .yc-edit-form .yc-check-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1.25rem}
+.yc-admin-page .yc-edit-form .yc-check-row>.yc-apply{margin-left:auto}
+.yc-admin-page .yc-edit-form .yc-check-row-note>.yc-apply{margin-left:0}
 .yc-admin-page .yc-edit-form .yc-apply{color:var(--yc-muted);font-size:12px;padding:.3rem .5rem;border:1px dashed var(--yc-line);border-radius:6px}
 .yc-admin-page .yc-edit-form .card-body>p{font-size:13.5px;line-height:1.7;margin:0 0 1.25rem}
 .yc-admin-page .yc-edit-form .card-title{margin-bottom:1.25rem}

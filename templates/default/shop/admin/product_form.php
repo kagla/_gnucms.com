@@ -16,8 +16,13 @@ $field = function (string $name, string $label, string $type = 'text', array $at
 $check = function (string $name, string $label) use ($v): void { ?>
   <label class="label cursor-pointer"><input type="hidden" name="<?= $name ?>" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="<?= $name ?>" value="1"<?= $v($name) === '1' ? ' checked' : '' ?>> <?= $this->e($label) ?></label>
 <?php };
-$apply = function (string $group) use ($apply_fields, $values): void { ?>
-  <label class="label cursor-pointer yc-apply"><input class="checkbox checkbox-xs" type="checkbox" name="apply_fields[]" value="<?= $group ?>"<?= in_array($group, is_array($values['apply_fields'] ?? null) ? $values['apply_fields'] : [], true) ? ' checked' : '' ?>> <?= $this->e($apply_fields[$group]) ?> 일괄 적용</label>
+/* "다른 상품에도 적용" 표시. 저장할 때 맨 아래 '다른 상품에도 적용'에서 고른 범위의 상품에 이 항목 값을 함께 써 넣는다. 같은 줄의 항목이 무엇인지 분명하면 접두어를 비운다. */
+$apply = function (string $group, ?string $prefix = null) use ($apply_fields, $values): void { ?>
+  <label class="label cursor-pointer yc-apply" title="저장할 때 아래 '다른 상품에도 적용'에서 고른 범위의 상품에 이 값을 함께 써 넣습니다"><input class="checkbox checkbox-xs" type="checkbox" name="apply_fields[]" value="<?= $group ?>"<?= in_array($group, is_array($values['apply_fields'] ?? null) ? $values['apply_fields'] : [], true) ? ' checked' : '' ?> aria-label="<?= $this->e($apply_fields[$group]) ?> 다른 상품에도 적용"> <?= $prefix === null ? '' : $this->e($prefix) . ' ' ?>다른 상품에도 적용</label>
+<?php };
+/* 체크 한 줄: 왼쪽에 항목, 오른쪽 끝에 "다른 상품에도 적용". */
+$checkRow = function (string $name, string $label, ?string $applyGroup = null) use ($check, $apply): void { ?>
+  <div class="yc-check-row"><?php $check($name, $label); if ($applyGroup !== null) $apply($applyGroup); ?></div>
 <?php };
 $catOptions = function (string $selected) use ($categories): void { ?><option value="">선택</option><?php foreach ($categories as $cid => $option): ?><option value="<?= $cid ?>" title="<?= $this->e($option['title']) ?>"<?= $selected === (string) $cid ? ' selected' : '' ?>><?= $this->e($option['text']) ?></option><?php endforeach ?><?php };
 $extraRow = function (string $selected) use ($catOptions): void { ?>
@@ -51,16 +56,16 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
     <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($product['code']) ?>" readonly></fieldset><?php endif ?>
     <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required']) ?>
     <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('maker', '제조사', 'text', ['maxlength' => 100]); $field('origin', '원산지', 'text', ['maxlength' => 100]); $field('brand', '브랜드', 'text', ['maxlength' => 100]); $field('model', '모델', 'text', ['maxlength' => 100]); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
-    <div class="yc-checks"><?php foreach ($types as $type => $label) $check($type, $label); ?><?php $apply('types') ?></div>
-    <div class="yc-checks"><?php $check('active', '판매가능'); $apply('active'); $check('no_coupon', '쿠폰 대상 제외'); $apply('no_coupon'); $check('phone_inquiry', '전화문의(가격 숨김)'); $apply('phone_inquiry'); ?></div>
+    <div class="yc-checks"><div class="yc-check-row yc-check-row-inline"><?php foreach ($types as $type => $label) $check($type, $label); ?><?php $apply('types', '유형') ?></div></div>
+    <div class="yc-checks"><?php $checkRow('active', '판매가능', 'active'); $checkRow('no_coupon', '쿠폰 대상 제외', 'no_coupon'); $checkRow('phone_inquiry', '전화문의(가격 숨김)', 'phone_inquiry'); ?></div>
   </div></section>
   <section class="card" id="section-price"><div class="card-body"><h2 class="card-title">가격·포인트·재고</h2>
     <div class="yc-fields"><?php $field('price', '판매가격', 'number', ['min' => 0, 'required' => 'required']); $field('list_price', '시중가격 (0이면 표시 안 함)', 'number', ['min' => 0]); ?>
       <fieldset class="fieldset"><legend class="fieldset-legend">포인트 방식</legend><select class="select select-bordered select-sm" name="point_type" data-yc-point-type><?php foreach ([0 => '설정 금액', 1 => '판매가 기준 %', 2 => '구매가 기준 %'] as $k => $l): ?><option value="<?= $k ?>"<?= $v('point_type') === (string) $k ? ' selected' : '' ?>><?= $l ?></option><?php endforeach ?></select></fieldset>
       <?php $field('point', '포인트 (정액 또는 0~99%)', 'number', ['min' => 0]); $field('supply_point', '추가옵션 포인트', 'number', ['min' => 0]); ?></div>
-    <div class="yc-checks"><?php $check('tax_free', '비과세'); $apply('tax_free'); $apply('point'); ?></div>
+    <div class="yc-checks"><?php $checkRow('tax_free', '비과세', 'tax_free'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('point', '포인트') ?></div></div>
     <div class="yc-fields"><?php $field('stock', '재고 (선택옵션 없을 때)', 'number', ['min' => 0]); $field('stock_alert', '재고 통보 기준', 'number', ['min' => 0]); $field('buy_min', '최소 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); $field('buy_max', '최대 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); ?></div>
-    <div class="yc-checks"><?php $check('sold_out', '품절 표시'); $check('restock_notify', '재입고 알림 신청 허용'); $apply('buy'); ?></div>
+    <div class="yc-checks"><?php $checkRow('sold_out', '품절 표시'); $checkRow('restock_notify', '재입고 알림 신청 허용'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('buy', '구매수량') ?></div></div>
   </div></section>
   <section class="card" id="section-images"><div class="card-body"><h2 class="card-title">상품 이미지 (최대 <?= \GnuCms\Shop\Images::MAX ?>장)</h2>
     <?php if (isset($errors['images'])): ?><p class="validator-hint"><?= $this->e($errors['images']) ?></p><?php endif ?>
@@ -124,7 +129,7 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
       <fieldset class="fieldset"><legend class="fieldset-legend">결제 방법</legend><select class="select select-bordered select-sm" name="shipping_method"><?php foreach ([0 => '선불', 1 => '착불', 2 => '구매자 선택'] as $k => $l): ?><option value="<?= $k ?>"<?= $v('shipping_method') === (string) $k ? ' selected' : '' ?>><?= $l ?></option><?php endforeach ?></select></fieldset>
       <?php $field('shipping_fee', '배송비', 'number', ['min' => 0]); $field('shipping_free_minimum', '무료배송 기준 금액', 'number', ['min' => 0]); $field('shipping_per_qty', '배송비 부과 수량 단위', 'number', ['min' => 0]); ?>
     </div>
-    <?php $apply('shipping') ?>
+    <div class="yc-checks"><div class="yc-check-row yc-check-row-note"><?php $apply('shipping', '배송비') ?></div></div>
   </div></section>
   <section class="card" id="section-info"><div class="card-body"><h2 class="card-title">상품정보고시</h2>
     <fieldset class="fieldset"><legend class="fieldset-legend">고시 항목 군</legend><select class="select select-bordered select-sm" name="info_group" data-yc-info-select><option value="">사용 안 함</option><?php foreach ($info_groups as $key => $group): ?><option value="<?= $key ?>"<?= $v('info_group') === $key ? ' selected' : '' ?>><?= $this->e($group['label']) ?></option><?php endforeach ?></select></fieldset>
@@ -142,7 +147,7 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
   <details class="yc-advanced" id="section-html"<?= $errors !== [] ? ' open' : '' ?>><summary>상세 화면 추가 설정<small>HTML과 판매자 메일 일괄 적용</small></summary><div class="card-body">
     <fieldset class="fieldset"><legend class="fieldset-legend">상세 위</legend><textarea class="textarea textarea-bordered textarea-block" name="head_html" rows="3"><?= $this->e($v('head_html')) ?></textarea></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">상세 아래</legend><textarea class="textarea textarea-bordered textarea-block" name="tail_html" rows="3"><?= $this->e($v('tail_html')) ?></textarea></fieldset>
-    <?php $apply('html'); $apply('seller_email'); ?>
+    <div class="yc-checks"><div class="yc-check-row yc-check-row-note"><?php $apply('html', 'HTML'); $apply('seller_email', '판매자 메일'); ?></div></div>
   </div></details>
   <details class="yc-advanced" id="section-extra"<?= $errors !== [] ? ' open' : '' ?>><summary>여분필드<small>테마·외부 연동을 위한 추가 항목</small></summary><div class="card-body">
     <div class="yc-fields"><?php for ($i = 1; $i <= 10; $i++): ?><fieldset class="fieldset"><legend class="fieldset-legend">여분 <?= $i ?></legend>
