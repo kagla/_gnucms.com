@@ -145,6 +145,10 @@
 .yc-admin-page :is(.input,.select,.textarea){border-radius:8px;border-color:var(--field-border,var(--yc-line));background-color:var(--yc-paper);font-size:14px}
 .yc-admin-page :is(.input-sm,.select-sm){min-height:38px;height:38px}
 .yc-admin-page .table :is(.input,.select){height:34px;min-height:34px;font-size:13.5px}
+/* 선택옵션: 옵션 1·2·3 을 세로로 쌓고, 한 줄에 이름표·그룹 이름·값을 나란히 둔다. */
+.yc-admin-page .yc-option-groups{display:grid;gap:.6rem;margin-bottom:.9rem}
+.yc-admin-page .yc-option-group{display:grid;grid-template-columns:4.5rem minmax(0,16rem) minmax(0,1fr);gap:.6rem;align-items:center}
+.yc-admin-page .yc-option-label{font-size:13px;font-weight:700}
 .yc-admin-page .yc-edit-form :is(.label,.yc-checks){font-size:13px;align-items:center}
 /* Keep numeric inputs and copy buttons together; checkboxes retain their own size. */
 .yc-admin-page .yc-option-input-group{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.4rem;white-space:nowrap}
@@ -211,6 +215,8 @@
   .yc-admin-page .yc-workflow a{padding:1rem}
 }
 @media(max-width:640px){
+  .yc-admin-page .yc-option-group{grid-template-columns:1fr}
+  .yc-admin-page .yc-option-label{margin-top:.25rem}
   .admin-content:has(.yc-admin-page) .admin-navbar-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .admin-content:has(.yc-admin-page) .navbar-start{flex:1;width:auto;min-width:0}
   .admin-content:has(.yc-admin-page) .navbar-end{width:auto;flex:none}
