@@ -23,6 +23,16 @@ final class CategoriesTest extends ShopTestCase
         self::assertSame('의류-2', $this->category('의류')['slug']);
         self::assertSame('summer-tees', $this->category('여름', null, ['slug' => ' summer/tees '])['slug']);
         try { $this->category('겹침', null, ['slug' => '셔츠']); self::fail('겹치는 슬러그는 거절해야 한다'); } catch (DomainError $e) { self::assertSame(422, $e->status()); self::assertArrayHasKey('slug', $e->details()); }
+        // 슬러그로 쓸 수 없는 값은 거절한다: 다듬고 나면 비는 이름과, 주소에서 상위 폴더로 읽히는 . 과 .. 이다.
+        foreach ([['/?#%', ''], ['..', ''], ['점', '.'], ['점', '..']] as [$name, $typed]) {
+            try {
+                $this->category($name, null, ['slug' => $typed]);
+                self::fail('쓸 수 없는 슬러그는 거절해야 한다: ' . $name . ' / ' . $typed);
+            } catch (DomainError $e) {
+                self::assertSame(422, $e->status(), $name . ' / ' . $typed);
+                self::assertArrayHasKey('slug', $e->details(), $name . ' / ' . $typed);
+            }
+        }
         // 자기 슬러그를 그대로 두고 저장하는 것은 된다.
         $this->shop->categories->save(['name' => '셔츠', 'slug' => '셔츠', 'parent_id' => (string) $top['id'], 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0'], (int) $child['id']);
         self::assertSame('셔츠', $this->shop->categories->get((int) $child['id'])['slug']);
@@ -50,9 +60,9 @@ final class CategoriesTest extends ShopTestCase
         self::assertSame(['/' . $x['id'] . '/' . $b['id'] . '/', 2], [$b2['path'], (int) $b2['depth']]);
         self::assertSame(['/' . $x['id'] . '/' . $b['id'] . '/' . $c['id'] . '/', 3], [$c2['path'], (int) $c2['depth']]);
         self::assertSame([], $this->shop->categories->children((int) $a['id'], false));
-        self::assertArrayNotHasKey((int) $b['id'], $this->shop->categories->optionsExcluding((int) $b['id']));
-        self::assertArrayNotHasKey((int) $c['id'], $this->shop->categories->optionsExcluding((int) $b['id']));
-        self::assertArrayHasKey((int) $x['id'], $this->shop->categories->optionsExcluding((int) $b['id']));
+        self::assertArrayNotHasKey((int) $b['id'], $this->shop->categories->parentOptions((int) $b['id']));
+        self::assertArrayNotHasKey((int) $c['id'], $this->shop->categories->parentOptions((int) $b['id']));
+        self::assertArrayHasKey((int) $x['id'], $this->shop->categories->parentOptions((int) $b['id']));
         // 자기 자신·자기 하위 아래로는 못 옮긴다.
         foreach ([(int) $b['id'], (int) $c['id']] as $bad) {
             try { $this->shop->categories->save($form + ['parent_id' => (string) $bad], (int) $b['id']); self::fail('순환'); } catch (DomainError $e) { self::assertSame(422, $e->status()); self::assertArrayHasKey('parent_id', $e->details()); }

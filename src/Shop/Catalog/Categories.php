@@ -102,6 +102,8 @@ final class Categories
         $typed = Input::text($given, 'slug', 200);
         $base = Input::slug($typed !== '' ? $typed : $name, '');
         if ($base === '') throw DomainError::validation(['slug' => '슬러그를 만들 수 없습니다. 영문·숫자·한글이 든 이름이나 슬러그를 입력해 주세요.']);
+        // 슬러그는 /shop/c/<슬러그> 의 한 칸이다. . 과 .. 은 브라우저가 주소에서 먼저 지워 버려 링크가 엉뚱한 곳으로 간다.
+        if ($base === '.' || $base === '..') throw DomainError::validation(['slug' => '슬러그로 쓸 수 없는 값입니다.']);
         $slug = $base;
         for ($n = 2; ($other = $this->bySlug($slug)) !== null && (int) $other['id'] !== $excludeId; $n++) {
             if ($typed !== '') throw DomainError::validation(['slug' => '이미 쓰는 슬러그입니다.']);
@@ -160,12 +162,17 @@ final class Categories
         return array_map(static fn (array $row): string => $row['label'], $this->labelled());
     }
 
-    /** 수정 화면의 상위 분류 선택용: 자기와 하위를 뺀 options(). */
-    public function optionsExcluding(int $id): array
+    /**
+     * 상위 분류 선택용 options(). 아래에 더 만들 수 없는 MAX_DEPTH 단계 분류는 뺀다.
+     * 수정 화면($excludeId)에서는 자기와 자기 하위도 뺀다(자기 아래로는 옮길 수 없다).
+     * 하위가 있는 분류를 옮길 때는 하위까지 함께 내려가므로 9단계 상위도 저장에서 거절될 수 있다 — 그 판단은 save() 가 한다.
+     */
+    public function parentOptions(?int $excludeId): array
     {
-        $self = $this->find($id);
+        $self = $excludeId === null ? null : $this->find($excludeId);
         $options = [];
         foreach ($this->labelled() as $optionId => $row) {
+            if ((int) $row['depth'] >= self::MAX_DEPTH) continue;
             if ($self !== null && str_starts_with((string) $row['path'], (string) $self['path'])) continue;
             $options[$optionId] = $row['label'];
         }

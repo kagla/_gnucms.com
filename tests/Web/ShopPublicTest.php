@@ -192,6 +192,9 @@ final class ShopPublicTest extends WebTestCase
         self::assertStringContainsString('빨간 셔츠', $this->body($this->get($this->app, '/shop/c/의류', ['sortdir' => 'price_asc'])));
         self::assertStringNotContainsString('빨간 셔츠', $this->body($this->get($this->app, '/shop/c/의류', ['sortdir' => '_'])));
         self::assertSame(404, $this->get($this->app, '/shop/c/없는-분류')->getStatusCode());
+        // 공개를 끈 분류는 주소를 알아도 열리지 않는다.
+        $hidden = $this->shop->categories->get($this->shop->categories->save(['parent_id' => '', 'name' => '숨은 분류', 'active' => '0', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        self::assertSame(404, $this->get($this->app, '/shop/c/' . rawurlencode($hidden['slug']))->getStatusCode());
         // 옛 주소는 새 주소로 넘긴다: 코드도, 슬러그도.
         foreach (['10', '의류'] as $ca) {
             $moved = $this->get($this->app, '/shop/list', ['ca' => $ca, 'sort' => 'price', 'dir' => 'asc']);

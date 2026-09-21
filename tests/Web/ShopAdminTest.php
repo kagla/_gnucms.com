@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Service;
 use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
@@ -454,6 +455,27 @@ final class ShopAdminTest extends WebTestCase
         $form = $this->get($this->app, '/admin/shop/categories/new', ['parent' => '1a']);
         self::assertSame(200, $form->getStatusCode());
         self::assertStringContainsString('<option value="" selected>최상위</option>', $this->body($form));
+    }
+
+    /** 10단계 분류는 그 아래에 또 만들 수 없으므로 상위 분류 선택에 나오지 않는다(9단계는 나온다). */
+    #[DataProvider('connectionProvider')]
+    public function testFullDepthCategoriesAreNotOfferedAsParents(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $ids = [];
+        $parent = '';
+        for ($depth = 1; $depth <= Categories::MAX_DEPTH; $depth++) {
+            $id = $this->shop->categories->save(['parent_id' => $parent, 'name' => '단계' . $depth, 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+            $ids[$depth] = $id;
+            $parent = (string) $id;
+        }
+        $form = $this->body($this->get($this->app, '/admin/shop/categories/new'));
+        self::assertStringContainsString('<option value="' . $ids[Categories::MAX_DEPTH - 1] . '"', $form);
+        self::assertStringNotContainsString('<option value="' . $ids[Categories::MAX_DEPTH] . '"', $form);
+        // 수정 화면도 같다: 자기와 자기 하위를 뺀 목록에서 10단계 분류는 빠진다.
+        $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $ids[1]]));
+        self::assertStringNotContainsString('<option value="' . $ids[Categories::MAX_DEPTH] . '"', $edit);
     }
 
     private function seedProducts(): array
