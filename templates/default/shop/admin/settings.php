@@ -9,7 +9,23 @@
   <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="yc-setting-<?= $this->e($name) ?>"><?= $this->e($label) ?></label></legend>
     <input class="input input-bordered input-sm" type="number" id="yc-setting-<?= $this->e($name) ?>" name="<?= $this->e($name) ?>" value="<?= $this->e((string) ($values[$name] ?? '')) ?>" min="<?= $min ?>" max="<?= $max ?>" required>
     <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
-<?php }; ?>
+<?php };
+$catOptions = function (string $selected) use ($categories): void { ?><option value="">선택</option><?php foreach ($categories as $cid => $option): ?><option value="<?= $cid ?>" title="<?= $this->e($option['title']) ?>"<?= $selected === (string) $cid ? ' selected' : '' ?>><?= $this->e($option['text']) ?></option><?php endforeach ?><?php };
+/* 메인 분류 블록 한 줄. $index 는 줄 번호이고, 틀(template)에서는 __i__ 다 — JS 가 넣을 때 현재 줄 수로 바꾼다. */
+$categoryRow = function (string $index, array $row) use ($catOptions): void { $name = 'main_categories[' . $index . ']'; ?>
+  <div class="yc-main-category-row" data-yc-main-category-item>
+    <select class="select select-bordered select-sm" name="<?= $name ?>[id]" aria-label="메인에 놓을 분류"><?php $catOptions($row['id']) ?></select>
+    <input class="input input-bordered input-sm" type="number" name="<?= $name ?>[columns]" value="<?= $this->e($row['columns']) ?>" min="1" max="12" aria-label="한 행 상품 수">
+    <input class="input input-bordered input-sm" type="number" name="<?= $name ?>[rows]" value="<?= $this->e($row['rows']) ?>" min="1" max="50" aria-label="행 수">
+    <button class="btn btn-xs" type="button" data-yc-remove-main-category aria-label="이 분류 블록 제거">제거</button>
+  </div>
+<?php };
+$cell = static fn (array $row, string $key, string $default): string => is_scalar($row[$key] ?? null) ? (string) $row[$key] : $default;
+$mainCategories = [];
+foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories'] : [] as $row) {
+    if (is_array($row)) $mainCategories[] = ['id' => $cell($row, 'id', ''), 'columns' => $cell($row, 'columns', '4'), 'rows' => $cell($row, 'rows', '1')];
+}
+?>
 <?php $this->insert('admin/_form_nav', ['sections' => ['settings-visible' => '공개', 'settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-payment' => '결제', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
 <form class="yc-edit-form" method="post" enctype="multipart/form-data" action="<?= $this->e($admin_url) ?>/settings">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
@@ -42,14 +58,36 @@
     <fieldset class="fieldset"><legend class="fieldset-legend">배송정보 탭</legend><textarea class="textarea textarea-bordered textarea-block" name="shipping_content" rows="6"><?= $this->e((string) ($values['shipping_content'] ?? '')) ?></textarea></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">교환정보 탭</legend><textarea class="textarea textarea-bordered textarea-block" name="exchange_content" rows="6"><?= $this->e((string) ($values['exchange_content'] ?? '')) ?></textarea></fieldset>
   </div></section>
-  <section class="card" id="settings-main"><div class="card-body"><h2 class="card-title">메인 화면 블록</h2><p class="muted">표시할 상품 유형과 진열 크기를 정하세요. 이미지 높이를 0으로 설정하면 원본 비율을 유지합니다.</p><div class="yc-settings-blocks">
-    <?php foreach ($types as $type => $label): ?>
+  <section class="card" id="settings-main"><div class="card-body"><h2 class="card-title">메인 화면 블록</h2>
+    <p class="muted">묶음은 규칙으로 자동으로 채웁니다. 기준을 "분류 선택"으로 바꾸면 그 분류(하위 포함)의 상품을 분류 정렬대로 보입니다. 이미지 높이를 0으로 설정하면 원본 비율을 유지합니다.</p>
+    <h3 class="yc-settings-subtitle">자동 묶음</h3>
+    <div class="yc-fields"><?php $num('auto_new_days', '신상품 기간(일)', 1, 365); $num('auto_best_days', '베스트 집계 기간(일)', 1, 365); ?></div>
+    <p class="muted">신상품은 등록한 지 이 기간 안의 상품, 베스트는 이 기간의 판매량 순입니다. 인기상품은 누적 조회수, 할인상품은 시중가보다 싼 상품입니다.</p>
+    <div class="yc-settings-blocks">
+    <?php foreach ($types as $type => $label): $source = 'main_' . $type . '_source'; ?>
       <div class="yc-settings-block"><header><h3><?= $this->e($label) ?></h3>
         <label class="label cursor-pointer"><input type="hidden" name="main_<?= $type ?>_use" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="main_<?= $type ?>_use" value="1"<?= ($values['main_' . $type . '_use'] ?? '') === '1' ? ' checked' : '' ?>> 메인에 표시</label></header>
+        <div class="yc-fields">
+          <fieldset class="fieldset"><legend class="fieldset-legend"><label for="yc-setting-<?= $source ?>">기준</label></legend>
+            <select class="select select-bordered select-sm" id="yc-setting-<?= $source ?>" name="<?= $source ?>"><?php foreach (['auto' => '자동 규칙', 'category' => '분류 선택'] as $key => $sourceLabel): ?><option value="<?= $key ?>"<?= ($values[$source] ?? 'auto') === $key ? ' selected' : '' ?>><?= $sourceLabel ?></option><?php endforeach ?></select></fieldset>
+          <fieldset class="fieldset<?= isset($errors[$source . '_category_id']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="yc-setting-<?= $source ?>_category_id">기준 분류</label></legend>
+            <select class="select select-bordered select-sm" id="yc-setting-<?= $source ?>_category_id" name="<?= $source ?>_category_id"><?php $catOptions((string) ($values[$source . '_category_id'] ?? '')) ?></select>
+            <?php if (isset($errors[$source . '_category_id'])): ?><p class="validator-hint"><?= $this->e($errors[$source . '_category_id']) ?></p><?php endif ?></fieldset>
+        </div>
         <div class="yc-fields"><?php $num('main_' . $type . '_columns', '한 행 상품 수', 1, 12); $num('main_' . $type . '_rows', '행 수', 1, 50); $num('main_' . $type . '_image_width', '이미지 너비', 0, 2000); $num('main_' . $type . '_image_height', '이미지 높이(0 = 비율)', 0, 2000); ?></div>
       </div>
     <?php endforeach ?>
-  </div></div></section>
+    </div>
+    <h3 class="yc-settings-subtitle">메인 분류 블록</h3>
+    <p class="muted">고른 분류의 상품을 메인에 순서대로 놓습니다. 메뉴 숨김 분류도 고를 수 있어 기획전을 메인에 올릴 때 씁니다. 최대 <?= \GnuCms\Shop\Settings::MAX_MAIN_CATEGORIES ?>개.</p>
+    <div class="yc-main-category-row yc-main-category-head" aria-hidden="true"><span>분류</span><span>한 행 상품 수</span><span>행 수</span><span></span></div>
+    <div class="yc-main-category-rows<?= isset($errors['main_categories']) ? ' is-invalid' : '' ?>" data-yc-main-categories>
+      <?php foreach ($mainCategories as $index => $row): ?><?php $categoryRow((string) $index, $row) ?><?php endforeach ?>
+    </div>
+    <template data-yc-main-category-row><?php $categoryRow('__i__', ['id' => '', 'columns' => '4', 'rows' => '1']) ?></template>
+    <div class="yc-main-category-add"><button class="btn btn-xs" type="button" data-yc-add-main-category><?= $this->icon('plus', 14) ?> 블록 추가</button></div>
+    <?php if (isset($errors['main_categories'])): ?><p class="validator-hint"><?= $this->e($errors['main_categories']) ?></p><?php endif ?>
+  </div></section>
   <div id="settings-lists">
   <?php foreach (['category' => '분류 목록 기본값(새 분류에 적용)', 'type' => '유형별 목록', 'search' => '검색 결과'] as $section => $label): ?>
     <section class="card"><div class="card-body"><h2 class="card-title"><?= $label ?></h2>

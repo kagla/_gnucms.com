@@ -56,7 +56,6 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
     <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($product['code']) ?>" readonly></fieldset><?php endif ?>
     <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required']) ?>
     <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('maker', '제조사', 'text', ['maxlength' => 100]); $field('origin', '원산지', 'text', ['maxlength' => 100]); $field('brand', '브랜드', 'text', ['maxlength' => 100]); $field('model', '모델', 'text', ['maxlength' => 100]); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
-    <div class="yc-checks"><div class="yc-check-row yc-check-row-inline"><?php foreach ($types as $type => $label) $check($type, $label); ?><?php $apply('types', '유형') ?></div></div>
     <div class="yc-checks"><?php $checkRow('active', '판매가능', 'active'); $checkRow('no_coupon', '쿠폰 대상 제외', 'no_coupon'); $checkRow('phone_inquiry', '전화문의(가격 숨김)', 'phone_inquiry'); ?></div>
   </div></section>
   <section class="card" id="section-price"><div class="card-body"><h2 class="card-title">가격·포인트·재고</h2>

@@ -66,7 +66,7 @@
     var saveStatus=editForm.querySelector('[data-yc-save-status]');
     function dirty(){if(saveStatus){saveStatus.textContent='저장하지 않은 변경사항이 있습니다.';saveStatus.dataset.dirty='true';}}
     editForm.addEventListener('input',dirty);editForm.addEventListener('change',dirty);
-    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra],[data-yc-add-category],[data-yc-remove-category]')){dirty();}});
+    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra],[data-yc-add-category],[data-yc-remove-category],[data-yc-add-main-category],[data-yc-remove-main-category]')){dirty();}});
     editForm.addEventListener('invalid',function(event){reveal(event.target);},true);
   });
   // Give existing compact fieldsets and tables unambiguous accessible input names.
@@ -94,6 +94,29 @@
     });
     errors.focus();
   }
+  // 설정 화면의 메인 분류 블록 줄. 틀을 복제해 name 속성의 줄 번호만 바꾼다(데이터를 문자열로 잇지 않는다).
+  function mainCategoryTarget(event,selector){return event.target&&event.target.closest?event.target.closest(selector):null;}
+  function renumberMainCategories(list){
+    [].slice.call(list.children).forEach(function(row,index){
+      [].slice.call(row.querySelectorAll('[name]')).forEach(function(field){field.name=field.name.replace(/^main_categories\[[^\]]*\]/,'main_categories['+index+']');});
+    });
+  }
+  document.addEventListener('click',function(event){
+    if(mainCategoryTarget(event,'[data-yc-add-main-category]')){
+      var rows=document.querySelector('[data-yc-main-categories]'),template=document.querySelector('template[data-yc-main-category-row]');
+      if(rows&&template){
+        rows.appendChild(template.content.firstElementChild.cloneNode(true));
+        renumberMainCategories(rows);
+        var select=rows.lastElementChild.querySelector('select');if(select){select.focus();}
+      }
+    }
+    var remove=mainCategoryTarget(event,'[data-yc-remove-main-category]');
+    if(remove){
+      var item=remove.closest('[data-yc-main-category-item]'),list=item&&item.parentElement;
+      if(item){item.remove();}
+      if(list){renumberMainCategories(list);}
+    }
+  });
   var form=document.querySelector('[data-yc-product-form]');
   if(!form){return;}
   // 조합 표: 같은 열의 아래 행에 값 복사

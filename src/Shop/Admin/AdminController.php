@@ -38,6 +38,7 @@ final class AdminController extends AdminBase
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
         $data['types'] = Settings::TYPE_LABELS;
+        $data['categories'] = $this->service->categories->optionDetails();
         $current = $this->service->settings->all();
         $data['banner_modes'] = HomeBanner::MODES;
         $data['banner_products'] = $this->service->banner->choices();
@@ -66,7 +67,10 @@ final class AdminController extends AdminBase
         $flat = [];
         $flat['visible'] = $settings['visible'] ? '1' : '0';
         foreach ($settings['banner'] as $key => $value) if ($key !== 'image') $flat['banner_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
-        foreach ($settings['main'] as $type => $block) foreach ($block as $key => $value) $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
+        foreach (Settings::TYPES as $type) foreach ($settings['main'][$type] as $key => $value) $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) ($value ?? '');
+        // 분류 블록은 줄 목록 그대로 편다(폼이 main_categories[i][…] 로 되돌려 보낸다).
+        $flat['main_categories'] = array_map(static fn (array $row): array => ['id' => (string) $row['id'], 'columns' => (string) $row['columns'], 'rows' => (string) $row['rows']], $settings['main']['categories']);
+        foreach ($settings['auto'] as $key => $days) $flat['auto_' . $key] = (string) $days;
         foreach (['category', 'type', 'search', 'related', 'detail'] as $section) foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';
         $flat['shipping_content'] = $settings['shipping']['content'];

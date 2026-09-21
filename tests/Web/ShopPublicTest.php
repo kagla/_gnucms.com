@@ -223,6 +223,11 @@ final class ShopPublicTest extends WebTestCase
         $moved = $this->get($this->app, '/shop/type', ['t' => 'hit']);
         self::assertSame(301, $moved->getStatusCode());
         self::assertSame('/shop/c/' . rawurlencode($kept['slug']), $moved->getHeaderLine('Location'));
+        // 옮겨 둔 분류를 공개에서 내리면 분류 화면과 마찬가지로 404 다.
+        $db = $this->app->db();
+        $db->update('yc_categories', ['active' => 0], 'id = :id', ['id' => (int) $kept['id']]);
+        self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'hit'])->getStatusCode(), '공개를 끈 분류로는 넘기지 않는다');
+        $db->update('yc_categories', ['active' => 1], 'id = :id', ['id' => (int) $kept['id']]);
         self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'recommend'])->getStatusCode(), '기록이 없는 유형은 404');
         // 메인 분류 블록: 고른 분류의 이름과 분류 주소가 메인에 놓인다.
         $settings = $this->shop->settings->all();

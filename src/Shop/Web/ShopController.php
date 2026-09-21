@@ -75,7 +75,8 @@ final class ShopController
                 if (in_array($type, ['hit', 'recommend'], true)) {
                     $target = $data['settings']['migrated_types'][$type] ?? null;
                     $moved = $target === null ? null : $this->service->categories->find((int) $target);
-                    if ($moved === null) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
+                    // 분류 화면과 같은 규칙: 공개를 끈 분류로는 넘기지 않는다.
+                    if ($moved === null || (int) $moved['active'] !== 1) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
                     return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($moved['slug']));
                 }
                 if (!isset(Settings::TYPE_LABELS[$type])) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');

@@ -8,6 +8,7 @@ use GnuCms\App;
 use GnuCms\Payment\InicisGateway;
 use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Service;
+use GnuCms\Shop\Settings;
 use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Shop\ImagesTest;
@@ -246,7 +247,14 @@ final class ShopAdminTest extends WebTestCase
         $this->signIn(true);
         self::assertStringContainsString('상품 0', $this->body($this->get($this->app, '/admin/shop')));
         $settings = $this->body($this->get($this->app, '/admin/shop/settings'));
-        self::assertStringContainsString('name="main_hit_use"', $settings);
+        self::assertStringNotContainsString('main_hit_use', $settings);
+        // 메인 진열: 자동 묶음 기간, 묶음마다 기준(자동·분류), 메인 분류 블록 줄을 늘리는 틀.
+        self::assertStringContainsString('name="auto_new_days"', $settings);
+        self::assertStringContainsString('name="auto_best_days"', $settings);
+        self::assertStringContainsString('name="main_best_source"', $settings);
+        self::assertStringContainsString('name="main_best_source_category_id"', $settings);
+        self::assertStringContainsString('<template data-yc-main-category-row>', $settings);
+        self::assertStringContainsString('data-yc-add-main-category', $settings);
         self::assertStringContainsString('name="category_columns" value="4"', $settings);
         // 토큰이 없는 POST 는 전역 관리자라도 지나지 못한다.
         self::assertSame(403, $this->post($this->app, '/admin/shop/settings', $this->settingsForm(['category_columns' => '5']))->getStatusCode());
@@ -264,14 +272,45 @@ final class ShopAdminTest extends WebTestCase
     private function settingsForm(array $overrides): array
     {
         $form = [];
-        foreach (['hit', 'new', 'recommend', 'discount', 'popular'] as $type) {
-            $form += ['main_' . $type . '_use' => '1', 'main_' . $type . '_columns' => '4', 'main_' . $type . '_rows' => '1', 'main_' . $type . '_image_width' => '200', 'main_' . $type . '_image_height' => '0'];
+        foreach (Settings::TYPES as $type) {
+            $form += ['main_' . $type . '_use' => '1', 'main_' . $type . '_columns' => '4', 'main_' . $type . '_rows' => '1', 'main_' . $type . '_image_width' => '200',
+                'main_' . $type . '_image_height' => '0', 'main_' . $type . '_source' => 'auto', 'main_' . $type . '_source_category_id' => ''];
         }
         foreach (['category', 'type', 'search'] as $section) {
             $form += [$section . '_columns' => '3', $section . '_rows' => '5', $section . '_image_width' => '200', $section . '_image_height' => '0'];
         }
-        return $overrides + $form + ['related_use' => '1', 'related_columns' => '4', 'related_image_width' => '100', 'related_image_height' => '0',
+        return $overrides + $form + ['auto_new_days' => '30', 'auto_best_days' => '30', 'related_use' => '1', 'related_columns' => '4', 'related_image_width' => '100', 'related_image_height' => '0',
             'detail_image_width' => '400', 'detail_image_height' => '0', 'shipping_content' => '', 'exchange_content' => ''];
+    }
+
+    /** 메인 진열 설정: 자동 묶음 기간, 묶음의 기준(분류 선택), 메인 분류 블록을 저장하고 다시 연 화면에 되비친다. */
+    #[DataProvider('connectionProvider')]
+    public function testSettingsSavesCollectionSourcesAndMainCategoryBlocks(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $event = (int) $this->shop->categories->save(['name' => '기획전', 'parent_id' => '', 'active' => '1', 'menu_hidden' => '1',
+            'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+        $response = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['auto_best_days' => '60',
+            'main_best_source' => 'category', 'main_best_source_category_id' => (string) $event,
+            'main_categories' => [['id' => (string) $event, 'columns' => '3', 'rows' => '1']]])));
+        self::assertSame(303, $response->getStatusCode());
+        $all = $this->shop->settings->all();
+        self::assertSame(['new_days' => 30, 'best_days' => 60], $all['auto']);
+        self::assertSame(['category', $event], [$all['main']['best']['source'], $all['main']['best']['source_category_id']]);
+        self::assertSame('auto', $all['main']['new']['source']);
+        self::assertSame([['id' => $event, 'columns' => 3, 'rows' => 1]], $all['main']['categories']);
+        $settings = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('name="auto_best_days" value="60"', $settings);
+        self::assertStringContainsString('<option value="category" selected>', $settings);
+        self::assertStringContainsString('name="main_categories[0][id]"', $settings);
+        self::assertStringContainsString('value="' . $event . '" title="슬러그 기획전 · 번호 ' . $event . '" selected', $settings);
+        self::assertStringContainsString('name="main_categories[0][columns]" value="3"', $settings);
+        // 없는 분류는 422 로 돌려보내고 저장된 목록은 그대로다.
+        $bad = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['main_categories' => [['id' => '999999', 'columns' => '3', 'rows' => '1']]])));
+        self::assertSame(422, $bad->getStatusCode());
+        self::assertStringContainsString('없는 분류', $this->body($bad));
+        self::assertSame([['id' => $event, 'columns' => 3, 'rows' => 1]], $this->shop->settings->all()['main']['categories']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -519,7 +558,7 @@ final class ShopAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testProductListBulkCopyTypesStockAndSearch(array $config): void
+    public function testProductListBulkCopyStockAndSearch(array $config): void
     {
         $this->setupShop($config);
         $seed = $this->seedProducts();
@@ -541,10 +580,11 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame('/admin/shop/products/edit?id=' . $copy['id'] . '&saved=1', $response->getHeaderLine('Location'));
         self::assertCount(1, $copy['options']['select']);
         self::assertSame(422, $this->post($this->app, '/admin/shop/products/copy', $this->csrf(['id' => (string) $seed['a'], 'code' => 'A2']))->getStatusCode());
-        $types = $this->body($this->get($this->app, '/admin/shop/products/types'));
-        self::assertStringContainsString('name="rows[' . $seed['a'] . '][is_hit]"', $types);
-        $this->post($this->app, '/admin/shop/products/types', $this->csrf(['rows' => [$seed['a'] => ['is_hit' => '1', 'is_new' => '1']]]));
-        self::assertSame(1, (int) $this->shop->products->find($seed['a'])['is_new']);
+        // 진열 유형 화면은 없앴다 — 주소도 하위 탭도 남지 않는다.
+        self::assertSame(404, $this->get($this->app, '/admin/shop/products/types')->getStatusCode());
+        self::assertSame(404, $this->post($this->app, '/admin/shop/products/types', $this->csrf(['rows' => []]))->getStatusCode());
+        self::assertStringNotContainsString('진열 유형', $list);
+        self::assertStringNotContainsString('/products/types', $list);
         $stock = $this->body($this->get($this->app, '/admin/shop/products/stock'));
         self::assertStringContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
         $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['original_stock' => '3', 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
@@ -612,6 +652,9 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('data-yc-add-category', $form);
         self::assertStringNotContainsString('name="category2_id"', $form);
         self::assertStringContainsString('<template data-yc-category-row>', $form);
+        // 진열 유형 깃발은 없앴다 — 체크도, "유형 다른 상품에도 적용" 칩도 없다.
+        self::assertStringNotContainsString('name="is_hit"', $form);
+        self::assertStringNotContainsString('value="types"', $form);
         // 폼의 첫 submit 단추는 이름 없는 숨은 단추여야 한다. 그래야 입력칸에서 Enter 를 눌러도
         // "조합 생성"(첫 눈에 보이는 submit) 이 아니라 기본 action=save 로 암시적 제출된다.
         $hiddenSubmitPos = strpos($form, '<button type="submit" hidden aria-hidden="true" tabindex="-1"></button>');
