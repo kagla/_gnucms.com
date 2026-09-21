@@ -127,7 +127,7 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
     <?php $apply('shipping') ?>
   </div></section>
   <section class="card" id="section-info"><div class="card-body"><h2 class="card-title">상품정보고시</h2>
-    <select class="select select-bordered select-sm" name="info_group" data-yc-info-select><option value="">사용 안 함</option><?php foreach ($info_groups as $key => $group): ?><option value="<?= $key ?>"<?= $v('info_group') === $key ? ' selected' : '' ?>><?= $this->e($group['label']) ?></option><?php endforeach ?></select>
+    <fieldset class="fieldset"><legend class="fieldset-legend">고시 항목 군</legend><select class="select select-bordered select-sm" name="info_group" data-yc-info-select><option value="">사용 안 함</option><?php foreach ($info_groups as $key => $group): ?><option value="<?= $key ?>"<?= $v('info_group') === $key ? ' selected' : '' ?>><?= $this->e($group['label']) ?></option><?php endforeach ?></select></fieldset>
     <noscript><p class="muted">군을 바꾼 뒤 조합 생성 버튼을 누르면 항목 입력칸이 갱신됩니다.</p></noscript>
     <div class="yc-fields" data-yc-info-fields data-yc-info-groups="<?= $this->e(json_encode(array_map(static fn ($g) => $g['articles'], $info_groups), JSON_UNESCAPED_UNICODE)) ?>">
       <?php foreach ($info_groups[$v('info_group')]['articles'] ?? [] as $index => $article): ?><fieldset class="fieldset"><legend class="fieldset-legend"><?= $this->e($article) ?></legend><input class="input input-bordered input-sm" type="text" name="info[<?= $index ?>]" value="<?= $this->e((string) ($values['info'][$index] ?? '')) ?>" maxlength="500" placeholder="상품페이지 참고"></fieldset><?php endforeach ?>
