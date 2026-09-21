@@ -391,6 +391,10 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="image_key" value="categories/' . $top['id'] . '"', $edit);
         // 도구 막대의 "쇼핑몰 보기"는 수정 중인 분류의 공개 화면으로 간다.
         self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98" target="_blank"', $edit);
+        // "이 분류에 상품 등록"은 상품 등록 폼을 열며 대표 분류를 미리 고른다. 모르는 값은 무시한다.
+        self::assertStringContainsString('href="/admin/shop/products/new?category=' . $top['id'] . '"', $edit);
+        self::assertStringContainsString('<option value="' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => (string) $top['id']])));
+        self::assertStringNotContainsString('<option value="' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => 'zz'])));
         self::assertStringContainsString('href="/shop" target="_blank"', $form);
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);

@@ -2,7 +2,7 @@
 <?php $this->start('title') ?><?= $id === null ? '분류 추가' : '분류 수정' ?> · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>shop<?php $this->stop() ?>
 <?php $this->start('extension_body') ?>
-<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => $id === null ? '분류 추가' : '분류 수정', 'description' => '', 'actions' => [['url' => $admin_url . '/categories', 'label' => '분류 목록']]]) ?>
+<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => $id === null ? '분류 추가' : '분류 수정', 'description' => '', 'actions' => array_values(array_filter([$id === null ? null : ['url' => $admin_url . '/products/new?category=' . $id, 'label' => '이 분류에 상품 등록'], ['url' => $admin_url . '/categories', 'label' => '분류 목록']]))]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
 <?php $v = static fn (string $key): string => (string) ($values[$key] ?? ''); ?>

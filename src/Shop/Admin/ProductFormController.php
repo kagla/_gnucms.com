@@ -65,6 +65,9 @@ final class ProductFormController extends AdminBase
             'options' => [], 'extras' => [], 'relations' => '', 'extra_label' => [], 'extra_value' => [], 'version' => '0'];
         foreach (Products::TYPES as $type) $values[$type] = '0';
         foreach (self::COOKIES as $field => $cookie) if (is_string($cookies[$cookie] ?? null)) $values[$field] = mb_substr($cookies[$cookie], 0, 100, 'UTF-8');
+        // 분류 화면의 "이 분류에 상품 등록"이 ?category=<id> 로 온다. 있는 분류일 때만 대표 분류로 미리 고른다.
+        $category = Input::filterId($request->getQueryParams()['category'] ?? '');
+        if ($category !== null && $this->service->categories->find($category) !== null) $values['category_id'] = (string) $category;
         return $values;
     }
 
