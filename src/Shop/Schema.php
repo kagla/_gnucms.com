@@ -133,33 +133,40 @@ final class Schema
             image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL';
     }
 
-    /** 29판: 2자 코드 계층 → 부모 id 트리. slug 칸이 이미 있으면 끝난 것이다. SQLite 는 칸을 지우거나 NULL 허용을 바꾸지 못해 표를 다시 만든다(코어의 rebuildSqliteUsers() 와 같은 방식). */
+    /**
+     * 29판: 2자 코드 계층 → 부모 id 트리. slug 칸이 없으면 표를 새 모양으로 바꾸고, 그다음 남은 뒷정리를 한다.
+     * MySQL 은 ALTER 와 UPDATE 가 하나씩 확정되므로 갱신이 중간에 끊길 수 있다 — 그래서 뒷정리(옛 code 칸 버리기,
+     * path 가 빈 행 채우기)는 갱신마다 상태를 보고 필요할 때만 하며, 끊긴 갱신은 다음 요청이 마저 끝낸다.
+     * SQLite 는 칸을 지우거나 NULL 허용을 바꾸지 못해 표를 다시 만든다(코어의 rebuildSqliteUsers() 와 같은 방식).
+     */
     private static function migrateCategoryTree(Connection $db, string $bin): void
     {
-        try {
-            $db->selectOne('SELECT slug FROM ' . $db->table('yc_categories') . ' LIMIT 1');
-            return;
-        } catch (DomainError) {
-        }
         $table = $db->table('yc_categories');
         $keep = 'id, parent_id, depth, name, sort_order, active, no_coupon, head_html, tail_html, list_columns, list_rows, image_width, image_height, extra, created_at, updated_at';
-        $db->transaction(function () use ($db, $table, $keep, $bin): void {
-            if ($db->dialect()->name() === 'mysql') {
-                $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
-                $db->execute('UPDATE ' . $table . ' SET legacy_code = code, slug = CONCAT(\'c\', id)');
-                $db->execute('ALTER TABLE ' . $table . ' DROP COLUMN code');
-            } else {
-                $old = $db->table('yc_categories_before_tree');
-                $db->execute('ALTER TABLE ' . $table . ' RENAME TO ' . $old);
-                $db->execute('CREATE TABLE ' . $table . ' (' . strtr(self::categoriesDefinition($bin), $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
-                $db->execute('INSERT INTO ' . $table . ' (' . $keep . ", slug, path, legacy_code) SELECT " . $keep . ", 'c' || id, '', code FROM " . $old);
-                $db->execute('DROP TABLE ' . $old);
-            }
-            self::fillCategoryTree($db);
-        });
+        if (!self::columnExists($db, 'yc_categories', 'slug')) {
+            $db->transaction(function () use ($db, $table, $keep, $bin): void {
+                if ($db->dialect()->name() === 'mysql') {
+                    $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
+                } else {
+                    $old = $db->table('yc_categories_before_tree');
+                    $db->execute('ALTER TABLE ' . $table . ' RENAME TO ' . $old);
+                    $db->execute('CREATE TABLE ' . $table . ' (' . strtr(self::categoriesDefinition($bin), $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
+                    $db->execute('INSERT INTO ' . $table . ' (' . $keep . ", slug, path, legacy_code) SELECT " . $keep . ", 'c' || id, '', code FROM " . $old);
+                    $db->execute('DROP TABLE ' . $old);
+                }
+            });
+        }
+        // 옛 코드는 legacy_code 로만 남는다(MySQL). SQLite 는 표를 다시 만들 때 이미 옮겼다.
+        if (self::columnExists($db, 'yc_categories', 'code')) {
+            $db->execute('UPDATE ' . $table . ' SET legacy_code = code WHERE legacy_code IS NULL');
+            self::dropColumn($db, 'yc_categories', 'code');
+        }
+        if ((int) $db->selectOne('SELECT COUNT(*) AS c FROM ' . $table . " WHERE path = ''")['c'] > 0) {
+            $db->transaction(function () use ($db): void { self::fillCategoryTree($db); });
+        }
     }
 
-    /** 부모 사슬로 path·depth 를, 이름으로 slug 를 채운다(겹치면 -2, -3…, 이름에서 못 만들면 c<id>). 이전 직후 한 번만 돈다. */
+    /** 부모 사슬로 path·depth 를, 이름으로 slug 를 채운다(겹치면 -2, -3…, 이름에서 못 만들면 c<id>). path 가 빈 행이 있을 때만 돈다. */
     private static function fillCategoryTree(Connection $db): void
     {
         $table = $db->table('yc_categories');
@@ -190,25 +197,28 @@ final class Schema
         return implode(', ', $parts);
     }
 
-    /** 기존 표의 칸을 지운다. 없으면 아무것도 하지 않는다. 이름은 이 파일의 상수로만 들어온다. */
-    private static function dropColumn(Connection $db, string $table, string $column): void
+    /** 칸이 있는지 본다. 이름은 이 파일의 상수로만 들어온다. */
+    private static function columnExists(Connection $db, string $table, string $column): bool
     {
         try {
             $db->selectOne('SELECT ' . $column . ' FROM ' . $db->table($table) . ' LIMIT 1');
         } catch (DomainError) {
-            return;
+            return false;
         }
+        return true;
+    }
+
+    /** 기존 표의 칸을 지운다. 없으면 아무것도 하지 않는다. */
+    private static function dropColumn(Connection $db, string $table, string $column): void
+    {
+        if (!self::columnExists($db, $table, $column)) return;
         $db->execute('ALTER TABLE ' . $db->table($table) . ' DROP COLUMN ' . $column);
     }
 
     /** 기존 표에 칸을 더한다. 이미 있으면 아무것도 하지 않는다 — 코어 Schema::addColumnIfMissing() 과 같은 방식. */
     private static function addColumn(Connection $db, string $table, string $column, string $definition): void
     {
-        try {
-            $db->selectOne('SELECT ' . $column . ' FROM ' . $db->table($table) . ' LIMIT 1');
-            return;
-        } catch (DomainError) {
-        }
+        if (self::columnExists($db, $table, $column)) return;
         $db->execute('ALTER TABLE ' . $db->table($table) . ' ADD COLUMN ' . $column . ' ' . strtr($definition, $db->dialect()->typeMap()));
     }
 }

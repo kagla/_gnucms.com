@@ -95,6 +95,11 @@ final class SchemaTest extends ShopTestCase
         $this->assertIndexesExist();
         self::assertNull($this->shop->categories->byLegacyCode('99'));
         self::assertSame((int) $child, (int) $this->shop->categories->byLegacyCode('1010')['id']);
+        // 갱신이 중간에 끊겨 path 가 빈 행이 남으면(MySQL 은 ALTER·UPDATE 가 하나씩 확정된다) 다음 갱신이 마저 채운다.
+        $db->execute('UPDATE ' . $db->table('yc_categories') . " SET path = '', slug = ? WHERE id = ?", ['c' . $child, $child]);
+        Schema::migrate($db);
+        $healed = $db->selectOne('SELECT slug, path FROM ' . $db->table('yc_categories') . ' WHERE id = ?', [$child]);
+        self::assertSame(['셔츠', '/' . $top . '/' . $child . '/'], [$healed['slug'], $healed['path']]);
     }
 
     private function assertIndexesExist(): void
