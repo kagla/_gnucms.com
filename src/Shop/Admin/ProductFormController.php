@@ -57,7 +57,7 @@ final class ProductFormController extends AdminBase
     private function defaults(ServerRequestInterface $request): array
     {
         $cookies = $request->getCookieParams();
-        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'category2_id' => '', 'category3_id' => '', 'maker' => '', 'origin' => '', 'brand' => '', 'model' => '',
+        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'extra_category_ids' => [], 'maker' => '', 'origin' => '', 'brand' => '', 'model' => '',
             'summary' => '', 'description' => '', 'list_price' => '0', 'price' => '', 'point_type' => '0', 'point' => '0', 'supply_point' => '0', 'tax_free' => '0', 'seller_email' => '',
             'active' => '1', 'no_coupon' => '0', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'restock_notify' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
             'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0', 'head_html' => '', 'tail_html' => '',
@@ -77,8 +77,7 @@ final class ProductFormController extends AdminBase
         $values = [];
         foreach ($product as $key => $value) if (is_scalar($value) || $value === null) $values[$key] = (string) $value;
         $values['category_id'] = (string) ($product['categories'][1]['id'] ?? '');
-        $values['category2_id'] = (string) ($product['categories'][2]['id'] ?? '');
-        $values['category3_id'] = (string) ($product['categories'][3]['id'] ?? '');
+        $values['extra_category_ids'] = array_values(array_map(static fn (array $c): string => (string) $c['id'], array_filter($product['categories'], static fn (int $slot): bool => $slot >= 2, ARRAY_FILTER_USE_KEY)));
         $values['info'] = $product['info'];
         $values['option_group'] = [1 => $product['options']['select_groups'][0] ?? '', 2 => $product['options']['select_groups'][1] ?? '', 3 => $product['options']['select_groups'][2] ?? ''];
         $values['option_values'] = [1 => '', 2 => '', 3 => ''];

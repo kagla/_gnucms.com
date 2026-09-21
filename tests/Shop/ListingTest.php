@@ -14,7 +14,7 @@ final class ListingTest extends ShopTestCase
         $this->setupShop($config);
         $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $hidden = $this->category('숨김', (int) $top['id'], ['active' => '0']); $other = $this->category('잡화');
         $a = $this->product(['category_id' => (string) $child['id'], 'code' => 'A', 'name' => '가', 'price' => '300', 'sort_order' => '2']);
-        $b = $this->product(['category_id' => (string) $other['id'], 'category2_id' => (string) $top['id'], 'code' => 'B', 'name' => '나', 'price' => '100', 'sort_order' => '1']);
+        $b = $this->product(['category_id' => (string) $other['id'], 'extra_category_ids' => [(string) $top['id']], 'code' => 'B', 'name' => '나', 'price' => '100', 'sort_order' => '1']);
         $c = $this->product(['category_id' => (string) $hidden['id'], 'code' => 'C', 'name' => '다', 'price' => '200']);
         $d = $this->product(['category_id' => (string) $child['id'], 'code' => 'D', 'name' => '라', 'price' => '50', 'active' => '0']);
         $e = $this->product(['category_id' => (string) $other['id'], 'code' => 'E', 'name' => '마', 'price' => '400', 'stock' => '0']);

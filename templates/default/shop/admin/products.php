@@ -11,7 +11,7 @@ $sortLink = fn (string $key): string => $admin_url . '/products?' . http_build_q
 $sort = function (string $key, string $label) use ($sortLink, $filters): void { ?><a href="<?= $this->e($sortLink($key)) ?>"><?= $label ?><?= $filters['sort'] === $key ? ($filters['dir'] === 'asc' ? ' ↑' : ' ↓') : '' ?></a><?php };
 ?>
 <section class="yc-list-panel">
-<div class="yc-list-heading"><h2>상품 목록 <span><?= number_format($list['total']) ?></span></h2><p>체크한 상품은 선택 삭제 대상입니다. <span class="yc-table-hint">표를 좌우로 밀어 확인하세요.</span></p></div>
+<div class="yc-list-heading"><h2>상품 목록 <span><?= number_format($list['total']) ?></span></h2><p>체크한 상품에 아래의 분류 넣기·빼기와 선택 삭제가 적용됩니다. <span class="yc-table-hint">표를 좌우로 밀어 확인하세요.</span></p></div>
 <?php if ($list['items'] === []): ?>
 <div class="yc-admin-empty"><?= $this->icon('tag', 30) ?><strong>표시할 상품이 없습니다</strong><p>검색 조건을 바꾸거나 새 상품을 등록해 주세요.</p><a class="btn btn-sm" href="<?= $this->e($admin_url) ?>/products/new">상품 등록</a></div>
 <?php else: ?>
@@ -34,8 +34,8 @@ $sort = function (string $key, string $label) use ($sortLink, $filters): void { 
     <?php endforeach ?>
   </tbody></table></div>
 </form>
-<form method="post" action="<?= $this->e($admin_url) ?>/products" id="yc-product-delete" onsubmit="return confirm('선택한 상품을 삭제할까요? 이미지·옵션도 함께 지워집니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="delete"></form>
-<div class="yc-list-actions"><p><span data-yc-selection-count role="status">0개 선택</span> · 저장은 현재 페이지의 모든 입력에 적용됩니다.</p><div class="row-actions"><button class="btn btn-sm btn-error btn-outline" type="submit" form="yc-product-delete" data-yc-delete-selected>선택 삭제</button><button class="btn btn-sm btn-primary" type="submit" form="yc-product-list">목록 변경사항 저장</button></div></div>
+<form method="post" action="<?= $this->e($admin_url) ?>/products" id="yc-product-delete" data-yc-selection-form><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"></form>
+<div class="yc-list-actions"><p><span data-yc-selection-count role="status">0개 선택</span> · 저장은 현재 페이지의 모든 입력에 적용됩니다.</p><div class="row-actions"><label class="yc-list-category"><span class="sr-only">분류</span><select class="select select-bordered select-sm" name="category" form="yc-product-delete"><option value="">분류 선택</option><?php foreach ($categories as $cid => $label): ?><option value="<?= (int) $cid ?>"><?= $this->e($label) ?></option><?php endforeach ?></select></label><button class="btn btn-sm" type="submit" form="yc-product-delete" name="action" value="categorize">분류에 넣기</button><button class="btn btn-sm" type="submit" form="yc-product-delete" name="action" value="uncategorize">분류에서 빼기</button><button class="btn btn-sm btn-error btn-outline" type="submit" form="yc-product-delete" name="action" value="delete" data-yc-delete-selected>선택 삭제</button><button class="btn btn-sm btn-primary" type="submit" form="yc-product-list">목록 변경사항 저장</button></div></div>
 <?php endif ?>
 </section>
 <?php $this->insert('_pager', ['page_url' => fn (int $p): string => $admin_url . '/products?' . http_build_query($filters + ['page' => $p])]) ?>

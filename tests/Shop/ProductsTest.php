@@ -30,7 +30,7 @@ final class ProductsTest extends ShopTestCase
         $this->setupShop($config);
         $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $other = $this->category('잡화');
         $related = $this->product(['category_id' => (string) $other['id'], 'code' => 'REL-1', 'name' => '관련상품']);
-        $id = $this->shop->products->save($this->fullInput((int) $child['id'], ['category2_id' => (string) $other['id'], 'relations' => $related['id'] . ',']), []);
+        $id = $this->shop->products->save($this->fullInput((int) $child['id'], ['extra_category_ids' => [(string) $other['id']], 'relations' => $related['id'] . ',']), []);
         $product = $this->shop->products->get($id);
         self::assertSame('SHIRT-01', $product['code']); self::assertSame('여름 셔츠', $product['name']); self::assertSame('여름-셔츠', $product['slug']);
         self::assertSame('<p>요약</p>', $product['summary']); self::assertSame('설명 본문 내용', $product['description_text']);
@@ -67,7 +67,7 @@ final class ProductsTest extends ShopTestCase
             'code' => ['code' => 'bad code'], 'category_id' => ['category_id' => '999'], 'price' => ['price' => '-1'], 'point' => ['point_type' => '1', 'point' => '100'],
             'shipping_free_minimum' => ['shipping_type' => '2', 'shipping_free_minimum' => '0'], 'shipping_per_qty' => ['shipping_type' => '4', 'shipping_per_qty' => '0'],
             'buy_max' => ['buy_min' => '5', 'buy_max' => '2'], 'seller_email' => ['seller_email' => 'not-mail'], 'relations' => ['relations' => '999'],
-            'name' => ['name' => ''], 'category2_id' => ['category2_id' => (string) $category['id']], 'info_group' => ['info_group' => 'nope'],
+            'name' => ['name' => ''], 'extra_category_ids' => ['extra_category_ids' => ['999999']], 'info_group' => ['info_group' => 'nope'],
         ];
         foreach ($cases as $field => $override) {
             try {
@@ -81,6 +81,40 @@ final class ProductsTest extends ShopTestCase
         $this->shop->products->save($this->fullInput((int) $category['id'], ['options' => [], 'extras' => [], 'option_group' => []]), []);
         try { $this->shop->products->save($this->fullInput((int) $category['id'], ['options' => [], 'extras' => [], 'option_group' => []]), []); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('code', $e->details()); }
         self::assertSame(0, (int) $this->shop->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->shop->store->table('yc_products') . " WHERE code = 'bad code'")['c']);
+    }
+
+    /** 추가 분류는 개수 제한 없이(20개까지) 순서대로 slot 2… 에 붙는다. 빈값·대표와 겹침·중복은 조용히 빠지고, 없는 분류와 21개 초과는 거절한다. */
+    #[DataProvider('connectionProvider')]
+    public function testExtraCategoriesAreUnlimitedAndOrdered(array $config): void
+    {
+        $this->setupShop($config);
+        $primary = $this->category('의류');
+        $extras = [];
+        for ($i = 1; $i <= 4; $i++) $extras[] = (int) $this->category('추가' . $i)['id'];
+        $id = $this->shop->products->save($this->fullInput((int) $primary['id'], ['extra_category_ids' => ['', (string) $extras[2], (string) $primary['id'], (string) $extras[0], (string) $extras[2], (string) $extras[3]]]), []);
+        $slots = array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get($id)['categories']);
+        self::assertSame([1 => (int) $primary['id'], 2 => $extras[2], 3 => $extras[0], 4 => $extras[3]], $slots);
+        foreach ([['extra_category_ids' => ['999999']], ['extra_category_ids' => array_fill(0, 21, (string) $extras[1])]] as $bad) {
+            try { $this->shop->products->save($this->fullInput((int) $primary['id'], ['code' => 'X' . count($bad['extra_category_ids'])] + $bad), []); self::fail('거절해야 한다'); }
+            catch (DomainError $e) { self::assertSame(422, $e->status()); self::assertArrayHasKey('extra_category_ids', $e->details()); }
+        }
+    }
+
+    /** 목록 일괄 작업: 분류에 넣기는 이미 있으면 건너뛰고 slot 을 이어 붙이며, 빼기는 대표(slot 1)를 건드리지 않는다. */
+    #[DataProvider('connectionProvider')]
+    public function testAddToAndRemoveFromCategory(array $config): void
+    {
+        $this->setupShop($config);
+        $primary = $this->category('의류'); $event = $this->category('봄 세일'); $other = $this->category('기타');
+        $a = $this->shop->products->save($this->fullInput((int) $primary['id'], ['code' => 'A', 'extra_category_ids' => [(string) $other['id']]]), []);
+        $b = $this->shop->products->save($this->fullInput((int) $event['id'], ['code' => 'B']), []);
+        self::assertSame(['changed' => 1, 'skipped' => 1], $this->shop->products->addToCategory([(string) $a, (string) $b], (int) $event['id']));
+        self::assertSame([1 => (int) $primary['id'], 2 => (int) $other['id'], 3 => (int) $event['id']], array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get($a)['categories']));
+        self::assertSame(['changed' => 0, 'skipped' => 2], $this->shop->products->addToCategory([(string) $a, (string) $b], (int) $event['id']));
+        self::assertSame(['changed' => 1, 'skipped' => 1], $this->shop->products->removeFromCategory([(string) $a, (string) $b], (int) $event['id']));
+        self::assertSame([1 => (int) $primary['id'], 2 => (int) $other['id']], array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get($a)['categories']));
+        self::assertSame((int) $event['id'], (int) $this->shop->products->get($b)['categories'][1]['id'], '대표 분류는 빼지 않는다');
+        try { $this->shop->products->addToCategory([(string) $a], 999999); self::fail(); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
     }
 
     #[DataProvider('connectionProvider')]

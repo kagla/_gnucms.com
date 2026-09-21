@@ -29,6 +29,13 @@ final class ProductController extends AdminBase
                         $action = $input['action'] ?? '';
                         if ($action === 'bulk') $products->bulk($rows, $data['actor']);
                         elseif ($action === 'delete') $products->bulkDelete(is_array($input['ids'] ?? null) ? $input['ids'] : []);
+                        elseif ($action === 'categorize' || $action === 'uncategorize') {
+                            $categoryId = Input::optionalId($input['category'] ?? '') ?? throw DomainError::validation(['category' => '분류를 고르세요.']);
+                            $ids = is_array($input['ids'] ?? null) ? $input['ids'] : [];
+                            if ($ids === []) throw DomainError::validation(['ids' => '상품을 선택하세요.']);
+                            $result = $action === 'categorize' ? $products->addToCategory($ids, $categoryId) : $products->removeFromCategory($ids, $categoryId);
+                            return $this->redirect($response, $data['admin_url'] . '/products?' . http_build_query(['op' => $action === 'categorize' ? 'add' : 'remove'] + $result));
+                        }
                         else throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
                         return $this->redirect($response, $data['admin_url'] . '/products?saved=1');
                     case 'products/copy':
@@ -54,6 +61,11 @@ final class ProductController extends AdminBase
             $data['page'] = $page;
         }
         if (($input['saved'] ?? '') === '1') $data['notice'] = '저장했습니다.';
+        if (in_array($input['op'] ?? '', ['add', 'remove'], true)) {
+            $changed = (int) ($input['changed'] ?? 0); $skipped = (int) ($input['skipped'] ?? 0);
+            $data['notice'] = $changed . '개 상품을 분류에' . ($input['op'] === 'add' ? ' 넣었습니다.' : '서 뺐습니다.')
+                . ($skipped > 0 ? ' ' . $skipped . '개는 ' . ($input['op'] === 'add' ? '이미 있어' : '대표 분류이거나 없어') . ' 건너뛰었습니다.' : '');
+        }
         $q = is_string($input['q'] ?? null) ? mb_substr(trim($input['q']), 0, 100, 'UTF-8') : '';
         switch ($page) {
             case 'products':

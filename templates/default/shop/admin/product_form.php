@@ -19,10 +19,9 @@ $check = function (string $name, string $label) use ($v): void { ?>
 $apply = function (string $group) use ($apply_fields, $values): void { ?>
   <label class="label cursor-pointer yc-apply"><input class="checkbox checkbox-xs" type="checkbox" name="apply_fields[]" value="<?= $group ?>"<?= in_array($group, is_array($values['apply_fields'] ?? null) ? $values['apply_fields'] : [], true) ? ' checked' : '' ?>> <?= $this->e($apply_fields[$group]) ?> 일괄 적용</label>
 <?php };
-$catSelect = function (string $name, bool $required) use ($v, $categories, $errors): void { ?>
-  <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><?= $name === 'category_id' ? '대표 분류' : '추가 분류' ?></legend>
-    <select class="select select-bordered select-sm" name="<?= $name ?>"<?= $required ? ' required' : '' ?>><option value="">선택</option><?php foreach ($categories as $cid => $option): ?><option value="<?= $cid ?>" title="<?= $this->e($option['title']) ?>"<?= $v($name) === (string) $cid ? ' selected' : '' ?>><?= $this->e($option['text']) ?></option><?php endforeach ?></select>
-    <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
+$catOptions = function (string $selected) use ($categories): void { ?><option value="">선택</option><?php foreach ($categories as $cid => $option): ?><option value="<?= $cid ?>" title="<?= $this->e($option['title']) ?>"<?= $selected === (string) $cid ? ' selected' : '' ?>><?= $this->e($option['text']) ?></option><?php endforeach ?><?php };
+$extraRow = function (string $selected) use ($catOptions): void { ?>
+  <div class="yc-category-row" data-yc-category-row-item><select class="select select-bordered select-sm" name="extra_category_ids[]" aria-label="추가 분류"><?php $catOptions($selected) ?></select><button class="btn btn-xs" type="button" data-yc-remove-category aria-label="이 추가 분류 제거">제거</button></div>
 <?php };
 ?>
 <?php $this->insert('admin/_form_nav', ['sections' => ['section-category' => '분류', 'section-basic' => '기본정보', 'section-price' => '가격·재고', 'section-images' => '이미지', 'section-description' => '상세 설명', 'section-options' => '선택옵션', 'section-extras' => '추가옵션', 'section-shipping' => '배송비', 'section-info' => '상품정보고시', 'section-relations' => '관련상품', 'section-html' => '추가 설정']]) ?>
@@ -34,7 +33,18 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
   <input type="hidden" name="image_key" value="<?= $this->e($v('image_key')) ?>">
   <input type="hidden" name="uploaded_images" value="" data-uploaded-images>
   <section class="card" id="section-category"><div class="card-body"><h2 class="card-title">분류</h2>
-    <div class="yc-fields"><?php $catSelect('category_id', true); $catSelect('category2_id', false); $catSelect('category3_id', false); ?></div>
+    <div class="yc-fields">
+      <fieldset class="fieldset<?= isset($errors['category_id']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">대표 분류</legend>
+        <select class="select select-bordered select-sm" name="category_id" required><?php $catOptions($v('category_id')) ?></select>
+        <?php if (isset($errors['category_id'])): ?><p class="validator-hint"><?= $this->e($errors['category_id']) ?></p><?php endif ?></fieldset>
+    </div>
+    <fieldset class="fieldset<?= isset($errors['extra_category_ids']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">추가 분류 <span class="legend-hint">이벤트·기획전 분류에도 함께 보이게 합니다. <?= \GnuCms\Shop\Catalog\Products::MAX_EXTRA_CATEGORIES ?>개까지</span></legend>
+      <div class="yc-category-rows" data-yc-categories>
+        <?php foreach (is_array($values['extra_category_ids'] ?? null) ? array_filter($values['extra_category_ids'], 'is_scalar') : [] as $extraId): ?><?php $extraRow((string) $extraId) ?><?php endforeach ?>
+      </div>
+      <template data-yc-category-row><?php $extraRow('') ?></template>
+      <button class="btn btn-xs" type="button" data-yc-add-category><?= $this->icon('plus', 14) ?> 분류 추가</button>
+      <?php if (isset($errors['extra_category_ids'])): ?><p class="validator-hint"><?= $this->e($errors['extra_category_ids']) ?></p><?php endif ?></fieldset>
   </div></section>
   <section class="card" id="section-basic"><div class="card-body"><h2 class="card-title">기본정보</h2>
     <?php if ($id === null): ?><?php $field('code', '상품 코드 (영문·숫자·-·_ 1~20자)', 'text', ['maxlength' => 20, 'pattern' => '[A-Za-z0-9_-]{1,20}', 'required' => 'required']) ?>

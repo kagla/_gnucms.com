@@ -559,6 +559,29 @@ final class ShopAdminTest extends WebTestCase
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop/products/search', ['q' => 'x']), '/admin/shop/products/search?q=x');
     }
 
+    /** 상품 목록에서 선택한 상품을 분류에 넣고 뺀다. 안내문에 바뀐 수와 건너뛴 수가 나온다. */
+    #[DataProvider('connectionProvider')]
+    public function testListCategorizeAndUncategorize(array $config): void
+    {
+        $this->setupShop($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $event = $this->shop->categories->save(['name' => '봄 세일', 'parent_id' => '', 'active' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+        $a = (int) $seed['a']; $b = (int) $seed['b'];
+        $list = $this->body($this->get($this->app, '/admin/shop/products'));
+        self::assertStringContainsString('name="category" form="yc-product-delete"', $list);
+        self::assertStringContainsString('value="categorize"', $list); self::assertStringContainsString('value="uncategorize"', $list);
+        self::assertStringNotContainsString('onsubmit=', $list);
+        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'categorize', 'ids' => [(string) $a, (string) $b], 'category' => (string) $event]));
+        self::assertSame('/admin/shop/products?op=add&changed=2&skipped=0', $response->getHeaderLine('Location'));
+        self::assertStringContainsString('2개 상품을 분류에 넣었습니다', $this->body($this->get($this->app, '/admin/shop/products', ['op' => 'add', 'changed' => '2', 'skipped' => '0'])));
+        self::assertSame((int) $event, (int) $this->shop->products->get($a)['categories'][2]['id']);
+        $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'uncategorize', 'ids' => [(string) $a], 'category' => (string) $event]));
+        self::assertSame('/admin/shop/products?op=remove&changed=1&skipped=0', $response->getHeaderLine('Location'));
+        self::assertArrayNotHasKey(2, $this->shop->products->get($a)['categories']);
+        self::assertSame(422, $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'categorize', 'ids' => [(string) $a], 'category' => '']))->getStatusCode());
+    }
+
     private function productForm(int $category, array $overrides = []): array
     {
         return $overrides + ['action' => 'save', 'code' => 'F1', 'name' => '폼 상품', 'category_id' => (string) $category, 'price' => '12000', 'list_price' => '0', 'point_type' => '0', 'point' => '0', 'supply_point' => '0',
@@ -577,6 +600,10 @@ final class ShopAdminTest extends WebTestCase
         $form = $this->body($this->get($this->app, '/admin/shop/products/new'));
         self::assertMatchesRegularExpression('/name="code" value="[0-9]{10}"/', $form);
         self::assertStringContainsString('의류', $form); self::assertStringContainsString('data-yc-info-groups', $form); self::assertStringContainsString('data-cms-editor', $form);
+        // 추가 분류는 고정 칸이 아니라 "분류 추가" 로 늘리는 줄이다. 빈 폼에는 줄이 없고 틀만 있다.
+        self::assertStringContainsString('data-yc-add-category', $form);
+        self::assertStringNotContainsString('name="category2_id"', $form);
+        self::assertStringContainsString('<template data-yc-category-row>', $form);
         // 폼의 첫 submit 단추는 이름 없는 숨은 단추여야 한다. 그래야 입력칸에서 Enter 를 눌러도
         // "조합 생성"(첫 눈에 보이는 submit) 이 아니라 기본 action=save 로 암시적 제출된다.
         $hiddenSubmitPos = strpos($form, '<button type="submit" hidden aria-hidden="true" tabindex="-1"></button>');
@@ -590,7 +617,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="options[3][value2]" value="M"', $body);
         self::assertStringContainsString('value="폼 상품"', $body);
         self::assertSame(0, $this->shop->products->stats()['products'] - 2);
-        $response = $this->postWithFiles($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'])), ['images' => [ImagesTest::png(120, 120)]]);
+        $response = $this->postWithFiles($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['extra_category_ids' => [(string) $seed['other']['id']]])), ['images' => [ImagesTest::png(120, 120)]]);
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
         $product = $this->shop->products->byCode('F1');
         self::assertSame('/admin/shop/products/edit?id=' . $product['id'] . '&saved=1', $response->getHeaderLine('Location'));
@@ -606,6 +633,8 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('href="/shop/item?id=' . rawurlencode($product['code']) . '" target="_blank"', $edit); // 도구 막대의 "쇼핑몰 보기"
         self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
         self::assertStringContainsString('image_delete[]', $edit); self::assertStringContainsString($product['images'][0]['filename'], $edit);
+        self::assertSame((int) $seed['other']['id'], (int) $this->shop->products->get((int) $product['id'])['categories'][2]['id']);
+        self::assertMatchesRegularExpression('/name="extra_category_ids\[\]".*?<option value="' . (int) $seed['other']['id'] . '"[^>]* selected>/s', $edit);
         $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '0', 'name' => '수정됨', 'image_delete' => [(string) $product['images'][0]['id']]])));
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
         $product = $this->shop->products->get((int) $product['id']);

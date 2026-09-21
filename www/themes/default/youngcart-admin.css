@@ -112,7 +112,8 @@
 .yc-admin-page .table .row-actions .btn+.btn{margin-left:.25rem}
 .yc-admin-page .yc-list-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;padding:1rem 1.25rem;border-top:1px solid var(--yc-line)}
 .yc-admin-page .yc-list-actions p{font-size:13.5px;color:var(--yc-muted);margin:0}
-.yc-admin-page .yc-list-actions .row-actions{gap:.65rem}
+.yc-admin-page .yc-list-actions .row-actions{gap:.65rem;flex-wrap:wrap}
+.yc-admin-page .yc-list-category .select{max-width:16rem}
 .yc-admin-page .yc-copy-panel{border:1px solid var(--yc-line);border-radius:10px;padding:1rem 1.25rem;background:var(--yc-paper);font-size:14px;margin-top:1rem}
 .yc-admin-page .yc-copy-panel>summary{cursor:pointer}
 .yc-admin-page .yc-copy-form{align-items:flex-end;gap:1rem;margin-bottom:0}
@@ -134,6 +135,11 @@
 .yc-admin-page .yc-edit-form .fieldset:has(+.fieldset){margin-bottom:.2rem}
 .yc-admin-page .yc-edit-form .yc-fields{gap:0 1.25rem;grid-template-columns:repeat(3,minmax(0,1fr))}
 .yc-admin-page .yc-edit-form .yc-fields>.fieldset :is(input,select){width:100%}
+/* 추가 분류: 한 줄에 분류 선택 + 제거 단추. */
+.yc-admin-page .yc-category-rows{display:grid;gap:.5rem;margin-bottom:.6rem}
+.yc-admin-page .yc-category-row{display:flex;gap:.5rem;align-items:center}
+.yc-admin-page .yc-category-row .select{flex:1;max-width:28rem}
+.yc-admin-page .yc-edit-form .fieldset>[data-yc-add-category]{align-self:flex-start}
 /* 분류 코드·분류명처럼 짧은 값과 긴 값을 한 줄에: 넓은 칸은 두 열을 쓴다. */
 .yc-admin-page .yc-edit-form .yc-fields>.fieldset.yc-field-wide{grid-column:span 2}
 .yc-admin-page :is(.input,.select,.textarea){border-radius:8px;border-color:var(--field-border,var(--yc-line));background-color:var(--yc-paper);font-size:14px}

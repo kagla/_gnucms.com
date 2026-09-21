@@ -26,6 +26,7 @@ final class Products
     ];
     public const SEARCH_FIELDS = ['name', 'code', 'maker', 'brand', 'model', 'origin', 'seller_email'];
     public const SORTS = ['code', 'name', 'sort_order', 'active', 'sold_out', 'hit', 'price', 'list_price', 'point', 'stock'];
+    public const MAX_EXTRA_CATEGORIES = 20;
     private const MAX_RELATIONS = 50;
 
     public function __construct(private Store $store, private HtmlSanitizer $sanitizer, private ContentImageService $contentImages,
@@ -162,23 +163,31 @@ final class Products
         for ($n = 2; ; $n++) if (!in_array($base . '-' . $n, $taken, true)) return $base . '-' . $n;
     }
 
-    /** @return array<int,int> slot => category id */
+    /**
+     * 대표 분류(slot 1) + 추가 분류(slot 2…). 빈값·대표와 겹침·중복은 빼고, 없는 분류와 상한 초과는 거절한다.
+     *
+     * @return array<int,int> slot => category id
+     */
     private function categoryIds(array $input): array
     {
-        $ids = [1 => Input::optionalId($input['category_id'] ?? '') ?? throw DomainError::validation(['category_id' => '대표 분류를 선택해 주세요.'])];
-        foreach ([2 => 'category2_id', 3 => 'category3_id'] as $slot => $field) {
-            $id = Input::optionalId($input[$field] ?? '');
-            if ($id !== null) $ids[$slot] = $id;
+        $primary = Input::optionalId($input['category_id'] ?? '') ?? throw DomainError::validation(['category_id' => '대표 분류를 선택해 주세요.']);
+        if ($this->store->find('yc_categories', $primary) === null) throw DomainError::validation(['category_id' => '분류를 찾을 수 없습니다.']);
+        $ids = [1 => $primary];
+        $extras = [];
+        $chosen = 0;
+        foreach (is_array($input['extra_category_ids'] ?? null) ? $input['extra_category_ids'] : [] as $raw) {
+            if (!is_string($raw) && !is_int($raw)) continue;
+            $extra = Input::optionalId((string) $raw);
+            if ($extra === null) continue;
+            $chosen++;
+            if ($extra === $primary || in_array($extra, $extras, true)) continue;
+            $extras[] = $extra;
         }
-        foreach ($ids as $slot => $id) {
-            $field = $slot === 1 ? 'category_id' : 'category' . $slot . '_id';
-            if ($this->store->find('yc_categories', $id) === null) throw DomainError::validation([$field => '분류를 찾을 수 없습니다.']);
-        }
-        foreach ([2, 3] as $slot) {
-            $earlier = array_filter($ids, static fn (int $s): bool => $s < $slot, ARRAY_FILTER_USE_KEY);
-            if (isset($ids[$slot]) && in_array($ids[$slot], $earlier, true)) {
-                throw DomainError::validation(['category' . $slot . '_id' => '같은 분류를 두 번 지정할 수 없습니다.']);
-            }
+        // 고른 줄 수로 센다. 21줄을 똑같은 분류로 채워도 상한을 넘은 폼이다.
+        if ($chosen > self::MAX_EXTRA_CATEGORIES) throw DomainError::validation(['extra_category_ids' => '추가 분류는 ' . self::MAX_EXTRA_CATEGORIES . '개까지입니다.']);
+        foreach ($extras as $extra) {
+            if ($this->store->find('yc_categories', $extra) === null) throw DomainError::validation(['extra_category_ids' => '분류를 찾을 수 없습니다.']);
+            $ids[] = $extra; // 2, 3, …
         }
         return $ids;
     }
@@ -303,6 +312,47 @@ final class Products
     public function bulkDelete(array $ids): void
     {
         foreach ($ids as $id) $this->delete(Input::id($id));
+    }
+
+    /**
+     * 목록 일괄: 선택 상품을 분류에 넣는다. 이미 있으면 건너뛴다.
+     *
+     * @return array{changed:int, skipped:int}
+     */
+    public function addToCategory(array $ids, int $categoryId): array
+    {
+        if ($this->store->find('yc_categories', $categoryId) === null) throw DomainError::validation(['category' => '분류를 찾을 수 없습니다.']);
+        $changed = 0; $skipped = 0;
+        $this->store->transaction(function () use ($ids, $categoryId, &$changed, &$skipped): void {
+            foreach ($ids as $raw) {
+                $id = Input::id($raw);
+                $this->store->get('yc_products', $id);
+                if ($this->store->selectOne('SELECT 1 AS x FROM ' . $this->store->table('yc_product_categories') . ' WHERE product_id = ? AND category_id = ?', [$id, $categoryId]) !== null) { $skipped++; continue; }
+                $slot = (int) $this->store->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $this->store->table('yc_product_categories') . ' WHERE product_id = ?', [$id])['s'] + 1;
+                $this->store->insert('yc_product_categories', ['product_id' => $id, 'category_id' => $categoryId, 'slot' => max(2, $slot)]);
+                $changed++;
+            }
+        });
+        return ['changed' => $changed, 'skipped' => $skipped];
+    }
+
+    /**
+     * 목록 일괄: 선택 상품을 분류에서 뺀다. 대표 분류(slot 1)는 건드리지 않는다.
+     *
+     * @return array{changed:int, skipped:int}
+     */
+    public function removeFromCategory(array $ids, int $categoryId): array
+    {
+        $changed = 0; $skipped = 0;
+        $this->store->transaction(function () use ($ids, $categoryId, &$changed, &$skipped): void {
+            foreach ($ids as $raw) {
+                $id = Input::id($raw);
+                $this->store->get('yc_products', $id);
+                $deleted = $this->store->delete('yc_product_categories', 'product_id = ? AND category_id = ? AND slot <> 1', [$id, $categoryId]);
+                $deleted > 0 ? $changed++ : $skipped++;
+            }
+        });
+        return ['changed' => $changed, 'skipped' => $skipped];
     }
 
     public function list(array $filters, int $page, int $perPage = 20): array

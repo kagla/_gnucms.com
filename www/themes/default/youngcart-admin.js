@@ -17,6 +17,16 @@
     checkAll.addEventListener('change',function(){boxes.forEach(function(box){box.checked=checkAll.checked;});syncSelection();});
     boxes.forEach(function(box){box.addEventListener('change',syncSelection);});syncSelection();
   }
+  // 선택 상품 일괄 작업: 누른 단추가 동작을 정한다(삭제는 확인, 분류 넣기·빼기는 분류를 먼저 고르게 한다).
+  var selection=root.querySelector('[data-yc-selection-form]');
+  if(selection){
+    selection.addEventListener('submit',function(event){
+      // 분류 선택 상자는 폼 밖에 있고 form 속성으로 이어져 있다 — elements 로 찾는다.
+      var action=event.submitter&&event.submitter.value,category=selection.elements.category;
+      if(action==='delete'&&!confirm('선택한 상품을 삭제할까요? 이미지·옵션도 함께 지워집니다.')){event.preventDefault();return;}
+      if((action==='categorize'||action==='uncategorize')&&category&&!category.value){event.preventDefault();alert('분류를 먼저 고르세요.');}
+    });
+  }
   // Anchors and form submissions still work without this progressive enhancement.
   function reveal(target){
     for(var parent=target;parent&&parent!==root;parent=parent.parentElement){if(parent.tagName==='DETAILS'){parent.open=true;}}
@@ -40,7 +50,7 @@
     var saveStatus=editForm.querySelector('[data-yc-save-status]');
     function dirty(){if(saveStatus){saveStatus.textContent='저장하지 않은 변경사항이 있습니다.';saveStatus.dataset.dirty='true';}}
     editForm.addEventListener('input',dirty);editForm.addEventListener('change',dirty);
-    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra]')){dirty();}});
+    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra],[data-yc-add-category],[data-yc-remove-category]')){dirty();}});
     editForm.addEventListener('invalid',function(event){reveal(event.target);},true);
   });
   // Give existing compact fieldsets and tables unambiguous accessible input names.
@@ -87,6 +97,13 @@
     }
     var removeRelation=event.target.closest('[data-yc-remove-relation]');
     if(removeRelation){removeRelation.closest('li').remove();syncRelations();}
+    var addCategory=event.target.closest('[data-yc-add-category]');
+    if(addCategory){
+      var categoryRows=form.querySelector('[data-yc-categories]'),categoryTemplate=form.querySelector('template[data-yc-category-row]');
+      if(categoryRows&&categoryTemplate){categoryRows.appendChild(categoryTemplate.content.firstElementChild.cloneNode(true));categoryRows.lastElementChild.querySelector('select').focus();}
+    }
+    var removeCategory=event.target.closest('[data-yc-remove-category]');
+    if(removeCategory){removeCategory.closest('[data-yc-category-row-item]').remove();}
     var addExtra=event.target.closest('[data-yc-add-extra]');
     if(addExtra){
       var body=form.querySelector('[data-yc-extras] tbody'),rows=body.querySelectorAll('tr'),index=rows.length,template=rows[rows.length-1].cloneNode(true);
