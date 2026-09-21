@@ -36,8 +36,8 @@ final class Listing
         if (!isset(Settings::TYPE_LABELS[$key])) throw \GnuCms\Error\DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
         if (($block['source'] ?? 'auto') === 'category' && ($block['source_category_id'] ?? null) !== null) {
             $category = $this->store->find('yc_categories', (int) $block['source_category_id']);
-            // 고른 분류가 없어졌으면 자동 규칙으로 돌아간다.
-            if ($category !== null) return [...$this->categoryWhere($category, $this->visible()), self::DEFAULT_ORDER];
+            // 고른 분류가 없어졌거나 공개를 끈 분류면 자동 규칙으로 돌아간다 — 메인 블록이 그런 분류를 건너뛰는 것과 같은 규칙이다.
+            if ($category !== null && (int) $category['active'] === 1) return [...$this->categoryWhere($category, $this->visible()), self::DEFAULT_ORDER];
         }
         $auto = $this->settings->all()['auto'];
         $now = Clock::timestamp();

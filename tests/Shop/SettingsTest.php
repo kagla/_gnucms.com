@@ -112,7 +112,10 @@ final class SettingsTest extends ShopTestCase
         self::assertSame(['category', (int) $cat['id']], [$all['main']['best']['source'], $all['main']['best']['source_category_id']]);
         self::assertSame('auto', $all['main']['new']['source']);
         self::assertSame([['id' => (int) $sub['id'], 'columns' => 3, 'rows' => 1], ['id' => (int) $cat['id'], 'columns' => 4, 'rows' => 2]], $all['main']['categories']);
-        foreach ([['main_categories' => [['id' => '999999', 'columns' => '3', 'rows' => '1']]], ['main_categories' => array_fill(0, 11, ['id' => (string) $cat['id'], 'columns' => '3', 'rows' => '1'])],
+        // 11개 초과는 서로 다른 분류라야 한다 — 같은 분류가 겹치면 첫 줄만 남으므로 수가 늘지 않는다.
+        $many = [];
+        for ($n = 0; $n < 11; $n++) $many[] = ['id' => (string) $this->category('블록' . $n)['id'], 'columns' => '3', 'rows' => '1'];
+        foreach ([['main_categories' => [['id' => '999999', 'columns' => '3', 'rows' => '1']]], ['main_categories' => $many],
             ['auto_new_days' => '0'], ['main_best_source' => 'category', 'main_best_source_category_id' => '999999']] as $bad) {
             try { $this->shop->settings->save($this->settingsInput() + $bad); self::fail('거절해야 한다'); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
         }
@@ -128,6 +131,11 @@ final class SettingsTest extends ShopTestCase
         // 분류 블록의 id 가 아닌 값은 빈 줄처럼 건너뛴다.
         $this->shop->settings->save($this->settingsInput() + ['main_categories' => [['id' => 'abc', 'columns' => '3', 'rows' => '1'], ['id' => (string) $cat['id'], 'columns' => '3', 'rows' => '1']]]);
         self::assertSame([['id' => (int) $cat['id'], 'columns' => 3, 'rows' => 1]], $this->shop->settings->all()['main']['categories']);
+        // 같은 분류를 두 번 올리면 첫 줄만 남는다 — 같은 블록이 메인에 두 번 나오지 않게.
+        $this->shop->settings->save($this->settingsInput() + ['main_categories' => [['id' => (string) $cat['id'], 'columns' => '2', 'rows' => '1'],
+            ['id' => (string) $sub['id'], 'columns' => '3', 'rows' => '1'], ['id' => (string) $cat['id'], 'columns' => '5', 'rows' => '2']]]);
+        self::assertSame([['id' => (int) $cat['id'], 'columns' => 2, 'rows' => 1], ['id' => (int) $sub['id'], 'columns' => 3, 'rows' => 1]],
+            $this->shop->settings->all()['main']['categories'], '겹친 분류는 첫 줄만 남는다');
         // 옛 저장값: hit·recommend 는 사라지고 popular 의 크기는 남는다.
         $legacy = $all; $legacy['main'] = ['hit' => ['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 100, 'image_height' => 0], 'popular' => ['use' => true, 'columns' => 6, 'rows' => 1, 'image_width' => 150, 'image_height' => 0]];
         $this->app->db()->update('yc_settings', ['payload' => json_encode($legacy, JSON_UNESCAPED_UNICODE)], 'id = :id', ['id' => 'settings']);

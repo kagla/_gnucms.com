@@ -73,12 +73,15 @@ final class ListingTest extends ShopTestCase
         $this->shop->store->update('yc_products', (int) $sale['id'], ['hit' => 5]);
         $this->shop->store->update('yc_products', (int) $fresh['id'], ['hit' => 9]);
         // 판매: fresh 2개(결제 완료), old 5개(주문 접수 — 세지 않음), sale 1개(배송 완료)
-        $order = function (int $productId, int $qty, string $status) use ($now): void {
-            $id = $this->shop->store->insert('yc_orders', ['number' => 'N' . $productId . $status, 'checkout_key' => bin2hex(random_bytes(32)), 'owner_key' => bin2hex(random_bytes(32)),
-                'user_id' => null, 'status' => $status, 'created_at' => $now, 'updated_at' => $now] + $this->orderDefaults());
+        $order = function (int $productId, int $qty, string $status, int $daysAgo = 0) use ($now): void {
+            $at = $now - $daysAgo * 86400;
+            $id = $this->shop->store->insert('yc_orders', ['number' => 'N' . $productId . $status . $daysAgo, 'checkout_key' => bin2hex(random_bytes(32)), 'owner_key' => bin2hex(random_bytes(32)),
+                'user_id' => null, 'status' => $status, 'created_at' => $at, 'updated_at' => $at] + $this->orderDefaults());
             $this->shop->store->insert('yc_order_items', ['order_id' => $id, 'product_id' => $productId, 'option_id' => null, 'quantity' => $qty] + $this->orderItemDefaults());
         };
         $order((int) $fresh['id'], 2, 'paid'); $order((int) $old['id'], 5, 'pending'); $order((int) $sale['id'], 1, 'completed');
+        // 옛것은 기간(기본 30일) 밖의 결제 주문과 취소된 주문뿐이라 베스트에 들어오지 않는다.
+        $order((int) $old['id'], 9, 'paid', 40); $order((int) $old['id'], 7, 'cancelled');
         $codes = fn (array $r): array => array_column($r['items'], 'code');
         self::assertSame(['S', 'F'], $codes($this->shop->listing->collection('new', '', '', 1)));      // 등록 내림차순, 옛것 제외
         self::assertSame(['F', 'S'], $codes($this->shop->listing->collection('best', '', '', 1)));     // 2개 > 1개, 접수 주문 제외
@@ -93,6 +96,10 @@ final class ListingTest extends ShopTestCase
         $settings = $this->shop->settings->all(); $settings['main']['best'] = ['source' => 'category', 'source_category_id' => (int) $event['id']] + $settings['main']['best'];
         $this->saveSettingsRow($settings);
         self::assertSame(['O'], $codes($this->shop->listing->collection('best', '', '', 1)));
+        // 공개를 끈 분류는 없어진 것과 같이 본다 — 메인 블록이 그런 분류를 건너뛰는 것과 맞춘다.
+        $this->shop->store->update('yc_categories', (int) $event['id'], ['active' => 0]);
+        self::assertSame(['F', 'S'], $codes($this->shop->listing->collection('best', '', '', 1)), '공개를 끈 분류도 자동 규칙으로');
+        $this->shop->store->update('yc_categories', (int) $event['id'], ['active' => 1]);
         $this->shop->products->removeFromCategory([(string) $old['id']], (int) $event['id']);
         $this->shop->categories->delete((int) $event['id']);
         self::assertSame(['F', 'S'], $codes($this->shop->listing->collection('best', '', '', 1)), '분류가 없어지면 자동 규칙으로');

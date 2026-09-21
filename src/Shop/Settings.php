@@ -95,10 +95,13 @@ final class Settings
                 'image_height' => $int('main_' . $type . '_image_height', 0, 2000)];
         }
         $settings['main']['categories'] = [];
+        $seen = [];
         foreach (is_array($input['main_categories'] ?? null) ? array_values($input['main_categories']) : [] as $row) {
             if (!is_array($row)) continue;
             $id = Input::filterId($row['id'] ?? '');
             if ($id === null) continue;                       // 빈 줄(과 id 가 아닌 값)은 건너뛴다
+            if (isset($seen[$id])) continue;                  // 같은 분류를 두 번 올리면 첫 줄만 남긴다
+            $seen[$id] = true;
             if ($this->store->find('yc_categories', $id) === null) { $errors['main_categories'] = '없는 분류가 있습니다.'; continue; }
             $settings['main']['categories'][] = ['id' => $id, 'columns' => Input::int($row['columns'] ?? '', 'main_categories', 1, 12, 4),
                 'rows' => Input::int($row['rows'] ?? '', 'main_categories', 1, 50, 1)];

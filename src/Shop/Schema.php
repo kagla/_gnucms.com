@@ -160,7 +160,7 @@ final class Schema
         foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $column) self::dropColumn($db, 'yc_products', $column);
     }
 
-    /** 지난 이전이 적어 둔 유형별 분류 id. 설정이 없거나 깨졌으면 빈 배열이다. */
+    /** 지난 이전이 적어 둔 묶음별 분류 id. 설정이 없거나 깨졌으면 빈 배열이다. */
     private static function recordedTypes(Connection $db): array
     {
         $row = $db->selectOne('SELECT payload FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'");
