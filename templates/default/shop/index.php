@@ -25,16 +25,17 @@
   <?php if ($menu !== []): ?><section class="yc-category-section" aria-labelledby="yc-categories-title"><div class="yc-section-heading"><h2 id="yc-categories-title">무엇을 찾으세요?</h2><span class="muted">카테고리별로 편하게 둘러보세요</span></div>
     <nav class="yc-category-shortcuts" aria-label="인기 분류 바로가기"><?php foreach ($menu as $index => $category): ?><a href="<?= $this->e($url) ?>/c/<?= $this->e(rawurlencode($category['slug'])) ?>"><span class="yc-category-icon" data-tone="<?= $index % 4 ?>" aria-hidden="true"><?= $this->icon(['grid', 'gift', 'home', 'star'][$index % 4], 26) ?></span><strong><?= $this->e($category['name']) ?></strong></a><?php endforeach ?></nav>
   </section><?php endif ?>
-  <?php foreach ($blocks as $type => $items): if ($type === 'categories') continue; ?>
+  <?php /* 상품이 없는 블록은 제목과 "등록된 상품이 없습니다" 만 남으므로 통째로 건너뛴다. */ ?>
+  <?php foreach ($blocks as $type => $items): if ($type === 'categories' || $items === []) continue; ?>
     <section class="yc-block">
       <div class="yc-section-heading"><div><p class="yc-kicker"><?= $this->e($captions[$type][0]) ?></p><h2 class="yc-block-title"><?= $this->e($type_labels[$type]) ?></h2><p class="yc-block-description"><?= $this->e($captions[$type][1]) ?></p></div><a class="yc-more" href="<?= $this->e($url) ?>/type?t=<?= $this->e($type) ?>">전체보기 <?= $this->icon('chevron-right', 17) ?></a></div>
       <?php $this->insert('_grid', ['items' => $items, 'columns' => $settings['main'][$type]['columns'], 'size' => 'main']) ?>
     </section>
   <?php endforeach ?>
-  <?php foreach ($blocks['categories'] ?? [] as $block): ?>
+  <?php foreach ($blocks['categories'] ?? [] as $block): if ($block['items'] === []) continue; ?>
     <section class="yc-block">
       <div class="yc-section-heading"><div><h2 class="yc-block-title"><?= $this->e($block['category']['name']) ?></h2></div><a class="yc-more" href="<?= $this->e($url) ?>/c/<?= $this->e(rawurlencode($block['category']['slug'])) ?>">전체보기 <?= $this->icon('chevron-right', 17) ?></a></div>
-      <?php $this->insert('_grid', ['items' => $block['items'], 'columns' => $block['category']['list_columns'], 'size' => 'list']) ?>
+      <?php $this->insert('_grid', ['items' => $block['items'], 'columns' => $block['columns'], 'size' => 'list']) ?>
     </section>
   <?php endforeach ?>
 </div>

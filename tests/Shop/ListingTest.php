@@ -104,18 +104,26 @@ final class ListingTest extends ShopTestCase
     public function testMainBlocksIncludeChosenCategories(array $config): void
     {
         $this->setupShop($config);
-        $cat = $this->category('의류'); $sub = $this->category('셔츠', (int) $cat['id']);
+        $cat = $this->category('의류'); $sub = $this->category('셔츠', (int) $cat['id']); $off = $this->category('내린 분류', null, ['active' => '0']);
         $a = $this->product(['category_id' => (string) $sub['id'], 'code' => 'A']); $b = $this->product(['category_id' => (string) $cat['id'], 'code' => 'B', 'price' => '50', 'list_price' => '100']);
+        $c = $this->product(['category_id' => (string) $sub['id'], 'code' => 'C']);
         $settings = $this->shop->settings->all();
         $settings['main']['popular']['use'] = false; $settings['main']['best']['use'] = false;
-        $settings['main']['categories'] = [['id' => (int) $cat['id'], 'columns' => 4, 'rows' => 1], ['id' => 999999, 'columns' => 4, 'rows' => 1]];
+        $settings['main']['categories'] = [['id' => (int) $cat['id'], 'columns' => 4, 'rows' => 1], ['id' => 999999, 'columns' => 4, 'rows' => 1],
+            ['id' => (int) $off['id'], 'columns' => 4, 'rows' => 1], ['id' => (int) $sub['id'], 'columns' => 1, 'rows' => 1]];
         $this->saveSettingsRow($settings);
         $blocks = $this->shop->listing->main();
         self::assertSame(['new', 'discount', 'categories'], array_keys($blocks));
         self::assertSame(['B'], array_column($blocks['discount'], 'code'));
-        self::assertCount(1, $blocks['categories'], '없어진 분류는 건너뛴다');
+        self::assertCount(2, $blocks['categories'], '없어진 분류도 공개를 끈 분류도 건너뛴다');
         self::assertSame('의류', $blocks['categories'][0]['category']['name']);
-        self::assertSame(['B', 'A'], array_column($blocks['categories'][0]['items'], 'code'), '하위 분류 상품까지, sort_order·id 역순');
+        self::assertSame(['C', 'B', 'A'], array_column($blocks['categories'][0]['items'], 'code'), '하위 분류 상품까지, sort_order·id 역순');
+        // 블록의 열은 분류의 기본 열(3)이 아니라 관리자가 블록에 정한 값이고, 열 × 행이 상품 수를 제한한다.
+        self::assertSame(4, $blocks['categories'][0]['columns']);
+        self::assertSame(1, $blocks['categories'][0]['rows']);
+        self::assertSame('셔츠', $blocks['categories'][1]['category']['name']);
+        self::assertSame(1, $blocks['categories'][1]['columns']);
+        self::assertSame(['C'], array_column($blocks['categories'][1]['items'], 'code'), '열 × 행이 상품 수를 제한한다');
     }
 
     /** 주문 표의 NOT NULL 칸을 빈값으로 채운다 — 판매량 집계만 보는 테스트용. */

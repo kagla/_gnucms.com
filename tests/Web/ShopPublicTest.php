@@ -170,7 +170,10 @@ final class ShopPublicTest extends WebTestCase
         $this->setupShop($config);
         $seed = $this->seed();
         $home = $this->body($this->get($this->app, '/shop'));
-        self::assertStringContainsString('신상품', $home);
+        self::assertStringContainsString('<h2 class="yc-block-title">신상품</h2>', $home);
+        // 팔린 상품이 없는 베스트는 제목과 "등록된 상품이 없습니다" 만 남으므로 통째로 빠진다(상단 메뉴에는 그대로 있다).
+        self::assertStringNotContainsString('<h2 class="yc-block-title">베스트</h2>', $home, '상품이 없는 자동 묶음은 보이지 않는다');
+        self::assertStringNotContainsString('등록된 상품이 없습니다', $home);
         self::assertStringContainsString('href="/shop/type?t=best"', $home, '상단 메뉴는 켜진 묶음만 보인다');
         self::assertStringNotContainsString('type?t=popular', $home, '인기상품은 기본으로 꺼져 있다');
         self::assertStringContainsString('파란 셔츠', $home);
@@ -231,10 +234,13 @@ final class ShopPublicTest extends WebTestCase
         self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'recommend'])->getStatusCode(), '기록이 없는 유형은 404');
         // 메인 분류 블록: 고른 분류의 이름과 분류 주소가 메인에 놓인다.
         $settings = $this->shop->settings->all();
-        $settings['main']['categories'] = [['id' => (int) $seed['top']['id'], 'columns' => 4, 'rows' => 1]];
+        $empty = $this->shop->categories->get($this->shop->categories->save(['parent_id' => '', 'name' => '빈 분류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $settings['main']['categories'] = [['id' => (int) $seed['top']['id'], 'columns' => 2, 'rows' => 1], ['id' => (int) $empty['id'], 'columns' => 4, 'rows' => 1]];
         $this->saveSettings($settings);
         $withBlock = $this->body($this->get($this->app, '/shop'));
         self::assertStringContainsString('<h2 class="yc-block-title">의류</h2>', $withBlock);
+        self::assertStringContainsString('style="--yc-columns: 2"', $withBlock, '분류의 기본 열(1)이 아니라 블록에 정한 열로 늘어놓는다');
+        self::assertStringNotContainsString('<h2 class="yc-block-title">빈 분류</h2>', $withBlock, '상품이 없는 분류 블록도 보이지 않는다');
         self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98">전체보기', $withBlock);
         $search = $this->body($this->get($this->app, '/shop/search', ['q' => '셔츠']));
         self::assertStringContainsString('2개', $search);

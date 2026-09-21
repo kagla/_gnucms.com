@@ -104,7 +104,8 @@ final class Listing
             // 없어졌거나 공개를 끈 분류는 조용히 건너뛴다.
             if ($category === null || (int) $category['active'] !== 1) continue;
             [$where, $params] = $this->categoryWhere($category, $this->visible());
-            $blocks['categories'][] = ['category' => $category,
+            // 열·행은 상품 수뿐 아니라 화면의 그리드 폭도 정한다 — 분류의 기본 열이 아니라 이 값을 넘긴다.
+            $blocks['categories'][] = ['category' => $category, 'columns' => max(1, (int) $entry['columns']), 'rows' => max(1, (int) $entry['rows']),
                 'items' => $this->paginate($where, $params, self::DEFAULT_ORDER, 1, (int) $entry['columns'], (int) $entry['rows'])['items']];
         }
         return $blocks;
