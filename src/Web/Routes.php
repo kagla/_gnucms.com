@@ -211,6 +211,9 @@ final class Routes
         // 파일 이름 뒤의 -thumb / -view 는 줄여서 내보내는 크기다 (ContentImageService::VARIANTS).
         $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'showOwned'])->setName('editor.owned_image');
+        // 소유자 폴더(categories/10, products/123, 첫 저장 전 tmp/<키>). 모양은 ContentImageService::assertKey() 와 같다.
+        $slim->get('/media/editor/{scope:[a-z]{1,20}}/{owner:[1-9][0-9]{0,18}|[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
+            [$cmsImages, 'showScoped'])->setName('editor.scoped_image');
         $slim->get('/media/editor/{year:[0-9]+}/{month:[0-9]+}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'show'])->setName('editor.image');
         $slim->get('/page/{slug:[a-z0-9][a-z0-9_-]*}', static function (

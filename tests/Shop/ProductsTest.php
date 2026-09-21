@@ -168,4 +168,27 @@ final class ProductsTest extends ShopTestCase
         $page = $this->shop->products->list([], 2, 2);
         self::assertSame(['A1'], array_column($page['items'], 'code')); self::assertSame(2, $page['total_pages']); self::assertSame(3, $page['total']);
     }
+
+    /** 상세 설명의 편집기 사진은 products/<id> 폴더에 둔다. 첫 저장 전 tmp 폴더의 사진은 저장하면서 옮기고, 본문에서 빠지면 지우며, 상품을 지우면 폴더째 없앤다. */
+    #[DataProvider('connectionProvider')]
+    public function testDescriptionImagesLiveInTheProductFolder(array $config): void
+    {
+        $this->setupShop($config);
+        $category = $this->category();
+        $tmp = 'tmp/' . str_repeat('ab', 16);
+        $tmpDir = $this->root . '/editor/' . $tmp;
+        mkdir($tmpDir, 0700, true);
+        $used = str_repeat('1', 32) . '.png';
+        file_put_contents($tmpDir . '/' . $used, 'x');
+        $id = $this->shop->products->save($this->fullInput((int) $category['id'], ['image_key' => $tmp, 'description' => '<p><img src="/media/editor/' . $tmp . '/' . $used . '" alt=""></p>']), []);
+        $dir = $this->root . '/editor/products/' . $id;
+        self::assertStringContainsString('/media/editor/products/' . $id . '/' . $used, $this->shop->products->get($id)['description']);
+        self::assertFileExists($dir . '/' . $used); self::assertDirectoryDoesNotExist($tmpDir);
+        $version = (string) $this->shop->products->get($id)['version'];
+        $this->shop->products->save($this->fullInput((int) $category['id'], ['image_key' => 'tmp/' . str_repeat('cd', 16), 'description' => '<p>없음</p>', 'version' => $version]), [], $id);
+        self::assertDirectoryDoesNotExist($dir);
+        mkdir($dir, 0700, true); file_put_contents($dir . '/' . $used, 'x');
+        $this->shop->products->delete($id);
+        self::assertDirectoryDoesNotExist($dir);
+    }
 }

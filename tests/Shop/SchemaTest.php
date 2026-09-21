@@ -61,15 +61,15 @@ final class SchemaTest extends ShopTestCase
         self::assertSame(['', '', 0, 0, 0, ''], [$row['payment_method'], $row['payment_id'], (int) $row['pay_by'], (int) $row['paid_at'], (int) $row['refunded_amount'], $row['payment_detail']]);
     }
 
-    /** 28판: 분류마다 편집기 사진을 모아 두는 image_key 칸. 그 전에 만든 yc_categories 에는 migrate() 가 넣는다. */
+    /** 28판 초안에서 잠깐 있었던 yc_categories.image_key 는 지운다 — 편집기 사진은 categories/<id> 폴더로 구분한다. */
     #[DataProvider('connectionProvider')]
-    public function testMigrateAddsTheImageKeyColumnToAnOlderCategoriesTable(array $config): void
+    public function testMigrateDropsTheShortLivedImageKeyColumnFromCategories(array $config): void
     {
         $this->setupShop($config);
         $db = $this->app->db();
-        $db->execute('ALTER TABLE ' . $db->table('yc_categories') . ' DROP COLUMN image_key');
-        Schema::migrate($db);
-        self::assertSame('', $this->category('의류')['image_key']);
+        $db->execute('ALTER TABLE ' . $db->table('yc_categories') . ' ADD COLUMN image_key VARCHAR(32) NOT NULL DEFAULT \'\'');
+        Schema::migrate($db); Schema::migrate($db);
+        self::assertArrayNotHasKey('image_key', $this->category('의류'));
     }
 
     private function assertIndexesExist(): void

@@ -49,14 +49,12 @@ final class Categories
             'extra' => Input::extra($input),
             'updated_at' => Clock::timestamp(),
         ];
-        // 목록 위·아래 HTML 의 편집기 사진 폴더 키. 폼이 올바른 키를 보내면 그것을, 아니면 저장된 키를 지킨다.
-        $imageKey = is_string($input['image_key'] ?? null) && preg_match('/^[a-f0-9]{32}$/D', $input['image_key']) ? $input['image_key'] : null;
-        $savedKey = '';
-        $saved = $this->store->transaction(function () use ($input, $id, $row, $imageKey, &$savedKey): int {
+        // 목록 위·아래 HTML 의 편집기 사진은 categories/<id> 폴더에 둔다. 첫 저장 전에는 폼이 준 tmp/<키> 에 모였다가 저장하면서 옮긴다.
+        $tmpKey = is_string($input['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $input['image_key']) ? $input['image_key'] : null;
+        $saved = $this->store->transaction(function () use ($input, $id, $row): int {
             if ($id !== null) {
                 $existing = $this->store->get('yc_categories', $id);
-                $savedKey = $imageKey ?? (string) ($existing['image_key'] ?? '');
-                $this->store->update('yc_categories', $id, $row + ['image_key' => $savedKey]);
+                $this->store->update('yc_categories', $id, $row);
                 if (($input['apply_children'] ?? '') === '1') {
                     $this->store->db->update('yc_categories', array_intersect_key($row, array_flip(['active', 'no_coupon', 'list_columns', 'list_rows', 'image_width', 'image_height', 'updated_at'])),
                         'code LIKE :prefix AND id <> :id', ['prefix' => $existing['code'] . '%', 'id' => $id]);
@@ -70,13 +68,18 @@ final class Categories
                 $parent = $this->byCode(substr($code, 0, -2)) ?? throw DomainError::validation(['code' => '상위 분류 코드가 없습니다.']);
             }
             if ($this->byCode($code) !== null) throw DomainError::validation(['code' => '이미 사용 중인 분류 코드입니다.']);
-            $savedKey = $imageKey ?? '';
-            $row += ['code' => $code, 'parent_id' => $parent === null ? null : (int) $parent['id'], 'depth' => intdiv(strlen($code), 2), 'created_at' => Clock::timestamp(),
-                'image_key' => $savedKey];
+            $row += ['code' => $code, 'parent_id' => $parent === null ? null : (int) $parent['id'], 'depth' => intdiv(strlen($code), 2), 'created_at' => Clock::timestamp()];
             return $this->store->insert('yc_categories', $row);
         });
+        $folder = 'categories/' . $saved;
+        if ($id === null && $tmpKey !== null) {
+            $this->contentImages->move($tmpKey, $folder);
+            $row['head_html'] = ContentImageService::relocatedHtml($tmpKey, $folder, $row['head_html']);
+            $row['tail_html'] = ContentImageService::relocatedHtml($tmpKey, $folder, $row['tail_html']);
+            $this->store->update('yc_categories', $saved, ['head_html' => $row['head_html'], 'tail_html' => $row['tail_html']]);
+        }
         // 본문에서 빠진 사진은 지운다(폴더가 비면 폴더도).
-        if ($savedKey !== '') $this->contentImages->sync($savedKey, $row['head_html'] . "\n" . $row['tail_html']);
+        $this->contentImages->sync($folder, $row['head_html'] . "\n" . $row['tail_html']);
         return $saved;
     }
 
@@ -146,7 +149,7 @@ final class Categories
         $count = (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_product_categories') . ' WHERE category_id = ?', [$id])['c'];
         if ($count > 0) throw DomainError::validation(['category' => $count . '개 상품이 연결되어 있어 삭제할 수 없습니다. 상품의 분류를 먼저 옮겨 주세요.']);
         $this->store->delete('yc_categories', 'id = ?', [(int) $category['id']]);
-        if (($category['image_key'] ?? '') !== '') $this->contentImages->deleteFolder((string) $category['image_key']);
+        $this->contentImages->deleteFolder('categories/' . (int) $category['id']);
     }
 
     /** @param array<int, array<string, mixed>> $rows 한 행이라도 틀리면 전체를 취소한다. */

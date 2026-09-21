@@ -47,29 +47,27 @@ final class CategoriesTest extends ShopTestCase
         self::assertStringStartsWith('의류 > ', $this->shop->categories->options()[(int) $child['id']]);
     }
 
-    /** 목록 위·아래 HTML 의 편집기 사진은 분류마다 하나인 이미지 키 아래에 두고, 저장 때 본문에 없는 파일은 지우며 분류를 지우면 폴더째 없앤다. */
+    /** 목록 위·아래 HTML 의 편집기 사진은 categories/<id> 폴더에 둔다. 첫 저장 전 tmp 폴더의 사진은 저장하면서 옮기고 주소를 바꾸며, 본문에서 빠진 사진은 지우고, 분류를 지우면 폴더째 없앤다. */
     #[DataProvider('connectionProvider')]
-    public function testImageKeyIsKeptAndEditorImagesFollowTheHtml(array $config): void
+    public function testEditorImagesLiveInTheCategoryFolder(array $config): void
     {
         $this->setupShop($config);
-        $key = str_repeat('ab', 16);
-        $dir = $this->root . '/editor/' . $key;
-        mkdir($dir, 0700, true);
+        $tmp = 'tmp/' . str_repeat('ab', 16);
+        $tmpDir = $this->root . '/editor/' . $tmp;
+        mkdir($tmpDir, 0700, true);
         $used = str_repeat('1', 32) . '.png'; $stale = str_repeat('2', 32) . '.png';
-        file_put_contents($dir . '/' . $used, 'x'); file_put_contents($dir . '/' . $stale, 'x');
+        file_put_contents($tmpDir . '/' . $used, 'x'); file_put_contents($tmpDir . '/' . $stale, 'x');
         $form = ['name' => '의류', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'active' => '1'];
-        $id = $this->shop->categories->save($form + ['code' => '10', 'image_key' => $key, 'head_html' => '<p><img src="/media/editor/' . $key . '/' . $used . '" alt=""></p>']);
-        self::assertSame($key, $this->shop->categories->get($id)['image_key']);
+        $id = $this->shop->categories->save($form + ['code' => '10', 'image_key' => $tmp,
+            'head_html' => '<p><img src="/media/editor/' . $tmp . '/' . $used . '" alt=""></p>', 'tail_html' => '<p><img src="/media/editor/' . $tmp . '/' . $stale . '" alt=""></p>']);
+        $dir = $this->root . '/editor/categories/' . $id;
+        $row = $this->shop->categories->get($id);
+        self::assertStringContainsString('/media/editor/categories/' . $id . '/' . $used, $row['head_html']);
+        self::assertStringContainsString('/media/editor/categories/' . $id . '/' . $stale, $row['tail_html']);
+        self::assertFileExists($dir . '/' . $used); self::assertFileExists($dir . '/' . $stale); self::assertDirectoryDoesNotExist($tmpDir);
+        // 수정 때 폼이 보내는 키는 무시하고 분류 폴더를 쓰며, 본문에서 빠진 사진은 지운다.
+        $this->shop->categories->save($form + ['image_key' => 'tmp/' . str_repeat('cd', 16), 'head_html' => $row['head_html'], 'tail_html' => ''], $id);
         self::assertFileExists($dir . '/' . $used); self::assertFileDoesNotExist($dir . '/' . $stale);
-        // 폼이 키를 안 보내거나 엉뚱한 값을 보내도 저장된 키는 그대로이고, 본문에서 빠진 사진은 지운다.
-        $this->shop->categories->save($form + ['image_key' => 'nope', 'head_html' => ''], $id);
-        self::assertSame($key, $this->shop->categories->get($id)['image_key']);
-        self::assertDirectoryDoesNotExist($dir);
-        // 새 분류에 잘못된 키는 빈 값이다.
-        $other = $this->shop->categories->save($form + ['code' => '20', 'image_key' => 'zz']);
-        self::assertSame('', $this->shop->categories->get($other)['image_key']);
-        // 분류를 지우면 폴더째 없앤다.
-        mkdir($dir, 0700, true); file_put_contents($dir . '/' . $used, 'x');
         $this->shop->categories->delete($id);
         self::assertDirectoryDoesNotExist($dir);
     }

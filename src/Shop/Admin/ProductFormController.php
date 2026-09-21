@@ -106,7 +106,9 @@ final class ProductFormController extends AdminBase
         $relationIds = array_filter(array_map('intval', explode(',', (string) ($values['relations'] ?? ''))));
         $data['relations'] = [];
         foreach ($relationIds as $relatedId) { $row = $this->service->products->find($relatedId); if ($row !== null) $data['relations'][] = ['id' => (int) $row['id'], 'code' => $row['code'], 'name' => $row['name']]; }
-        if (!preg_match('/^[a-f0-9]{32}$/D', (string) ($values['image_key'] ?? ''))) $data['values']['image_key'] = bin2hex(random_bytes(16));
+        // 편집기 사진 폴더 키. 저장된 상품은 제 폴더(products/<id>), 새 상품은 저장 때 옮길 임시 폴더다(입력 오류로 다시 그릴 때는 폼이 보낸 것을 지킨다).
+        $data['values']['image_key'] = $product !== null ? 'products/' . (int) $product['id']
+            : (is_string($values['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $values['image_key']) ? $values['image_key'] : 'tmp/' . bin2hex(random_bytes(16)));
         return $this->render($request, $response, 'product_form', $data);
     }
 }

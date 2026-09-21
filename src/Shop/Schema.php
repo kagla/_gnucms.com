@@ -19,9 +19,6 @@ final class Schema
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
         'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history'];
 
-    /** 28판: 분류의 편집기 사진 폴더 키. 새 설치는 CREATE 문에, 그 전에 만든 yc_categories 에는 addColumn() 이 넣는다. */
-    public const CATEGORY_COLUMNS = ['image_key' => 'VARCHAR(32) NOT NULL DEFAULT \'\''];
-
     /** 결제 칸. 새 설치는 CREATE 문에, 결제 이전에 만든 yc_orders 에는 addColumn() 이 넣는다. */
     public const PAYMENT_COLUMNS = [
         'payment_method' => 'VARCHAR(20) NOT NULL DEFAULT \'\'',
@@ -58,7 +55,7 @@ final class Schema
             'yc_settings' => 'id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL',
             'yc_categories' => 'id {AUTO_PK}, code VARCHAR(10)' . $bin . ' NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
                 name VARCHAR(100) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1,
-                no_coupon SMALLINT NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, image_key VARCHAR(32) NOT NULL DEFAULT \'\',
+                no_coupon SMALLINT NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL,
                 list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL, image_width INTEGER NOT NULL, image_height INTEGER NOT NULL,
                 extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
             'yc_products' => 'id {AUTO_PK}, code VARCHAR(20)' . $bin . ' NOT NULL UNIQUE, slug VARCHAR(200)' . $bin . ' NOT NULL UNIQUE, category_id BIGINT NOT NULL,
@@ -96,7 +93,8 @@ final class Schema
             $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
         }
         foreach (self::PAYMENT_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
-        foreach (self::CATEGORY_COLUMNS as $column => $definition) self::addColumn($db, 'yc_categories', $column, $definition);
+        // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
+        self::dropColumn($db, 'yc_categories', 'image_key');
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
             'yc_prod_category' => ['yc_products', 'category_id'], 'yc_prod_name' => ['yc_products', 'name'],
             'yc_prod_order' => ['yc_products', 'sort_order'], 'yc_prod_updated' => ['yc_products', 'updated_at'],
@@ -124,6 +122,17 @@ final class Schema
         $parts = [];
         foreach (self::PAYMENT_COLUMNS as $column => $definition) $parts[] = $column . ' ' . $definition;
         return implode(', ', $parts);
+    }
+
+    /** 기존 표의 칸을 지운다. 없으면 아무것도 하지 않는다. 이름은 이 파일의 상수로만 들어온다. */
+    private static function dropColumn(Connection $db, string $table, string $column): void
+    {
+        try {
+            $db->selectOne('SELECT ' . $column . ' FROM ' . $db->table($table) . ' LIMIT 1');
+        } catch (DomainError) {
+            return;
+        }
+        $db->execute('ALTER TABLE ' . $db->table($table) . ' DROP COLUMN ' . $column);
     }
 
     /** 기존 표에 칸을 더한다. 이미 있으면 아무것도 하지 않는다 — 코어 Schema::addColumnIfMissing() 과 같은 방식. */

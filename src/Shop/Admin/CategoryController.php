@@ -54,7 +54,7 @@ final class CategoryController extends AdminBase
         $parent = is_string($input['parent'] ?? null) && preg_match('/^[0-9a-z]{2,10}$/D', $input['parent']) ? $input['parent'] : null;
         $block = $this->service->settings->block('category');
         return ['code' => (string) $this->service->categories->suggestCode($parent), 'name' => '', 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0',
-            'head_html' => '', 'tail_html' => '', 'image_key' => '', 'list_columns' => (string) $block['columns'], 'list_rows' => (string) $block['rows'],
+            'head_html' => '', 'tail_html' => '', 'list_columns' => (string) $block['columns'], 'list_rows' => (string) $block['rows'],
             'image_width' => (string) $block['image_width'], 'image_height' => (string) $block['image_height'], 'extra' => []];
     }
 
@@ -66,8 +66,9 @@ final class CategoryController extends AdminBase
 
     private function form(ServerRequestInterface $request, ResponseInterface $response, array $data, array $values, ?int $id): ResponseInterface
     {
-        // 편집기 사진 폴더 키. 아직 없는 분류(모듈 시절 것 포함)는 여기서 만들어 저장 때 굳힌다.
-        if (!preg_match('/^[a-f0-9]{32}$/D', (string) ($values['image_key'] ?? ''))) $values['image_key'] = bin2hex(random_bytes(16));
+        // 편집기 사진 폴더 키. 저장된 분류는 제 폴더(categories/<id>), 새 분류는 저장 때 옮길 임시 폴더다(입력 오류로 다시 그릴 때는 폼이 보낸 것을 지킨다).
+        $values['image_key'] = $id !== null ? 'categories/' . $id
+            : (is_string($values['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $values['image_key']) ? $values['image_key'] : 'tmp/' . bin2hex(random_bytes(16)));
         $data['values'] = $values;
         $data['id'] = $id;
         $data['extra'] = [];

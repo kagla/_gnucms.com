@@ -49,7 +49,8 @@ final class Products
         foreach (is_array($input['image_delete'] ?? null) ? $input['image_delete'] : [] as $value) if ($value !== '') $deleteIds[] = Input::id($value, 'image_delete');
         $orderIds = [];
         foreach (array_filter(explode(',', is_string($input['image_order'] ?? null) ? $input['image_order'] : '')) as $value) $orderIds[] = Input::id(trim($value), 'image_order');
-        $imageKey = is_string($input['image_key'] ?? null) && preg_match('/^[a-f0-9]{32}$/D', $input['image_key']) ? $input['image_key'] : null;
+        // 상세 설명의 편집기 사진은 products/<id> 폴더에 둔다. 첫 저장 전에는 폼이 준 tmp/<키> 에 모였다가 저장하면서 옮긴다.
+        $tmpKey = is_string($input['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $input['image_key']) ? $input['image_key'] : null;
         $version = $existing === null ? 0 : Input::int($input['version'] ?? '', 'version', 0, PHP_INT_MAX, -1);
         $saved = [];
         $removed = [];
@@ -97,7 +98,13 @@ final class Products
             throw $e;
         }
         foreach ($removed as [$pid, $name]) $this->images->delete($pid, $name);
-        if ($imageKey !== null) $this->contentImages->sync($imageKey, $row['description']);
+        $folder = 'products/' . $productId;
+        if ($existing === null && $tmpKey !== null) {
+            $this->contentImages->move($tmpKey, $folder);
+            $row['description'] = ContentImageService::relocatedHtml($tmpKey, $folder, $row['description']);
+            $this->store->update('yc_products', $productId, ['description' => $row['description']]);
+        }
+        $this->contentImages->sync($folder, $row['description']);
         $this->applyScope($input, $row, $productId);
         return $productId;
     }
@@ -290,6 +297,7 @@ final class Products
             $this->store->delete('yc_products', 'id = ?', [$id]);
         });
         $this->images->deleteAll($id);
+        $this->contentImages->deleteFolder('products/' . $id);
     }
 
     public function bulkDelete(array $ids): void

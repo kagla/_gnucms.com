@@ -32,6 +32,7 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
   <input type="hidden" name="action" value="save" data-yc-action>
   <?php if ($id !== null): ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="version" value="<?= $this->e($v('version')) ?>"><?php endif ?>
   <input type="hidden" name="image_key" value="<?= $this->e($v('image_key')) ?>">
+  <input type="hidden" name="uploaded_images" value="" data-uploaded-images>
   <section class="card" id="section-category"><div class="card-body"><h2 class="card-title">분류</h2>
     <div class="yc-fields"><?php $catSelect('category_id', true); $catSelect('category2_id', false); $catSelect('category3_id', false); ?></div>
   </div></section>

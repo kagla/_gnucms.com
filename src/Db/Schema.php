@@ -310,7 +310,7 @@ final class Schema
         }
     }
 
-    /** 27판: 쇼핑몰 표, 28판: 분류의 편집기 사진 키(yc_categories.image_key). 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
+    /** 27판: 쇼핑몰 표, 28판: 편집기 사진을 소유자 폴더(categories/<id>, products/<id>)로 구분하고, 초안에 잠깐 있던 yc_categories.image_key 를 지운다. 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
     public function migrateShop(): void
     {
         \GnuCms\Shop\Schema::migrate($this->db);

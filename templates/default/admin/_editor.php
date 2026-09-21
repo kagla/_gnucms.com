@@ -19,7 +19,8 @@ $editor_discard_url = $editor_images ? $this->url('admin.editor.images.discard')
   var uploadedInput=textarea.form&&textarea.form.querySelector('[data-uploaded-images]'),uploadedFiles={};
   (uploadedInput&&uploadedInput.value?uploadedInput.value.split(','):[]).forEach(function(file){if(/^[a-f0-9]{32}\.(?:jpg|png|gif|webp)$/.test(file)){uploadedFiles[file]=true}});
   function rememberUpload(url){
-    var match=String(url||'').match(/\/media\/editor\/[a-f0-9]{32}\/([a-f0-9]{32}\.(?:jpg|png|gif|webp))(?:[?#]|$)/i);
+    // 폴더 키는 32자리 키 또는 종류/식별자(categories/10, tmp/<키>) 다.
+    var match=String(url||'').match(/\/media\/editor\/(?:[a-z]{1,20}\/)?(?:[a-f0-9]{32}|[0-9]{1,19})\/([a-f0-9]{32}\.(?:jpg|png|gif|webp))(?:[?#]|$)/i);
     if(!match){return}uploadedFiles[match[1].toLowerCase()]=true;
     if(uploadedInput){uploadedInput.value=Object.keys(uploadedFiles).join(',')}
   }

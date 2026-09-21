@@ -13,7 +13,7 @@
 | 코드 | `src/Shop` (`GnuCms\Shop`), 템플릿 `templates/default/shop/`, 테마 덮어쓰기 `templates/<테마>/shop/` |
 | 사용자 주소 | `/shop` — 메인 `/shop`, 분류 `/shop/list?ca=코드`, 유형 `/shop/type?t=hit|recommend|new|popular|discount`, 검색 `/shop/search?q=`, 상세 `/shop/item?id=상품코드` 또는 `?slug=`, 이미지 `/shop/image`, 장바구니 `/shop/cart`, 주문서 `/shop/checkout`, 주문 조회 `/shop/orders`, 주문 상세 `/shop/order?number=주문번호`, 결제 `/shop/pay?number=주문번호`, 결제 콜백 `/shop/pay/callback`(이니시스가 부른다, 세션 없음) |
 | 관리자 주소 | `/admin/shop` 현황, `/admin/shop/settings`, `/admin/shop/categories`, `/admin/shop/products`와 `new`·`edit`·`types`·`stock`·`option-stock`, 주문 목록 `/admin/shop/orders`, 주문 상세 `/admin/shop/orders/detail?id=번호` |
-| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (코어 스키마 27판이 만들고 28판이 `yc_categories.image_key`를 더한다) |
+| 테이블 | `yc_settings`, `yc_categories`, `yc_products`, `yc_product_categories`, `yc_product_images`, `yc_option_groups`, `yc_options`, `yc_product_relations`, `yc_stock_log`, `yc_orders`, `yc_order_items`, `yc_order_history` (코어 스키마 27판이 만든다) |
 
 `/shop`은 코어 주소다. 같은 기본 주소를 선언한 모듈은 실행되지 않는다.
 
@@ -73,12 +73,16 @@ PG 응답 원문은 저장하지 않으며 주문에는 거래번호와 표시�
 - 판매가능을 끄면 목록·검색·상세에서 숨겨진다. 관리자는 상세를 미리보기로 열 수 있다.
 - 하위 분류나 연결된 상품이 있으면 삭제할 수 없다.
 - 수정 화면의 **하위 분류에 적용**은 판매·쿠폰·목록 크기·이미지 크기를 하위 분류에 함께 반영한다.
-- **목록 위·아래 HTML**은 코어 편집기로 쓴다. 사진 올리기로 올린 사진은 분류마다 하나인 이미지 키
-  폴더(`/media/editor/<키>/`)에 들어가고, 저장할 때 본문에 없는 사진은 지워지며 분류를 지우면 폴더째
-  사라진다. 사진 저장 위치와 용량 제한은 내용 관리 편집기와 같다(`editor.dir`, `editor.max_bytes`).
+- **목록 위·아래 HTML**은 코어 편집기로 쓴다. 사진 올리기로 올린 사진은 분류의 폴더
+  `/media/editor/categories/<분류 id>/`에 들어간다(첫 저장 전에는 `tmp/…`에 모였다가 저장하면서 옮겨지고
+  본문 주소도 바뀐다). 저장할 때 본문에 없는 사진은 지워지고 분류를 지우면 폴더째 사라진다. 저장 위치와
+  용량 제한은 내용 관리 편집기와 같다(`editor.dir`, `editor.max_bytes`).
 
 ## 상품
 
+- 상세 설명의 편집기 사진은 상품의 폴더 `/media/editor/products/<상품 id>/`에 들어간다(첫 저장 전에는 `tmp/…`에
+  모였다가 저장하면서 옮겨지고 본문 주소도 바뀐다). 저장할 때 본문에 없는 사진은 지워지고 상품을 지우면 폴더째
+  사라진다. 이 방식 전에 올린 사진은 예전 32자 키 폴더에 그대로 남아 주소가 계속 동작한다.
 - 관리자로 로그인하면 상품 상세 상단의 분류 경로 오른쪽에 **상품 관리** 링크가 표시되며 해당 상품의 수정 화면으로 이동한다.
 - 코드는 영문·숫자·`-`·`_` 1~20자이며 생성 후 바꿀 수 없다. 폼은 현재 시각 10자리를 제안한다.
 - 판매가격이 표시 가격이다. 시중가격은 0이 아닐 때만 취소선으로 보인다. 전화문의를 켜면 가격 대신
