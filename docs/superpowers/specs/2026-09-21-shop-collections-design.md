@@ -1,0 +1,93 @@
+# 쇼핑몰 진열 유형 정리: 자동 묶음 + 분류 블록 — 설계
+
+2026-09-21. 사용자 결정: "자동 묶음 + 분류로 정리한다". 진열 유형(히트·추천·최신·인기·할인 깃발)은 없앤다.
+
+## 1. 목표와 범위
+
+영카트5에서 가져온 다섯 깃발(`is_hit`, `is_recommended`, `is_new`, `is_popular`, `is_discount`)과 그것을 켜고 끄는
+진열 유형 화면을 없앤다. 대신
+
+- **자동 묶음** 셋 — 신상품(등록일), 베스트(최근 판매량), 할인(시중가보다 싼 상품) — 을 규칙으로 계산하고,
+- 메인 화면과 상단 메뉴에는 **관리자가 고른 분류 블록**을 몇 개든 놓을 수 있게 한다.
+
+골라 담기(추천·히트 같은 큐레이션)는 분류(특히 메뉴 숨김 분류)가 맡는다. 기존 깃발 데이터는 분류로 옮겨 보존한다.
+
+범위 밖: 판매량 통계 화면, 분류 블록의 드래그 정렬, 메인 배너 규칙 변경.
+
+## 2. 자동 묶음
+
+| 키 | 이름 | 규칙 | 설정 |
+|---|---|---|---|
+| `new` | 신상품 | `created_at >= now - new_days 일`. 등록일 내림차순 | `auto.new_days` 기본 30 (1~365) |
+| `best` | 베스트 | 최근 `best_days` 일 동안 `paid`·`confirmed`·`shipped`·`completed` 주문의 `yc_order_items.quantity` 합이 큰 순. 판매 기록이 없는 상품은 빠진다. 같은 수량이면 최근 등록순 | `auto.best_days` 기본 30 (1~365) |
+| `discount` | 할인상품 | `list_price > price`. 할인율(`1 - price/list_price`) 큰 순 | 없음 |
+
+- 모두 `p.active = 1` 인 상품만이다(지금 `Listing::visible()` 과 같다).
+- 정렬 메뉴(`sort`·`dir`)를 고르면 그 정렬이 우선하고, 고르지 않으면 위 기본 정렬이다.
+- 베스트는 판매량을 매 요청마다 집계한다(주문 항목 표에 `product_id`·`order_id` 인덱스가 있다). 상품이 수만 개가 되기 전까지는 충분하다. 캐시는 범위 밖.
+- 묶음 페이지의 열·행·이미지 크기는 지금의 `type` 블록 설정(`type.columns` 등)을 그대로 쓴다. 이름은 `collection` 으로 바꾸지 않고 유지한다(설정 이전 비용을 피한다).
+
+## 3. 메인 화면
+
+`main` 설정은 세 자동 블록 + 분류 블록 목록이 된다.
+
+```
+main.new      = {use, columns, rows, image_width, image_height}   (기본 use true)
+main.best     = {use, columns, rows, image_width, image_height}   (기본 use true)
+main.discount = {use, columns, rows, image_width, image_height}   (기본 use true)
+main.categories = [ {id, columns, rows}, … ]   (기본 [], 최대 10개, 순서 = 표시 순서)
+```
+
+- 블록 순서: 신상품 → 베스트 → 할인 → 분류 블록들. 자동 블록의 순서 바꾸기는 범위 밖.
+- 분류 블록은 그 분류와 하위 분류(`Categories::subtreeWhere()`)의 활성 상품을 `sort_order, id DESC` 로 `columns × rows` 개 보인다. 제목은 분류 이름, "더 보기" 는 `/shop/c/슬러그`. 이미지 크기는 그 분류의 `image_width`·`image_height` 를 쓴다. 메뉴 숨김 분류도 고를 수 있다(이벤트 블록의 핵심).
+- 없어진 분류를 가리키는 항목은 조용히 건너뛴다. 저장할 때는 없는 id 를 거절한다(422 `main_categories`).
+- 메인 배너의 기본 링크(`HomeBanner::view()`, 첫 블록의 첫 상품·유형 링크)는 첫 자동 블록 또는 첫 분류 블록을 따른다.
+- 메인 화면의 홍보 타일 두 개(`index.php` 의 JUST ARRIVED / SMART CHOICE)는 `main.new.use`·`main.discount.use` 를 그대로 따른다.
+- 옛 `main.hit`·`main.recommend`·`main.popular` 설정은 읽을 때 버린다(`Settings::all()` 이 기본값으로 덮는다).
+
+## 4. 공개 주소와 메뉴
+
+| 주소 | 동작 |
+|---|---|
+| `/shop/type?t=new` `best` `discount` | 자동 묶음 페이지(지금의 유형 페이지). 라우트·템플릿 이름은 그대로 |
+| `/shop/type?t=popular` | `t=best` 로 301 |
+| `/shop/type?t=hit`, `t=recommend` | 이전 때 만든 분류(§6)가 있으면 그 `/shop/c/슬러그` 로 301, 없으면 404 |
+| 상단 메뉴 | 쇼핑홈 · 베스트 · 신상품 · 할인상품(각각 `main.*.use` 가 켜졌을 때) · 분류 메뉴(그대로) |
+
+`Settings::TYPES` = `['new', 'best', 'discount']`, `TYPE_LABELS` = 신상품·베스트·할인상품, `TYPE_COLUMNS` 는 없앤다.
+
+## 5. 상품과 관리자 화면
+
+- `yc_products` 에서 다섯 깃발 칸을 지운다(31판). `Products::TYPES` 삭제. 상품 폼의 유형 체크 다섯 개와 "유형 다른 상품에도 적용" 칩, `apply_fields` 의 `types` 삭제. 상품 복사·일괄 적용(`applyScope`)에서 유형 항목 제거.
+- 관리자 상품 하위 탭 **진열 유형**(`/admin/shop/products/types`, `Products::setTypes()`, `product_types.php`)을 없앤다. 주소는 404.
+- 쇼핑몰 설정 → 메인 진열: 신상품·베스트·할인 블록(사용·열·행·이미지 크기) + 기간 두 개(신상품 일수, 베스트 일수) + **메인 분류 블록** 목록(분류 선택 + 열·행, "블록 추가"/"제거", 상품 폼의 추가 분류와 같은 JS 방식).
+- 상품 목록 필터·검색 조건에서 유형 항목이 있으면 없앤다.
+
+## 6. 데이터 이전 (31판)
+
+`Shop\Schema::migrate()` 가 `yc_products` 에 `is_hit` 칸이 있으면 한 번 실행한다.
+
+1. `is_hit = 1`, `is_recommended = 1`, `is_popular = 1` 인 상품이 하나라도 있는 깃발마다 메뉴 숨김 최상위 분류를 만든다: 이름·슬러그 `히트상품`, `추천상품`, `인기상품`(슬러그가 이미 쓰이면 `-2`). 그 상품들을 추가 분류(다음 slot)로 연결한다(이미 연결돼 있으면 건너뛴다). 상품이 없는 깃발은 분류를 만들지 않는다.
+2. `is_new`·`is_discount` 는 규칙으로 대신하므로 옮기지 않는다.
+3. 다섯 칸을 지운다(`dropColumn()` ×5; SQLite 3.35 이상은 인덱스가 없는 칸을 `DROP COLUMN` 할 수 있다).
+4. `yc_settings` 의 `main.hit`·`main.recommend`·`main.popular` 는 §3 대로 읽을 때 버린다. 옛 `main.hit.use` 등을 분류 블록으로 자동 변환하지는 않는다(관리자가 고른다).
+
+멱등: `is_hit` 칸이 없으면 아무것도 하지 않는다. 코어 `Db\Schema::VERSION = '31'`.
+
+## 7. 테스트
+
+- 스키마: 새 설치에 깃발 칸 없음; 30판 모양(깃발 있음)으로 만든 표에 깃발 상품을 넣고 `migrate()` → 분류 셋(해당 깃발이 있을 때만) 생성·메뉴 숨김·상품 연결·칸 삭제, 두 번 돌려도 같다. SQLite·MySQL.
+- 목록: 신상품 기간 안팎, 베스트가 판매량 합으로 정렬되고 판매 없는 상품은 빠지며 취소·접수 주문은 세지 않음, 할인은 `list_price > price` 만, 정렬 메뉴 우선.
+- 메인: 자동 블록 use 에 따라, 분류 블록이 하위 상품까지 순서대로, 없어진 분류는 건너뜀, 배너 기본 링크.
+- 설정: 기간·분류 블록 저장·검증(없는 id 422, 11개 초과 422, 옛 `main.hit` 무시).
+- 공개: `type?t=best|new|discount` 200, `popular` 301, `hit` 는 이전 분류가 있으면 301 없으면 404, 상단 메뉴 링크.
+- 관리자: 상품 폼에 유형 체크 없음, `/admin/shop/products/types` 404, 설정 화면의 분류 블록 추가·저장.
+- 기존 테스트에서 `is_hit` 등을 쓰는 곳은 모두 바꾼다.
+
+## 8. 문서
+
+`docs/shop.md`: 주소 표의 유형 주소, "진열 유형" 절을 "자동 묶음과 메인 블록" 절로, 상품 절의 유형 체크 설명 삭제, 영카트5 대응표(`it_type1~5` → 자동 규칙/분류), 메인 배너 자동 표시 설명. AGENTS.md 34행의 "메인·분류 목록·유형별 목록" 표현.
+
+## 9. 기존 사이트
+
+31판이 첫 요청에서 돈다. 깃발이 켜진 상품이 있으면 숨김 분류가 생겨 상품이 그대로 묶여 있고, 관리자는 쇼핑몰 설정에서 그 분류를 메인 블록에 넣으면 이전과 같은 화면이 된다. 신상품·할인은 그날부터 자동이다.
