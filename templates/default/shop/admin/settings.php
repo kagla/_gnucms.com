@@ -89,7 +89,7 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <?php if (isset($errors['main_categories'])): ?><p class="validator-hint"><?= $this->e($errors['main_categories']) ?></p><?php endif ?>
   </div></section>
   <div id="settings-lists">
-  <?php foreach (['category' => '분류 목록 기본값(새 분류에 적용)', 'type' => '유형별 목록', 'search' => '검색 결과'] as $section => $label): ?>
+  <?php foreach (['category' => '분류 목록 기본값(새 분류에 적용)', 'type' => '묶음 목록', 'search' => '검색 결과'] as $section => $label): ?>
     <section class="card"><div class="card-body"><h2 class="card-title"><?= $label ?></h2>
       <div class="yc-fields"><?php $num($section . '_columns', '한 행 상품 수', 1, 12); $num($section . '_rows', '행 수', 1, 50); $num($section . '_image_width', '이미지 너비', 0, 2000); $num($section . '_image_height', '이미지 높이(0 = 비율)', 0, 2000); ?></div>
     </div></section>
