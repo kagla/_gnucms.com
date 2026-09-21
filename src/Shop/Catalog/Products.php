@@ -329,7 +329,9 @@ final class Products
                 $this->store->get('yc_products', $id);
                 if ($this->store->selectOne('SELECT 1 AS x FROM ' . $this->store->table('yc_product_categories') . ' WHERE product_id = ? AND category_id = ?', [$id, $categoryId]) !== null) { $skipped++; continue; }
                 $slot = (int) $this->store->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $this->store->table('yc_product_categories') . ' WHERE product_id = ?', [$id])['s'] + 1;
-                $this->store->insert('yc_product_categories', ['product_id' => $id, 'category_id' => $categoryId, 'slot' => max(2, $slot)]);
+                // 두 관리자가 같은 상품을 동시에 넣으면 나중 삽입이 UNIQUE (product_id, category_id) 에 걸린다 — 이미 있는 것이니 건너뛴다.
+                try { $this->store->insert('yc_product_categories', ['product_id' => $id, 'category_id' => $categoryId, 'slot' => max(2, $slot)]); }
+                catch (DomainError) { $skipped++; continue; }
                 $changed++;
             }
         });

@@ -26,7 +26,7 @@
   <div class="yc-list-actions"><p>현재 목록의 변경사항을 모두 저장합니다. <span class="yc-table-hint">표를 좌우로 밀어 확인하세요.</span></p><button class="btn btn-sm btn-primary" type="submit">분류 변경사항 저장</button></div>
 </form>
 <?php foreach ($tree as $row): ?>
-  <form method="post" action="<?= $this->e($admin_url) ?>/categories" id="yc-category-delete-<?= (int) $row['id'] ?>" onsubmit="return confirm('이 분류를 삭제할까요?')">
+  <form method="post" action="<?= $this->e($admin_url) ?>/categories" id="yc-category-delete-<?= (int) $row['id'] ?>" data-yc-confirm="이 분류를 삭제할까요?">
     <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
   </form>
 <?php endforeach ?>

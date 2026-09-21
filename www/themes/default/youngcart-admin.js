@@ -4,6 +4,13 @@
   if(!root){return;}
   var shell=root.closest('.admin-content'),siteLink=shell&&shell.querySelector('.navbar-end>a');
   if(siteLink){siteLink.title=siteLink.textContent.trim();}
+  // 누른 제출 단추의 동작. event.submitter 가 없는 엔진(Safari 15.4 이전)에서는 초점과 폼 안을 뒤지고, 그래도 모르면 빈 문자열이다.
+  function submitAction(event,form){
+    var button=event.submitter
+      ||(document.activeElement&&document.activeElement.form===form&&document.activeElement.type==='submit'?document.activeElement:null)
+      ||form.querySelector('button[type=submit][name=action]');
+    return button?button.value:'';
+  }
   var checkAll=document.querySelector('[data-yc-check-all]');
   if(checkAll){
     var boxes=[].slice.call(root.querySelectorAll('input[name="ids[]"]'));
@@ -22,11 +29,20 @@
   if(selection){
     selection.addEventListener('submit',function(event){
       // 분류 선택 상자는 폼 밖에 있고 form 속성으로 이어져 있다 — elements 로 찾는다.
-      var action=event.submitter&&event.submitter.value,category=selection.elements.category;
-      if(action==='delete'&&!confirm('선택한 상품을 삭제할까요? 이미지·옵션도 함께 지워집니다.')){event.preventDefault();return;}
-      if((action==='categorize'||action==='uncategorize')&&category&&!category.value){event.preventDefault();alert('분류를 먼저 고르세요.');}
+      var action=submitAction(event,selection),category=selection.elements.category;
+      if(action==='categorize'||action==='uncategorize'){
+        if(category&&!category.value){event.preventDefault();alert('분류를 먼저 고르세요.');}
+        return;
+      }
+      // 어떤 단추인지 알아내지 못하면 삭제로 보고 묻는다 — 묻지 않고 지우는 것보다 낫다.
+      if(!confirm('선택한 상품을 삭제할까요? 이미지·옵션도 함께 지워집니다.')){event.preventDefault();}
     });
   }
+  // 한 줄짜리 삭제 폼의 확인 문구는 data-yc-confirm 속성에서 온다 — 분류명 같은 데이터를 JS 문자열에 끼워 넣지 않는다.
+  root.addEventListener('submit',function(event){
+    var message=event.target.getAttribute('data-yc-confirm');
+    if(message&&!confirm(message)){event.preventDefault();}
+  });
   // Anchors and form submissions still work without this progressive enhancement.
   function reveal(target){
     for(var parent=target;parent&&parent!==root;parent=parent.parentElement){if(parent.tagName==='DETAILS'){parent.open=true;}}
