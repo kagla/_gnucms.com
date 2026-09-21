@@ -84,6 +84,9 @@ final class ListingTest extends ShopTestCase
         self::assertSame(['F', 'S'], $codes($this->shop->listing->collection('best', '', '', 1)));     // 2개 > 1개, 접수 주문 제외
         self::assertSame(['F', 'S'], $codes($this->shop->listing->collection('popular', '', '', 1)));  // 9 > 5, 0 제외
         self::assertSame(['S'], $codes($this->shop->listing->collection('discount', '', '', 1)));
+        // 할인율이 큰 쪽이 앞이다: 반값(D) > 20%(S)
+        $this->product(['category_id' => (string) $cat['id'], 'code' => 'D', 'name' => '반값', 'price' => '50', 'list_price' => '100']);
+        self::assertSame(['D', 'S'], $codes($this->shop->listing->collection('discount', '', '', 1)));
         self::assertSame(['S', 'F'], $codes($this->shop->listing->collection('best', 'price', 'asc', 1)), '정렬 메뉴는 규칙보다 우선하되 판매 없는 상품은 여전히 빠진다');
         // 수동 전환: 베스트를 기획전 분류로
         $this->shop->products->addToCategory([(string) $old['id']], (int) $event['id']);

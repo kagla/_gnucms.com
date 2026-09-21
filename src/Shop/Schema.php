@@ -121,32 +121,52 @@ final class Schema
 
     /**
      * 31판: 진열 깃발을 없앤다. 히트·추천·인기 깃발이 켜진 상품은 메뉴 숨김 분류로 옮겨 보존하고,
-     * 신상품·할인은 규칙이 대신한다. is_hit 칸이 없으면 이미 끝난 것이다.
+     * 신상품·할인은 규칙이 대신한다. 옮긴 분류는 설정의 migrated_types 에 남겨 옛 유형 주소가 그리로 가게 한다.
      */
     private static function migrateDisplayFlags(Connection $db): void
     {
-        if (!self::columnExists($db, 'yc_products', 'is_hit')) return;
         $products = $db->table('yc_products'); $categories = $db->table('yc_categories'); $links = $db->table('yc_product_categories');
-        $db->transaction(function () use ($db, $products, $categories, $links): void {
-            $now = time();
-            foreach (['is_hit' => '히트상품', 'is_recommended' => '추천상품', 'is_popular' => '인기상품'] as $flag => $name) {
-                $ids = array_map('intval', array_column($db->select('SELECT id FROM ' . $products . ' WHERE ' . $flag . ' = 1 ORDER BY id'), 'id'));
-                if ($ids === []) continue;
-                $slug = $name;
-                for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
-                $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
-                    'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
-                    'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
-                $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
-                foreach ($ids as $productId) {
-                    if ($db->selectOne('SELECT 1 AS x FROM ' . $links . ' WHERE product_id = ? AND category_id = ?', [$productId, $categoryId]) !== null) continue;
-                    $slot = (int) $db->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $links . ' WHERE product_id = ?', [$productId])['s'] + 1;
-                    $db->insert('yc_product_categories', ['product_id' => $productId, 'category_id' => $categoryId, 'slot' => max(2, $slot)]);
+        // 상품 옮기기는 깃발이 아직 있을 때만. 칸 삭제는 아래에서 갱신마다 확인한다(다섯 칸 중간에 끊긴 이전도 마저 끝낸다).
+        if (self::columnExists($db, 'yc_products', 'is_hit')) {
+            $db->transaction(function () use ($db, $products, $categories, $links): void {
+                $now = time();
+                $moved = [];
+                foreach (['is_hit' => ['hit', '히트상품'], 'is_recommended' => ['recommend', '추천상품'], 'is_popular' => ['popular', '인기상품']] as $flag => [$type, $name]) {
+                    $ids = array_map('intval', array_column($db->select('SELECT id FROM ' . $products . ' WHERE ' . $flag . ' = 1 ORDER BY id'), 'id'));
+                    if ($ids === []) continue;
+                    $slug = $name;
+                    for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
+                    $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
+                        'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
+                        'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
+                    $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
+                    foreach ($ids as $productId) {
+                        if ($db->selectOne('SELECT 1 AS x FROM ' . $links . ' WHERE product_id = ? AND category_id = ?', [$productId, $categoryId]) !== null) continue;
+                        $slot = (int) $db->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $links . ' WHERE product_id = ?', [$productId])['s'] + 1;
+                        $db->insert('yc_product_categories', ['product_id' => $productId, 'category_id' => $categoryId, 'slot' => max(2, $slot)]);
+                    }
+                    $moved[$type] = $categoryId;
                 }
-            }
-        });
-        // DDL 은 스스로 확정되므로(SQLite·MySQL 모두) 트랜잭션 밖에서 지운다.
+                if ($moved !== []) self::recordMigratedTypes($db, $moved);
+            });
+        }
+        // DDL 은 스스로 확정되므로(SQLite·MySQL 모두) 트랜잭션 밖에서 지운다. 없는 칸은 dropColumn() 이 건너뛴다.
         foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $column) self::dropColumn($db, 'yc_products', $column);
+    }
+
+    /** 옛 유형 주소(/shop/type?t=hit)가 어느 분류로 갔는지 설정에 적어 둔다. 이름·슬러그가 겹쳐 -2 가 붙어도 찾을 수 있게. */
+    private static function recordMigratedTypes(Connection $db, array $moved): void
+    {
+        $table = $db->table('yc_settings');
+        $row = $db->selectOne('SELECT payload FROM ' . $table . " WHERE id = 'settings'");
+        if ($row === null) {
+            $db->insert('yc_settings', ['id' => 'settings', 'payload' => json_encode(['migrated_types' => $moved], JSON_UNESCAPED_UNICODE)]);
+            return;
+        }
+        $payload = json_decode((string) $row['payload'], true);
+        if (!is_array($payload)) $payload = [];
+        $payload['migrated_types'] = $moved + (is_array($payload['migrated_types'] ?? null) ? $payload['migrated_types'] : []);
+        $db->update('yc_settings', ['payload' => json_encode($payload, JSON_UNESCAPED_UNICODE)], 'id = :id', ['id' => 'settings']);
     }
 
     private static function indexExists(Connection $db, string $table, string $index): bool

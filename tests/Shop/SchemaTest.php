@@ -155,6 +155,14 @@ final class SchemaTest extends ShopTestCase
         self::assertSame([1 => (int) $cat['id'], 2 => (int) $hit['id'], 3 => (int) $popular['id']], array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get((int) $b['id'])['categories']));
         // 숨김 분류이므로 메뉴에는 나오지 않지만 분류 목록에서는 상품이 보인다.
         self::assertNotContains('히트상품-2', array_column($this->shop->categories->children(null, true, true), 'slug'), '메뉴에는 나오지 않는다');
+        // 옛 유형 주소가 찾아갈 수 있게 어느 분류로 옮겼는지 설정에 남는다(슬러그가 아니라 id 로).
+        $migrated = $this->shop->settings->all()['migrated_types'];
+        self::assertSame((int) $hit['id'], $migrated['hit']);
+        self::assertSame((int) $popular['id'], $migrated['popular']);
+        self::assertArrayNotHasKey('recommend', $migrated, '분류를 만들지 않은 깃발은 기록도 없다');
+        // 이전 기록은 설정을 저장해도 남는다.
+        $this->shop->settings->save(HomeBannerTest::form());
+        self::assertSame($migrated, $this->shop->settings->all()['migrated_types']);
         self::assertSame(['B', 'A'], array_column($this->shop->listing->category($hit, '', '', 1)['items'], 'code'));
     }
 }

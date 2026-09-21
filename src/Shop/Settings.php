@@ -27,6 +27,8 @@ final class Settings
             'visible' => true,
             'banner' => HomeBanner::defaults(),
             'auto' => ['new_days' => 30, 'best_days' => 30],
+            // 31판 이전이 깃발 상품을 옮겨 둔 분류. 옛 유형 주소를 넘길 때만 쓴다. {'hit'|'recommend'|'popular' => 분류 id}
+            'migrated_types' => [],
             'main' => $main,
             'category' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'type' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
@@ -55,6 +57,8 @@ final class Settings
         foreach (self::TYPES as $type) $main[$type] = $all['main'][$type];
         $main['categories'] = array_values(array_filter(is_array($all['main']['categories'] ?? null) ? $all['main']['categories'] : [], 'is_array'));
         $all['main'] = $main;
+        $migrated = is_array($all['migrated_types'] ?? null) ? $all['migrated_types'] : [];
+        $all['migrated_types'] = array_map('intval', array_filter($migrated, static fn ($id): bool => is_int($id) || (is_string($id) && ctype_digit($id))));
         return $all;
     }
 
@@ -80,7 +84,8 @@ final class Settings
         $settings = ['main' => []];
         foreach (self::TYPES as $type) {
             $source = in_array($input['main_' . $type . '_source'] ?? 'auto', self::SOURCES, true) ? $input['main_' . $type . '_source'] ?? 'auto' : 'auto';
-            $categoryId = $source === 'category' ? Input::optionalId($input['main_' . $type . '_source_category_id'] ?? '') : null;
+            // id 가 아닌 값은 "고르지 않음" 으로 보고 아래에서 422 로 돌려준다 — 폼 입력이 404 를 내면 안 된다.
+            $categoryId = $source === 'category' ? Input::filterId($input['main_' . $type . '_source_category_id'] ?? '') : null;
             if ($source === 'category' && ($categoryId === null || $this->store->find('yc_categories', $categoryId) === null)) {
                 $errors['main_' . $type . '_source_category_id'] = '기준으로 쓸 분류를 고르세요.';
             }
@@ -92,8 +97,8 @@ final class Settings
         $settings['main']['categories'] = [];
         foreach (is_array($input['main_categories'] ?? null) ? array_values($input['main_categories']) : [] as $row) {
             if (!is_array($row)) continue;
-            $id = Input::optionalId($row['id'] ?? '');
-            if ($id === null) continue;                       // 빈 줄은 건너뛴다
+            $id = Input::filterId($row['id'] ?? '');
+            if ($id === null) continue;                       // 빈 줄(과 id 가 아닌 값)은 건너뛴다
             if ($this->store->find('yc_categories', $id) === null) { $errors['main_categories'] = '없는 분류가 있습니다.'; continue; }
             $settings['main']['categories'][] = ['id' => $id, 'columns' => Input::int($row['columns'] ?? '', 'main_categories', 1, 12, 4),
                 'rows' => Input::int($row['rows'] ?? '', 'main_categories', 1, 50, 1)];
@@ -114,6 +119,8 @@ final class Settings
         }
         // 이전 테마의 설정 폼에서도 새 필드가 누락되면 저장된 값을 보존한다.
         $previous = $this->all();
+        // 이전이 남긴 기록은 폼이 보내지 않는다 — 저장할 때마다 이어 간다.
+        $settings['migrated_types'] = $previous['migrated_types'];
         $settings['auto'] = [];
         foreach (['new_days', 'best_days'] as $key) {
             $settings['auto'][$key] = array_key_exists('auto_' . $key, $input) ? $int('auto_' . $key, 1, 365) : $previous['auto'][$key];

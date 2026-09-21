@@ -71,9 +71,10 @@ final class ShopController
                 return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($category['slug']) . ($query === [] ? '' : '?' . http_build_query($query)));
             case 'type':
                 $type = $query['t'] ?? '';
-                // 옛 유형: 이전 때 히트·추천 상품을 옮겨 둔 숨김 분류가 있으면 그리로 넘긴다.
+                // 옛 유형: 31판 이전이 상품을 옮겨 둔 분류가 있으면 그리로 넘긴다(이름이 아니라 이전이 남긴 id 로 찾는다).
                 if (in_array($type, ['hit', 'recommend'], true)) {
-                    $moved = $this->service->categories->bySlug($type === 'hit' ? '히트상품' : '추천상품');
+                    $target = $data['settings']['migrated_types'][$type] ?? null;
+                    $moved = $target === null ? null : $this->service->categories->find((int) $target);
                     if ($moved === null) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
                     return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($moved['slug']));
                 }

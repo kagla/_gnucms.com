@@ -210,11 +210,20 @@ final class ShopPublicTest extends WebTestCase
         self::assertStringContainsString('빨간 셔츠', $type);
         self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'nope'])->getStatusCode());
         self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'hit'])->getStatusCode(), '옮겨 둔 분류가 없으면 404');
-        // 31판 이전이 만든 분류가 있으면 옛 유형 주소를 그 분류로 넘긴다.
-        $this->shop->categories->save(['parent_id' => '', 'name' => '히트상품', 'active' => '1', 'menu_hidden' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+        // 이름이 같은 남의 분류로는 넘기지 않는다 — 이전이 남긴 id 만 따른다.
+        $this->shop->categories->save(['parent_id' => '', 'name' => '히트상품', 'active' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+        self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'hit'])->getStatusCode(), '이름만 같은 분류로는 넘기지 않는다');
+        // 31판 이전이 남긴 기록이 있으면 그 분류로 넘긴다(슬러그가 겹쳐 -2 가 붙어도).
+        $kept = $this->shop->categories->get($this->shop->categories->save(['parent_id' => '', 'name' => '히트상품', 'active' => '1', 'menu_hidden' => '1',
+            'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        self::assertSame('히트상품-2', $kept['slug']);
+        $settings = $this->shop->settings->all();
+        $settings['migrated_types'] = ['hit' => (int) $kept['id']];
+        $this->saveSettings($settings);
         $moved = $this->get($this->app, '/shop/type', ['t' => 'hit']);
         self::assertSame(301, $moved->getStatusCode());
-        self::assertSame('/shop/c/%ED%9E%88%ED%8A%B8%EC%83%81%ED%92%88', $moved->getHeaderLine('Location'));
+        self::assertSame('/shop/c/' . rawurlencode($kept['slug']), $moved->getHeaderLine('Location'));
+        self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'recommend'])->getStatusCode(), '기록이 없는 유형은 404');
         // 메인 분류 블록: 고른 분류의 이름과 분류 주소가 메인에 놓인다.
         $settings = $this->shop->settings->all();
         $settings['main']['categories'] = [['id' => (int) $seed['top']['id'], 'columns' => 4, 'rows' => 1]];

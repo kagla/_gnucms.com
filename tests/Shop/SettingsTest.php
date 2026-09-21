@@ -117,6 +117,17 @@ final class SettingsTest extends ShopTestCase
             try { $this->shop->settings->save($this->settingsInput() + $bad); self::fail('거절해야 한다'); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
         }
         self::assertSame(['new_days' => 14, 'best_days' => 90], $this->shop->settings->all()['auto'], '거절된 저장은 아무것도 바꾸지 않는다');
+        // id 가 아닌 값도 404 가 아니라 422 다.
+        try {
+            $this->shop->settings->save($this->settingsInput() + ['main_best_source' => 'category', 'main_best_source_category_id' => 'abc']);
+            self::fail('id 가 아닌 값은 거절해야 한다');
+        } catch (DomainError $e) {
+            self::assertSame(422, $e->status());
+            self::assertArrayHasKey('main_best_source_category_id', $e->details());
+        }
+        // 분류 블록의 id 가 아닌 값은 빈 줄처럼 건너뛴다.
+        $this->shop->settings->save($this->settingsInput() + ['main_categories' => [['id' => 'abc', 'columns' => '3', 'rows' => '1'], ['id' => (string) $cat['id'], 'columns' => '3', 'rows' => '1']]]);
+        self::assertSame([['id' => (int) $cat['id'], 'columns' => 3, 'rows' => 1]], $this->shop->settings->all()['main']['categories']);
         // 옛 저장값: hit·recommend 는 사라지고 popular 의 크기는 남는다.
         $legacy = $all; $legacy['main'] = ['hit' => ['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 100, 'image_height' => 0], 'popular' => ['use' => true, 'columns' => 6, 'rows' => 1, 'image_width' => 150, 'image_height' => 0]];
         $this->app->db()->update('yc_settings', ['payload' => json_encode($legacy, JSON_UNESCAPED_UNICODE)], 'id = :id', ['id' => 'settings']);
