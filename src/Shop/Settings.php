@@ -24,7 +24,7 @@ final class Settings
             'visible' => true,
             'banner' => HomeBanner::defaults(),
             'main' => $main,
-            'category' => ['columns' => 3, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
+            'category' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'type' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'search' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'related' => ['use' => true, 'columns' => 4, 'image_width' => 100, 'image_height' => 0],

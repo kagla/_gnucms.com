@@ -389,6 +389,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('id="yc-tail-html" name="tail_html" rows="6" data-cms-editor', $edit);
         self::assertStringContainsString('/vendor/ckeditor4/ckeditor.js', $edit);
         self::assertStringContainsString('name="image_key" value="categories/' . $top['id'] . '"', $edit);
+        self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98">쇼핑몰에서 보기', $edit);
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);
         self::assertStringContainsString('data-uploaded-images', $edit);

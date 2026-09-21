@@ -17,7 +17,7 @@ final class SettingsTest extends ShopTestCase
         self::assertTrue($settings['main']['hit']['use']);
         self::assertFalse($settings['main']['popular']['use']);
         self::assertSame(['use' => true, 'columns' => 4, 'rows' => 1, 'image_width' => 200, 'image_height' => 0], $settings['main']['new']);
-        self::assertSame(['columns' => 3, 'rows' => 5, 'image_width' => 200, 'image_height' => 0], $settings['category']);
+        self::assertSame(['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0], $settings['category']);
         self::assertSame(400, $settings['detail']['image_width']);
         self::assertFalse($settings['show_tax']);
         $saved = $this->shop->settings->save($this->settingsInput());
