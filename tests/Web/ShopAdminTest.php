@@ -247,7 +247,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('상품 0', $this->body($this->get($this->app, '/admin/shop')));
         $settings = $this->body($this->get($this->app, '/admin/shop/settings'));
         self::assertStringContainsString('name="main_hit_use"', $settings);
-        self::assertStringContainsString('name="category_columns" value="3"', $settings);
+        self::assertStringContainsString('name="category_columns" value="4"', $settings);
         // 토큰이 없는 POST 는 전역 관리자라도 지나지 못한다.
         self::assertSame(403, $this->post($this->app, '/admin/shop/settings', $this->settingsForm(['category_columns' => '4']))->getStatusCode());
         self::assertSame(3, $this->shop->settings->all()['category']['columns']);
