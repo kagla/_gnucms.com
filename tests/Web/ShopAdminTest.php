@@ -67,7 +67,7 @@ final class ShopAdminTest extends WebTestCase
 
     private function placeOrder(string $method, array $extra = []): array
     {
-        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
+        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
         $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
         $input = $extra + ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1',
@@ -193,7 +193,7 @@ final class ShopAdminTest extends WebTestCase
     public function testReceiptOnlyPaidOrderCanBeRefunded(array $config): void
     {
         $this->setupShop($config); $this->enablePayments();
-        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['code' => '30', 'name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
+        $productId = $this->shop->products->save(['code' => 'PAY' . bin2hex(random_bytes(2)), 'name' => '결제 상품', 'category_id' => (string) $this->shop->categories->save(['name' => '결제', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']), 'price' => '5000', 'stock' => '5', 'active' => '1'], []);
         $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
         $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1'];
@@ -323,7 +323,10 @@ final class ShopAdminTest extends WebTestCase
         $this->setupShop($config);
         $this->signIn(true);
         $form = $this->body($this->get($this->app, '/admin/shop/categories/new'));
-        self::assertStringContainsString('name="code" value="10"', $form);
+        // 코드 칸은 없다. 이름·슬러그·상위 분류로 만든다.
+        self::assertStringNotContainsString('name="code"', $form);
+        self::assertStringContainsString('name="slug"', $form);
+        self::assertStringContainsString('name="parent_id"', $form);
         // 새 분류의 편집기 사진은 임시 폴더(tmp/<키>)로 올라갔다가 저장하면서 categories/<id> 로 옮겨진다.
         self::assertSame(1, preg_match('#name="image_key" value="(tmp/[a-f0-9]{32})"#', $form, $keyMatch));
         $tmpKey = $keyMatch[1];
@@ -336,28 +339,50 @@ final class ShopAdminTest extends WebTestCase
         $image = json_decode($this->body($upload), true, 512, JSON_THROW_ON_ERROR);
         self::assertMatchesRegularExpression('#^/media/editor/tmp/[a-f0-9]{32}/[a-f0-9]{32}\.png$#', $image['url']);
         self::assertSame(200, $this->get($this->app, $image['url'])->getStatusCode());
-        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => '의류', 'image_key' => $tmpKey, 'head_html' => '<p><img src="' . $image['url'] . '" alt=""></p>', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['parent_id' => '', 'name' => '의류', 'image_key' => $tmpKey, 'head_html' => '<p><img src="' . $image['url'] . '" alt=""></p>', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         self::assertSame(303, $response->getStatusCode());
-        $top = $this->shop->categories->byCode('10');
+        $top = $this->shop->categories->bySlug('의류');
+        self::assertNotNull($top);
+        self::assertSame(['/' . $top['id'] . '/', 1], [$top['path'], (int) $top['depth']]);
         self::assertSame('/admin/shop/categories/edit?id=' . $top['id'] . '&saved=1', $response->getHeaderLine('Location'));
         $movedUrl = '/media/editor/categories/' . $top['id'] . '/' . basename($image['url']);
         self::assertStringContainsString($movedUrl, $top['head_html']);
         self::assertSame(200, $this->get($this->app, $movedUrl)->getStatusCode());
         self::assertFileExists($this->root . '/editor/categories/' . $top['id'] . '/' . basename($image['url']));
         self::assertDirectoryDoesNotExist($this->root . '/editor/' . $tmpKey);
-        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => '중복', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        // 직접 쓴 슬러그가 다른 분류와 겹치면 거절한다.
+        $response = $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['name' => '중복', 'slug' => '의류', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         self::assertSame(422, $response->getStatusCode());
-        self::assertStringContainsString('이미 사용 중인 분류 코드', $this->body($response));
+        self::assertStringContainsString('이미 쓰는 슬러그', $this->body($response));
         self::assertStringContainsString('value="중복"', $this->body($response));
-        self::assertStringContainsString('name="code" value="1010"', $this->body($this->get($this->app, '/admin/shop/categories/new', ['parent' => '10'])));
-        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '1010', 'name' => '셔츠', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        // 목록의 "하위 추가" 는 ?parent=<id> 로 상위 분류를 미리 고른다.
+        $childForm = $this->body($this->get($this->app, '/admin/shop/categories/new', ['parent' => (string) $top['id']]));
+        self::assertStringContainsString('<option value="' . $top['id'] . '" selected', $childForm);
+        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['parent_id' => (string) $top['id'], 'name' => '셔츠', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $child = $this->shop->categories->bySlug('셔츠');
+        self::assertNotNull($child);
+        self::assertSame(['/' . $top['id'] . '/' . $child['id'] . '/', 2], [$child['path'], (int) $child['depth']]);
+        // 상품 목록 필터는 분류 id 를 값으로 쓰고 하위 분류의 상품까지 찾는다.
+        $product = $this->shop->products->save(['code' => 'C1', 'name' => '파란 셔츠', 'category_id' => (string) $child['id'], 'price' => '300', 'stock' => '3', 'active' => '1'], []);
+        $filtered = $this->get($this->app, '/admin/shop/products', ['ca' => (string) $top['id']]);
+        self::assertSame(200, $filtered->getStatusCode());
+        self::assertStringContainsString('파란 셔츠', $this->body($filtered));
+        self::assertStringContainsString('<option value="' . $top['id'] . '" selected', $this->body($filtered));
+        $this->shop->products->delete($product); // 아래 분류 삭제는 트리만 본다.
         $list = $this->body($this->get($this->app, '/admin/shop/categories'));
-        self::assertStringContainsString('의류', $list); self::assertStringContainsString('셔츠', $list);
+        self::assertStringContainsString('의류', $list);
+        self::assertStringContainsString('<code>셔츠</code>', $list); // 이름 아래에 슬러그를 보인다.
+        self::assertStringContainsString('products?ca=' . $top['id'], $list);
+        self::assertStringContainsString('categories/new?parent=' . $top['id'], $list);
         self::assertStringContainsString('name="rows[' . $top['id'] . '][name]"', $list);
         self::assertStringContainsString('form="yc-category-delete-' . $top['id'] . '"', $list);
         self::assertStringContainsString('id="yc-category-delete-' . $top['id'] . '"', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/categories/edit', ['id' => (string) $top['id']]));
         self::assertStringContainsString('value="의류"', $edit); self::assertStringContainsString('apply_children', $edit);
+        // 상위 분류 선택에는 자기 자신도, 자기 하위 분류도 없다.
+        self::assertStringContainsString('name="parent_id"', $edit);
+        self::assertStringNotContainsString('<option value="' . $top['id'] . '"', $edit);
+        self::assertStringNotContainsString('<option value="' . $child['id'] . '"', $edit);
         // 목록 위·아래 HTML 은 코어 편집기(CKEditor)로 쓰고, 저장된 분류의 사진은 제 폴더(categories/<id>)로 올린다.
         self::assertStringContainsString('id="yc-head-html" name="head_html" rows="6" data-cms-editor', $edit);
         self::assertStringContainsString('id="yc-tail-html" name="tail_html" rows="6" data-cms-editor', $edit);
@@ -366,19 +391,26 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);
         self::assertStringContainsString('data-uploaded-images', $edit);
-        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
+        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $top['id'], 'parent_id' => '', 'slug' => '의류', 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0', 'apply_children' => '1']));
         self::assertSame(303, $response->getStatusCode());
-        self::assertSame(0, (int) $this->shop->categories->byCode('1010')['active']);
-        $child = $this->shop->categories->byCode('1010');
+        self::assertSame(0, (int) $this->shop->categories->get((int) $child['id'])['active']);
         $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'bulk', 'rows' => [$child['id'] => ['name' => '셔츠(일괄)', 'sort_order' => '1', 'active' => '1', 'list_columns' => '2', 'list_rows' => '2', 'image_width' => '100', 'image_height' => '0']]]));
         self::assertSame('/admin/shop/categories?saved=1', $response->getHeaderLine('Location'));
-        self::assertSame('셔츠(일괄)', $this->shop->categories->byCode('1010')['name']);
-        $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'delete', 'id' => (string) $top['id']]));
+        self::assertSame('셔츠(일괄)', $this->shop->categories->get((int) $child['id'])['name']);
+        // 상위 분류를 바꿔 저장하면 옮겨진다.
+        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['parent_id' => '', 'name' => '가전', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $home = $this->shop->categories->bySlug('가전');
+        self::assertNotNull($home);
+        $response = $this->post($this->app, '/admin/shop/categories/edit', $this->csrf(['id' => (string) $child['id'], 'parent_id' => (string) $home['id'], 'slug' => '셔츠', 'name' => '셔츠(일괄)', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        self::assertSame(303, $response->getStatusCode());
+        $moved = $this->shop->categories->get((int) $child['id']);
+        self::assertSame(['/' . $home['id'] . '/' . $child['id'] . '/', 2], [$moved['path'], (int) $moved['depth']]);
+        $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'delete', 'id' => (string) $home['id']]));
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('하위 분류가 있어', $this->body($response));
         $response = $this->post($this->app, '/admin/shop/categories', $this->csrf(['action' => 'delete', 'id' => (string) $child['id']]));
         self::assertSame(303, $response->getStatusCode());
-        self::assertNull($this->shop->categories->byCode('1010'));
+        self::assertNull($this->shop->categories->bySlug('셔츠'));
         self::assertSame(404, $this->get($this->app, '/admin/shop/categories/edit', ['id' => '999'])->getStatusCode());
         self::assertSame(403, $this->post($this->app, '/admin/shop/categories', ['action' => 'delete', 'id' => (string) $top['id']])->getStatusCode());
     }
@@ -389,7 +421,7 @@ final class ShopAdminTest extends WebTestCase
     {
         $this->setupShop($config);
         $this->signIn(true);
-        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['code' => '10', 'name' => "잡화'); alert(1);//", 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['name' => "잡화'); alert(1);//", 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         $list = $this->body($this->get($this->app, '/admin/shop/categories'));
         self::assertStringContainsString("confirm('이 분류를 삭제할까요?')", $list);
         self::assertStringNotContainsString("confirm('잡화", $list);
@@ -398,8 +430,8 @@ final class ShopAdminTest extends WebTestCase
 
     private function seedProducts(): array
     {
-        $top = $this->shop->categories->get($this->shop->categories->save(['code' => '10', 'name' => '의류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
-        $other = $this->shop->categories->get($this->shop->categories->save(['code' => '20', 'name' => '잡화', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $top = $this->shop->categories->get($this->shop->categories->save(['name' => '의류', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
+        $other = $this->shop->categories->get($this->shop->categories->save(['name' => '잡화', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         $a = $this->shop->products->save(['code' => 'A1', 'name' => '파란 셔츠', 'category_id' => (string) $top['id'], 'price' => '300', 'stock' => '3', 'active' => '1', 'stock_alert' => '5',
             'option_group' => [1 => '색상'], 'options' => [['value1' => '빨강', 'price' => '0', 'stock' => '1', 'stock_alert' => '2', 'active' => '1']]], []);
         $b = $this->shop->products->save(['code' => 'B1', 'name' => '가방', 'category_id' => (string) $other['id'], 'price' => '100', 'stock' => '0', 'active' => '1'], []);

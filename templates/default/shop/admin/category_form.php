@@ -14,14 +14,19 @@
   <?php if ($id !== null): ?><input type="hidden" name="id" value="<?= $id ?>"><?php endif ?>
   <section class="card" id="category-basic"><div class="card-body"><h2 class="card-title">분류 기본 설정</h2>
     <div class="yc-fields yc-fields-title">
-    <fieldset class="fieldset<?= isset($errors['code']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">분류 코드 <span class="legend-hint">단계당 2자, 영문 소문자·숫자</span></legend>
-      <?php if ($id === null): ?><input class="input input-bordered" type="text" name="code" value="<?= $this->e($v('code')) ?>" maxlength="10" pattern="[0-9a-zA-Z]{2,10}" required>
-      <?php else: ?><input class="input input-bordered" type="text" value="<?= $this->e($v('code')) ?>" readonly><?php endif ?>
-      <?php if (isset($errors['code'])): ?><p class="validator-hint"><?= $this->e($errors['code']) ?></p><?php endif ?></fieldset>
     <fieldset class="fieldset yc-field-wide<?= isset($errors['name']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">분류명</legend><input class="input input-bordered input-block" type="text" name="name" value="<?= $this->e($v('name')) ?>" maxlength="100" required></fieldset>
+    <fieldset class="fieldset<?= isset($errors['slug']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">슬러그 <span class="legend-hint">주소 /shop/c/슬러그</span></legend>
+      <input class="input input-bordered" type="text" name="slug" value="<?= $this->e($v('slug')) ?>" maxlength="200" placeholder="비우면 이름에서 만듭니다">
+      <?php if (isset($errors['slug'])): ?><p class="validator-hint"><?= $this->e($errors['slug']) ?></p><?php endif ?></fieldset>
     </div>
     <div class="yc-fields">
+      <fieldset class="fieldset yc-field-wide<?= isset($errors['parent_id']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">상위 분류</legend>
+        <select class="select select-bordered" name="parent_id"><option value=""<?= $v('parent_id') === '' ? ' selected' : '' ?>>최상위</option>
+        <?php foreach ($parents as $parentId => $parentLabel): ?><option value="<?= (int) $parentId ?>"<?= $v('parent_id') === (string) $parentId ? ' selected' : '' ?>><?= $this->e($parentLabel) ?></option><?php endforeach ?></select>
+        <?php if (isset($errors['parent_id'])): ?><p class="validator-hint"><?= $this->e($errors['parent_id']) ?></p><?php endif ?></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">순서</legend><input class="input input-bordered input-sm" type="number" name="sort_order" value="<?= $this->e($v('sort_order')) ?>"></fieldset>
+    </div>
+    <div class="yc-fields">
       <fieldset class="fieldset"><legend class="fieldset-legend">한 행 상품 수</legend><input class="input input-bordered input-sm" type="number" name="list_columns" value="<?= $this->e($v('list_columns')) ?>" min="1" max="12" required></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">행 수</legend><input class="input input-bordered input-sm" type="number" name="list_rows" value="<?= $this->e($v('list_rows')) ?>" min="1" max="50" required></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">이미지 너비</legend><input class="input input-bordered input-sm" type="number" name="image_width" value="<?= $this->e($v('image_width')) ?>" min="0" max="2000" required></fieldset>

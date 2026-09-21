@@ -44,16 +44,17 @@ final class CategoryController extends AdminBase
             $data['errors'] = $e->details() ?: [$e->getMessage()];
             if ($page === 'categories') return $this->list($request, $response, $data);
             $id = $page === 'categories/edit' ? Input::id($input['id'] ?? '') : null;
-            return $this->form($request, $response, $data, $input + ($id === null ? [] : ['code' => $categories->get($id)['code']]), $id);
+            return $this->form($request, $response, $data, $input, $id);
         }
         throw DomainError::notFound('페이지를 찾을 수 없습니다.');
     }
 
+    /** 새 분류의 첫 값. 목록의 "하위 추가" 가 ?parent=<id> 로 상위 분류를 미리 고른다. */
     private function defaults(array $input): array
     {
-        $parent = is_string($input['parent'] ?? null) && preg_match('/^[0-9a-z]{2,10}$/D', $input['parent']) ? $input['parent'] : null;
+        $parent = Input::optionalId($input['parent'] ?? '');
         $block = $this->service->settings->block('category');
-        return ['code' => (string) $this->service->categories->suggestCode($parent), 'name' => '', 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0',
+        return ['name' => '', 'slug' => '', 'parent_id' => $parent === null ? '' : (string) $parent, 'sort_order' => '0', 'active' => '1', 'no_coupon' => '0',
             'head_html' => '', 'tail_html' => '', 'list_columns' => (string) $block['columns'], 'list_rows' => (string) $block['rows'],
             'image_width' => (string) $block['image_width'], 'image_height' => (string) $block['image_height'], 'extra' => []];
     }
@@ -71,6 +72,8 @@ final class CategoryController extends AdminBase
             : (is_string($values['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $values['image_key']) ? $values['image_key'] : 'tmp/' . bin2hex(random_bytes(16)));
         $data['values'] = $values;
         $data['id'] = $id;
+        // 상위 분류 선택. 수정 화면에서는 자기와 자기 하위를 뺀다(자기 아래로는 옮길 수 없다).
+        $data['parents'] = $id === null ? $this->service->categories->options() : $this->service->categories->optionsExcluding($id);
         $data['extra'] = [];
         for ($i = 1; $i <= 10; $i++) {
             $data['extra'][$i] = ['label' => (string) ($values['extra_label'][$i] ?? $values['extra'][$i - 1]['label'] ?? ''), 'value' => (string) ($values['extra_value'][$i] ?? $values['extra'][$i - 1]['value'] ?? '')];
