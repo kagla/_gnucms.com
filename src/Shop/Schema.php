@@ -142,19 +142,20 @@ final class Schema
     private static function migrateCategoryTree(Connection $db, string $bin): void
     {
         $table = $db->table('yc_categories');
-        $keep = 'id, parent_id, depth, name, sort_order, active, no_coupon, head_html, tail_html, list_columns, list_rows, image_width, image_height, extra, created_at, updated_at';
         if (!self::columnExists($db, 'yc_categories', 'slug')) {
-            $db->transaction(function () use ($db, $table, $keep, $bin): void {
-                if ($db->dialect()->name() === 'mysql') {
-                    $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
-                } else {
+            if ($db->dialect()->name() === 'mysql') {
+                // MySQL 은 DDL 을 스스로 확정하므로 트랜잭션으로 묶지 않는다(묶으면 커밋이 "열린 트랜잭션 없음" 으로 터진다).
+                $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
+            } else {
+                $keep = 'id, parent_id, depth, name, sort_order, active, no_coupon, head_html, tail_html, list_columns, list_rows, image_width, image_height, extra, created_at, updated_at';
+                $db->transaction(function () use ($db, $table, $keep, $bin): void {
                     $old = $db->table('yc_categories_before_tree');
                     $db->execute('ALTER TABLE ' . $table . ' RENAME TO ' . $old);
                     $db->execute('CREATE TABLE ' . $table . ' (' . strtr(self::categoriesDefinition($bin), $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
                     $db->execute('INSERT INTO ' . $table . ' (' . $keep . ", slug, path, legacy_code) SELECT " . $keep . ", 'c' || id, '', code FROM " . $old);
                     $db->execute('DROP TABLE ' . $old);
-                }
-            });
+                });
+            }
         }
         // 옛 코드는 legacy_code 로만 남는다(MySQL). SQLite 는 표를 다시 만들 때 이미 옮겼다.
         if (self::columnExists($db, 'yc_categories', 'code')) {
