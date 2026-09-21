@@ -11,6 +11,7 @@ final class SchemaTest extends ShopTestCase
 {
     /** Schema::migrate() 가 만드는 인덱스 목록과 그대로 맞춰 둔다. */
     private const INDEXES = ['yc_cat_parent' => 'yc_categories', 'yc_cat_order' => 'yc_categories',
+        'yc_cat_path' => 'yc_categories', 'yc_cat_slug' => 'yc_categories', 'yc_cat_legacy_code' => 'yc_categories',
         'yc_prod_category' => 'yc_products', 'yc_prod_name' => 'yc_products',
         'yc_prod_order' => 'yc_products', 'yc_prod_updated' => 'yc_products',
         'yc_prod_price' => 'yc_products', 'yc_pc_category' => 'yc_product_categories',
@@ -29,9 +30,9 @@ final class SchemaTest extends ShopTestCase
         Schema::migrate($db);
         foreach (Schema::TABLES as $table) self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table($table)), $table);
         self::assertSame(12, count(Schema::TABLES));
-        self::assertSame(21, count(self::INDEXES));
+        self::assertSame(24, count(self::INDEXES));
         $this->assertIndexesExist();
-        $id = $this->shop->store->insert('yc_categories', ['code' => '10', 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
+        $id = $this->shop->store->insert('yc_categories', ['slug' => '의류', 'path' => '/1/', 'legacy_code' => null, 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
             'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
             'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => 1, 'updated_at' => 1]);
         self::assertSame('의류', $this->shop->store->get('yc_categories', $id)['name']);
@@ -61,15 +62,39 @@ final class SchemaTest extends ShopTestCase
         self::assertSame(['', '', 0, 0, 0, ''], [$row['payment_method'], $row['payment_id'], (int) $row['pay_by'], (int) $row['paid_at'], (int) $row['refunded_amount'], $row['payment_detail']]);
     }
 
-    /** 28판 초안에서 잠깐 있었던 yc_categories.image_key 는 지운다 — 편집기 사진은 categories/<id> 폴더로 구분한다. */
+    /** 29판: 2자 코드 계층을 부모 id 트리로. 옛 표를 새 모양으로 바꾸고 slug·path·legacy_code 를 채운다. 두 번 돌려도 같다. */
     #[DataProvider('connectionProvider')]
-    public function testMigrateDropsTheShortLivedImageKeyColumnFromCategories(array $config): void
+    public function testMigrateTurnsCodedCategoriesIntoATree(array $config): void
     {
         $this->setupShop($config);
         $db = $this->app->db();
-        $db->execute('ALTER TABLE ' . $db->table('yc_categories') . ' ADD COLUMN image_key VARCHAR(32) NOT NULL DEFAULT \'\'');
-        Schema::migrate($db); Schema::migrate($db);
-        self::assertArrayNotHasKey('image_key', $this->category('의류'));
+        // 28판 모양(code 있음, slug·path 없음)의 표를 손으로 만든다.
+        foreach (['yc_cat_parent', 'yc_cat_order', 'yc_cat_path', 'yc_cat_slug', 'yc_cat_legacy_code'] as $index) {
+            $db->execute('DROP INDEX ' . ($db->dialect()->name() === 'mysql' ? $db->index($index) . ' ON ' . $db->table('yc_categories') : $db->index($index)));
+        }
+        $db->execute('DROP TABLE ' . $db->table('yc_categories'));
+        $bin = $db->dialect()->name() === 'mysql' ? ' COLLATE utf8mb4_bin' : '';
+        $db->execute('CREATE TABLE ' . $db->table('yc_categories') . ' (' . strtr('id {AUTO_PK}, code VARCHAR(10)' . $bin . ' NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
+            name VARCHAR(100) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
+            head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL, image_width INTEGER NOT NULL,
+            image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL', $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
+        $common = ['sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5, 'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => 1, 'updated_at' => 1];
+        $top = $db->insert('yc_categories', ['code' => '10', 'parent_id' => null, 'depth' => 1, 'name' => '의류'] + $common);
+        $child = $db->insert('yc_categories', ['code' => '1010', 'parent_id' => $top, 'depth' => 2, 'name' => '셔츠'] + $common);
+        $grand = $db->insert('yc_categories', ['code' => '101010', 'parent_id' => $child, 'depth' => 3, 'name' => '반팔 셔츠'] + $common);
+        $dup = $db->insert('yc_categories', ['code' => '20', 'parent_id' => null, 'depth' => 1, 'name' => '의류'] + $common);
+        Schema::migrate($db);
+        Schema::migrate($db);
+        $rows = [];
+        foreach ($db->select('SELECT * FROM ' . $db->table('yc_categories') . ' ORDER BY id') as $row) $rows[(int) $row['id']] = $row;
+        self::assertArrayNotHasKey('code', $rows[(int) $top]);
+        self::assertSame(['의류', '/' . $top . '/', 1, '10'], [$rows[(int) $top]['slug'], $rows[(int) $top]['path'], (int) $rows[(int) $top]['depth'], $rows[(int) $top]['legacy_code']]);
+        self::assertSame(['셔츠', '/' . $top . '/' . $child . '/', 2, '1010'], [$rows[(int) $child]['slug'], $rows[(int) $child]['path'], (int) $rows[(int) $child]['depth'], $rows[(int) $child]['legacy_code']]);
+        self::assertSame(['반팔-셔츠', '/' . $top . '/' . $child . '/' . $grand . '/', 3], [$rows[(int) $grand]['slug'], $rows[(int) $grand]['path'], (int) $rows[(int) $grand]['depth']]);
+        self::assertSame('의류-2', $rows[(int) $dup]['slug']);
+        $this->assertIndexesExist();
+        self::assertNull($this->shop->categories->byLegacyCode('99'));
+        self::assertSame((int) $child, (int) $this->shop->categories->byLegacyCode('1010')['id']);
     }
 
     private function assertIndexesExist(): void

@@ -1,7 +1,7 @@
 <header class="yc-header yc-header-compact">
   <div class="yc-header-bottom">
     <details class="yc-category-dropdown"><summary><?= $this->icon('grid', 18) ?> 카테고리</summary><nav aria-label="전체 상품 분류">
-      <?php foreach ($menu as $category): ?><a href="<?= $this->e($url) ?>/list?ca=<?= $this->e($category['code']) ?>"><?= $this->e($category['name']) ?> <span aria-hidden="true">›</span></a><?php endforeach ?>
+      <?php foreach ($menu as $category): ?><a href="<?= $this->e($url) ?>/c/<?= $this->e(rawurlencode($category['slug'])) ?>"><?= $this->e($category['name']) ?> <span aria-hidden="true">›</span></a><?php endforeach ?>
       <?php if ($menu === []): ?><p class="muted">분류를 준비하고 있습니다.</p><?php endif ?>
     </nav></details>
     <nav class="yc-nav" aria-label="쇼핑 메뉴">

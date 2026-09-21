@@ -20,7 +20,7 @@
     <?php if ($list['facets'] !== []): ?>
       <nav class="yc-facets" aria-label="분류별 결과">
         <a class="btn btn-sm<?= $ca === '' ? ' btn-active' : ' btn-outline' ?>" href="<?= $this->e($url) ?>/search?<?= $this->e(http_build_query(['q' => $q, 'min' => $min ?: '', 'max' => $max ?: ''])) ?>">전체</a>
-        <?php foreach ($list['facets'] as $facet): ?><a class="btn btn-sm<?= $ca === $facet['code'] ? ' btn-active' : ' btn-outline' ?>" href="<?= $this->e($url) ?>/search?<?= $this->e(http_build_query(['q' => $q, 'ca' => $facet['code'], 'min' => $min ?: '', 'max' => $max ?: ''])) ?>"><?= $this->e($facet['name']) ?> (<?= $facet['count'] ?>)</a><?php endforeach ?>
+        <?php foreach ($list['facets'] as $facet): ?><a class="btn btn-sm<?= $ca === $facet['slug'] ? ' btn-active' : ' btn-outline' ?>" href="<?= $this->e($url) ?>/search?<?= $this->e(http_build_query(['q' => $q, 'ca' => $facet['slug'], 'min' => $min ?: '', 'max' => $max ?: ''])) ?>"><?= $this->e($facet['name']) ?> (<?= $facet['count'] ?>)</a><?php endforeach ?>
       </nav>
     <?php endif ?>
     <div class="yc-toolbar"><span class="muted"><?= $list['total'] ?>개</span><?php $this->insert('_sort', ['action' => $url . '/search', 'hidden' => ['q' => $q, 'ca' => $ca, 'min' => $min ?: '', 'max' => $max ?: '']]) ?></div>

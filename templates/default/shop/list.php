@@ -12,10 +12,10 @@
   </div>
   <h1 class="yc-title"><?= $this->e($category['name']) ?></h1>
   <?php if ($category['head_html'] !== ''): ?><div class="yc-html"><?= $this->html($category['head_html']) ?></div><?php endif ?>
-  <?php if ($children !== []): ?><nav class="yc-children" aria-label="하위 분류"><?php foreach ($children as $child): ?><a class="btn btn-sm btn-outline" href="<?= $this->e($url) ?>/list?ca=<?= $this->e($child['code']) ?>"><?= $this->e($child['name']) ?></a><?php endforeach ?></nav><?php endif ?>
-  <div class="yc-toolbar"><span class="muted"><?= $list['total'] ?>개</span><?php $this->insert('_sort', ['action' => $url . '/list', 'hidden' => ['ca' => $category['code']]]) ?></div>
+  <?php if ($children !== []): ?><nav class="yc-children" aria-label="하위 분류"><?php foreach ($children as $child): ?><a class="btn btn-sm btn-outline" href="<?= $this->e($url) ?>/c/<?= $this->e(rawurlencode($child['slug'])) ?>"><?= $this->e($child['name']) ?></a><?php endforeach ?></nav><?php endif ?>
+  <div class="yc-toolbar"><span class="muted"><?= $list['total'] ?>개</span><?php $this->insert('_sort', ['action' => $url . '/c/' . rawurlencode($category['slug']), 'hidden' => []]) ?></div>
   <?php $this->insert('_grid', ['items' => $list['items'], 'columns' => $list['columns'], 'size' => 'list']) ?>
-  <?php $this->insert('_pager', ['page_url' => fn (int $p): string => $url . '/list?' . http_build_query(['ca' => $category['code'], 'sort' => $sort, 'dir' => $dir, 'page' => $p])]) ?>
+  <?php $this->insert('_pager', ['page_url' => fn (int $p): string => $url . '/c/' . rawurlencode($category['slug']) . '?' . http_build_query(['sort' => $sort, 'dir' => $dir, 'page' => $p])]) ?>
   <?php if ($category['tail_html'] !== ''): ?><div class="yc-html"><?= $this->html($category['tail_html']) ?></div><?php endif ?>
 </div>
 <?php $this->stop() ?>

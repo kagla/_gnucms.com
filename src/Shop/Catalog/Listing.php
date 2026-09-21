@@ -17,9 +17,10 @@ final class Listing
 
     public function category(array $category, string $sort, string $dir, int $page): array
     {
+        [$sub, $params] = Categories::subtreeWhere($category, 'c');
         $where = 'p.active = 1 AND EXISTS (SELECT 1 FROM ' . $this->store->table('yc_product_categories') . ' pc JOIN ' . $this->store->table('yc_categories')
-            . ' c ON c.id = pc.category_id WHERE pc.product_id = p.id AND c.active = 1 AND c.code LIKE ?)';
-        return $this->paginate($where, [$category['code'] . '%'], $this->order($sort, $dir), $page, (int) $category['list_columns'], (int) $category['list_rows']);
+            . ' c ON c.id = pc.category_id WHERE pc.product_id = p.id AND c.active = 1 AND ' . $sub . ')';
+        return $this->paginate($where, $params, $this->order($sort, $dir), $page, (int) $category['list_columns'], (int) $category['list_rows']);
     }
 
     public function type(string $type, string $sort, string $dir, int $page): array
@@ -29,7 +30,7 @@ final class Listing
         return $this->paginate($this->visible() . ' AND p.' . $column . ' = 1', [], $this->order($sort, $dir), $page, (int) $block['columns'], (int) $block['rows']);
     }
 
-    public function search(string $q, string $ca, int $min, int $max, string $sort, string $dir, int $page): array
+    public function search(string $q, ?array $category, int $min, int $max, string $sort, string $dir, int $page): array
     {
         $words = array_values(array_unique(array_filter(preg_split('/\s+/u', mb_substr(trim($q), 0, 50, 'UTF-8')) ?: [], static fn (string $w): bool => $w !== '')));
         $block = $this->settings->block('search');
@@ -42,11 +43,15 @@ final class Listing
         }
         if ($min > 0) { $where[] = 'p.price >= ?'; $params[] = $min; }
         if ($max > 0) { $where[] = 'p.price <= ?'; $params[] = $max; }
-        $facets = $this->store->select('SELECT c.code, c.name, COUNT(*) AS count FROM ' . $this->store->table('yc_products') . ' p JOIN ' . $this->store->table('yc_categories')
-            . ' c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' GROUP BY c.code, c.name ORDER BY c.code', $params);
-        if ($ca !== '' && preg_match('/^[0-9a-z]{2,10}$/D', $ca)) { $where[] = 'EXISTS (SELECT 1 FROM ' . $this->store->table('yc_categories') . ' cc WHERE cc.id = p.category_id AND cc.code LIKE ?)'; $params[] = $ca . '%'; }
+        $facets = $this->store->select('SELECT c.slug, c.name, COUNT(*) AS count FROM ' . $this->store->table('yc_products') . ' p JOIN ' . $this->store->table('yc_categories')
+            . ' c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' GROUP BY c.slug, c.name ORDER BY c.name', $params);
+        if ($category !== null) {
+            [$sub, $subParams] = Categories::subtreeWhere($category, 'cc');
+            $where[] = 'EXISTS (SELECT 1 FROM ' . $this->store->table('yc_categories') . ' cc WHERE cc.id = p.category_id AND ' . $sub . ')';
+            array_push($params, ...$subParams);
+        }
         $result = $this->paginate(implode(' AND ', $where), $params, $this->order($sort, $dir), $page, (int) $block['columns'], (int) $block['rows']);
-        $result['facets'] = array_map(static fn (array $f): array => ['code' => $f['code'], 'name' => $f['name'], 'count' => (int) $f['count']], $facets);
+        $result['facets'] = array_map(static fn (array $f): array => ['slug' => $f['slug'], 'name' => $f['name'], 'count' => (int) $f['count']], $facets);
         $result['words'] = $words;
         return $result;
     }

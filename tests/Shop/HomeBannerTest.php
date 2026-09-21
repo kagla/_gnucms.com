@@ -165,7 +165,7 @@ final class HomeBannerTest extends ShopTestCase
         self::assertSame('', $empty['image_url']);
         self::assertSame('', $empty['caption']);
         self::assertSame('/cms/store/type?t=hit', $empty['button_url']);
-        self::assertSame('/cms/store/list?ca=' . $category['code'], $this->shop->banner->view($banner, [], [$category], '/cms/store', '/cms')['button_url']);
+        self::assertSame('/cms/store/c/' . rawurlencode($category['slug']), $this->shop->banner->view($banner, [], [$category], '/cms/store', '/cms')['button_url']);
         self::assertSame('', $this->shop->banner->view($banner, [], [], '/cms/store', '/cms')['button_url']);
     }
 }

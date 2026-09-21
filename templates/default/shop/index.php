@@ -23,7 +23,7 @@
   </section>
   <?php endif ?>
   <?php if ($menu !== []): ?><section class="yc-category-section" aria-labelledby="yc-categories-title"><div class="yc-section-heading"><h2 id="yc-categories-title">무엇을 찾으세요?</h2><span class="muted">카테고리별로 편하게 둘러보세요</span></div>
-    <nav class="yc-category-shortcuts" aria-label="인기 분류 바로가기"><?php foreach ($menu as $index => $category): ?><a href="<?= $this->e($url) ?>/list?ca=<?= $this->e($category['code']) ?>"><span class="yc-category-icon" data-tone="<?= $index % 4 ?>" aria-hidden="true"><?= $this->icon(['grid', 'gift', 'home', 'star'][$index % 4], 26) ?></span><strong><?= $this->e($category['name']) ?></strong></a><?php endforeach ?></nav>
+    <nav class="yc-category-shortcuts" aria-label="인기 분류 바로가기"><?php foreach ($menu as $index => $category): ?><a href="<?= $this->e($url) ?>/c/<?= $this->e(rawurlencode($category['slug'])) ?>"><span class="yc-category-icon" data-tone="<?= $index % 4 ?>" aria-hidden="true"><?= $this->icon(['grid', 'gift', 'home', 'star'][$index % 4], 26) ?></span><strong><?= $this->e($category['name']) ?></strong></a><?php endforeach ?></nav>
   </section><?php endif ?>
   <?php foreach ($blocks as $type => $items): ?>
     <section class="yc-block">

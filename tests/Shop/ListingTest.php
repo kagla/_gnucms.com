@@ -12,7 +12,7 @@ final class ListingTest extends ShopTestCase
     public function testCategoryPrefixSlotsVisibilitySortAndPaging(array $config): void
     {
         $this->setupShop($config);
-        $top = $this->category('의류'); $child = $this->category('셔츠', '10'); $hidden = $this->category('숨김', '10', ['active' => '0']); $other = $this->category('잡화');
+        $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $hidden = $this->category('숨김', (int) $top['id'], ['active' => '0']); $other = $this->category('잡화');
         $a = $this->product(['category_id' => (string) $child['id'], 'code' => 'A', 'name' => '가', 'price' => '300', 'sort_order' => '2']);
         $b = $this->product(['category_id' => (string) $other['id'], 'category2_id' => (string) $top['id'], 'code' => 'B', 'name' => '나', 'price' => '100', 'sort_order' => '1']);
         $c = $this->product(['category_id' => (string) $hidden['id'], 'code' => 'C', 'name' => '다', 'price' => '200']);
@@ -45,14 +45,14 @@ final class ListingTest extends ShopTestCase
         self::assertSame(['A', 'B'], array_column($this->shop->listing->type('hit', '', '', 1)['items'], 'code'));
         self::assertSame(['C'], array_column($this->shop->listing->type('new', '', '', 1)['items'], 'code'));
         self::assertSame(['A'], array_column($this->shop->listing->type('popular', '', '', 1)['items'], 'code'));
-        $search = $this->shop->listing->search('셔츠 상품', '', 0, 0, '', '', 1);
+        $search = $this->shop->listing->search('셔츠 상품', null, 0, 0, '', '', 1);
         self::assertSame(['A', 'B'], array_column($search['items'], 'code'));
         self::assertSame(['셔츠', '상품'], $search['words']);
-        self::assertSame([['code' => '10', 'name' => '의류', 'count' => 2]], $search['facets']);
-        self::assertSame(['B'], array_column($this->shop->listing->search('셔츠', '', 0, 150, '', '', 1)['items'], 'code'));
-        self::assertSame(['C'], array_column($this->shop->listing->search('가방', '20', 0, 0, '', '', 1)['items'], 'code'));
-        self::assertSame([], $this->shop->listing->search('100%', '', 0, 0, '', '', 1)['items']);
-        self::assertSame(['B', 'A'], array_column($this->shop->listing->search('셔츠', '', 0, 0, 'price', 'asc', 1)['items'], 'code'));
+        self::assertSame([['slug' => '의류', 'name' => '의류', 'count' => 2]], $search['facets']);
+        self::assertSame(['B'], array_column($this->shop->listing->search('셔츠', null, 0, 150, '', '', 1)['items'], 'code'));
+        self::assertSame(['C'], array_column($this->shop->listing->search('가방', $other, 0, 0, '', '', 1)['items'], 'code'));
+        self::assertSame([], $this->shop->listing->search('100%', null, 0, 0, '', '', 1)['items']);
+        self::assertSame(['B', 'A'], array_column($this->shop->listing->search('셔츠', null, 0, 0, 'price', 'asc', 1)['items'], 'code'));
         $main = $this->shop->listing->main();
         self::assertSame(['hit', 'new', 'recommend', 'discount'], array_keys($main));
         self::assertSame(['A', 'B'], array_column($main['hit'], 'code')); self::assertSame([], $main['recommend']);

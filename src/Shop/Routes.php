@@ -49,6 +49,7 @@ final class Routes
         foreach (['list', 'type', 'search', 'item', 'image', 'banner-image'] as $page) {
             $map('GET', '/' . $page, static fn ($request, $response) => $shop->handle($page, $request, $response));
         }
+        $map('GET', '/c/{slug}', static fn ($request, $response, array $args) => $shop->handle('category', $request, $response, $args))->setName('shop.category');
         foreach (['cart', 'checkout', 'orders'] as $page) foreach (['GET', 'POST'] as $method) {
             $map($method, '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }

@@ -37,11 +37,10 @@ abstract class ShopTestCase extends DatabaseTestCase
         }
     }
 
-    /** 최소 필드로 분류 하나를 만든다. */
-    protected function category(string $name = '의류', ?string $parent = null, array $extra = []): array
+    /** 최소 필드로 분류 하나. 상위는 id 로 준다(없으면 최상위). */
+    protected function category(string $name = '의류', ?int $parentId = null, array $extra = []): array
     {
-        $code = $this->shop->categories->suggestCode($parent);
-        $id = $this->shop->categories->save($extra + ['code' => $code, 'name' => $name, 'active' => '1',
+        $id = $this->shop->categories->save($extra + ['name' => $name, 'parent_id' => $parentId === null ? '' : (string) $parentId, 'active' => '1',
             'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
         return $this->shop->categories->get($id);
     }

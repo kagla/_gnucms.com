@@ -431,7 +431,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('파란 셔츠', $list); self::assertStringContainsString('가방', $list);
         self::assertStringContainsString('name="rows[' . $seed['a'] . '][price]"', $list);
         self::assertStringNotContainsString('가방', $this->body($this->get($this->app, '/admin/shop/products', ['q' => '셔츠'])));
-        self::assertStringNotContainsString('파란 셔츠', $this->body($this->get($this->app, '/admin/shop/products', ['ca' => '20'])));
+        self::assertStringNotContainsString('파란 셔츠', $this->body($this->get($this->app, '/admin/shop/products', ['ca' => (string) $seed['other']['id']])));
         $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'bulk', 'rows' => [$seed['b'] => ['original_stock' => '0', 'category_id' => (string) $seed['top']['id'], 'name' => '가방(일괄)', 'list_price' => '0', 'price' => '150', 'stock' => '2', 'active' => '1', 'sold_out' => '0', 'sort_order' => '1']]]));
         self::assertSame('/admin/shop/products?saved=1', $response->getHeaderLine('Location'));
         self::assertSame('가방(일괄)', $this->shop->products->find($seed['b'])['name']);
@@ -462,7 +462,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame('application/json; charset=utf-8', $json->getHeaderLine('Content-Type'));
         $decoded = json_decode($this->body($json), true);
         self::assertSame('B1', $decoded['items'][0]['code']); self::assertSame('의류', $decoded['items'][0]['category_name']);
-        self::assertSame([], json_decode($this->body($this->get($this->app, '/admin/shop/products/search', ['q' => '셔츠', 'exclude' => (string) $seed['a'], 'ca' => '20'])), true)['items']);
+        self::assertSame([], json_decode($this->body($this->get($this->app, '/admin/shop/products/search', ['q' => '셔츠', 'exclude' => (string) $seed['a'], 'ca' => (string) $seed['other']['id']])), true)['items']);
         $response = $this->post($this->app, '/admin/shop/products', $this->csrf(['action' => 'delete', 'ids' => [(string) $copy['id']]]));
         self::assertSame(303, $response->getStatusCode());
         self::assertNull($this->shop->products->find((int) $copy['id']));

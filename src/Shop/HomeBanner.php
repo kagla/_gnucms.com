@@ -117,7 +117,7 @@ final class HomeBanner
         $type = null;
         foreach ($blocks as $key => $rows) { if ($rows !== []) { $product = $rows[0]; $type = $key; break; } }
         $buttonUrl = $type !== null ? $url . '/type?t=' . rawurlencode($type)
-            : ($menu !== [] ? $url . '/list?ca=' . rawurlencode($menu[0]['code']) : '');
+            : ($menu !== [] ? $url . '/c/' . rawurlencode($menu[0]['slug']) : '');
         if ($banner['mode'] === 'product') $product = self::product($this->store, $banner['product_id']);
         if ($banner['mode'] === 'random') $product = self::randomProduct($blocks);
         $image = null; $caption = ''; $alt = ''; $imageUrl = '';

@@ -53,11 +53,7 @@ final class Schema
             'yc_order_history' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, status VARCHAR(20) NOT NULL,
                 actor VARCHAR(100) NOT NULL, note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL',
             'yc_settings' => 'id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL',
-            'yc_categories' => 'id {AUTO_PK}, code VARCHAR(10)' . $bin . ' NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
-                name VARCHAR(100) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1,
-                no_coupon SMALLINT NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL,
-                list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL, image_width INTEGER NOT NULL, image_height INTEGER NOT NULL,
-                extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
+            'yc_categories' => self::categoriesDefinition($bin),
             'yc_products' => 'id {AUTO_PK}, code VARCHAR(20)' . $bin . ' NOT NULL UNIQUE, slug VARCHAR(200)' . $bin . ' NOT NULL UNIQUE, category_id BIGINT NOT NULL,
                 name VARCHAR(250) NOT NULL, maker VARCHAR(100) NOT NULL DEFAULT \'\', origin VARCHAR(100) NOT NULL DEFAULT \'\',
                 brand VARCHAR(100) NOT NULL DEFAULT \'\', model VARCHAR(100) NOT NULL DEFAULT \'\', summary {TEXT} NOT NULL,
@@ -95,7 +91,9 @@ final class Schema
         foreach (self::PAYMENT_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
         self::dropColumn($db, 'yc_categories', 'image_key');
+        self::migrateCategoryTree($db, $bin);
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
+            'yc_cat_path' => ['yc_categories', 'path'],
             'yc_prod_category' => ['yc_products', 'category_id'], 'yc_prod_name' => ['yc_products', 'name'],
             'yc_prod_order' => ['yc_products', 'sort_order'], 'yc_prod_updated' => ['yc_products', 'updated_at'],
             'yc_prod_price' => ['yc_products', 'price'], 'yc_pc_category' => ['yc_product_categories', 'category_id'],
@@ -108,12 +106,80 @@ final class Schema
             'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
             'yc_history_order' => ['yc_order_history', 'order_id']];
         foreach ($indexes as $index => [$table, $column]) {
-            $physical = $db->prefix() . $index;
-            $exists = match ($db->dialect()->name()) {
-                'sqlite' => $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [$physical]),
-                'mysql' => $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]),
-            };
-            if ($exists === null) $db->execute('CREATE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
+            if (!self::indexExists($db, $table, $index)) $db->execute('CREATE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
+        }
+        $uniqueIndexes = ['yc_cat_slug' => ['yc_categories', 'slug'], 'yc_cat_legacy_code' => ['yc_categories', 'legacy_code']];
+        foreach ($uniqueIndexes as $index => [$table, $column]) {
+            if (!self::indexExists($db, $table, $index)) $db->execute('CREATE UNIQUE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
+        }
+    }
+
+    private static function indexExists(Connection $db, string $table, string $index): bool
+    {
+        $physical = $db->prefix() . $index;
+        return match ($db->dialect()->name()) {
+            'sqlite' => $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [$physical]),
+            'mysql' => $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]),
+        } !== null;
+    }
+
+    /** 분류 표. 부모 id 트리: path 는 /1/5/12/ 처럼 조상부터 자기까지의 id, slug 는 공개 주소, legacy_code 는 29판 이전의 2자 코드(새 분류는 NULL). */
+    private static function categoriesDefinition(string $bin): string
+    {
+        return 'id {AUTO_PK}, parent_id BIGINT NULL, depth SMALLINT NOT NULL, name VARCHAR(100) NOT NULL,
+            slug VARCHAR(200)' . $bin . ' NOT NULL, path VARCHAR(255) NOT NULL, legacy_code VARCHAR(10)' . $bin . ' NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
+            head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL,
+            image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL';
+    }
+
+    /** 29판: 2자 코드 계층 → 부모 id 트리. slug 칸이 이미 있으면 끝난 것이다. SQLite 는 칸을 지우거나 NULL 허용을 바꾸지 못해 표를 다시 만든다(코어의 rebuildSqliteUsers() 와 같은 방식). */
+    private static function migrateCategoryTree(Connection $db, string $bin): void
+    {
+        try {
+            $db->selectOne('SELECT slug FROM ' . $db->table('yc_categories') . ' LIMIT 1');
+            return;
+        } catch (DomainError) {
+        }
+        $table = $db->table('yc_categories');
+        $keep = 'id, parent_id, depth, name, sort_order, active, no_coupon, head_html, tail_html, list_columns, list_rows, image_width, image_height, extra, created_at, updated_at';
+        $db->transaction(function () use ($db, $table, $keep, $bin): void {
+            if ($db->dialect()->name() === 'mysql') {
+                $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
+                $db->execute('UPDATE ' . $table . ' SET legacy_code = code, slug = CONCAT(\'c\', id)');
+                $db->execute('ALTER TABLE ' . $table . ' DROP COLUMN code');
+            } else {
+                $old = $db->table('yc_categories_before_tree');
+                $db->execute('ALTER TABLE ' . $table . ' RENAME TO ' . $old);
+                $db->execute('CREATE TABLE ' . $table . ' (' . strtr(self::categoriesDefinition($bin), $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
+                $db->execute('INSERT INTO ' . $table . ' (' . $keep . ", slug, path, legacy_code) SELECT " . $keep . ", 'c' || id, '', code FROM " . $old);
+                $db->execute('DROP TABLE ' . $old);
+            }
+            self::fillCategoryTree($db);
+        });
+    }
+
+    /** 부모 사슬로 path·depth 를, 이름으로 slug 를 채운다(겹치면 -2, -3…, 이름에서 못 만들면 c<id>). 이전 직후 한 번만 돈다. */
+    private static function fillCategoryTree(Connection $db): void
+    {
+        $table = $db->table('yc_categories');
+        $rows = [];
+        foreach ($db->select('SELECT id, parent_id, name FROM ' . $table . ' ORDER BY id') as $row) $rows[(int) $row['id']] = $row;
+        $paths = [];
+        $pathOf = static function (int $id) use (&$pathOf, &$paths, $rows): string {
+            if (isset($paths[$id])) return $paths[$id];
+            $parent = $rows[$id]['parent_id'];
+            $above = $parent === null || !isset($rows[(int) $parent]) ? '/' : $pathOf((int) $parent);
+            return $paths[$id] = $above . $id . '/';
+        };
+        $taken = [];
+        foreach ($rows as $id => $row) {
+            $base = Input::slug((string) $row['name'], 'c' . $id);
+            $slug = $base;
+            for ($n = 2; isset($taken[$slug]); $n++) $slug = $base . '-' . $n;
+            $taken[$slug] = true;
+            $path = $pathOf($id);
+            $db->execute('UPDATE ' . $table . ' SET slug = ?, path = ?, depth = ? WHERE id = ?', [$slug, $path, substr_count($path, '/') - 1, $id]);
         }
     }
 

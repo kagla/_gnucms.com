@@ -12,31 +12,40 @@ use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
 use GnuCms\Support\Clock;
 
+/**
+ * 분류 트리. 부모 id 로 잇고 path(/1/5/12/)로 하위 전체를 한 번에 건다.
+ * 공개 주소는 slug 이고, 29판 이전의 2자 코드는 legacy_code 로만 남아 옛 주소를 넘긴다.
+ */
 final class Categories
 {
-    public const MAX_DEPTH = 5;
+    public const MAX_DEPTH = 10;
 
     public function __construct(private Store $store, private HtmlSanitizer $sanitizer, private Settings $settings, private ContentImageService $contentImages) {}
 
-    /** 형제의 마지막 두 자리 최댓값(36진수)에 36을 더한다. 첫 형제는 '10'. 'zz'를 넘으면 null. */
-    public function suggestCode(?string $parentCode): ?string
-    {
-        $prefix = $parentCode ?? '';
-        if ($prefix !== '' && $this->byCode($prefix) === null) throw DomainError::notFound('상위 분류를 찾을 수 없습니다.');
-        if (strlen($prefix) >= self::MAX_DEPTH * 2) throw DomainError::validation(['code' => self::MAX_DEPTH . '단계 아래에는 분류를 만들 수 없습니다.']);
-        $rows = $this->store->select('SELECT code FROM ' . $this->store->table('yc_categories') . ' WHERE code LIKE ?', [$prefix . '__']);
-        $max = -1;
-        foreach ($rows as $row) $max = max($max, (int) base_convert(substr($row['code'], -2), 36, 10));
-        $next = $max < 0 ? 36 : $max + 36;
-        if ($next > 1295) return null;
-        return $prefix . str_pad(base_convert((string) $next, 10, 36), 2, '0', STR_PAD_LEFT);
-    }
-
+    /** 만들기와 고치기. 상위 분류를 바꾸면 자기와 하위 전체가 함께 옮겨진다. */
     public function save(array $input, ?int $id = null): int
     {
         $defaults = $this->settings->block('category');
+        $existing = $id === null ? null : $this->get($id);
+        $parentId = Input::optionalId($input['parent_id'] ?? '');
+        $parent = null;
+        if ($parentId !== null) {
+            $parent = $this->find($parentId) ?? throw DomainError::validation(['parent_id' => '상위 분류를 찾을 수 없습니다.']);
+            if ($existing !== null && str_starts_with((string) $parent['path'], (string) $existing['path'])) {
+                throw DomainError::validation(['parent_id' => '자기 자신이나 자기 하위 분류 아래로 옮길 수 없습니다.']);
+            }
+        }
+        $depth = $parent === null ? 1 : (int) $parent['depth'] + 1;
+        // 옮기면 하위도 같이 내려간다 — 가장 깊은 하위가 상한을 넘지 않아야 한다.
+        $below = $existing === null ? 0
+            : (int) $this->store->selectOne('SELECT MAX(depth) AS d FROM ' . $this->store->table('yc_categories') . ' WHERE path LIKE ?', [$existing['path'] . '%'])['d'] - (int) $existing['depth'];
+        if ($depth + $below > self::MAX_DEPTH) throw DomainError::validation(['parent_id' => '분류는 ' . self::MAX_DEPTH . '단계까지입니다.']);
+        $name = Input::text($input['name'] ?? '', 'name', 100, false);
         $row = [
-            'name' => Input::text($input['name'] ?? '', 'name', 100, false),
+            'name' => $name,
+            'slug' => $this->uniqueSlug($input['slug'] ?? '', $name, $id),
+            'parent_id' => $parentId,
+            'depth' => $depth,
             'sort_order' => Input::int($input['sort_order'] ?? '', 'sort_order', -999999, 999999, 0),
             'active' => Input::bool($input['active'] ?? '0'),
             'no_coupon' => Input::bool($input['no_coupon'] ?? '0'),
@@ -51,25 +60,29 @@ final class Categories
         ];
         // 목록 위·아래 HTML 의 편집기 사진은 categories/<id> 폴더에 둔다. 첫 저장 전에는 폼이 준 tmp/<키> 에 모였다가 저장하면서 옮긴다.
         $tmpKey = is_string($input['image_key'] ?? null) && preg_match('/^tmp\/[a-f0-9]{32}$/D', $input['image_key']) ? $input['image_key'] : null;
-        $saved = $this->store->transaction(function () use ($input, $id, $row): int {
-            if ($id !== null) {
-                $existing = $this->store->get('yc_categories', $id);
-                $this->store->update('yc_categories', $id, $row);
+        $saved = $this->store->transaction(function () use ($input, $id, $existing, $parent, $row): int {
+            $above = $parent === null ? '/' : (string) $parent['path'];
+            if ($existing !== null) {
+                $newPath = $above . $id . '/';
+                $this->store->update('yc_categories', $id, $row + ['path' => $newPath]);
+                if ($newPath !== $existing['path']) {
+                    // 하위 전체의 path 앞부분을 바꾸고 depth 를 차이만큼 옮긴다. 분류는 많지 않아 행마다 고친다(방언 차이 없음).
+                    $delta = (int) $row['depth'] - (int) $existing['depth'];
+                    $rows = $this->store->select('SELECT id, path, depth FROM ' . $this->store->table('yc_categories') . ' WHERE path LIKE ? AND id <> ?', [$existing['path'] . '%', $id]);
+                    foreach ($rows as $node) {
+                        $this->store->update('yc_categories', (int) $node['id'],
+                            ['path' => $newPath . substr((string) $node['path'], strlen((string) $existing['path'])), 'depth' => (int) $node['depth'] + $delta]);
+                    }
+                }
                 if (($input['apply_children'] ?? '') === '1') {
                     $this->store->db->update('yc_categories', array_intersect_key($row, array_flip(['active', 'no_coupon', 'list_columns', 'list_rows', 'image_width', 'image_height', 'updated_at'])),
-                        'code LIKE :prefix AND id <> :id', ['prefix' => $existing['code'] . '%', 'id' => $id]);
+                        'path LIKE :prefix AND id <> :id', ['prefix' => $newPath . '%', 'id' => $id]);
                 }
                 return $id;
             }
-            $code = strtolower(Input::code($input['code'] ?? '', 'code', '/^[0-9A-Za-z]{2,10}$/D', '분류 코드는 단계당 2자, 최대 10자의 영문 소문자·숫자입니다.'));
-            if (strlen($code) % 2 !== 0) throw DomainError::validation(['code' => '분류 코드는 단계당 2자입니다.']);
-            $parent = null;
-            if (strlen($code) > 2) {
-                $parent = $this->byCode(substr($code, 0, -2)) ?? throw DomainError::validation(['code' => '상위 분류 코드가 없습니다.']);
-            }
-            if ($this->byCode($code) !== null) throw DomainError::validation(['code' => '이미 사용 중인 분류 코드입니다.']);
-            $row += ['code' => $code, 'parent_id' => $parent === null ? null : (int) $parent['id'], 'depth' => intdiv(strlen($code), 2), 'created_at' => Clock::timestamp()];
-            return $this->store->insert('yc_categories', $row);
+            $newId = $this->store->insert('yc_categories', $row + ['path' => '', 'legacy_code' => null, 'created_at' => Clock::timestamp()]);
+            $this->store->update('yc_categories', $newId, ['path' => $above . $newId . '/']);
+            return $newId;
         });
         $folder = 'categories/' . $saved;
         if ($id === null && $tmpKey !== null) {
@@ -83,22 +96,51 @@ final class Categories
         return $saved;
     }
 
+    /** 직접 준 슬러그는 규칙대로 다듬고 겹치면 거절한다. 이름에서 만든 슬러그는 -2, -3 … 을 붙인다. */
+    private function uniqueSlug(mixed $given, string $name, ?int $excludeId): string
+    {
+        $typed = Input::text($given, 'slug', 200);
+        $base = Input::slug($typed !== '' ? $typed : $name, '');
+        if ($base === '') throw DomainError::validation(['slug' => '슬러그를 만들 수 없습니다. 영문·숫자·한글이 든 이름이나 슬러그를 입력해 주세요.']);
+        $slug = $base;
+        for ($n = 2; ($other = $this->bySlug($slug)) !== null && (int) $other['id'] !== $excludeId; $n++) {
+            if ($typed !== '') throw DomainError::validation(['slug' => '이미 쓰는 슬러그입니다.']);
+            $slug = $base . '-' . $n;
+        }
+        return $slug;
+    }
+
     public function get(int $id): array
     {
         return $this->decode($this->store->get('yc_categories', $id));
     }
 
-    public function byCode(string $code): ?array
+    public function find(int $id): ?array
     {
-        $row = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE code = ?', [$code]);
+        $row = $this->store->find('yc_categories', $id);
         return $row === null ? null : $this->decode($row);
     }
 
-    /** 부모 우선 DFS. 형제는 sort_order, code 순. 각 행에 product_count. */
+    public function bySlug(string $slug): ?array
+    {
+        if ($slug === '') return null;
+        $row = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE slug = ?', [$slug]);
+        return $row === null ? null : $this->decode($row);
+    }
+
+    /** 29판 이전의 2자 코드로 찾는다 — 옛 주소를 새 주소로 넘길 때만 쓴다. */
+    public function byLegacyCode(string $code): ?array
+    {
+        if ($code === '') return null;
+        $row = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE legacy_code = ?', [$code]);
+        return $row === null ? null : $this->decode($row);
+    }
+
+    /** 부모 우선 DFS. 형제는 sort_order, name 순. 각 행에 product_count. */
     public function tree(): array
     {
         $rows = $this->store->select('SELECT c.*, (SELECT COUNT(*) FROM ' . $this->store->table('yc_product_categories') . ' pc WHERE pc.category_id = c.id) AS product_count FROM '
-            . $this->store->table('yc_categories') . ' c ORDER BY c.sort_order, c.code');
+            . $this->store->table('yc_categories') . ' c ORDER BY c.sort_order, c.name, c.id');
         $byParent = [];
         foreach ($rows as $row) $byParent[$row['parent_id'] === null ? 0 : (int) $row['parent_id']][] = $this->decode($row);
         $result = [];
@@ -115,29 +157,41 @@ final class Categories
     /** 선택 상자용 `id => 경로 이름`. */
     public function options(): array
     {
-        $names = [];
+        return array_map(static fn (array $row): string => $row['label'], $this->labelled());
+    }
+
+    /** 수정 화면의 상위 분류 선택용: 자기와 하위를 뺀 options(). */
+    public function optionsExcluding(int $id): array
+    {
+        $self = $this->find($id);
         $options = [];
-        foreach ($this->tree() as $row) {
-            $names[(int) $row['id']] = ($row['parent_id'] === null ? '' : $names[(int) $row['parent_id']] . ' > ') . $row['name'];
-            $options[(int) $row['id']] = $names[(int) $row['id']];
+        foreach ($this->labelled() as $optionId => $row) {
+            if ($self !== null && str_starts_with((string) $row['path'], (string) $self['path'])) continue;
+            $options[$optionId] = $row['label'];
         }
         return $options;
     }
 
-    public function path(string $code): array
+    /** 빵부스러기: path 의 id 순서대로. */
+    public function ancestors(array $category): array
     {
-        $codes = [];
-        for ($length = 2; $length <= strlen($code); $length += 2) $codes[] = substr($code, 0, $length);
+        $ids = array_values(array_filter(explode('/', (string) $category['path']), static fn (string $s): bool => $s !== ''));
         $rows = [];
-        foreach ($codes as $c) { $row = $this->byCode($c); if ($row !== null) $rows[] = $row; }
+        foreach ($ids as $id) { $row = $this->find((int) $id); if ($row !== null) $rows[] = $row; }
         return $rows;
     }
 
-    public function children(string $code, bool $activeOnly): array
+    public function children(?int $parentId, bool $activeOnly): array
     {
-        $rows = $this->store->select('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE code LIKE ?'
-            . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY sort_order, code', [$code . '__']);
+        $rows = $this->store->select('SELECT * FROM ' . $this->store->table('yc_categories') . ' WHERE ' . ($parentId === null ? 'parent_id IS NULL' : 'parent_id = ?')
+            . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY sort_order, name, id', $parentId === null ? [] : [$parentId]);
         return array_map($this->decode(...), $rows);
+    }
+
+    /** 하위 전체(자기 포함)를 거는 조건. [sql, params]. */
+    public static function subtreeWhere(array $category, string $alias = 'c'): array
+    {
+        return [$alias . '.path LIKE ?', [$category['path'] . '%']];
     }
 
     public function delete(int $id): void
@@ -180,6 +234,18 @@ final class Categories
     public function count(): int
     {
         return (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_categories'))['c'];
+    }
+
+    /** tree() 의 각 행에 '의류 > 셔츠' 이름표를 붙여 id 로 색인한다. */
+    private function labelled(): array
+    {
+        $rows = [];
+        foreach ($this->tree() as $row) {
+            $parent = $row['parent_id'] === null ? null : (int) $row['parent_id'];
+            $row['label'] = ($parent === null || !isset($rows[$parent]) ? '' : $rows[$parent]['label'] . ' > ') . $row['name'];
+            $rows[(int) $row['id']] = $row;
+        }
+        return $rows;
     }
 
     private function decode(array $row): array

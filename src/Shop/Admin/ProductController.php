@@ -63,7 +63,6 @@ final class ProductController extends AdminBase
                 $data['filters'] = $filters;
                 $data['list'] = $products->list($filters, $this->page($input['page'] ?? ''));
                 $data['categories'] = $this->service->categories->options();
-                $data['category_codes'] = array_column($this->service->categories->tree(), 'name', 'code');
                 $data['fields'] = Products::SEARCH_FIELDS;
                 $data['sorts'] = Products::SORTS;
                 $data['types'] = Products::TYPES;

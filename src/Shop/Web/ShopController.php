@@ -22,7 +22,7 @@ final class ShopController
 {
     public function __construct(private Service $service, private string $routePrefix, private ?string $adminRoutePrefix) {}
 
-    public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response, array $args = []): ResponseInterface
     {
         $base = RouteContext::fromRequest($request)->getBasePath();
         $url = $base . $this->routePrefix;
@@ -40,7 +40,7 @@ final class ShopController
             if (!in_array($page, ['image', 'banner-image'], true)) return $view->render($response, 'closed', $data);
             if (!$admin) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
         }
-        $data['menu'] = $this->service->categories->children('', true);
+        $data['menu'] = $this->service->categories->children(null, true);
         $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'] ?? [], 'quantity'));
         $sort = $query['sort'] ?? '';
         $dir = ($query['dir'] ?? '') === 'asc' ? 'asc' : 'desc';
@@ -54,14 +54,21 @@ final class ShopController
                 return $view->render($response, 'index', $data);
             case 'banner-image':
                 return $this->service->banner->imageResponse($query['f'] ?? '', $admin, $response);
-            case 'list':
-                $category = $this->service->categories->byCode($query['ca'] ?? '');
+            case 'category':
+                $category = $this->service->categories->bySlug((string) ($args['slug'] ?? ''));
                 if ($category === null || (int) $category['active'] !== 1) throw DomainError::notFound('분류를 찾을 수 없습니다.');
                 $data['category'] = $category;
-                $data['path'] = $this->service->categories->path($category['code']);
-                $data['children'] = $this->service->categories->children($category['code'], true);
+                $data['path'] = $this->service->categories->ancestors($category);
+                $data['children'] = $this->service->categories->children((int) $category['id'], true);
                 $data['list'] = $this->service->listing->category($category, $sort, $dir, $pageNo);
                 return $view->render($response, 'list', $data);
+            case 'list':
+                // 옛 주소 /shop/list?ca=코드|슬러그 → /shop/c/슬러그. 나머지 매개변수는 그대로 붙인다.
+                $ca = (string) ($query['ca'] ?? '');
+                $category = $ca === '' ? null : ($this->service->categories->byLegacyCode($ca) ?? $this->service->categories->bySlug($ca));
+                if ($category === null) throw DomainError::notFound('분류를 찾을 수 없습니다.');
+                unset($query['ca']);
+                return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($category['slug']) . ($query === [] ? '' : '?' . http_build_query($query)));
             case 'type':
                 $type = $query['t'] ?? '';
                 if (!isset(Settings::TYPE_LABELS[$type])) throw DomainError::notFound('상품 유형을 찾을 수 없습니다.');
@@ -70,11 +77,11 @@ final class ShopController
                 return $view->render($response, 'type', $data);
             case 'search':
                 $q = mb_substr(trim($query['q'] ?? ''), 0, 50, 'UTF-8');
-                $ca = preg_match('/^[0-9a-z]{2,10}$/D', $query['ca'] ?? '') ? $query['ca'] : '';
+                $category = $this->service->categories->bySlug((string) ($query['ca'] ?? ''));
                 $min = preg_match('/^[0-9]{1,10}$/D', $query['min'] ?? '') ? (int) $query['min'] : 0;
                 $max = preg_match('/^[0-9]{1,10}$/D', $query['max'] ?? '') ? (int) $query['max'] : 0;
-                $data += ['q' => $q, 'ca' => $ca, 'min' => $min, 'max' => $max];
-                $data['list'] = $this->service->listing->search($q, $ca, $min, $max, $sort, $dir, $pageNo);
+                $data += ['q' => $q, 'ca' => $category['slug'] ?? '', 'min' => $min, 'max' => $max];
+                $data['list'] = $this->service->listing->search($q, $category, $min, $max, $sort, $dir, $pageNo);
                 return $view->render($response, 'search', $data);
             case 'item':
                 $product = ($query['id'] ?? '') !== '' ? $this->service->products->byCode($query['id'])
@@ -90,7 +97,7 @@ final class ShopController
                 }
                 $data['product'] = $product;
                 $data['preview'] = !$visible;
-                $data['path'] = isset($product['categories'][1]) ? $this->service->categories->path($product['categories'][1]['code']) : [];
+                $data['path'] = isset($product['categories'][1]) ? $this->service->categories->ancestors($product['categories'][1]) : [];
                 $data['adjacent'] = $this->service->listing->adjacent($product);
                 $data['related'] = $data['settings']['related']['use'] ? $this->service->listing->related((int) $product['id']) : [];
                 $data['options_json'] = Options::pageJson($product, $product['options']);

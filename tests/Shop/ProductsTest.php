@@ -28,7 +28,7 @@ final class ProductsTest extends ShopTestCase
     public function testSaveStoresEverythingAndGuardsEdits(array $config): void
     {
         $this->setupShop($config);
-        $top = $this->category('의류'); $child = $this->category('셔츠', '10'); $other = $this->category('잡화');
+        $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $other = $this->category('잡화');
         $related = $this->product(['category_id' => (string) $other['id'], 'code' => 'REL-1', 'name' => '관련상품']);
         $id = $this->shop->products->save($this->fullInput((int) $child['id'], ['category2_id' => (string) $other['id'], 'relations' => $related['id'] . ',']), []);
         $product = $this->shop->products->get($id);
@@ -153,7 +153,7 @@ final class ProductsTest extends ShopTestCase
     public function testAdminListFiltersAndSorts(array $config): void
     {
         $this->setupShop($config);
-        $top = $this->category('의류'); $child = $this->category('셔츠', '10'); $other = $this->category('잡화');
+        $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $other = $this->category('잡화');
         $a = $this->product(['category_id' => (string) $child['id'], 'code' => 'A1', 'name' => '파란 셔츠', 'price' => '300', 'maker' => '메이커A']);
         $b = $this->product(['category_id' => (string) $other['id'], 'code' => 'B1', 'name' => '가방', 'price' => '100']);
         $c = $this->product(['category_id' => (string) $top['id'], 'code' => 'C1', 'name' => '빨간 셔츠', 'price' => '200']);
@@ -162,7 +162,7 @@ final class ProductsTest extends ShopTestCase
         self::assertSame('셔츠', $all['items'][2]['category_name']);
         self::assertSame(['C1', 'A1'], array_column($this->shop->products->list(['q' => '셔츠'], 1)['items'], 'code'));
         self::assertSame(['A1'], array_column($this->shop->products->list(['q' => '메이커A', 'field' => 'maker'], 1)['items'], 'code'));
-        self::assertSame(['C1', 'A1'], array_column($this->shop->products->list(['ca' => '10'], 1)['items'], 'code'));
+        self::assertSame(['C1', 'A1'], array_column($this->shop->products->list(['ca' => (string) $top['id']], 1)['items'], 'code'));
         self::assertSame(['B1', 'C1', 'A1'], array_column($this->shop->products->list(['sort' => 'price', 'dir' => 'asc'], 1)['items'], 'code'));
         self::assertSame(['C1', 'B1', 'A1'], array_column($this->shop->products->list(['sort' => 'nope', 'dir' => 'sideways'], 1)['items'], 'code'));
         $page = $this->shop->products->list([], 2, 2);
