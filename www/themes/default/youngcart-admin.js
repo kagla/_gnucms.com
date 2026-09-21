@@ -85,6 +85,13 @@
     function showBannerFields(){root.querySelectorAll('[data-yc-banner-panel]').forEach(function(panel){panel.hidden=panel.dataset.ycBannerPanel!==bannerMode.value;});}
     bannerMode.addEventListener('change',showBannerFields);showBannerFields();
   }
+  // 묶음의 기준(자동/분류 선택)이 자동일 때는 기준 분류 선택을 꺼서 제출되지 않게 한다.
+  root.querySelectorAll('select[name$="_source"]').forEach(function(source){
+    var form=source.form,target=form&&form.elements[source.name.replace(/_source$/,'_source_category_id')];
+    if(!target){return;}
+    function sync(){target.disabled=source.value!=='category';}
+    source.addEventListener('change',sync);sync();
+  });
   var errors=root.querySelector('[data-yc-errors]');
   if(errors){
     errors.querySelectorAll('[data-yc-error-field]').forEach(function(message){
