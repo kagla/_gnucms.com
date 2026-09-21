@@ -102,7 +102,7 @@ final class ProductFormController extends AdminBase
         $data['options_rows'] = Options::rows($values['options'] ?? []);
         $data['extras_rows'] = Options::rows($values['extras'] ?? []);
         $data['images'] = $product['images'] ?? [];
-        $data['categories'] = $this->service->categories->options();
+        $data['categories'] = $this->service->categories->optionDetails();
         $data['info_groups'] = ProductInfo::GROUPS;
         $data['types'] = ['is_hit' => '히트', 'is_recommended' => '추천', 'is_new' => '최신', 'is_popular' => '인기', 'is_discount' => '할인'];
         $data['apply_fields'] = ['types' => '유형', 'active' => '판매가능', 'no_coupon' => '쿠폰제외', 'point' => '포인트', 'tax_free' => '과세', 'shipping' => '배송비', 'buy' => '구매수량', 'html' => '상세 위·아래 HTML', 'seller_email' => '판매자 메일', 'phone_inquiry' => '전화문의'];

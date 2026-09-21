@@ -22,7 +22,7 @@
     <div class="yc-fields">
       <fieldset class="fieldset yc-field-wide<?= isset($errors['parent_id']) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">상위 분류</legend>
         <select class="select select-bordered" name="parent_id"><option value=""<?= $v('parent_id') === '' ? ' selected' : '' ?>>최상위</option>
-        <?php foreach ($parents as $parentId => $parentLabel): ?><option value="<?= (int) $parentId ?>"<?= $v('parent_id') === (string) $parentId ? ' selected' : '' ?>><?= $this->e($parentLabel) ?></option><?php endforeach ?></select>
+        <?php foreach ($parents as $parentId => $parentOption): ?><option value="<?= (int) $parentId ?>" title="<?= $this->e($parentOption['title']) ?>"<?= $v('parent_id') === (string) $parentId ? ' selected' : '' ?>><?= $this->e($parentOption['text']) ?></option><?php endforeach ?></select>
         <?php if (isset($errors['parent_id'])): ?><p class="validator-hint"><?= $this->e($errors['parent_id']) ?></p><?php endif ?></fieldset>
       <fieldset class="fieldset"><legend class="fieldset-legend">순서</legend><input class="input input-bordered input-sm" type="number" name="sort_order" value="<?= $this->e($v('sort_order')) ?>"></fieldset>
     </div>

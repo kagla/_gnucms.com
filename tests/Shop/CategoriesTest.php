@@ -45,6 +45,13 @@ final class CategoriesTest extends ShopTestCase
         $tree = $this->shop->categories->tree();
         self::assertSame(['여름', '의류', '셔츠', '의류'], array_column($tree, 'name'));
         self::assertSame('의류 > 셔츠', $this->shop->categories->options()[(int) $child['id']]);
+        // 선택 상자 글자에는 슬러그가 이름과 다를 때만 덧붙이고, title 에는 슬러그·번호를 늘 담는다.
+        $details = $this->shop->categories->optionDetails();
+        self::assertSame('의류 > 셔츠', $details[(int) $child['id']]['text']);
+        self::assertSame('슬러그 셔츠 · 번호 ' . $child['id'], $details[(int) $child['id']]['title']);
+        $summer = $this->shop->categories->bySlug('summer-tees');
+        self::assertSame('여름 [summer-tees]', $details[(int) $summer['id']]['text']);
+        self::assertSame(array_keys($this->shop->categories->parentOptions(null)), array_keys($this->shop->categories->parentOptionDetails(null)));
         self::assertSame(['c.path LIKE ?', [$top['path'] . '%']], Categories::subtreeWhere($top, 'c'));
     }
 

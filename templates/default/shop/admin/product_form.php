@@ -21,7 +21,7 @@ $apply = function (string $group) use ($apply_fields, $values): void { ?>
 <?php };
 $catSelect = function (string $name, bool $required) use ($v, $categories, $errors): void { ?>
   <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><?= $name === 'category_id' ? '대표 분류' : '추가 분류' ?></legend>
-    <select class="select select-bordered select-sm" name="<?= $name ?>"<?= $required ? ' required' : '' ?>><option value="">선택</option><?php foreach ($categories as $cid => $label): ?><option value="<?= $cid ?>"<?= $v($name) === (string) $cid ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select>
+    <select class="select select-bordered select-sm" name="<?= $name ?>"<?= $required ? ' required' : '' ?>><option value="">선택</option><?php foreach ($categories as $cid => $option): ?><option value="<?= $cid ?>" title="<?= $this->e($option['title']) ?>"<?= $v($name) === (string) $cid ? ' selected' : '' ?>><?= $this->e($option['text']) ?></option><?php endforeach ?></select>
     <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
 <?php };
 ?>

@@ -358,7 +358,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('value="중복"', $this->body($response));
         // 목록의 "하위 추가" 는 ?parent=<id> 로 상위 분류를 미리 고른다.
         $childForm = $this->body($this->get($this->app, '/admin/shop/categories/new', ['parent' => (string) $top['id']]));
-        self::assertStringContainsString('<option value="' . $top['id'] . '" selected', $childForm);
+        self::assertStringContainsString('<option value="' . $top['id'] . '" title="슬러그 의류 · 번호 ' . $top['id'] . '" selected', $childForm);
         $this->post($this->app, '/admin/shop/categories/new', $this->csrf(['parent_id' => (string) $top['id'], 'name' => '셔츠', 'active' => '1', 'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']));
         $child = $this->shop->categories->bySlug('셔츠');
         self::assertNotNull($child);
@@ -393,8 +393,8 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98" target="_blank"', $edit);
         // "이 분류에 상품 등록"은 상품 등록 폼을 열며 대표 분류를 미리 고른다. 모르는 값은 무시한다.
         self::assertStringContainsString('href="/admin/shop/products/new?category=' . $top['id'] . '"', $edit);
-        self::assertStringContainsString('<option value="' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => (string) $top['id']])));
-        self::assertStringNotContainsString('<option value="' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => 'zz'])));
+        self::assertStringContainsString('<option value="' . $top['id'] . '" title="슬러그 의류 · 번호 ' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => (string) $top['id']])));
+        self::assertStringNotContainsString('" selected>의류</option>', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => 'zz'])));
         self::assertStringContainsString('href="/shop" target="_blank"', $form);
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
         self::assertStringContainsString("items:['GnucmsImages'", $edit);

@@ -163,20 +163,46 @@ final class Categories
     }
 
     /**
+     * 선택 상자용 `id => ['label', 'text', 'title']`. text 는 경로 이름에 슬러그가 이름과 다를 때만 `[슬러그]` 를 덧붙인 것,
+     * title 은 마우스를 올리면 보이는 슬러그·옛 코드·번호다. 코드가 없어진 뒤에도 같은 이름의 분류를 가려낼 수 있게 한다.
+     */
+    public function optionDetails(): array
+    {
+        return array_map(self::detail(...), $this->labelled());
+    }
+
+    /** parentOptions() 와 같은 목록을 optionDetails() 모양으로. */
+    public function parentOptionDetails(?int $excludeId): array
+    {
+        return array_map(self::detail(...), $this->parentRows($excludeId));
+    }
+
+    private static function detail(array $row): array
+    {
+        $title = '슬러그 ' . $row['slug'] . (($row['legacy_code'] ?? null) !== null && $row['legacy_code'] !== '' ? ' · 옛 코드 ' . $row['legacy_code'] : '') . ' · 번호 ' . (int) $row['id'];
+        return ['label' => $row['label'], 'text' => $row['label'] . ($row['slug'] === $row['name'] ? '' : ' [' . $row['slug'] . ']'), 'title' => $title];
+    }
+
+    /**
      * 상위 분류 선택용 options(). 아래에 더 만들 수 없는 MAX_DEPTH 단계 분류는 뺀다.
      * 수정 화면($excludeId)에서는 자기와 자기 하위도 뺀다(자기 아래로는 옮길 수 없다).
      * 하위가 있는 분류를 옮길 때는 하위까지 함께 내려가므로 9단계 상위도 저장에서 거절될 수 있다 — 그 판단은 save() 가 한다.
      */
     public function parentOptions(?int $excludeId): array
     {
+        return array_map(static fn (array $row): string => $row['label'], $this->parentRows($excludeId));
+    }
+
+    private function parentRows(?int $excludeId): array
+    {
         $self = $excludeId === null ? null : $this->find($excludeId);
-        $options = [];
+        $rows = [];
         foreach ($this->labelled() as $optionId => $row) {
             if ((int) $row['depth'] >= self::MAX_DEPTH) continue;
             if ($self !== null && str_starts_with((string) $row['path'], (string) $self['path'])) continue;
-            $options[$optionId] = $row['label'];
+            $rows[$optionId] = $row;
         }
-        return $options;
+        return $rows;
     }
 
     /** 빵부스러기: path 의 id 순서대로. */

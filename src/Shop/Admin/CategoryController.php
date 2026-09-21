@@ -73,7 +73,7 @@ final class CategoryController extends AdminBase
         $data['values'] = $values;
         $data['id'] = $id;
         // 상위 분류 선택. 10단계 분류는 그 아래에 만들 수 없어 빼고, 수정 화면에서는 자기와 자기 하위도 뺀다(자기 아래로는 옮길 수 없다).
-        $data['parents'] = $this->service->categories->parentOptions($id);
+        $data['parents'] = $this->service->categories->parentOptionDetails($id);
         // 저장된 분류의 공개 주소 — 도구 막대의 "쇼핑몰 보기"가 여기로 간다. 입력 오류로 다시 그릴 때도 저장된 슬러그로 간다.
         $data['public_view_url'] = $id === null ? '' : $data['public_url'] . '/c/' . rawurlencode($this->service->categories->get($id)['slug']);
         $data['extra'] = [];
