@@ -71,9 +71,15 @@ final class ShopController
                 return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($category['slug']) . ($query === [] ? '' : '?' . http_build_query($query)));
             case 'type':
                 $type = $query['t'] ?? '';
-                if (!isset(Settings::TYPE_LABELS[$type])) throw DomainError::notFound('상품 유형을 찾을 수 없습니다.');
+                // 옛 유형: 이전 때 히트·추천 상품을 옮겨 둔 숨김 분류가 있으면 그리로 넘긴다.
+                if (in_array($type, ['hit', 'recommend'], true)) {
+                    $moved = $this->service->categories->bySlug($type === 'hit' ? '히트상품' : '추천상품');
+                    if ($moved === null) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
+                    return $response->withStatus(301)->withHeader('Location', $url . '/c/' . rawurlencode($moved['slug']));
+                }
+                if (!isset(Settings::TYPE_LABELS[$type])) throw DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
                 $data['type'] = $type;
-                $data['list'] = $this->service->listing->type($type, $sort, $dir, $pageNo);
+                $data['list'] = $this->service->listing->collection($type, $sort, $dir, $pageNo);
                 return $view->render($response, 'type', $data);
             case 'search':
                 $q = mb_substr(trim($query['q'] ?? ''), 0, 50, 'UTF-8');

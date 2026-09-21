@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
+use GnuCms\Shop\Settings;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class SettingsTest extends ShopTestCase
@@ -14,19 +15,21 @@ final class SettingsTest extends ShopTestCase
     {
         $this->setupShop($config);
         $settings = $this->shop->settings->all();
-        self::assertTrue($settings['main']['hit']['use']);
+        self::assertTrue($settings['main']['best']['use']);
         self::assertFalse($settings['main']['popular']['use']);
-        self::assertSame(['use' => true, 'columns' => 4, 'rows' => 1, 'image_width' => 200, 'image_height' => 0], $settings['main']['new']);
+        self::assertSame(['use' => true, 'source' => 'auto', 'source_category_id' => null, 'columns' => 4, 'rows' => 1, 'image_width' => 200, 'image_height' => 0], $settings['main']['new']);
+        self::assertSame([], $settings['main']['categories']);
+        self::assertSame(['new_days' => 30, 'best_days' => 30], $settings['auto']);
         self::assertSame(['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0], $settings['category']);
         self::assertSame(400, $settings['detail']['image_width']);
         self::assertFalse($settings['show_tax']);
         $saved = $this->shop->settings->save($this->settingsInput());
-        self::assertFalse($saved['main']['hit']['use']);
-        self::assertSame(['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $saved['main']['popular']);
+        self::assertFalse($saved['main']['best']['use']);
+        self::assertSame(['use' => true, 'source' => 'auto', 'source_category_id' => null, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $saved['main']['popular']);
         self::assertSame(4, $this->shop->settings->all()['category']['columns']);
         self::assertTrue($this->shop->settings->all()['show_tax']);
         self::assertSame('<p>배송 안내</p>', $this->shop->settings->all()['shipping']['content']);
-        self::assertSame(['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $this->shop->settings->block('main.popular'));
+        self::assertSame(['use' => true, 'source' => 'auto', 'source_category_id' => null, 'columns' => 2, 'rows' => 2, 'image_width' => 300, 'image_height' => 300], $this->shop->settings->block('main.popular'));
         $flatNoShowTax = array_diff_key($this->flat($saved), ['show_tax' => true]);
         $savedWithoutShowTax = $this->shop->settings->save($flatNoShowTax);
         self::assertFalse($savedWithoutShowTax['show_tax']);
@@ -43,7 +46,7 @@ final class SettingsTest extends ShopTestCase
     /** 기존 테스트가 save()에 넘기던 "필수 폼 값 전부" 배열. */
     private function settingsInput(): array
     {
-        return ['main_hit_use' => '0', 'main_popular_use' => '1', 'main_popular_columns' => '2', 'main_popular_rows' => '2',
+        return ['main_best_use' => '0', 'main_popular_use' => '1', 'main_popular_columns' => '2', 'main_popular_rows' => '2',
             'main_popular_image_width' => '300', 'main_popular_image_height' => '300', 'category_columns' => '4', 'category_rows' => '6',
             'category_image_width' => '250', 'category_image_height' => '0', 'type_columns' => '4', 'type_rows' => '5', 'type_image_width' => '200', 'type_image_height' => '0',
             'search_columns' => '4', 'search_rows' => '5', 'search_image_width' => '200', 'search_image_height' => '0',
@@ -95,11 +98,43 @@ final class SettingsTest extends ShopTestCase
         self::assertTrue($this->shop->settings->all()['visible']);
     }
 
+    /** 자동 묶음 기간, 묶음 기준(자동/분류), 메인 분류 블록을 저장하고 검증한다. 옛 hit·recommend 설정은 버리고 popular 의 크기는 잇는다. */
+    #[DataProvider('connectionProvider')]
+    public function testCollectionSettings(array $config): void
+    {
+        $this->setupShop($config);
+        $cat = $this->category('기획전'); $sub = $this->category('여름', (int) $cat['id']);
+        $form = $this->settingsInput() + ['auto_new_days' => '14', 'auto_best_days' => '90', 'main_best_source' => 'category', 'main_best_source_category_id' => (string) $cat['id'],
+            'main_categories' => [['id' => (string) $sub['id'], 'columns' => '3', 'rows' => '1'], ['id' => (string) $cat['id'], 'columns' => '4', 'rows' => '2']]];
+        $this->shop->settings->save($form);
+        $all = $this->shop->settings->all();
+        self::assertSame(['new_days' => 14, 'best_days' => 90], $all['auto']);
+        self::assertSame(['category', (int) $cat['id']], [$all['main']['best']['source'], $all['main']['best']['source_category_id']]);
+        self::assertSame('auto', $all['main']['new']['source']);
+        self::assertSame([['id' => (int) $sub['id'], 'columns' => 3, 'rows' => 1], ['id' => (int) $cat['id'], 'columns' => 4, 'rows' => 2]], $all['main']['categories']);
+        foreach ([['main_categories' => [['id' => '999999', 'columns' => '3', 'rows' => '1']]], ['main_categories' => array_fill(0, 11, ['id' => (string) $cat['id'], 'columns' => '3', 'rows' => '1'])],
+            ['auto_new_days' => '0'], ['main_best_source' => 'category', 'main_best_source_category_id' => '999999']] as $bad) {
+            try { $this->shop->settings->save($this->settingsInput() + $bad); self::fail('거절해야 한다'); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
+        }
+        self::assertSame(['new_days' => 14, 'best_days' => 90], $this->shop->settings->all()['auto'], '거절된 저장은 아무것도 바꾸지 않는다');
+        // 옛 저장값: hit·recommend 는 사라지고 popular 의 크기는 남는다.
+        $legacy = $all; $legacy['main'] = ['hit' => ['use' => true, 'columns' => 2, 'rows' => 2, 'image_width' => 100, 'image_height' => 0], 'popular' => ['use' => true, 'columns' => 6, 'rows' => 1, 'image_width' => 150, 'image_height' => 0]];
+        $this->app->db()->update('yc_settings', ['payload' => json_encode($legacy, JSON_UNESCAPED_UNICODE)], 'id = :id', ['id' => 'settings']);
+        $all = $this->shop->settings->all();
+        self::assertArrayNotHasKey('hit', $all['main']);
+        self::assertSame([true, 6, 'auto'], [$all['main']['popular']['use'], $all['main']['popular']['columns'], $all['main']['popular']['source']]);
+        self::assertSame(['new', 'best', 'popular', 'discount', 'categories'], array_keys($all['main']));
+    }
+
     private function flat(array $settings): array
     {
         $flat = [];
-        foreach (['hit', 'new', 'recommend', 'discount', 'popular'] as $type) {
-            foreach ($settings['main'][$type] as $key => $value) $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
+        // 자동 묶음의 기준·기간은 관리자 폼이 따로 보낸다 — 여기서는 크기만 낸다.
+        foreach (Settings::TYPES as $type) {
+            foreach (['use', 'columns', 'rows', 'image_width', 'image_height'] as $key) {
+                $value = $settings['main'][$type][$key];
+                $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
+            }
         }
         foreach (['category', 'type', 'search', 'related', 'detail'] as $section) {
             foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;

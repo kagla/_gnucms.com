@@ -63,7 +63,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '30';
+    public const VERSION = '31';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -310,7 +310,7 @@ final class Schema
         }
     }
 
-    /** 27판: 쇼핑몰 표, 28판: 편집기 사진을 소유자 폴더(categories/<id>, products/<id>)로 구분하고, 초안에 잠깐 있던 yc_categories.image_key 를 지운다. 29판: 분류를 부모 id 트리(slug·path·legacy_code)로. 30판: 분류 메뉴 숨김(yc_categories.menu_hidden). 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
+    /** 27판: 쇼핑몰 표, 28판: 편집기 사진을 소유자 폴더(categories/<id>, products/<id>)로 구분하고, 초안에 잠깐 있던 yc_categories.image_key 를 지운다. 29판: 분류를 부모 id 트리(slug·path·legacy_code)로. 30판: 분류 메뉴 숨김(yc_categories.menu_hidden). 31판: 진열 깃발 → 자동 묶음·숨김 분류. 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
     public function migrateShop(): void
     {
         \GnuCms\Shop\Schema::migrate($this->db);

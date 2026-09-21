@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
+use GnuCms\Shop\Settings;
 use GnuCms\Tests\Support\AdminViewFixture;
 
 $view = AdminViewFixture::view('/cms')->forShop();
@@ -14,7 +15,7 @@ foreach (['화이트 / S', '화이트 / M'] as $index => $label) {
 }
 echo $view->fetch('cart', [
     'url' => '/cms/shop', 'page' => 'cart', 'admin' => true, 'admin_url' => '/cms/admin/shop', 'menu' => [],
-    'type_labels' => ['hit' => '히트상품', 'new' => '신상품', 'recommend' => '추천상품', 'discount' => '할인상품', 'popular' => '인기상품'],
-    'settings' => ['main' => array_fill_keys(['hit', 'new', 'recommend', 'discount', 'popular'], ['use' => true])],
+    'type_labels' => Settings::TYPE_LABELS,
+    'settings' => ['main' => array_fill_keys(Settings::TYPES, ['use' => true])],
     'cart_count' => 2, 'quote' => ['items' => $items, 'errors' => [], 'subtotal' => 78000, 'shipping_fee' => 0, 'cod_fee' => 0, 'total' => 78000],
 ]);

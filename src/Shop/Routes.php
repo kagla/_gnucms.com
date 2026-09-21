@@ -70,7 +70,7 @@ final class Routes
             foreach (['categories', 'categories/new', 'categories/edit'] as $page) {
                 $map($method, '/' . $page, static fn ($request, $response) => $category->handle($page, $request, $response), true);
             }
-            foreach (['products', 'products/types', 'products/stock', 'products/option-stock'] as $page) {
+            foreach (['products', 'products/stock', 'products/option-stock'] as $page) {
                 $map($method, '/' . $page, static fn ($request, $response) => $product->handle($page, $request, $response), true);
             }
             foreach (['products/new', 'products/edit'] as $page) {

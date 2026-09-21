@@ -18,9 +18,8 @@ use Throwable;
 final class Products
 {
     public const CODE_PATTERN = '/^[A-Za-z0-9_-]{1,20}$/D';
-    public const TYPES = ['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'];
     public const APPLY_FIELDS = [
-        'types' => self::TYPES, 'active' => ['active'], 'no_coupon' => ['no_coupon'], 'point' => ['point_type', 'point', 'supply_point'],
+        'active' => ['active'], 'no_coupon' => ['no_coupon'], 'point' => ['point_type', 'point', 'supply_point'],
         'tax_free' => ['tax_free'], 'shipping' => ['shipping_type', 'shipping_method', 'shipping_fee', 'shipping_free_minimum', 'shipping_per_qty'],
         'buy' => ['buy_min', 'buy_max'], 'html' => ['head_html', 'tail_html'], 'seller_email' => ['seller_email'], 'phone_inquiry' => ['phone_inquiry'],
     ];
@@ -129,7 +128,7 @@ final class Products
         $row['point_type'] = Input::int($input['point_type'] ?? '', 'point_type', 0, 2, 0);
         $row['point'] = Input::int($input['point'] ?? '', 'point', 0, $row['point_type'] === 0 ? 10000000 : 99, 0);
         $row['supply_point'] = Input::int($input['supply_point'] ?? '', 'supply_point', 0, 10000000, 0);
-        foreach (['tax_free', 'active', 'no_coupon', 'sold_out', 'restock_notify', 'phone_inquiry', ...self::TYPES] as $field) $row[$field] = Input::bool($input[$field] ?? '0');
+        foreach (['tax_free', 'active', 'no_coupon', 'sold_out', 'restock_notify', 'phone_inquiry'] as $field) $row[$field] = Input::bool($input[$field] ?? '0');
         $row['seller_email'] = Input::text($input['seller_email'] ?? '', 'seller_email', 191);
         if ($row['seller_email'] !== '' && filter_var($row['seller_email'], FILTER_VALIDATE_EMAIL) === false) throw DomainError::validation(['seller_email' => '판매자 이메일을 확인해 주세요.']);
         $row['stock'] = Input::int($input['stock'] ?? '', 'stock', 0, 1000000, 0);
@@ -404,23 +403,6 @@ final class Products
                     $this->store->insert('yc_product_categories', ['product_id' => $id, 'category_id' => $categoryId, 'slot' => 1]);
                 }
                 if ((int) $old['stock'] !== $data['stock']) $this->store->logStock($id, null, $data['stock'] - (int) $old['stock'], 'admin', 'bulk', $actor);
-            }
-        });
-    }
-
-    public function setTypes(array $rows): void
-    {
-        $this->store->transaction(function () use ($rows): void {
-            foreach ($rows as $id => $input) {
-                $id = Input::id($id);
-                $this->store->get('yc_products', $id);
-                try {
-                    $data = ['updated_at' => Clock::timestamp()];
-                    foreach (self::TYPES as $type) $data[$type] = Input::bool($input[$type] ?? '0');
-                    $this->store->update('yc_products', $id, $data);
-                } catch (DomainError $e) {
-                    throw DomainError::validation(['row_' . $id => implode(' ', $e->details())]);
-                }
             }
         });
     }

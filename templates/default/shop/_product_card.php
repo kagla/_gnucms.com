@@ -18,7 +18,6 @@
     </div>
     <div class="yc-card-icons">
       <?php if ((int) $item['shipping_type'] === 1): ?><span class="badge badge-sm">무료배송</span><?php endif ?>
-      <?php foreach (['is_hit' => '히트', 'is_recommended' => '추천', 'is_new' => '최신', 'is_popular' => '인기', 'is_discount' => '할인'] as $flag => $label): if ((int) $item[$flag] === 1): ?><span class="badge badge-sm"><?= $label ?></span><?php endif; endforeach ?>
       <?php if ((int) $item['review_count'] > 0): ?><span class="yc-stars" aria-label="평점 <?= $this->e((string) $item['review_avg']) ?>">★ <?= $this->e((string) $item['review_avg']) ?> (<?= (int) $item['review_count'] ?>)</span><?php endif ?>
     </div>
   </div>

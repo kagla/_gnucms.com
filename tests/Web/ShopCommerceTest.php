@@ -31,7 +31,7 @@ final class ShopCommerceTest extends WebTestCase
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'], 'app' => ['url' => 'https://shop.example.test']]);
         $this->shop = new Service($this->app);
         $category = $this->shop->categories->save(['name' => '생활용품', 'active' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '300', 'image_height' => '0']);
-        $id = $this->shop->products->save(['code' => 'DEMO', 'name' => '테스트 상품', 'category_id' => $category, 'price' => '12000', 'stock' => '10', 'active' => '1', 'is_hit' => '1'], []);
+        $id = $this->shop->products->save(['code' => 'DEMO', 'name' => '테스트 상품', 'category_id' => $category, 'price' => '12000', 'stock' => '10', 'active' => '1'], []);
         $this->product = $this->shop->products->get($id);
     }
 

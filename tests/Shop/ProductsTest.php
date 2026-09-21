@@ -16,7 +16,7 @@ final class ProductsTest extends ShopTestCase
             'point_type' => '1', 'point' => '5', 'supply_point' => '100', 'tax_free' => '0', 'seller_email' => 'seller@example.test', 'active' => '1', 'no_coupon' => '0',
             'sold_out' => '0', 'stock' => '3', 'stock_alert' => '1', 'restock_notify' => '1', 'buy_min' => '1', 'buy_max' => '5', 'phone_inquiry' => '0',
             'shipping_type' => '2', 'shipping_method' => '0', 'shipping_fee' => '3000', 'shipping_free_minimum' => '50000', 'shipping_per_qty' => '0',
-            'head_html' => '<p>위</p>', 'tail_html' => '<p>아래</p>', 'info_group' => 'wear', 'info' => [0 => '면 100%'], 'memo' => '메모', 'is_hit' => '1', 'is_new' => '1', 'sort_order' => '2',
+            'head_html' => '<p>위</p>', 'tail_html' => '<p>아래</p>', 'info_group' => 'wear', 'info' => [0 => '면 100%'], 'memo' => '메모', 'sort_order' => '2',
             'extra_label' => [1 => '라벨'], 'extra_value' => [1 => '값'],
             'option_group' => [1 => '색상', 2 => '크기'], 'options' => [
                 ['value1' => '빨강', 'value2' => 'S', 'price' => '0', 'stock' => '2', 'stock_alert' => '1', 'active' => '1'],
@@ -40,7 +40,6 @@ final class ProductsTest extends ShopTestCase
         self::assertSame([(int) $related['id']], array_map(static fn ($r) => (int) $r['id'], $product['relations']));
         self::assertSame('면 100%', $product['info'][0]); self::assertSame('상품페이지 참고', $product['info'][1]);
         self::assertSame('라벨', $product['extra'][0]['label']);
-        self::assertSame(1, (int) $product['is_hit']); self::assertSame(0, (int) $product['is_popular']);
         self::assertFalse($product['sold_out_computed']);
         self::assertSame(3, (int) $this->shop->store->selectOne('SELECT SUM(delta) AS d FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE product_id = ? AND option_id IS NULL', [$id])['d']);
         self::assertSame($id, (int) $this->shop->products->byCode('SHIRT-01')['id']);
@@ -118,7 +117,7 @@ final class ProductsTest extends ShopTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testImagesCopyDeleteBulkTypesStockAndApply(array $config): void
+    public function testImagesCopyDeleteBulkStockAndApply(array $config): void
     {
         $this->setupShop($config);
         $category = $this->category(); $other = $this->category('잡화');
@@ -148,9 +147,6 @@ final class ProductsTest extends ShopTestCase
         $copy = $this->shop->products->get($copyId);
         self::assertSame('일괄', $copy['name']); self::assertSame((int) $other['id'], (int) $copy['categories'][1]['id']); self::assertSame(7, (int) $copy['stock']);
         self::assertSame(4, (int) $this->shop->store->selectOne('SELECT delta FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE product_id = ? ORDER BY id DESC LIMIT 1', [$copyId])['delta']);
-        $this->shop->products->setTypes([$copyId => ['is_hit' => '0', 'is_popular' => '1']]);
-        $copy = $this->shop->products->get($copyId);
-        self::assertSame(0, (int) $copy['is_hit']); self::assertSame(1, (int) $copy['is_popular']);
         $this->shop->products->updateStock([$copyId => ['original_stock' => (string) $this->shop->products->get($copyId)['stock'], 'stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
         self::assertSame(0, (int) $this->shop->products->get($copyId)['stock']);
         try {
@@ -166,11 +162,11 @@ final class ProductsTest extends ShopTestCase
         self::assertSame($copyId, (int) $list['items'][0]['id']);
         self::assertSame(1, count($this->shop->products->lowStock()['products']));
 
-        $this->shop->products->save($base + ['version' => '2', 'is_discount' => '1', 'apply_scope' => 'category', 'apply_fields' => ['types']], [], $id);
-        self::assertSame(0, (int) $this->shop->products->get($copyId)['is_discount']);
-        $this->shop->products->save($base + ['version' => '3', 'is_discount' => '1', 'apply_scope' => 'all', 'apply_fields' => ['types', 'shipping']], [], $id);
+        $this->shop->products->save(['version' => '2', 'shipping_type' => '0', 'shipping_fee' => '0', 'apply_scope' => 'category', 'apply_fields' => ['shipping']] + $base, [], $id);
+        self::assertSame(2, (int) $this->shop->products->get($copyId)['shipping_type'], '다른 분류의 상품은 그대로');
+        $this->shop->products->save(['version' => '3', 'shipping_type' => '0', 'shipping_fee' => '0', 'apply_scope' => 'all', 'apply_fields' => ['shipping']] + $base, [], $id);
         $copy = $this->shop->products->get($copyId);
-        self::assertSame(1, (int) $copy['is_discount']); self::assertSame(2, (int) $copy['shipping_type']); self::assertSame('일괄', $copy['name']);
+        self::assertSame(0, (int) $copy['shipping_type']); self::assertSame('일괄', $copy['name']);
 
         $stats = $this->shop->products->stats();
         self::assertSame(['products' => 2, 'active' => 2, 'sold_out' => 0, 'categories' => 2], $stats);

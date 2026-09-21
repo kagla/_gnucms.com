@@ -6,8 +6,8 @@
     </nav></details>
     <nav class="yc-nav" aria-label="쇼핑 메뉴">
       <a href="<?= $this->e($url) ?>"<?= ($page ?? '') === 'index' ? ' aria-current="page"' : '' ?>>쇼핑홈</a>
-      <?php foreach ($type_labels as $key => $label): if (!($settings['main'][$key]['use'] ?? false)) continue; ?>
-        <a href="<?= $this->e($url) ?>/type?t=<?= $this->e($key) ?>"<?= ($type ?? '') === $key ? ' aria-current="page"' : '' ?>><?= $this->e(['hit' => '베스트', 'new' => '신상품', 'recommend' => '추천상품', 'discount' => '할인상품', 'popular' => '인기상품'][$key]) ?></a>
+      <?php foreach (['best', 'new', 'popular', 'discount'] as $key): if (!($settings['main'][$key]['use'] ?? false)) continue; ?>
+        <a href="<?= $this->e($url) ?>/type?t=<?= $this->e($key) ?>"<?= ($type ?? '') === $key ? ' aria-current="page"' : '' ?>><?= $this->e($type_labels[$key]) ?></a>
       <?php endforeach ?>
     </nav>
     <div class="yc-header-actions">

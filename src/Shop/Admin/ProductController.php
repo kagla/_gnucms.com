@@ -41,9 +41,6 @@ final class ProductController extends AdminBase
                     case 'products/copy':
                         $id = $products->copy(Input::id($input['id'] ?? ''), is_string($input['code'] ?? null) ? $input['code'] : '', $data['actor']);
                         return $this->redirect($response, $data['admin_url'] . '/products/edit?id=' . $id . '&saved=1');
-                    case 'products/types':
-                        $products->setTypes($rows);
-                        return $this->redirect($response, $data['admin_url'] . '/products/types?saved=1');
                     case 'products/stock':
                         $products->updateStock($rows, $data['actor']);
                         return $this->redirect($response, $data['admin_url'] . '/products/stock?saved=1');
@@ -69,7 +66,6 @@ final class ProductController extends AdminBase
         $q = is_string($input['q'] ?? null) ? mb_substr(trim($input['q']), 0, 100, 'UTF-8') : '';
         switch ($page) {
             case 'products':
-            case 'products/types':
                 $filters = ['q' => $q, 'field' => is_string($input['field'] ?? null) ? $input['field'] : 'name', 'ca' => is_string($input['ca'] ?? null) ? $input['ca'] : '',
                     'sort' => is_string($input['sort'] ?? null) ? $input['sort'] : '', 'dir' => is_string($input['dir'] ?? null) ? $input['dir'] : 'desc'];
                 $data['filters'] = $filters;
@@ -77,8 +73,7 @@ final class ProductController extends AdminBase
                 $data['categories'] = $this->service->categories->options();
                 $data['fields'] = Products::SEARCH_FIELDS;
                 $data['sorts'] = Products::SORTS;
-                $data['types'] = Products::TYPES;
-                return $this->render($request, $response, $page === 'products' ? 'products' : 'product_types', $data);
+                return $this->render($request, $response, 'products', $data);
             case 'products/stock':
                 $data['q'] = $q;
                 $data['list'] = $products->stockList($q, $this->page($input['page'] ?? ''), 30);

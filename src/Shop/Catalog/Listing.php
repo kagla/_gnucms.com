@@ -6,6 +6,7 @@ namespace GnuCms\Shop\Catalog;
 
 use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
+use GnuCms\Support\Clock;
 
 final class Listing
 {
@@ -17,17 +18,47 @@ final class Listing
 
     public function category(array $category, string $sort, string $dir, int $page): array
     {
-        [$sub, $params] = Categories::subtreeWhere($category, 'c');
-        $where = 'p.active = 1 AND EXISTS (SELECT 1 FROM ' . $this->store->table('yc_product_categories') . ' pc JOIN ' . $this->store->table('yc_categories')
-            . ' c ON c.id = pc.category_id WHERE pc.product_id = p.id AND c.active = 1 AND ' . $sub . ')';
+        [$where, $params] = $this->categoryWhere($category, 'p.active = 1');
         return $this->paginate($where, $params, $this->order($sort, $dir), $page, (int) $category['list_columns'], (int) $category['list_rows']);
     }
 
-    public function type(string $type, string $sort, string $dir, int $page): array
+    /** 분류와 그 하위 분류에 걸린 상품. 분류 화면은 p.active, 묶음·메인 블록은 visible() 을 앞에 둔다. [where, params]. */
+    private function categoryWhere(array $category, string $base): array
     {
-        $column = Settings::TYPE_COLUMNS[$type] ?? throw \GnuCms\Error\DomainError::notFound('상품 유형을 찾을 수 없습니다.');
-        $block = $this->settings->block('type');
-        return $this->paginate($this->visible() . ' AND p.' . $column . ' = 1', [], $this->order($sort, $dir), $page, (int) $block['columns'], (int) $block['rows']);
+        [$sub, $params] = Categories::subtreeWhere($category, 'c');
+        return [$base . ' AND EXISTS (SELECT 1 FROM ' . $this->store->table('yc_product_categories') . ' pc JOIN ' . $this->store->table('yc_categories')
+            . ' c ON c.id = pc.category_id WHERE pc.product_id = p.id AND c.active = 1 AND ' . $sub . ')', $params];
+    }
+
+    /** 자동 묶음(신상품·베스트·인기·할인) 또는 수동 전환된 분류. [where, params, 기본 정렬]. */
+    public function collectionWhere(string $key, array $block): array
+    {
+        if (!isset(Settings::TYPE_LABELS[$key])) throw \GnuCms\Error\DomainError::notFound('상품 묶음을 찾을 수 없습니다.');
+        if (($block['source'] ?? 'auto') === 'category' && ($block['source_category_id'] ?? null) !== null) {
+            $category = $this->store->find('yc_categories', (int) $block['source_category_id']);
+            // 고른 분류가 없어졌으면 자동 규칙으로 돌아간다.
+            if ($category !== null) return [...$this->categoryWhere($category, $this->visible()), self::DEFAULT_ORDER];
+        }
+        $auto = $this->settings->all()['auto'];
+        $now = Clock::timestamp();
+        $sold = 'SELECT COALESCE(SUM(oi.quantity), 0) FROM ' . $this->store->table('yc_order_items') . ' oi JOIN ' . $this->store->table('yc_orders')
+            . " o ON o.id = oi.order_id WHERE oi.product_id = p.id AND o.status IN ('paid', 'confirmed', 'shipped', 'completed') AND o.created_at >= ";
+        $bestFrom = $now - (int) $auto['best_days'] * 86400;
+        return match ($key) {
+            'new' => [$this->visible() . ' AND p.created_at >= ?', [$now - (int) $auto['new_days'] * 86400], 'p.created_at DESC, p.id DESC'],
+            // 정렬식은 매개변수를 받을 수 없어 기준 시각을 정수로 넣는다 — (int) 캐스트라 주입 여지가 없다.
+            'best' => [$this->visible() . ' AND (' . $sold . '?) > 0', [$bestFrom], '(' . $sold . $bestFrom . ') DESC, p.id DESC'],
+            'popular' => [$this->visible() . ' AND p.hit > 0', [], 'p.hit DESC, p.id DESC'],
+            'discount' => [$this->visible() . ' AND p.list_price > p.price', [], '(1.0 * p.price / p.list_price) ASC, p.id DESC'],
+        };
+    }
+
+    public function collection(string $key, string $sort, string $dir, int $page): array
+    {
+        $blocks = $this->settings->all()['main'];
+        [$where, $params, $order] = $this->collectionWhere($key, is_array($blocks[$key] ?? null) ? $blocks[$key] : []);
+        $size = $this->settings->block('type');
+        return $this->paginate($where, $params, $sort === '' ? $order : $this->order($sort, $dir), $page, (int) $size['columns'], (int) $size['rows']);
     }
 
     public function search(string $q, ?array $category, int $min, int $max, string $sort, string $dir, int $page): array
@@ -56,12 +87,25 @@ final class Listing
         return $result;
     }
 
+    /** 메인: use 가 켜진 자동 묶음(키별) + 관리자가 고른 분류 블록(`categories`). */
     public function main(): array
     {
+        $settings = $this->settings->all();
         $blocks = [];
-        foreach ($this->settings->all()['main'] as $type => $block) {
+        foreach (Settings::TYPES as $key) {
+            $block = $settings['main'][$key];
             if (!$block['use']) continue;
-            $blocks[$type] = $this->paginate($this->visible() . ' AND p.' . Settings::TYPE_COLUMNS[$type] . ' = 1', [], self::DEFAULT_ORDER, 1, (int) $block['columns'], (int) $block['rows'])['items'];
+            [$where, $params, $order] = $this->collectionWhere($key, $block);
+            $blocks[$key] = $this->paginate($where, $params, $order, 1, (int) $block['columns'], (int) $block['rows'])['items'];
+        }
+        $blocks['categories'] = [];
+        foreach ($settings['main']['categories'] as $entry) {
+            $category = $this->store->find('yc_categories', (int) $entry['id']);
+            // 없어졌거나 공개를 끈 분류는 조용히 건너뛴다.
+            if ($category === null || (int) $category['active'] !== 1) continue;
+            [$where, $params] = $this->categoryWhere($category, $this->visible());
+            $blocks['categories'][] = ['category' => $category,
+                'items' => $this->paginate($where, $params, self::DEFAULT_ORDER, 1, (int) $entry['columns'], (int) $entry['rows'])['items']];
         }
         return $blocks;
     }

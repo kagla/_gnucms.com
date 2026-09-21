@@ -131,4 +131,30 @@ final class SchemaTest extends ShopTestCase
             self::assertNotNull($exists, $index);
         }
     }
+
+    /** 31판: 깃발 다섯 개를 없앤다. 히트·추천·인기가 켜진 상품은 메뉴 숨김 분류로 옮기고, 상품이 없는 깃발은 분류를 만들지 않는다. 두 번 돌려도 같다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateMovesDisplayFlagsIntoHiddenCategories(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $c) $db->execute('ALTER TABLE ' . $db->table('yc_products') . ' ADD COLUMN ' . $c . ' SMALLINT NOT NULL DEFAULT 0');
+        $cat = $this->category('의류');
+        $a = $this->product(['category_id' => (string) $cat['id'], 'code' => 'A']); $b = $this->product(['category_id' => (string) $cat['id'], 'code' => 'B']);
+        $db->execute('UPDATE ' . $db->table('yc_products') . ' SET is_hit = 1, is_new = 1 WHERE id = ?', [(int) $a['id']]);
+        $db->execute('UPDATE ' . $db->table('yc_products') . ' SET is_hit = 1, is_popular = 1 WHERE id = ?', [(int) $b['id']]);
+        $this->category('히트상품'); // 슬러그가 이미 쓰이는 경우 → 히트상품-2
+        Schema::migrate($db); Schema::migrate($db);
+        self::assertArrayNotHasKey('is_hit', $this->shop->products->get((int) $a['id']));
+        $hit = $this->shop->categories->bySlug('히트상품-2'); $popular = $this->shop->categories->bySlug('인기상품');
+        self::assertNotNull($hit); self::assertSame(1, (int) $hit['menu_hidden']); self::assertNull($hit['parent_id']);
+        self::assertSame('히트상품', $hit['name']);
+        self::assertNull($this->shop->categories->bySlug('추천상품'), '켜진 상품이 없는 깃발은 분류를 만들지 않는다');
+        // 대표 분류(slot 1)는 그대로, 깃발 분류는 다음 slot 으로 붙는다.
+        self::assertSame([1 => (int) $cat['id'], 2 => (int) $hit['id']], array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get((int) $a['id'])['categories']));
+        self::assertSame([1 => (int) $cat['id'], 2 => (int) $hit['id'], 3 => (int) $popular['id']], array_map(static fn (array $c): int => (int) $c['id'], $this->shop->products->get((int) $b['id'])['categories']));
+        // 숨김 분류이므로 메뉴에는 나오지 않지만 분류 목록에서는 상품이 보인다.
+        self::assertNotContains('히트상품-2', array_column($this->shop->categories->children(null, true, true), 'slug'), '메뉴에는 나오지 않는다');
+        self::assertSame(['B', 'A'], array_column($this->shop->listing->category($hit, '', '', 1)['items'], 'code'));
+    }
 }

@@ -9,9 +9,11 @@ use GnuCms\Error\DomainError;
 
 final class Settings
 {
-    public const TYPES = ['hit', 'new', 'recommend', 'discount', 'popular'];
-    public const TYPE_LABELS = ['hit' => '히트상품', 'new' => '최신상품', 'recommend' => '추천상품', 'discount' => '할인상품', 'popular' => '인기상품'];
-    public const TYPE_COLUMNS = ['hit' => 'is_hit', 'new' => 'is_new', 'recommend' => 'is_recommended', 'discount' => 'is_discount', 'popular' => 'is_popular'];
+    public const TYPES = ['new', 'best', 'popular', 'discount'];
+    public const TYPE_LABELS = ['new' => '신상품', 'best' => '베스트', 'popular' => '인기상품', 'discount' => '할인상품'];
+    /** 묶음을 채우는 기준: 규칙(auto) 또는 관리자가 고른 분류(category). */
+    public const SOURCES = ['auto', 'category'];
+    public const MAX_MAIN_CATEGORIES = 10;
 
     public function __construct(private Store $store, private HtmlSanitizer $sanitizer) {}
 
@@ -19,10 +21,12 @@ final class Settings
     {
         $block = ['columns' => 4, 'rows' => 1, 'image_width' => 200, 'image_height' => 0];
         $main = [];
-        foreach (self::TYPES as $type) $main[$type] = ['use' => $type !== 'popular'] + $block;
+        foreach (self::TYPES as $type) $main[$type] = ['use' => $type !== 'popular', 'source' => 'auto', 'source_category_id' => null] + $block;
+        $main['categories'] = [];
         return [
             'visible' => true,
             'banner' => HomeBanner::defaults(),
+            'auto' => ['new_days' => 30, 'best_days' => 30],
             'main' => $main,
             'category' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'type' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
@@ -45,7 +49,13 @@ final class Settings
     {
         $row = $this->store->selectOne('SELECT payload FROM ' . $this->store->table('yc_settings') . " WHERE id = 'settings'");
         $saved = $row === null ? [] : json_decode((string) $row['payload'], true, 8, JSON_THROW_ON_ERROR);
-        return array_replace_recursive(self::defaults(), is_array($saved) ? $saved : []);
+        $all = array_replace_recursive(self::defaults(), is_array($saved) ? $saved : []);
+        // 옛 저장값의 묶음 키(hit·recommend)는 버리고 순서는 TYPES 를 따른다. 분류 블록은 목록 그대로.
+        $main = [];
+        foreach (self::TYPES as $type) $main[$type] = $all['main'][$type];
+        $main['categories'] = array_values(array_filter(is_array($all['main']['categories'] ?? null) ? $all['main']['categories'] : [], 'is_array'));
+        $all['main'] = $main;
+        return $all;
     }
 
     public function block(string $name): array
@@ -69,10 +79,26 @@ final class Settings
         $bool = static fn (string $key): bool => ($input[$key] ?? '') === '1';
         $settings = ['main' => []];
         foreach (self::TYPES as $type) {
-            $settings['main'][$type] = ['use' => $bool('main_' . $type . '_use'), 'columns' => $int('main_' . $type . '_columns', 1, 12),
+            $source = in_array($input['main_' . $type . '_source'] ?? 'auto', self::SOURCES, true) ? $input['main_' . $type . '_source'] ?? 'auto' : 'auto';
+            $categoryId = $source === 'category' ? Input::optionalId($input['main_' . $type . '_source_category_id'] ?? '') : null;
+            if ($source === 'category' && ($categoryId === null || $this->store->find('yc_categories', $categoryId) === null)) {
+                $errors['main_' . $type . '_source_category_id'] = '기준으로 쓸 분류를 고르세요.';
+            }
+            $settings['main'][$type] = ['use' => $bool('main_' . $type . '_use'), 'source' => $source, 'source_category_id' => $categoryId,
+                'columns' => $int('main_' . $type . '_columns', 1, 12),
                 'rows' => $int('main_' . $type . '_rows', 1, 50), 'image_width' => $int('main_' . $type . '_image_width', 0, 2000),
                 'image_height' => $int('main_' . $type . '_image_height', 0, 2000)];
         }
+        $settings['main']['categories'] = [];
+        foreach (is_array($input['main_categories'] ?? null) ? array_values($input['main_categories']) : [] as $row) {
+            if (!is_array($row)) continue;
+            $id = Input::optionalId($row['id'] ?? '');
+            if ($id === null) continue;                       // 빈 줄은 건너뛴다
+            if ($this->store->find('yc_categories', $id) === null) { $errors['main_categories'] = '없는 분류가 있습니다.'; continue; }
+            $settings['main']['categories'][] = ['id' => $id, 'columns' => Input::int($row['columns'] ?? '', 'main_categories', 1, 12, 4),
+                'rows' => Input::int($row['rows'] ?? '', 'main_categories', 1, 50, 1)];
+        }
+        if (count($settings['main']['categories']) > self::MAX_MAIN_CATEGORIES) $errors['main_categories'] = '메인 분류 블록은 ' . self::MAX_MAIN_CATEGORIES . '개까지입니다.';
         foreach (['category', 'type', 'search'] as $section) {
             $settings[$section] = ['columns' => $int($section . '_columns', 1, 12), 'rows' => $int($section . '_rows', 1, 50),
                 'image_width' => $int($section . '_image_width', 0, 2000), 'image_height' => $int($section . '_image_height', 0, 2000)];
@@ -88,6 +114,10 @@ final class Settings
         }
         // 이전 테마의 설정 폼에서도 새 필드가 누락되면 저장된 값을 보존한다.
         $previous = $this->all();
+        $settings['auto'] = [];
+        foreach (['new_days', 'best_days'] as $key) {
+            $settings['auto'][$key] = array_key_exists('auto_' . $key, $input) ? $int('auto_' . $key, 1, 365) : $previous['auto'][$key];
+        }
         $settings['banner'] = HomeBanner::validate($this->store, $input, $previous['banner'], $bannerImage);
         foreach (['fee', 'free_minimum'] as $key) {
             $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];

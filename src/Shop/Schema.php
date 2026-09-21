@@ -70,8 +70,7 @@ final class Schema
                 shipping_per_qty INTEGER NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL,
                 info_group VARCHAR(50) NOT NULL DEFAULT \'\', info_values {TEXT} NOT NULL, memo {TEXT} NOT NULL, hit INTEGER NOT NULL DEFAULT 0,
                 sold_qty INTEGER NOT NULL DEFAULT 0, review_count INTEGER NOT NULL DEFAULT 0, review_avg DECIMAL(2,1) NOT NULL DEFAULT 0,
-                is_hit SMALLINT NOT NULL DEFAULT 0, is_recommended SMALLINT NOT NULL DEFAULT 0, is_new SMALLINT NOT NULL DEFAULT 0,
-                is_popular SMALLINT NOT NULL DEFAULT 0, is_discount SMALLINT NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 extra {TEXT} NOT NULL, version INTEGER NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
             'yc_product_categories' => 'product_id BIGINT NOT NULL, category_id BIGINT NOT NULL, slot SMALLINT NOT NULL,
                 PRIMARY KEY (product_id, slot), UNIQUE (product_id, category_id)',
@@ -97,6 +96,7 @@ final class Schema
         self::migrateCategoryTree($db, $bin);
         // 트리 갱신이 표를 다시 만든 뒤에 둔다 — 그렇게 만들어진 표에도 이 칸이 있어야 한다.
         foreach (self::CATEGORY_COLUMNS as $column => $definition) self::addColumn($db, 'yc_categories', $column, $definition);
+        self::migrateDisplayFlags($db);
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
             'yc_cat_path' => ['yc_categories', 'path'],
             'yc_prod_category' => ['yc_products', 'category_id'], 'yc_prod_name' => ['yc_products', 'name'],
@@ -117,6 +117,36 @@ final class Schema
         foreach ($uniqueIndexes as $index => [$table, $column]) {
             if (!self::indexExists($db, $table, $index)) $db->execute('CREATE UNIQUE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
         }
+    }
+
+    /**
+     * 31판: 진열 깃발을 없앤다. 히트·추천·인기 깃발이 켜진 상품은 메뉴 숨김 분류로 옮겨 보존하고,
+     * 신상품·할인은 규칙이 대신한다. is_hit 칸이 없으면 이미 끝난 것이다.
+     */
+    private static function migrateDisplayFlags(Connection $db): void
+    {
+        if (!self::columnExists($db, 'yc_products', 'is_hit')) return;
+        $products = $db->table('yc_products'); $categories = $db->table('yc_categories'); $links = $db->table('yc_product_categories');
+        $db->transaction(function () use ($db, $products, $categories, $links): void {
+            $now = time();
+            foreach (['is_hit' => '히트상품', 'is_recommended' => '추천상품', 'is_popular' => '인기상품'] as $flag => $name) {
+                $ids = array_map('intval', array_column($db->select('SELECT id FROM ' . $products . ' WHERE ' . $flag . ' = 1 ORDER BY id'), 'id'));
+                if ($ids === []) continue;
+                $slug = $name;
+                for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
+                $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
+                    'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
+                    'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
+                $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
+                foreach ($ids as $productId) {
+                    if ($db->selectOne('SELECT 1 AS x FROM ' . $links . ' WHERE product_id = ? AND category_id = ?', [$productId, $categoryId]) !== null) continue;
+                    $slot = (int) $db->selectOne('SELECT COALESCE(MAX(slot), 0) AS s FROM ' . $links . ' WHERE product_id = ?', [$productId])['s'] + 1;
+                    $db->insert('yc_product_categories', ['product_id' => $productId, 'category_id' => $categoryId, 'slot' => max(2, $slot)]);
+                }
+            }
+        });
+        // DDL 은 스스로 확정되므로(SQLite·MySQL 모두) 트랜잭션 밖에서 지운다.
+        foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $column) self::dropColumn($db, 'yc_products', $column);
     }
 
     private static function indexExists(Connection $db, string $table, string $index): bool

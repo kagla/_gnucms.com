@@ -36,7 +36,7 @@ final class ShopPublicTest extends WebTestCase
         $ids = [];
         foreach ([['A', '파란 셔츠', '300', '1'], ['B', '빨간 셔츠', '100', '1'], ['C', '숨은 셔츠', '200', '0']] as [$code, $name, $price, $active]) {
             $ids[$code] = $this->shop->products->save(['code' => $code, 'name' => $name, 'category_id' => (string) $child['id'], 'price' => $price, 'list_price' => '500', 'stock' => $code === 'B' ? '0' : '3',
-                'active' => $active, 'is_hit' => '1', 'summary' => '요약 ' . $code, 'description' => '<p>설명 ' . $code . '</p>', 'info_group' => 'wear', 'sort_order' => $code === 'A' ? '1' : '2',
+                'active' => $active, 'summary' => '요약 ' . $code, 'description' => '<p>설명 ' . $code . '</p>', 'info_group' => 'wear', 'sort_order' => $code === 'A' ? '1' : '2',
                 'option_group' => $code === 'A' ? [1 => '색상'] : [], 'options' => $code === 'A' ? [['value1' => '빨강', 'price' => '100', 'stock' => '2']] : [],
                 'relations' => $code === 'B' ? (string) $ids['A'] : ''], $code === 'A' ? [ImagesTest::png(300, 300)] : []);
         }
@@ -170,7 +170,9 @@ final class ShopPublicTest extends WebTestCase
         $this->setupShop($config);
         $seed = $this->seed();
         $home = $this->body($this->get($this->app, '/shop'));
-        self::assertStringContainsString('히트상품', $home);
+        self::assertStringContainsString('신상품', $home);
+        self::assertStringContainsString('href="/shop/type?t=best"', $home, '상단 메뉴는 켜진 묶음만 보인다');
+        self::assertStringNotContainsString('type?t=popular', $home, '인기상품은 기본으로 꺼져 있다');
         self::assertStringContainsString('파란 셔츠', $home);
         self::assertStringNotContainsString('숨은 셔츠', $home);
         self::assertStringContainsString('href="/shop/item?id=A"', $home);
@@ -203,10 +205,23 @@ final class ShopPublicTest extends WebTestCase
         }
         self::assertSame(404, $this->get($this->app, '/shop/list', ['ca' => '99'])->getStatusCode());
         self::assertSame(404, $this->get($this->app, '/shop/list')->getStatusCode());
-        $type = $this->body($this->get($this->app, '/shop/type', ['t' => 'hit']));
-        self::assertStringContainsString('히트상품', $type);
+        $type = $this->body($this->get($this->app, '/shop/type', ['t' => 'new']));
+        self::assertStringContainsString('신상품', $type);
         self::assertStringContainsString('빨간 셔츠', $type);
         self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'nope'])->getStatusCode());
+        self::assertSame(404, $this->get($this->app, '/shop/type', ['t' => 'hit'])->getStatusCode(), '옮겨 둔 분류가 없으면 404');
+        // 31판 이전이 만든 분류가 있으면 옛 유형 주소를 그 분류로 넘긴다.
+        $this->shop->categories->save(['parent_id' => '', 'name' => '히트상품', 'active' => '1', 'menu_hidden' => '1', 'list_columns' => '4', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
+        $moved = $this->get($this->app, '/shop/type', ['t' => 'hit']);
+        self::assertSame(301, $moved->getStatusCode());
+        self::assertSame('/shop/c/%ED%9E%88%ED%8A%B8%EC%83%81%ED%92%88', $moved->getHeaderLine('Location'));
+        // 메인 분류 블록: 고른 분류의 이름과 분류 주소가 메인에 놓인다.
+        $settings = $this->shop->settings->all();
+        $settings['main']['categories'] = [['id' => (int) $seed['top']['id'], 'columns' => 4, 'rows' => 1]];
+        $this->saveSettings($settings);
+        $withBlock = $this->body($this->get($this->app, '/shop'));
+        self::assertStringContainsString('<h2 class="yc-block-title">의류</h2>', $withBlock);
+        self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98">전체보기', $withBlock);
         $search = $this->body($this->get($this->app, '/shop/search', ['q' => '셔츠']));
         self::assertStringContainsString('2개', $search);
         self::assertStringContainsString('의류', $search);

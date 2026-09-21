@@ -33,9 +33,10 @@ final class HomeBannerTest extends ShopTestCase
         self::assertSame("새로운 계절\n새로운 상품", $saved['banner']['title']);
         self::assertSame($saved['banner'], $this->shop->banner->saveSettings(self::form())['banner']);
         self::assertFalse($this->shop->banner->saveSettings(self::form(['banner_use' => '0']))['banner']['use']);
-        $this->shop->store->db->update('yc_settings', ['payload' => '{"main":{"hit":{"columns":2}}}'], 'id = :id', ['id' => 'settings']);
+        $this->shop->store->db->update('yc_settings', ['payload' => '{"main":{"hit":{"columns":2},"popular":{"columns":6}}}'], 'id = :id', ['id' => 'settings']);
         self::assertSame(HomeBanner::defaults(), $this->shop->settings->all()['banner']);
-        self::assertSame(2, $this->shop->settings->all()['main']['hit']['columns']);
+        self::assertSame(6, $this->shop->settings->all()['main']['popular']['columns']);
+        self::assertArrayNotHasKey('hit', $this->shop->settings->all()['main'], '옛 묶음 설정은 버린다');
     }
 
     #[DataProvider('connectionProvider')]
@@ -95,12 +96,12 @@ final class HomeBannerTest extends ShopTestCase
     public function testProductSelectionAndBasePathLinks(array $config): void
     {
         $this->setupShop($config);
-        $automatic = $this->product(['is_hit' => '1']);
+        $automatic = $this->product(['name' => '이미지 없는 상품']);
         $selected = $this->product(['name' => '선택 상품']);
         $filename = $this->shop->images->save((int) $selected['id'], ImagesTest::png(80, 80));
         $this->shop->store->insert('yc_product_images', ['product_id' => $selected['id'], 'filename' => $filename, 'sort_order' => 0]);
         $view = $this->shop->banner->view(HomeBanner::defaults(), $this->shop->listing->main(), [], '/cms/store', '/cms');
-        self::assertSame('/cms/store/type?t=hit', $view['button_url']);
+        self::assertSame('/cms/store/type?t=new', $view['button_url'], '자동 표시는 첫 자동 묶음(신상품)을 따른다');
         self::assertSame([$selected['id']], array_column($this->shop->banner->choices(), 'id'));
         $input = self::form(['banner_mode' => 'product', 'banner_product_id' => (string) $selected['id']]);
         $banner = $this->shop->banner->saveSettings($input)['banner'];
@@ -128,15 +129,17 @@ final class HomeBannerTest extends ShopTestCase
     {
         $this->setupShop($config);
         $category = $this->category();
-        $this->product(['name' => '이미지 없는 첫 상품', 'category_id' => $category['id'], 'is_hit' => '1', 'sort_order' => '-10']);
-        $first = $this->product(['name' => '첫 후보', 'category_id' => $category['id'], 'is_hit' => '1', 'is_new' => '1']);
-        $second = $this->product(['name' => '둘째 후보', 'category_id' => $category['id'], 'is_new' => '1']);
-        $hidden = $this->product(['name' => '비공개 상품', 'category_id' => $category['id'], 'is_hit' => '1', 'active' => '0']);
-        $disabledType = $this->product(['name' => '진열하지 않는 유형', 'category_id' => $category['id'], 'is_popular' => '1']);
+        $this->product(['name' => '이미지 없는 첫 상품', 'category_id' => $category['id'], 'sort_order' => '-10']);
+        $first = $this->product(['name' => '첫 후보', 'category_id' => $category['id']]);
+        $second = $this->product(['name' => '둘째 후보', 'category_id' => $category['id']]);
+        $hidden = $this->product(['name' => '비공개 상품', 'category_id' => $category['id'], 'active' => '0']);
+        // 신상품 기간(기본 30일)보다 오래된 상품은 어느 메인 블록에도 없다.
+        $outdated = $this->product(['name' => '오래된 상품', 'category_id' => $category['id']]);
+        $this->shop->store->update('yc_products', (int) $outdated['id'], ['created_at' => \GnuCms\Support\Clock::timestamp() - 40 * 86400]);
         $hiddenCategory = $this->category('비공개 분류', null, ['active' => '0']);
-        $hiddenCategoryProduct = $this->product(['name' => '비공개 분류 상품', 'category_id' => $hiddenCategory['id'], 'is_hit' => '1']);
+        $hiddenCategoryProduct = $this->product(['name' => '비공개 분류 상품', 'category_id' => $hiddenCategory['id']]);
         $expected = [];
-        foreach ([$first, $second, $hidden, $disabledType, $hiddenCategoryProduct] as $product) {
+        foreach ([$first, $second, $hidden, $outdated, $hiddenCategoryProduct] as $product) {
             $file = $this->shop->images->save((int) $product['id'], ImagesTest::png(20, 20));
             $this->shop->store->insert('yc_product_images', ['product_id' => $product['id'], 'filename' => $file, 'sort_order' => 0]);
             if (in_array($product['id'], [$first['id'], $second['id']], true)) $expected[$product['name']] = ['code' => $product['code'], 'id' => $product['id'], 'image' => $file];
@@ -164,7 +167,7 @@ final class HomeBannerTest extends ShopTestCase
         self::assertNull($empty['image']);
         self::assertSame('', $empty['image_url']);
         self::assertSame('', $empty['caption']);
-        self::assertSame('/cms/store/type?t=hit', $empty['button_url']);
+        self::assertSame('/cms/store/type?t=new', $empty['button_url']);
         self::assertSame('/cms/store/c/' . rawurlencode($category['slug']), $this->shop->banner->view($banner, [], [$category], '/cms/store', '/cms')['button_url']);
         self::assertSame('', $this->shop->banner->view($banner, [], [], '/cms/store', '/cms')['button_url']);
     }

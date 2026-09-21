@@ -113,11 +113,22 @@ final class HomeBanner
 
     public function view(array $banner, array $blocks, array $menu, string $url, string $base): array
     {
+        // 자동 묶음이 먼저, 없으면 고른 분류 블록, 그것도 없으면 첫 메뉴 분류.
         $product = null;
-        $type = null;
-        foreach ($blocks as $key => $rows) { if ($rows !== []) { $product = $rows[0]; $type = $key; break; } }
-        $buttonUrl = $type !== null ? $url . '/type?t=' . rawurlencode($type)
-            : ($menu !== [] ? $url . '/c/' . rawurlencode($menu[0]['slug']) : '');
+        $buttonUrl = '';
+        foreach ($blocks as $key => $rows) {
+            if ($key === 'categories') {
+                foreach ($rows as $entry) {
+                    if ($entry['items'] === []) continue;
+                    $product = $entry['items'][0];
+                    $buttonUrl = $url . '/c/' . rawurlencode($entry['category']['slug']);
+                    break 2;
+                }
+                continue;
+            }
+            if ($rows !== []) { $product = $rows[0]; $buttonUrl = $url . '/type?t=' . rawurlencode($key); break; }
+        }
+        if ($buttonUrl === '' && $menu !== []) $buttonUrl = $url . '/c/' . rawurlencode($menu[0]['slug']);
         if ($banner['mode'] === 'product') $product = self::product($this->store, $banner['product_id']);
         if ($banner['mode'] === 'random') $product = self::randomProduct($blocks);
         $image = null; $caption = ''; $alt = ''; $imageUrl = '';
@@ -136,11 +147,16 @@ final class HomeBanner
         return ['settings' => $banner, 'image' => $image, 'caption' => $caption, 'alt' => $alt, 'image_url' => $imageUrl, 'button_url' => $buttonUrl];
     }
 
-    /** 공개 메인 목록을 재사용하며 여러 유형에 속한 상품도 같은 확률로 선택한다. */
+    /** 공개 메인 목록을 재사용하며 여러 묶음에 속한 상품도 같은 확률로 선택한다. */
     private static function randomProduct(array $blocks): ?array
     {
         $candidates = [];
-        foreach ($blocks as $rows) foreach ($rows as $product) {
+        $rowsPerBlock = [];
+        foreach ($blocks as $key => $rows) {
+            if ($key !== 'categories') { $rowsPerBlock[] = $rows; continue; }
+            foreach ($rows as $entry) $rowsPerBlock[] = $entry['items'];
+        }
+        foreach ($rowsPerBlock as $rows) foreach ($rows as $product) {
             if (($product['image'] ?? '') !== '') $candidates[(int) $product['id']] = $product;
         }
         if ($candidates === []) return null;

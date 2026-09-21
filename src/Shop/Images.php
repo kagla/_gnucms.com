@@ -85,7 +85,7 @@ final class Images
     {
         $all = $this->settings->all();
         return match ($size) {
-            'main' => max(array_column($all['main'], 'image_width') ?: [0]),
+            'main' => max(array_column(array_intersect_key($all['main'], array_flip(Settings::TYPES)), 'image_width') ?: [0]),
             'list' => $category === null ? (int) $all['category']['image_width'] : (int) $category['image_width'],
             'type' => (int) $all['type']['image_width'],
             'search' => (int) $all['search']['image_width'],
