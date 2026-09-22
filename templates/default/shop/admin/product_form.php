@@ -7,9 +7,9 @@
 <?php $this->insert('admin/_errors') ?>
 <?php
 $v = static fn (string $key): string => is_scalar($values[$key] ?? null) ? (string) $values[$key] : '';
-$field = function (string $name, string $label, string $type = 'text', array $attrs = []) use ($v, $errors): void {
+$field = function (string $name, string $label, string $type = 'text', array $attrs = [], string $class = '') use ($v, $errors): void {
     $extra = ''; foreach ($attrs as $k => $val) $extra .= ' ' . $k . '="' . $this->e((string) $val) . '"'; ?>
-  <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="yc-field-<?= $name ?>"><?= $this->e($label) ?></label></legend>
+  <fieldset class="fieldset<?= $class !== '' ? ' ' . $class : '' ?><?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="yc-field-<?= $name ?>"><?= $this->e($label) ?></label></legend>
     <input class="input input-bordered input-sm input-block" type="<?= $type ?>" id="yc-field-<?= $name ?>" name="<?= $name ?>" value="<?= $this->e($v($name)) ?>"<?= $extra ?>>
     <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
 <?php };
@@ -30,7 +30,7 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
 <?php };
 ?>
 <?php $this->insert('admin/_form_nav', ['sections' => ['section-category' => '분류', 'section-basic' => '기본정보', 'section-price' => '가격·재고', 'section-images' => '이미지', 'section-description' => '상세 설명', 'section-options' => '선택옵션', 'section-extras' => '추가옵션', 'section-shipping' => '배송비', 'section-info' => '상품정보고시', 'section-relations' => '관련상품', 'section-html' => '추가 설정']]) ?>
-<form method="post" action="<?= $this->e($admin_url) ?>/products/<?= $id === null ? 'new' : 'edit' ?>" enctype="multipart/form-data" class="yc-edit-form" data-yc-product-form>
+<form method="post" action="<?= $this->e($admin_url) ?>/products/<?= $id === null ? 'new' : 'edit' ?>" enctype="multipart/form-data" class="yc-edit-form yc-edit-form-wide" data-yc-product-form>
   <button type="submit" hidden aria-hidden="true" tabindex="-1"></button>
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <input type="hidden" name="action" value="save" data-yc-action>
@@ -52,9 +52,9 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
       <?php if (isset($errors['extra_category_ids'])): ?><p class="validator-hint"><?= $this->e($errors['extra_category_ids']) ?></p><?php endif ?></fieldset>
   </div></section>
   <section class="card" id="section-basic"><div class="card-body"><h2 class="card-title">기본정보</h2>
-    <?php if ($id === null): ?><?php $field('code', '상품 코드 (영문·숫자·-·_ 1~20자)', 'text', ['maxlength' => 20, 'pattern' => '[A-Za-z0-9_-]{1,20}', 'required' => 'required']) ?>
-    <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($product['code']) ?>" readonly></fieldset><?php endif ?>
-    <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required']) ?>
+    <?php if ($id === null): ?><?php $field('code', '상품 코드 (영문·숫자·-·_ 1~20자)', 'text', ['maxlength' => 20, 'pattern' => '[A-Za-z0-9_-]{1,20}', 'required' => 'required'], 'yc-field-half') ?>
+    <?php else: ?><fieldset class="fieldset yc-field-half"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($product['code']) ?>" readonly></fieldset><?php endif ?>
+    <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required'], 'yc-field-half') ?>
     <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('maker', '제조사', 'text', ['maxlength' => 100]); $field('origin', '원산지', 'text', ['maxlength' => 100]); $field('brand', '브랜드', 'text', ['maxlength' => 100]); $field('model', '모델', 'text', ['maxlength' => 100]); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
     <div class="yc-checks"><?php $checkRow('active', '판매가능', 'active'); $checkRow('no_coupon', '쿠폰 대상 제외', 'no_coupon'); $checkRow('phone_inquiry', '전화문의(가격 숨김)', 'phone_inquiry'); ?></div>
   </div></section>
