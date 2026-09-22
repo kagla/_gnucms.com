@@ -13,6 +13,7 @@
 <section class="yc-panel yc-payment-panel"><h2>결제</h2>
 <?php if ($order['payment_method'] === ''): ?><p class="yc-help">온라인 결제 내역이 없는 주문입니다. 결제 안내와 확인은 별도로 진행해 주세요.</p>
 <?php else: ?><dl class="yc-detail-list">
+<?php if ($is_pg): ?><div><dt>결제사</dt><dd><?= $this->e($payment_provider_label) ?></dd></div><?php endif ?>
 <div><dt>수단</dt><dd><?= $this->e($payment_methods[$order['payment_method']] ?? $order['payment_method']) ?></dd></div>
 <div><dt>상태</dt><dd><?= (int) $order['paid_at'] > 0 ? '결제 완료 · ' . $this->e(date('Y-m-d H:i', (int) $order['paid_at'])) . ' · ' . number_format((int) $order['paid_amount']) . '원' : '결제 대기 · 기한 ' . $this->e(date('Y-m-d H:i', (int) $order['pay_by'])) ?></dd></div>
 <?php if ((int) $order['refunded_amount'] > 0): ?><div><dt>환불</dt><dd><?= number_format((int) $order['refunded_amount']) ?>원</dd></div><?php endif ?>

@@ -18,17 +18,19 @@ use GnuCms\Support\Clock;
  */
 final class Payments
 {
-    public const PROVIDER = 'inicis';
     public const METHODS = ['card' => '카드 결제', 'easy_pay' => '간편결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'manual_transfer' => '무통장입금'];
 
     public function __construct(private App $app, private Settings $settings, private Orders $orders) {}
 
-    /** 주문서에 보일 수단. 3.1 은 카드와 무통장만 안다. 켜져 있지 않은 수단은 목록에 없다. */
+    /** 주문서에 보일 수단. 현재 쇼핑몰은 카드와 무통장을 지원한다. 켜져 있지 않은 수단은 목록에 없다. */
     public function methods(): array
     {
         $payment = $this->settings->all()['payment'];
         $methods = [];
-        if ($this->app->paymentSettings()->available($payment['environment'])) $methods['card'] = self::METHODS['card'];
+        $provider = $this->app->paymentProviders()->get($payment['provider']);
+        if ($this->app->paymentSettings($provider->id())->available($payment['environment'])) {
+            foreach (array_intersect($provider->methods(), ['card']) as $method) $methods[$method] = self::METHODS[$method];
+        }
         if ($payment['manual']['enabled'] && $payment['manual']['account'] !== '') $methods['manual_transfer'] = self::METHODS['manual_transfer'];
         return $methods;
     }
@@ -48,8 +50,8 @@ final class Payments
                 'bank' => $payment['manual']['bank'], 'account' => $payment['manual']['account'], 'holder' => $payment['manual']['holder']];
             return $spec;
         }
-        $summary = $this->app->paymentSettings()->summary($payment['environment']);
-        return $spec + ['id' => bin2hex(random_bytes(16)), 'environment' => $payment['environment'], 'revision' => $summary['revision']];
+        $summary = $this->app->paymentSettings($payment['provider'])->summary($payment['environment']);
+        return $spec + ['provider' => $payment['provider'], 'id' => bin2hex(random_bytes(16)), 'environment' => $payment['environment'], 'revision' => $summary['revision']];
     }
 
     /** 카드·간편결제·계좌이체는 카드 기한을, 가상계좌·무통장은 제 기한을 쓴다. */
@@ -69,12 +71,12 @@ final class Payments
         $items = $order['items'] ?? [];
         $first = (string) ($items[0]['product_name'] ?? '주문');
         $name = count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first;
-        return ['id' => (string) $order['payment_id'], 'provider' => self::PROVIDER, 'environment' => (string) $order['payment_environment'],
-            'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'order_name' => $name,
+        return ['id' => (string) $order['payment_id'], 'provider' => (string) ($order['payment_provider'] ?? ''), 'environment' => (string) $order['payment_environment'],
+            'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'method' => (string) $order['payment_method'], 'order_name' => $name,
             'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at']];
     }
 
-    /** 이니시스가 인증 결과를 보낼 주소. 주문의 원장 키와 그 주문·결제사·설정 판의 HMAC 을 싣는다. */
+    /** PG가 인증 결과를 보낼 주소. 주문의 원장 키와 그 주문·결제사·설정 판의 HMAC 을 싣는다. */
     public function callbackUrl(array $order, string $callbackBase): string
     {
         return $callbackBase . '?order=' . $order['payment_id'] . '&state=' . CallbackToken::create($this->app, self::gatewayOrder($order));
@@ -89,7 +91,7 @@ final class Payments
         if ((int) $order['pay_by'] > 0 && (int) $order['pay_by'] - Clock::timestamp() < 900) {
             $order = $this->orders->extendDeadline((int) $order['id'], Clock::timestamp() + 900);
         }
-        $gateway = $this->app->inicisGateway();
+        $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
         $customer = ['name' => $order['buyer_name'], 'phone' => preg_replace('/\D/', '', $order['phone']) ?? '', 'email' => $order['email']];
         $callbackUrl = $this->callbackUrl($order, $callbackBase);
         return ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->checkout(self::gatewayOrder($order), $customer, $returnUrl, $callbackUrl, $device));
@@ -101,7 +103,7 @@ final class Payments
      */
     public function complete(array $order, array $callback): array
     {
-        $gateway = $this->app->inicisGateway();
+        $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
         $gw = self::gatewayOrder($order);
         ExecutionLock::run($this->app->storageDir(), static fn () => $gateway->complete($gw, $callback));
         return $this->applyFetched($order, $gateway->fetch($gw), '결제가 승인되었습니다.');
@@ -111,7 +113,7 @@ final class Payments
     public function sync(array $order): array
     {
         if (!$this->isPgOrder($order)) throw DomainError::validation(['payment' => '결제사 결제가 아닌 주문입니다.']);
-        $payment = $this->app->inicisGateway()->fetch(self::gatewayOrder($order));
+        $payment = $this->app->paymentGateway((string) $order['payment_provider'])->fetch(self::gatewayOrder($order));
         if (($payment['status'] ?? '') === 'NOT_FOUND') throw DomainError::validation(['payment' => '결제사에 이 주문의 결제 기록이 없습니다.']);
         if (!($payment['valid'] ?? false)) throw DomainError::serviceUnavailable('결제사 조회 결과가 주문과 맞지 않습니다. PG 관리자 화면에서 확인해 주세요.');
         if ($order['status'] === 'pending' && $payment['status'] === 'PAID') return $this->applyFetched($order, $payment, '결제 조회로 승인을 확인했습니다.');
@@ -126,7 +128,7 @@ final class Payments
         $settled = (int) $payment['cancelled'] - array_sum(array_column($this->pendingRefunds($order), 'amount'));
         if ((int) $order['paid_at'] > 0 && $settled > (int) $order['refunded_amount']) {
             $this->orders->recordRefund((int) $order['id'], $settled - (int) $order['refunded_amount'],
-                'pg:' . self::PROVIDER, '결제사 조회로 확인한 취소', 'sync-' . $payment['transaction_id'] . '-' . $settled);
+                'pg:' . $order['payment_provider'], '결제사 조회로 확인한 취소', 'sync-' . $payment['transaction_id'] . '-' . $settled);
         }
         if ((int) ($payment['open_cancellations'] ?? 0) > 0) {
             throw DomainError::validation(['refund' => '결제사에서 아직 확정되지 않은 환불 요청이 있습니다. 환불 대조를 진행해 주세요.']);
@@ -138,7 +140,7 @@ final class Payments
     {
         if (($payment['status'] ?? '') !== 'PAID' || !($payment['valid'] ?? false)) throw DomainError::serviceUnavailable('승인 결과를 확인하지 못했습니다. 관리자에게 문의해 주세요.');
         try {
-            return $this->orders->markPaid((int) $order['id'], 'pg:' . self::PROVIDER, (int) $order['total'],
+            return $this->orders->markPaid((int) $order['id'], 'pg:' . $order['payment_provider'], (int) $order['total'],
                 ['tid' => (string) $payment['transaction_id'], 'label' => self::label($order)], (int) $payment['paid_at'], $note);
         } catch (DomainError $e) {
             // 결제 대기가 아닌 주문에 승인이 도착했다. 주문은 그대로 두고 환불 필요만 적은 뒤 그대로 올린다.
@@ -150,7 +152,7 @@ final class Payments
 
     private function recordOrphanApproval(array $order, array $payment): void
     {
-        $this->orders->recordOrphanApproval((int) $order['id'], 'pg:' . self::PROVIDER, (string) $payment['transaction_id'], self::label($order));
+        $this->orders->recordOrphanApproval((int) $order['id'], 'pg:' . $order['payment_provider'], (string) $payment['transaction_id'], self::label($order));
     }
 
     private static function label(array $order): string
@@ -165,7 +167,10 @@ final class Payments
         $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
         if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
         if ($this->isPgOrder($order)) {
-            $gateway = $this->app->inicisGateway();
+            if ($amount < $remaining && !$this->app->paymentProviders()->get($order['payment_provider'])->supportsPartialRefund()) {
+                throw DomainError::validation(['refund' => '이 결제사는 부분 환불을 지원하지 않습니다.']);
+            }
+            $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
             $gw = self::gatewayOrder($order);
             ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->cancel($gw, $amount, $remaining, $reason, $key));
         }
@@ -180,14 +185,14 @@ final class Payments
     public function pendingRefunds(array $order): array
     {
         if (!$this->isPgOrder($order)) return [];
-        return $this->app->inicisGateway()->pendingRefunds(self::gatewayOrder($order));
+        return $this->app->paymentGateway((string) $order['payment_provider'])->pendingRefunds(self::gatewayOrder($order));
     }
 
     /** 보류 중인 환불을 결제사 조회에서 확인한 취소 거래번호에 연결하고 주문에 기록한다. */
     public function confirmRefund(array $order, string $key, string $reference, string $actor): array
     {
         if (!$this->isPgOrder($order)) throw DomainError::validation(['refund' => '결제사 결제가 아닌 주문입니다.']);
-        $gateway = $this->app->inicisGateway();
+        $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
         $gw = self::gatewayOrder($order);
         $pending = $gateway->pendingRefunds($gw)[$key] ?? null;
         if ($pending === null) throw DomainError::validation(['refund' => '대조할 환불 요청이 없습니다. 화면을 새로고침해 주세요.']);
@@ -199,7 +204,7 @@ final class Payments
     public function dismissRefund(array $order, string $key): array
     {
         if (!$this->isPgOrder($order)) throw DomainError::validation(['refund' => '결제사 결제가 아닌 주문입니다.']);
-        $this->app->inicisGateway()->confirmUnprocessedRefund(self::gatewayOrder($order), $key);
+        $this->app->paymentGateway((string) $order['payment_provider'])->confirmUnprocessedRefund(self::gatewayOrder($order), $key);
         return $this->orders->get((int) $order['id']);
     }
 
@@ -207,7 +212,7 @@ final class Payments
     public function inProgress(array $order): bool
     {
         if (!$this->isPgOrder($order)) return false;
-        return in_array($this->app->inicisGateway()->approvalState(self::gatewayOrder($order)), ['pending', 'confirmed'], true);
+        return in_array($this->app->paymentGateway((string) $order['payment_provider'])->approvalState(self::gatewayOrder($order)), ['pending', 'confirmed'], true);
     }
 
     public function expireOverdue(): int

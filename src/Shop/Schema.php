@@ -22,6 +22,7 @@ final class Schema
     /** 결제 칸. 새 설치는 CREATE 문에, 결제 이전에 만든 yc_orders 에는 addColumn() 이 넣는다. */
     public const PAYMENT_COLUMNS = [
         'payment_method' => 'VARCHAR(20) NOT NULL DEFAULT \'\'',
+        'payment_provider' => 'VARCHAR(32) NOT NULL DEFAULT \'\'',
         'payment_id' => 'VARCHAR(32) NOT NULL DEFAULT \'\'',
         'payment_environment' => 'VARCHAR(8) NOT NULL DEFAULT \'\'',
         'payment_revision' => 'VARCHAR(32) NOT NULL DEFAULT \'\'',
@@ -91,6 +92,7 @@ final class Schema
             $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
         }
         foreach (self::PAYMENT_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
+        $db->execute("UPDATE " . $db->table('yc_orders') . " SET payment_provider = 'inicis' WHERE payment_provider = '' AND payment_id <> '' AND payment_method IN ('card', 'easy_pay', 'bank_transfer', 'virtual_account')");
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
         self::dropColumn($db, 'yc_categories', 'image_key');
         self::migrateCategoryTree($db, $bin);

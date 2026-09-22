@@ -323,7 +323,7 @@ final class ShopCommerceTest extends WebTestCase
         $this->setupShop($config); $this->enablePayments();
         $order = $this->placeCardOrder();
         $db = $this->app->db();
-        $db->execute('DROP TABLE ' . $db->table('pay_inicis_transactions'));
+        $db->execute('DROP TABLE ' . $db->table('pay_transactions'));
         $response = $this->get($this->app, '/shop/order', ['number' => $order['number']]);
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('결제하기', $this->body($response));

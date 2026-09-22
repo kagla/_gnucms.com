@@ -67,7 +67,7 @@ final class PaymentSettingsTest extends WebTestCase
         $settings = $this->app->paymentSettings();
         self::assertTrue($settings->summary('test')['configured']);
         self::assertFalse($settings->available('test'));
-        $raw = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table('pay_inicis_settings') . " WHERE id = 'test'")['payload'];
+        $raw = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table('pay_settings') . " WHERE id = 'test'")['payload'];
         self::assertStringNotContainsString($merchant['api_key'], $raw);
         $enabled = $this->post($this->app, '/admin/settings/payment', ['action' => 'enable', 'environment' => 'test', 'csrf_token' => $_SESSION['csrf_token']]);
         self::assertSame(200, $enabled->getStatusCode());
@@ -80,4 +80,29 @@ final class PaymentSettingsTest extends WebTestCase
         self::assertFalse($settings->summary('live')['configured']);
         self::assertSame(422, $this->post($this->app, '/admin/settings/payment', ['action' => 'unknown', 'environment' => 'test', 'csrf_token' => $_SESSION['csrf_token']])->getStatusCode());
     }
+    #[DataProvider('connectionProvider')]
+    public function testEachProviderUsesItsOwnFieldsSecretsAndExecutionPermit(array $config): void
+    {
+        $this->setupApp($config);
+        $this->app->paymentProviders()->register(new \GnuCms\Tests\Payment\TestProvider());
+        $this->signIn(true);
+        $page = $this->get($this->app, '/admin/settings/payment', ['provider' => 'testpg', 'environment' => 'test']);
+        self::assertSame(200, $page->getStatusCode());
+        self::assertStringContainsString('name="account"', $this->body($page));
+        self::assertStringNotContainsString('name="sign_key"', $this->body($page));
+        self::assertStringContainsString('name="provider" value="testpg"', $this->body($page));
+        self::assertStringContainsString('provider=testpg&amp;environment=live', $this->body($page));
+        $token = bin2hex(random_bytes(20));
+        $form = ['provider' => 'testpg', 'environment' => 'test', 'csrf_token' => $_SESSION['csrf_token']];
+        $saved = $this->post($this->app, '/admin/settings/payment', $form + ['action' => 'save', 'account' => 'fixture-account', 'token' => $token]);
+        self::assertSame(200, $saved->getStatusCode());
+        self::assertStringNotContainsString($token, $this->body($saved));
+        self::assertStringContainsString('value="fixture-account"', $this->body($saved));
+        self::assertSame(200, $this->post($this->app, '/admin/settings/payment', $form + ['action' => 'enable'])->getStatusCode());
+        self::assertTrue($this->app->paymentSettings('testpg')->available('test'));
+        self::assertFalse($this->app->paymentSettings()->available('test'));
+        self::assertSame(422, $this->get($this->app, '/admin/settings/payment', ['provider' => '../unknown'])->getStatusCode());
+        self::assertSame(422, $this->post($this->app, '/admin/settings/payment', array_replace($form, ['provider' => 'unknown', 'action' => 'save']))->getStatusCode());
+    }
+
 }

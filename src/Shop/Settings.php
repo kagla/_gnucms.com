@@ -15,7 +15,7 @@ final class Settings
     public const SOURCES = ['auto', 'category'];
     public const MAX_MAIN_CATEGORIES = 10;
 
-    public function __construct(private Store $store, private HtmlSanitizer $sanitizer) {}
+    public function __construct(private Store $store, private HtmlSanitizer $sanitizer, private \GnuCms\Payment\ProviderRegistry $providers = new \GnuCms\Payment\ProviderRegistry()) {}
 
     public static function defaults(): array
     {
@@ -39,7 +39,7 @@ final class Settings
             'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0],
             'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
-            'payment' => ['environment' => 'live',
+            'payment' => ['provider' => 'inicis', 'environment' => 'live',
                 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
                 'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]],
         ];
@@ -136,6 +136,11 @@ final class Settings
         $settings['visible'] = array_key_exists('visible_form', $input) ? $bool('visible') : $previous['visible'];
         // 결제: 폼에 없는 값은 이전 값을 지킨다(다른 테마의 옛 폼과 같은 규칙).
         $payment = $previous['payment'];
+        if (array_key_exists('payment_provider', $input)) {
+            $provider = Input::text($input['payment_provider'], 'payment_provider', 32, false);
+            $this->providers->get($provider);
+            $payment['provider'] = $provider;
+        }
         $environment = $input['payment_environment'] ?? null;
         if (in_array($environment, ['test', 'live'], true)) $payment['environment'] = $environment;
         if (array_key_exists('payment_manual_enabled', $input) || array_key_exists('payment_manual_account', $input)) {

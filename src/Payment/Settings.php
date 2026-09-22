@@ -9,19 +9,20 @@ use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
 use GnuCms\Extension\RuntimePermit;
 
-/** 이니시스 결제 설정. 이전 주문의 조회·환불에 필요한 암호화 설정 판을 보존한다. */
+/** PG별 공통 결제 설정. 이전 주문의 조회·환불에 필요한 암호화 설정 판을 보존한다. */
 final class Settings
 {
-    public const PROVIDERS = ['inicis' => 'KG이니시스'];
     private SecretCipher $cipher;
     private string $table;
 
     public function __construct(public readonly App $app, public readonly string $provider = 'inicis')
     {
-        if (!isset(self::PROVIDERS[$provider])) throw DomainError::internal('결제사를 확인해 주세요.');
-        $this->table = 'pay_' . $provider . '_settings';
+        $this->definition();
+        $this->table = 'pay_settings';
         $this->cipher = new SecretCipher((string) $app->config('auth.secret'));
     }
+
+    public function definition(): Provider { return $this->app->paymentProviders()->get($this->provider); }
 
     /** 실행 허용값의 키. 플러그인 시절 키(plugins/payment-inicis)와 다르므로 업그레이드 후 다시 허용해야 한다. */
     public function key(): string { return 'payment-' . $this->provider; }
@@ -34,7 +35,7 @@ final class Settings
 
     private function row(string $id): ?array
     {
-        $row = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table($this->table) . ' WHERE id = ?', [$id]);
+        $row = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table($this->table) . ' WHERE provider = ? AND id = ?', [$this->provider, $id]);
         return $row === null ? null : json_decode($this->cipher->decrypt($row['payload']), true, 16, JSON_THROW_ON_ERROR);
     }
 
@@ -57,12 +58,7 @@ final class Settings
     {
         $row = $this->revision($revision);
         $current = $this->current($row['environment']);
-        if ($current !== null && $current['merchant_id'] === $row['merchant_id']) {
-            foreach (ProviderConfig::fields($this->provider) as $key => $field) {
-                if ($field['secret'] || $key === 'client_ip') $row[$key] = $current[$key];
-            }
-        }
-        return $row;
+        return $this->definition()->credentials($row, $current);
     }
 
     public function available(string $environment): bool
@@ -79,9 +75,12 @@ final class Settings
     public function summary(string $environment): array
     {
         $row = $this->current($environment);
+        $public = [];
+        foreach ($this->definition()->fields() as $key => $field) {
+            if (!$field['secret']) $public[$key] = $row[$key] ?? '';
+        }
         return ['configured' => $row !== null, 'enabled' => $this->available($environment),
-            'merchant_id' => $row['merchant_id'] ?? '', 'client_ip' => $row['client_ip'] ?? '',
-            'revision' => $row['revision'] ?? '', 'environment' => $environment];
+            'revision' => $row['revision'] ?? '', 'environment' => $environment] + $public;
     }
 
     public function save(string $environment, array $input): void
@@ -93,15 +92,15 @@ final class Settings
     {
         self::environment($environment);
         $before = $this->row($environment);
-        $data = ProviderConfig::validate($this->provider, $input, $this->current($environment) ?? [], $environment)
+        $data = $this->definition()->validate($input, $this->current($environment) ?? [], $environment)
             + ['integration' => 'direct-v1', 'environment' => $environment, 'revision' => bin2hex(random_bytes(16))];
         (new RuntimePermit($this->app->storageDir()))->set($this->key() . '/' . $environment, null);
         $payload = $this->cipher->encrypt(json_encode($data, JSON_THROW_ON_ERROR));
         $db = $this->app->db();
         $db->transaction(function () use ($db, $data, $environment, $before, $payload): void {
-            $db->execute('INSERT INTO ' . $db->table($this->table) . ' (id, payload) VALUES (?, ?)', [$data['revision'], $payload]);
-            if ($before === null) $db->execute('INSERT INTO ' . $db->table($this->table) . ' (id, payload) VALUES (?, ?)', [$environment, $payload]);
-            else $db->update($this->table, ['payload' => $payload], 'id = :id', ['id' => $environment]);
+            $db->execute('INSERT INTO ' . $db->table($this->table) . ' (provider, id, payload) VALUES (?, ?, ?)', [$this->provider, $data['revision'], $payload]);
+            if ($before === null) $db->execute('INSERT INTO ' . $db->table($this->table) . ' (provider, id, payload) VALUES (?, ?, ?)', [$this->provider, $environment, $payload]);
+            else $db->update($this->table, ['payload' => $payload], 'provider = :provider AND id = :id', ['provider' => $this->provider, 'id' => $environment]);
         });
     }
 

@@ -49,6 +49,7 @@ final class Orders
                     'cod_fee' => $quote['cod_fee'], 'total' => $quote['total'], 'shipping_detail' => json_encode($quote['shipping'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     'order_notice' => $this->settings->all()['order_notice'], 'carrier' => '', 'tracking_number' => '',
                     'payment_method' => (string) ($payment['method'] ?? ''), 'payment_id' => (string) ($payment['id'] ?? ''),
+                    'payment_provider' => (string) ($payment['provider'] ?? (!empty($payment['id']) ? 'inicis' : '')),
                     'payment_environment' => (string) ($payment['environment'] ?? ''), 'payment_revision' => (string) ($payment['revision'] ?? ''),
                     'paid_at' => 0, 'paid_amount' => 0, 'refunded_amount' => 0, 'pay_by' => (int) ($payment['pay_by'] ?? 0),
                     'payment_detail' => $payment === [] ? '' : json_encode($payment['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),

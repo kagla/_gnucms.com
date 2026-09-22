@@ -161,9 +161,10 @@ final class App
 
     private ?Notifier $notifier = null;
 
-    private ?\GnuCms\Payment\Settings $paymentSettings = null;
+    private array $paymentSettings = [];
+    private ?\GnuCms\Payment\ProviderRegistry $paymentProviders = null;
 
-    private ?\GnuCms\Payment\InicisGateway $inicisGateway = null;
+    private array $paymentGateways = [];
 
     private ?\GnuCms\Shop\Service $shop = null;
 
@@ -629,20 +630,42 @@ final class App
         return $this->shop ??= new \GnuCms\Shop\Service($this);
     }
 
-    public function paymentSettings(): \GnuCms\Payment\Settings
+    public function paymentProviders(): \GnuCms\Payment\ProviderRegistry
     {
-        return $this->paymentSettings ??= new \GnuCms\Payment\Settings($this, 'inicis');
+        return $this->paymentProviders ??= new \GnuCms\Payment\ProviderRegistry();
     }
 
-    public function inicisGateway(): \GnuCms\Payment\InicisGateway
+    public function paymentSettings(string $provider = 'inicis'): \GnuCms\Payment\Settings
     {
-        return $this->inicisGateway ??= new \GnuCms\Payment\InicisGateway($this->paymentSettings());
+        return $this->paymentSettings[$provider] ??= new \GnuCms\Payment\Settings($this, $provider);
     }
 
-    /** 테스트에서 모의 전송기를 가진 게이트웨이로 바꾼다. */
+    public function paymentGateway(string $provider): \GnuCms\Payment\Gateway
+    {
+        if (!isset($this->paymentGateways[$provider])) {
+            $gateway = $this->paymentProviders()->get($provider)->gateway($this->paymentSettings($provider));
+            if ($gateway->id() !== $provider) throw new \LogicException('결제사와 게이트웨이 ID가 다릅니다.');
+            $this->paymentGateways[$provider] = $gateway;
+        }
+        return $this->paymentGateways[$provider];
+    }
+
+    /** 테스트·내부 서비스에서 전송기를 주입한 게이트웨이를 등록한다. */
+    public function setPaymentGateway(\GnuCms\Payment\Gateway $gateway): void
+    {
+        $this->paymentProviders()->get($gateway->id());
+        $this->paymentGateways[$gateway->id()] = $gateway;
+    }
+
+    /** 기존 코어 호출과의 호환. 쇼핑몰은 paymentGateway()를 사용한다. */
+    public function inicisGateway(): \GnuCms\Payment\Gateway
+    {
+        return $this->paymentGateway('inicis');
+    }
+
     public function setInicisGateway(\GnuCms\Payment\InicisGateway $gateway): void
     {
-        $this->inicisGateway = $gateway;
+        $this->setPaymentGateway($gateway);
     }
 
     /**

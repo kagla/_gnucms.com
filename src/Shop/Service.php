@@ -28,7 +28,7 @@ final class Service
     public function __construct(public readonly App $app)
     {
         $this->store = new Store($app->db());
-        $this->settings = new Settings($this->store, $app->htmlSanitizer());
+        $this->settings = new Settings($this->store, $app->htmlSanitizer(), $app->paymentProviders());
         $this->categories = new Categories($this->store, $app->htmlSanitizer(), $this->settings, $app->contentImages());
         $this->options = new Options($this->store);
         $this->images = new Images($app, $this->settings);

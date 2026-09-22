@@ -12,7 +12,7 @@ abstract class DirectGateway implements Gateway
     protected Journal $journal;
     public function __construct(public readonly Settings $settings, protected Transport $http = new StreamTransport()) { $this->journal = new Journal($settings); }
     public function id(): string { return $this->settings->provider; }
-    public function label(): string { return Settings::PROVIDERS[$this->id()]; }
+    public function label(): string { return $this->settings->definition()->label(); }
     public function available(string $environment): bool { return $this->settings->available($environment); }
     public function configuration(string $environment): array { $this->settings->requireEnabled($environment); return $this->settings->summary($environment); }
 
@@ -126,6 +126,7 @@ abstract class DirectGateway implements Gateway
      */
     public function approvalState(array $order): string
     {
+        if (($order['provider'] ?? '') !== $this->id()) throw DomainError::validation(['order' => '주문 결제사를 확인해 주세요.']);
         if (!preg_match('/^[a-f0-9]{32}$/D', (string) ($order['id'] ?? ''))) return 'none';
         $state = $this->journal->read($order['id']);
         return (string) ($state['approval'] ?? 'none');

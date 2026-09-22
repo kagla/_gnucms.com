@@ -39,7 +39,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <div class="yc-fields"><?php $num('shipping_fee', '기본 배송비 (원)', 0, 9999999); $num('shipping_free_minimum', '무료배송 기준 금액 (원)', 0, 9999999); ?></div>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 카드 결제와 무통장입금은 아래 결제 항목에서 설정합니다.</span></label>
   </div></section>
-  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">카드 결제는 설정 → 결제에서 저장하고 실행을 허용한 이니시스 환경을 씁니다. 무통장입금은 아래 계좌를 안내하고 관리자가 입금을 확인합니다.</p>
+  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">카드 결제는 설정 → 결제에서 저장하고 실행을 허용한 PG 환경을 씁니다. 무통장입금은 아래 계좌를 안내하고 관리자가 입금을 확인합니다.</p>
+    <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider"><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">새 주문에 적용합니다. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
       <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $label): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_environment" value="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? ' checked' : '' ?>> <?= $label ?></label><?php endforeach ?>
       <span class="muted">주문서의 카드 결제는 이 환경이 결제 설정에서 허용돼 있을 때만 보입니다.</span></fieldset>

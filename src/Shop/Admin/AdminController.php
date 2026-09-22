@@ -37,6 +37,7 @@ final class AdminController extends AdminBase
 
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
+        $data['payment_providers'] = $this->service->app->paymentProviders()->labels();
         $data['types'] = Settings::TYPE_LABELS;
         $data['categories'] = $this->service->categories->optionDetails();
         $current = $this->service->settings->all();
@@ -78,6 +79,7 @@ final class AdminController extends AdminBase
         $flat['shipping_free_minimum'] = (string) $settings['shipping']['free_minimum'];
         $flat['order_notice'] = $settings['order_notice'];
         $flat['exchange_content'] = $settings['exchange']['content'];
+        $flat['payment_provider'] = $settings['payment']['provider'];
         $flat['payment_environment'] = $settings['payment']['environment'];
         $flat['payment_manual_enabled'] = $settings['payment']['manual']['enabled'] ? '1' : '0';
         foreach (['bank', 'account', 'holder'] as $key) $flat['payment_manual_' . $key] = $settings['payment']['manual'][$key];

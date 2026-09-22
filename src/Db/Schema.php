@@ -19,7 +19,8 @@ final class Schema
         'password_attempts', 'login_events', 'write_rate_limits',
         'extension_schemas',
         'message_jobs', 'message_recipients', 'alimtalk_templates',
-        'pay_inicis_settings', 'pay_inicis_transactions',
+        'pay_inicis_settings', 'pay_inicis_transactions', // 31판까지의 원본 보관·백업
+        'pay_settings', 'pay_transactions',
         ...\GnuCms\Shop\Schema::TABLES,
     ];
 
@@ -63,7 +64,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '31';
+    public const VERSION = '32';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -292,10 +293,12 @@ final class Schema
         $this->addColumnIfMissing('users', 'phone', 'VARCHAR(20) NULL');
     }
 
-    /** 쇼핑몰 결제(docs/payments.md). 설정과 원장은 암호문이라 칸이 둘뿐이다. */
+    /** 쇼핑몰 결제(docs/payments.md). 설정과 원장은 PG별로 격리하고 암호화한다. 이전 표는 보관한다. */
     private function paymentStatements(): array
     {
         return [
+            'CREATE TABLE pay_settings (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, PRIMARY KEY (provider, id)){SUFFIX}',
+            'CREATE TABLE pay_transactions (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, PRIMARY KEY (provider, id)){SUFFIX}',
             'CREATE TABLE pay_inicis_settings (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
             'CREATE TABLE pay_inicis_transactions (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
         ];
@@ -307,6 +310,13 @@ final class Schema
         foreach ($this->paymentStatements() as $sql) {
             preg_match('/^CREATE TABLE (\w+)/', $sql, $m);
             if (!$this->tableExists($m[1])) $this->db->execute($this->expand($sql));
+        }
+        // 암호문을 그대로 옮겨 설정 판·콜백·미확정 승인/환불 기록을 보존한다.
+        // 재실행해도 공통 원장의 더 최신 상태를 덮어쓰지 않는다.
+        foreach (['settings', 'transactions'] as $kind) {
+            $source = $this->db->table('pay_inicis_' . $kind);
+            $target = $this->db->table('pay_' . $kind);
+            $this->db->execute("INSERT INTO $target (provider, id, payload) SELECT 'inicis', old.id, old.payload FROM $source old WHERE NOT EXISTS (SELECT 1 FROM $target current_row WHERE current_row.provider = 'inicis' AND current_row.id = old.id)");
         }
     }
 

@@ -16,14 +16,14 @@ final class Journal
     public function __construct(private Settings $settings)
     {
         $this->cipher = new SecretCipher((string) $settings->app->config('auth.secret'));
-        $this->table = 'pay_' . $settings->provider . '_transactions';
+        $this->table = 'pay_transactions';
     }
 
     public function read(string $id): array
     {
         if (!preg_match('/^[a-f0-9]{32}$/D', $id)) throw DomainError::validation(['order' => '주문번호를 확인해 주세요.']);
         $db = $this->settings->app->db();
-        $row = $db->selectOne('SELECT payload FROM ' . $db->table($this->table) . ' WHERE id = ?', [$id]);
+        $row = $db->selectOne('SELECT payload FROM ' . $db->table($this->table) . ' WHERE provider = ? AND id = ?', [$this->settings->provider, $id]);
         return $row === null ? [] : json_decode($this->cipher->decrypt($row['payload']), true, 32, JSON_THROW_ON_ERROR);
     }
 
@@ -33,12 +33,12 @@ final class Journal
         $db = $this->settings->app->db();
         // 결제 설정 행이 항상 있으므로 최초 주문 기록 생성도 두 DB에서 직렬화된다.
         return $db->transaction(function () use ($db, $id, $change): array {
-            $db->execute('UPDATE ' . $db->table('pay_' . $this->settings->provider . '_settings') . ' SET payload = payload WHERE id IN (?, ?)', ['test', 'live']);
+            $db->execute('UPDATE ' . $db->table('pay_settings') . ' SET payload = payload WHERE provider = ? AND id IN (?, ?)', [$this->settings->provider, 'test', 'live']);
             $before = $this->read($id);
             $after = $change($before);
             $payload = $this->cipher->encrypt(json_encode($after, JSON_THROW_ON_ERROR));
-            if ($before === []) $db->execute('INSERT INTO ' . $db->table($this->table) . ' (id, payload) VALUES (?, ?)', [$id, $payload]);
-            else $db->update($this->table, ['payload' => $payload], 'id = :id', ['id' => $id]);
+            if ($before === []) $db->execute('INSERT INTO ' . $db->table($this->table) . ' (provider, id, payload) VALUES (?, ?, ?)', [$this->settings->provider, $id, $payload]);
+            else $db->update($this->table, ['payload' => $payload], 'provider = :provider AND id = :id', ['provider' => $this->settings->provider, 'id' => $id]);
             return $after;
         });
     }

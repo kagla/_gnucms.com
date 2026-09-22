@@ -15,7 +15,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
 
 /**
- * 결제 페이지(주문 주인만)와 이니시스가 부르는 콜백(세션 없음). 콜백은 ExternalRequests 가
+ * 결제 페이지(주문 주인만)와 PG가 부르는 콜백(세션 없음). 콜백은 ExternalRequests 가
  * 인증기를 본문보다 먼저 부르므로 인증은 쿼리(order=원장 키, state=HMAC)만으로 한다.
  */
 final class PayController
@@ -42,6 +42,7 @@ final class PayController
             return $response->withStatus(303)->withHeader('Location', $url . '/order?number=' . rawurlencode($number) . '&pay=failed');
         }
         return $view->render($response, 'pay', ['url' => $url, 'base' => $base, 'order' => $order, 'payment' => $payment,
+            'checkout_template' => $this->service->app->paymentProviders()->get($order['payment_provider'])->checkoutTemplate(),
             'method_label' => Payments::METHODS[$order['payment_method']] ?? $order['payment_method']]);
     }
 

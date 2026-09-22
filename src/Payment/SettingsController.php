@@ -10,7 +10,7 @@ use GnuCms\Web\Csrf;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-/** 설정 → 결제(이니시스). 전체 관리자 전용이며 POST는 세션 CSRF를 검사한다. */
+/** 설정 → 결제. 전체 관리자 전용이며 POST는 세션 CSRF를 검사한다. */
 final class SettingsController
 {
     public function __construct(private Settings $settings)
@@ -25,16 +25,18 @@ final class SettingsController
         $input = is_array($input) ? $input : [];
         foreach ($input as $value) if (!is_string($value) && !is_int($value)) throw DomainError::validation(['input' => '단일 입력값을 사용해 주세요.']);
         $environment = is_string($input['environment'] ?? null) ? Settings::environment($input['environment']) : 'test';
+        $settings = $this->settings->app->paymentSettings((string) ($input['provider'] ?? 'inicis'));
+        $provider = $settings->definition();
         $notice = '';
         $errors = [];
         try {
             if ($request->getMethod() === 'POST') {
                 $action = $input['action'] ?? '';
                 if ($action === 'save') {
-                    $this->settings->save($environment, $input);
+                    $settings->save($environment, $input);
                     $notice = '설정을 저장했습니다. 상점 코드와 환경을 확인한 뒤 API 실행을 허용해 주세요.';
                 } elseif (in_array($action, ['enable', 'disable'], true)) {
-                    $this->settings->enable($environment, $action === 'enable');
+                    $settings->enable($environment, $action === 'enable');
                     $notice = $action === 'enable' ? 'API 실행을 허용했습니다.' : 'API 실행을 정지했습니다.';
                 } else {
                     throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
@@ -47,9 +49,9 @@ final class SettingsController
         return View::fromRequest($request)->render(
             $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer'),
             'admin/payment_settings',
-            ['fields' => ProviderConfig::fields($this->settings->provider), 'manual' => ProviderConfig::manual($this->settings->provider),
-                'label' => Settings::PROVIDERS[$this->settings->provider], 'environment' => $environment,
-                'settings' => $this->settings->summary($environment), 'notice' => $notice, 'errors' => $errors]
+            ['provider' => $provider->id(), 'providers' => $settings->app->paymentProviders()->labels(), 'fields' => $provider->fields(), 'manual' => $provider->manual(),
+                'label' => $provider->label(), 'environment' => $environment,
+                'settings' => $settings->summary($environment), 'notice' => $notice, 'errors' => $errors]
         );
     }
 }

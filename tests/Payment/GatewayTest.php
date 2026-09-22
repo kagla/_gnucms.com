@@ -81,7 +81,7 @@ final class GatewayTest extends DatabaseTestCase
     {
         $this->setupGateway($db);
         $revision = $this->order['config_revision'];
-        $raw = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table('pay_inicis_settings') . " WHERE id = 'test'")['payload'];
+        $raw = $this->app->db()->selectOne('SELECT payload FROM ' . $this->app->db()->table('pay_settings') . " WHERE id = 'test'")['payload'];
         self::assertStringNotContainsString($this->config['api_key'], $raw);
         self::assertArrayNotHasKey('api_key', $this->settings->summary('test'));
         $next = array_replace($this->config, ['api_key' => bin2hex(random_bytes(16)), 'client_ip' => '192.0.2.20']);
