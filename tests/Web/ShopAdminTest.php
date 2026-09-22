@@ -652,6 +652,8 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('data-yc-add-category', $form);
         self::assertStringNotContainsString('name="category2_id"', $form);
         self::assertStringContainsString('<template data-yc-category-row>', $form);
+        // 선택옵션 세 줄의 예시는 서로 다르다(색상 → 사이즈 → 소재).
+        foreach (['그룹 이름 (예: 색상)', '값 (예: 빨강,파랑)', '그룹 이름 (예: 사이즈)', '값 (예: S,M,L)', '그룹 이름 (예: 소재)', '값 (예: 면,린넨)'] as $placeholder) self::assertStringContainsString('placeholder="' . $placeholder . '"', $form);
         // 진열 유형 깃발은 없앴다 — 체크도, "유형 다른 상품에도 적용" 칩도 없다.
         self::assertStringNotContainsString('name="is_hit"', $form);
         self::assertStringNotContainsString('value="types"', $form);

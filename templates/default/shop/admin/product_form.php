@@ -88,10 +88,10 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
   </div></section>
   <section class="card" id="section-options"><div class="card-body"><h2 class="card-title">선택옵션</h2>
     <p class="muted">그룹 이름과 쉼표로 구분한 값을 입력하고 <strong>조합 생성</strong>을 누르면 조합 표가 만들어집니다. 가격은 판매가에 더하는 차액입니다.</p>
-    <div class="yc-option-groups<?= isset($errors['option_group']) ? ' is-invalid' : '' ?>"><?php for ($i = 1; $i <= 3; $i++): ?>
+    <div class="yc-option-groups<?= isset($errors['option_group']) ? ' is-invalid' : '' ?>"><?php $examples = [1 => ['색상', '빨강,파랑'], 2 => ['사이즈', 'S,M,L'], 3 => ['소재', '면,린넨']]; for ($i = 1; $i <= 3; $i++): ?>
       <div class="yc-option-group" role="group" aria-labelledby="yc-option-label-<?= $i ?>"><strong class="yc-option-label" id="yc-option-label-<?= $i ?>">옵션 <?= $i ?></strong>
-        <input class="input input-bordered input-sm" type="text" name="option_group[<?= $i ?>]" value="<?= $this->e((string) ($values['option_group'][$i] ?? '')) ?>" maxlength="100" placeholder="그룹 이름 (예: 색상)" aria-label="옵션 <?= $i ?> 그룹 이름">
-        <input class="input input-bordered input-sm" type="text" name="option_values[<?= $i ?>]" value="<?= $this->e((string) ($values['option_values'][$i] ?? '')) ?>" placeholder="값 (예: 빨강,파랑)" aria-label="옵션 <?= $i ?> 값"></div>
+        <input class="input input-bordered input-sm" type="text" name="option_group[<?= $i ?>]" value="<?= $this->e((string) ($values['option_group'][$i] ?? '')) ?>" maxlength="100" placeholder="그룹 이름 (예: <?= $examples[$i][0] ?>)" aria-label="옵션 <?= $i ?> 그룹 이름">
+        <input class="input input-bordered input-sm" type="text" name="option_values[<?= $i ?>]" value="<?= $this->e((string) ($values['option_values'][$i] ?? '')) ?>" placeholder="값 (예: <?= $examples[$i][1] ?>)" aria-label="옵션 <?= $i ?> 값"></div>
     <?php endfor ?></div>
     <button class="btn btn-sm" type="submit" name="action" value="combine" formnovalidate>조합 생성</button>
     <?php if (isset($errors['options']) || isset($errors['option_values'])): ?><p class="validator-hint"><?= $this->e($errors['options'] ?? $errors['option_values']) ?></p><?php endif ?>
