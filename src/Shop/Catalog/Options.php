@@ -181,16 +181,6 @@ final class Options
         return $result;
     }
 
-    public static function soldOut(array $product, array $selectRows): bool
-    {
-        if ((int) ($product['sold_out'] ?? 0) === 1) return true;
-        if ($selectRows === []) return (int) ($product['stock'] ?? 0) <= 0;
-        foreach ($selectRows as $row) {
-            if ((int) ($row['active'] ?? 1) === 1 && (int) $row['stock'] > 0) return false;
-        }
-        return true;
-    }
-
     public static function pageJson(array $product, array $loaded): array
     {
         $items = [];

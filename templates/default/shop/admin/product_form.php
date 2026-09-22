@@ -63,7 +63,9 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
       <fieldset class="fieldset"><legend class="fieldset-legend">포인트 방식</legend><select class="select select-bordered select-sm" name="point_type" data-yc-point-type><?php foreach ([0 => '설정 금액', 1 => '판매가 기준 %', 2 => '구매가 기준 %'] as $k => $l): ?><option value="<?= $k ?>"<?= $v('point_type') === (string) $k ? ' selected' : '' ?>><?= $l ?></option><?php endforeach ?></select></fieldset>
       <?php $field('point', '포인트 (정액 또는 0~99%)', 'number', ['min' => 0]); $field('supply_point', '추가옵션 포인트', 'number', ['min' => 0]); ?></div>
     <div class="yc-checks"><?php $checkRow('tax_free', '비과세', 'tax_free'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('point', '포인트') ?></div></div>
-    <div class="yc-fields"><?php $field('stock', '재고 (선택옵션 없을 때)', 'number', ['min' => 0]); $field('stock_alert', '재고 통보 기준', 'number', ['min' => 0]); $field('buy_min', '최소 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); $field('buy_max', '최대 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); ?></div>
+    <?php $locked = $options_rows !== [] ? ['readonly' => 'readonly', 'title' => '선택옵션이 있는 상품은 조합별 재고를 씁니다'] : []; ?>
+    <?php if ($locked !== []): ?><p class="muted">선택옵션이 있는 상품은 조합별 재고를 씁니다. 아래 재고와 통보 기준은 쓰이지 않으며 <a href="#section-options">선택옵션</a> 표에서 관리합니다.</p><?php endif ?>
+    <div class="yc-fields"><?php $field('stock', '재고 (선택옵션 없을 때)', 'number', ['min' => 0] + $locked); $field('stock_alert', '재고 통보 기준', 'number', ['min' => 0] + $locked); $field('buy_min', '최소 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); $field('buy_max', '최대 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); ?></div>
     <div class="yc-checks"><?php $checkRow('sold_out', '품절 표시'); $checkRow('restock_notify', '재입고 알림 신청 허용'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('buy', '구매수량') ?></div></div>
   </div></section>
   <section class="card" id="section-images"><div class="card-body"><h2 class="card-title">상품 이미지 (최대 <?= \GnuCms\Shop\Images::MAX ?>장)</h2>

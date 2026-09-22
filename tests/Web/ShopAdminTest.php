@@ -585,10 +585,23 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame(404, $this->post($this->app, '/admin/shop/products/types', $this->csrf(['rows' => []]))->getStatusCode());
         self::assertStringNotContainsString('진열 유형', $list);
         self::assertStringNotContainsString('/products/types', $list);
+        // 상품 재고 화면은 선택옵션이 없는 상품만 — 옵션 상품(a)의 재고는 조합 행에 있다.
         $stock = $this->body($this->get($this->app, '/admin/shop/products/stock'));
-        self::assertStringContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
-        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['original_stock' => '3', 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
-        self::assertSame(9, (int) $this->shop->products->find($seed['a'])['stock']);
+        self::assertStringContainsString('name="rows[' . $seed['b'] . '][stock]"', $stock);
+        self::assertStringNotContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
+        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['b'] => ['original_stock' => (string) $this->shop->products->find($seed['b'])['stock'], 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
+        self::assertSame(9, (int) $this->shop->products->find($seed['b'])['stock']);
+        // 상품 목록은 옵션 상품의 재고 칸 대신 조합 재고로 안내하고, 폼은 상품 재고 칸을 잠근다.
+        $list = $this->body($this->get($this->app, '/admin/shop/products'));
+        self::assertMatchesRegularExpression('/<input type="hidden" name="rows\[' . $seed['a'] . '\]\[stock\]" value="3">/', $list);
+        self::assertStringContainsString('/products/option-stock?q=A1', $list);
+        self::assertMatchesRegularExpression('/<input[^>]* type="number"[^>]* name="rows\[' . $seed['b'] . '\]\[stock\]"/', $list);
+        $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['a']]));
+        self::assertMatchesRegularExpression('/name="stock"[^>]* readonly/', $edit);
+        self::assertStringContainsString('조합별 재고를 씁니다', $edit);
+        $editPlain = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['b']]));
+        self::assertDoesNotMatchRegularExpression('/name="stock"[^>]* readonly/', $editPlain);
+        self::assertStringNotContainsString('조합별 재고를 씁니다', $editPlain);
         $optionId = (int) $this->shop->products->get($seed['a'])['options']['select'][0]['id'];
         $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock'));
         self::assertStringContainsString('name="rows[' . $optionId . '][stock]"', $optionStock);

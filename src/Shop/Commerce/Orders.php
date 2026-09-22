@@ -6,6 +6,7 @@ namespace GnuCms\Shop\Commerce;
 
 use GnuCms\Auth\PasswordThrottle;
 use GnuCms\Error\DomainError;
+use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
@@ -54,9 +55,8 @@ final class Orders
                     'created_at' => $now, 'updated_at' => $now]);
                 foreach ($quote['items'] as $item) {
                     $optionId = $item['option_id'] ?: null;
-                    $table = $optionId === null ? 'yc_products' : 'yc_options';
-                    $stockId = $optionId ?? $item['product_id'];
-                    if ($this->store->execute('UPDATE ' . $this->store->table($table) . ' SET stock = stock - ? WHERE id = ? AND stock >= ? AND active = 1', [$item['quantity'], $stockId, $item['quantity']]) !== 1) {
+                    $cell = Stock::cellOfItem($item);
+                    if ($this->store->execute('UPDATE ' . $this->store->table($cell['table']) . ' SET stock = stock - ? WHERE id = ? AND stock >= ? AND active = 1', [$item['quantity'], $cell['id'], $item['quantity']]) !== 1) {
                         throw DomainError::validation(['stock' => $item['name'] . ': 재고가 변경되었습니다. 수량을 다시 확인해 주세요.']);
                     }
                     $this->store->insert('yc_order_items', ['order_id' => $id, 'product_id' => $item['product_id'], 'option_id' => $optionId,
@@ -156,9 +156,8 @@ final class Orders
                 foreach ($items as $item) {
                     $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $item['product_id']]);
                     if ($to === 'cancelled') {
-                        $table = $item['option_id'] === null ? 'yc_products' : 'yc_options';
-                        $stockId = (int) ($item['option_id'] ?? $item['product_id']);
-                        if ($this->store->execute('UPDATE ' . $this->store->table($table) . ' SET stock = stock + ? WHERE id = ?', [(int) $item['quantity'], $stockId]) !== 1) {
+                        $cell = Stock::cellOfItem($item);
+                        if ($this->store->execute('UPDATE ' . $this->store->table($cell['table']) . ' SET stock = stock + ? WHERE id = ?', [(int) $item['quantity'], $cell['id']]) !== 1) {
                             throw DomainError::validation(['stock' => '재고 복원 대상이 없습니다. 상품·옵션을 확인해 주세요.']);
                         }
                         $this->store->logStock((int) $item['product_id'], $item['option_id'] === null ? null : (int) $item['option_id'], (int) $item['quantity'], 'cancel', $order['number'], $actor);

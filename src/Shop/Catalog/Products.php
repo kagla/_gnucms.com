@@ -247,7 +247,7 @@ final class Products
         $row['info'] = ProductInfo::decode((string) $row['info_values']);
         $extra = json_decode((string) $row['extra'], true);
         $row['extra'] = is_array($extra) ? $extra : [];
-        $row['sold_out_computed'] = Options::soldOut($row, $row['options']['select']);
+        $row['sold_out_computed'] = Stock::soldOut($row, $row['options']['select']);
         return $row;
     }
 
@@ -374,7 +374,8 @@ final class Products
         $dir = ($filters['dir'] ?? 'desc') === 'asc' ? 'ASC' : 'DESC';
         $from = ' FROM ' . $this->store->table('yc_products') . ' p LEFT JOIN ' . $this->store->table('yc_categories') . ' c ON c.id = p.category_id WHERE ' . implode(' AND ', $where);
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c' . $from, $params)['c'];
-        $items = $this->store->select('SELECT p.*, c.name AS category_name' . $from . ' ORDER BY ' . $sort . ' ' . $dir . ', p.id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
+        $optionCount = '(SELECT COUNT(*) FROM ' . $this->store->table('yc_options') . " so WHERE so.product_id = p.id AND so.kind = 'select') AS option_count";
+        $items = $this->store->select('SELECT p.*, c.name AS category_name, ' . $optionCount . $from . ' ORDER BY ' . $sort . ' ' . $dir . ', p.id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
         return ['items' => $items, 'total' => $total, 'page' => $page, 'total_pages' => max(1, (int) ceil($total / $perPage))];
     }
 
@@ -409,8 +410,9 @@ final class Products
 
     public function stockList(string $q, int $page, int $perPage): array
     {
-        $where = ''; $params = [];
-        if ($q !== '') { $where = ' WHERE (p.name LIKE ? ESCAPE \'!\' OR p.code LIKE ? ESCAPE \'!\')'; $params = ['%' . self::like($q) . '%', '%' . self::like($q) . '%']; }
+        // 선택옵션이 있는 상품의 재고는 조합 행에 있다(Stock) — 여기서는 상품 행에 재고가 있는 상품만 다룬다.
+        $where = ' WHERE ' . Stock::withoutOptionsWhere($this->store->table('yc_options'), 'p'); $params = [];
+        if ($q !== '') { $where .= ' AND (p.name LIKE ? ESCAPE \'!\' OR p.code LIKE ? ESCAPE \'!\')'; $params = ['%' . self::like($q) . '%', '%' . self::like($q) . '%']; }
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_products') . ' p' . $where, $params)['c'];
         $items = $this->store->select('SELECT p.id, p.code, p.name, p.stock, p.stock_alert, p.active, p.sold_out, p.restock_notify FROM ' . $this->store->table('yc_products') . ' p' . $where
             . ' ORDER BY p.stock ASC, p.id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
@@ -458,7 +460,8 @@ final class Products
 
     public function lowStock(int $limit = 20): array
     {
-        return ['products' => $this->store->select('SELECT id, code, name, stock, stock_alert FROM ' . $this->store->table('yc_products') . ' WHERE stock_alert > 0 AND stock <= stock_alert ORDER BY stock ASC, id DESC LIMIT ' . $limit),
+        return ['products' => $this->store->select('SELECT p.id, p.code, p.name, p.stock, p.stock_alert FROM ' . $this->store->table('yc_products') . ' p WHERE p.stock_alert > 0 AND p.stock <= p.stock_alert AND '
+                . Stock::withoutOptionsWhere($this->store->table('yc_options'), 'p') . ' ORDER BY p.stock ASC, p.id DESC LIMIT ' . $limit),
             'options' => $this->store->select('SELECT o.id, o.product_id, o.value1, o.value2, o.value3, o.stock, o.stock_alert, p.name FROM ' . $this->store->table('yc_options') . ' o JOIN ' . $this->store->table('yc_products')
                 . ' p ON p.id = o.product_id WHERE o.stock_alert > 0 AND o.stock <= o.stock_alert ORDER BY o.stock ASC, o.id DESC LIMIT ' . $limit)];
     }

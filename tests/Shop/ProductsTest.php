@@ -116,6 +116,25 @@ final class ProductsTest extends ShopTestCase
         try { $this->shop->products->addToCategory([(string) $a], 999999); self::fail(); } catch (DomainError $e) { self::assertSame(422, $e->status()); }
     }
 
+    /** 선택옵션이 있는 상품의 상품 재고 칸은 쓰이지 않는다 — 부족 알림도 상품 재고 화면도 그 상품을 조합 쪽으로 보낸다. */
+    #[DataProvider('connectionProvider')]
+    public function testStockLivesOnTheOptionsWhenAProductHasThem(array $config): void
+    {
+        $this->setupShop($config);
+        $category = $this->category();
+        $plain = $this->shop->products->save($this->fullInput((int) $category['id'], ['code' => 'PLAIN', 'stock' => '0', 'stock_alert' => '2', 'options' => [], 'extras' => [], 'option_group' => []]), []);
+        $withOptions = $this->shop->products->save($this->fullInput((int) $category['id'], ['code' => 'OPT', 'stock' => '0', 'stock_alert' => '2', 'extras' => [],
+            'option_group' => [1 => '색상'], 'options' => [['value1' => '빨강', 'price' => '0', 'stock' => '1', 'stock_alert' => '3', 'active' => '1'], ['value1' => '파랑', 'price' => '0', 'stock' => '9', 'stock_alert' => '0', 'active' => '1']]]), []);
+        $low = $this->shop->products->lowStock();
+        self::assertSame([$plain], array_map('intval', array_column($low['products'], 'id')), '옵션 상품은 상품 재고로 부족을 판단하지 않는다');
+        self::assertSame(['빨강'], array_column($low['options'], 'value1'));
+        self::assertSame([$plain], array_map('intval', array_column($this->shop->products->stockList('', 1, 20)['items'], 'id')), '상품 재고 화면은 옵션 없는 상품만');
+        self::assertSame(0, (int) $this->shop->products->stockList('OPT', 1, 20)['total'], '검색해도 옵션 상품은 나오지 않는다');
+        $listed = [];
+        foreach ($this->shop->products->list([], 1)['items'] as $row) $listed[(int) $row['id']] = (int) $row['option_count'];
+        self::assertSame([$withOptions => 2, $plain => 0], $listed, '목록은 조합 개수를 함께 준다');
+    }
+
     #[DataProvider('connectionProvider')]
     public function testImagesCopyDeleteBulkStockAndApply(array $config): void
     {

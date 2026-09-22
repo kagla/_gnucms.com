@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Shop;
 
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Catalog\Options;
+use GnuCms\Shop\Catalog\Stock;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class OptionsTest extends ShopTestCase
@@ -66,11 +67,11 @@ final class OptionsTest extends ShopTestCase
         self::assertSame([], $loaded['extra']);
         self::assertSame(7, (int) $this->shop->store->selectOne('SELECT SUM(delta) AS d FROM ' . $this->shop->store->table('yc_stock_log') . ' WHERE option_id = ?', [$redId])['d']);
         $product = ['sold_out' => 0, 'stock' => 0];
-        self::assertFalse(Options::soldOut($product, $loaded['select']));
-        self::assertTrue(Options::soldOut(['sold_out' => 1, 'stock' => 9], $loaded['select']));
-        self::assertTrue(Options::soldOut($product, [['stock' => 0, 'active' => 1], ['stock' => 5, 'active' => 0]]));
-        self::assertTrue(Options::soldOut($product, []));
-        self::assertFalse(Options::soldOut(['sold_out' => 0, 'stock' => 1], []));
+        self::assertFalse(Stock::soldOut($product, $loaded['select']));
+        self::assertTrue(Stock::soldOut(['sold_out' => 1, 'stock' => 9], $loaded['select']));
+        self::assertTrue(Stock::soldOut($product, [['stock' => 0, 'active' => 1], ['stock' => 5, 'active' => 0]]));
+        self::assertTrue(Stock::soldOut($product, []));
+        self::assertFalse(Stock::soldOut(['sold_out' => 0, 'stock' => 1], []));
         $json = Options::pageJson(['price' => 10000], $loaded);
         self::assertSame(['색상'], $json['select']['groups']);
         self::assertSame(['id' => $redId, 'v' => ['빨강'], 'price' => 100, 'stock' => 7], $json['select']['items'][0]);

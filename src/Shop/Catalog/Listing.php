@@ -167,7 +167,7 @@ final class Listing
         }
         foreach ($items as &$item) {
             $item['image'] = $images[(int) $item['id']] ?? null;
-            $item['sold_out'] = Options::soldOut($item, $options[(int) $item['id']] ?? []);
+            $item['sold_out'] = Stock::soldOut($item, $options[(int) $item['id']] ?? []);
         }
         return $items;
     }

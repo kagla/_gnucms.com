@@ -6,6 +6,7 @@ namespace GnuCms\Shop\Commerce;
 
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Catalog\Products;
+use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 
@@ -106,7 +107,7 @@ final class Cart
                 if ((int) $product['active'] !== 1 || (int) ($product['categories'][1]['active'] ?? 0) !== 1 || (int) $product['phone_inquiry'] === 1) {
                     throw DomainError::validation(['product' => '현재 구매할 수 없는 상품입니다.']);
                 }
-                $stock = (int) ($option['stock'] ?? $product['stock']);
+                $stock = Stock::cell($product, $option)['stock'];
                 if ((int) $product['sold_out'] === 1 || $item['quantity'] > $stock) throw DomainError::validation(['stock' => '재고가 부족합니다. 구매 가능 수량: ' . ((int) $product['sold_out'] === 1 ? 0 : $stock) . '개']);
                 Input::int($item['quantity'], 'quantity', 1, self::MAX_QUANTITY);
                 $item['price'] = $item['kind'] === 'extra' ? (int) $option['price'] : (int) $product['price'] + (int) ($option['price'] ?? 0);
