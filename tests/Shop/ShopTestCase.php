@@ -19,7 +19,6 @@ abstract class ShopTestCase extends DatabaseTestCase
     {
         $this->root = sys_get_temp_dir() . '/gnucms-yc-' . bin2hex(random_bytes(8));
         mkdir($this->root, 0700, true);
-        if ($config['dsn'] === 'sqlite::memory:') $config['dsn'] = 'sqlite:' . $this->root . '/yc.sqlite';
         $config['prefix'] = 'yc' . bin2hex(random_bytes(3)) . '_';
         $this->app = new App(['db' => $config, 'storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'],
             'auth' => ['secret' => bin2hex(random_bytes(32))]]);

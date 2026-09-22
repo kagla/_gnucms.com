@@ -536,7 +536,7 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('설치 이후 없음', $body);
     }
 
-    /** 옮긴 시각·백업 목록·비SQLite 안내, 세 갈래를 모두 확인한다. */
+    /** 갱신 시각과 수동 백업 안내를 확인한다. 기존 백업 파일은 지우지 않는다. */
     #[DataProvider('connectionProvider')]
     public function testSettingsPageShowsSchemaBackupsAndUpgradedAt(array $dbConfig): void
     {
@@ -569,32 +569,10 @@ final class AdminPageTest extends WebTestCase
             $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
             self::assertStringContainsString('2026-08-30 10:02:03 Asia/Seoul', $body);
-            self::assertStringContainsString('<dt>마지막 백업</dt><dd>board-v9-20260201-000000.sqlite</dd>', $body);
-
-            if ($app->db()->dialect()->name() !== 'sqlite') {
-                self::assertStringContainsString('스키마 갱신 직전 자동 DB 백업은 SQLite에서만', $body);
-                return;
-            }
-
-            self::assertStringContainsString('2026-02-01 09:00:05', $body);
-            self::assertStringContainsString('schema-backups', $body);
-            self::assertStringNotContainsString('설치 이후 없음', $body);
-            $newerPos = strpos($body, 'board-v9-20260201-000000.sqlite');
-            $olderPos = strpos($body, 'board-v8-20260101-000000.sqlite');
-            self::assertIsInt($newerPos);
-            self::assertIsInt($olderPos);
-            self::assertLessThan($olderPos, $newerPos, '최신 백업이 먼저 나와야 한다');
-
-            $deleted = $this->post($app, '/admin/schema-backups/' . basename($older) . '/delete', [
-                'csrf_token' => $_SESSION['csrf_token'],
-            ]);
-            self::assertSame(303, $deleted->getStatusCode(), $this->body($deleted));
-            self::assertStringContainsString('schema_backup_deleted=', $deleted->getHeaderLine('Location'));
-            self::assertFileDoesNotExist($older);
-            $afterDelete = $this->body($this->get($app, '/admin/settings/maintenance', [
-                'schema_backup_deleted' => basename($older),
-            ]));
-            self::assertStringContainsString('자동 DB 백업을 삭제했습니다', $afterDelete);
+            self::assertStringContainsString('배포 전에 아래 전체 백업', $body);
+            self::assertStringNotContainsString('schema-backups', $body);
+            self::assertFileExists($older);
+            self::assertFileExists($newer);
         } finally {
             @unlink($older);
             @unlink($newer);

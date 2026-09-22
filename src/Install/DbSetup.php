@@ -15,7 +15,6 @@ use GnuCms\Error\DomainError;
 final class DbSetup
 {
     public const TYPES = [
-        'sqlite' => 'SQLite',
         'mysql'  => 'MySQL / MariaDB',
     ];
 
@@ -49,27 +48,6 @@ final class DbSetup
             throw DomainError::validation([
                 'prefix' => '영문으로 시작하고 영문·숫자·밑줄만 사용해 밑줄로 끝내세요. 최대 30자입니다.',
             ]);
-        }
-
-        if ($type === 'sqlite') {
-            $path = trim((string) ($input['sqlite_path'] ?? ''));
-            if ($path === '') {
-                throw DomainError::validation(['sqlite_path' => 'SQLite 파일 경로를 적어 주세요.']);
-            }
-            if ($path[0] !== '/') {
-                throw DomainError::validation(['sqlite_path' => '절대 경로로 적어 주세요. 예) /home/user/site/storage/board.sqlite']);
-            }
-            $folder = dirname($path);
-            if (!is_dir($folder) || !is_writable($folder)) {
-                throw DomainError::validation(['sqlite_path' => '그 폴더에 쓸 수 없습니다: ' . $folder]);
-            }
-            $webRoot = realpath(dirname(__DIR__, 2) . '/www');
-            $realFolder = realpath($folder);
-            if ($webRoot !== false && $realFolder !== false && str_starts_with($realFolder . '/', $webRoot . '/')) {
-                throw DomainError::validation(['sqlite_path' => '웹에서 접근할 수 있는 www/ 아래에는 둘 수 없습니다.']);
-            }
-
-            return ['dsn' => 'sqlite:' . $path, 'username' => null, 'password' => null, 'prefix' => $prefix];
         }
 
         $errors = [];

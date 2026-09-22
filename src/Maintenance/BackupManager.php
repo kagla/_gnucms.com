@@ -20,9 +20,8 @@ use ZipArchive;
 /**
  * DB와 운영 중 생긴 파일을 GNUCMS 전용 ZIP/TAR 아카이브로 묶고 검증한다.
  *
- * 아카이브 안의 manifest.json에는 모든 파일의 크기와 SHA-256이 들어간다. 복원은
- * 그 목록에 있는 파일만 안전한 임시 경로로 푼 뒤 같은 파일시스템 안에서 바꿔 끼운다.
- * 원격 DB는 네이티브 덤프까지만 만들고, 웹에서의 자동 복원은 SQLite 파일 DB로 제한한다.
+ * manifest.json에 파일 크기와 SHA-256을 기록한다. DB는 네이티브 SQL 덤프로
+ * 보관하며 복원은 쓰기를 중지한 뒤 서버 콘솔에서 수행한다.
  */
 final class BackupManager
 {
@@ -62,11 +61,10 @@ final class BackupManager
     public function status(): array
     {
         $driver = $this->driver();
-        $binary = $driver === 'mysql' ? 'mysqldump' : null;
+        $binary = 'mysqldump';
         $availableFormats = $this->availableArchiveFormats();
         $hasArchiveSupport = $availableFormats !== [];
-        $canCreate = $hasArchiveSupport && ($driver === 'sqlite'
-            || ($binary !== null && function_exists('proc_open') && $this->findExecutable($binary) !== null));
+        $canCreate = $hasArchiveSupport && function_exists('proc_open') && $this->findExecutable($binary) !== null;
         $reason = null;
         if (!$canCreate) {
             $reason = !$hasArchiveSupport
@@ -80,7 +78,7 @@ final class BackupManager
             'driver' => $driver,
             'can_create' => $canCreate,
             'unavailable_reason' => $reason,
-            'can_restore' => $hasArchiveSupport && $this->canRestoreSqlite(),
+            'can_restore' => false,
             'preferred_format' => $availableFormats[0] ?? null,
             'available_formats' => $availableFormats,
             'archives' => $this->archives(),
@@ -170,40 +168,10 @@ final class BackupManager
         return $result;
     }
 
-    /**
-     * SQLite 전체 백업을 복원한다. 현재 상태의 전체 백업을 같은 잠금 안에서 먼저 만든다.
-     * 설정 파일은 아카이브에 들어 있지만 실행 중 자동 교체하지 않는다.
-     *
-     * @return array{restored:string,safety_backup:string}
-     */
+    /** 기존 호출에도 자동 복원을 수행하지 않는다. SQL 덤프는 서버 콘솔에서 복원한다. */
     public function restore(string $archive): array
     {
-        $verified = $this->verify($archive);
-        if ($this->driver() !== 'sqlite' || $verified['driver'] !== 'sqlite') {
-            throw new RuntimeException('웹과 GNUCMS CLI의 자동 복원은 SQLite 백업끼리만 지원합니다.');
-        }
-        if ($this->sqliteDatabasePath() === null) {
-            throw new RuntimeException('메모리 SQLite 또는 확인할 수 없는 SQLite 경로는 복원할 수 없습니다.');
-        }
-        $manifest = $this->readManifest($this->resolveArchive($archive));
-        if (($manifest['database']['prefix'] ?? '') !== $this->db->prefix()) {
-            throw new RuntimeException('백업과 현재 설치의 테이블 프리픽스가 달라 복원할 수 없습니다.');
-        }
-
-        return $this->withLock(function () use ($archive): array {
-            $safety = $this->createUnlocked('pre-restore');
-            // 최초 검증과 실제 교체 사이에 파일이 바뀌는 경우까지 막는다.
-            $this->verify($archive);
-            $path = $this->resolveArchive($archive);
-            $manifest = $this->readManifest($path);
-            if (($manifest['database']['prefix'] ?? '') !== $this->db->prefix()) {
-                throw new RuntimeException('현재 설정과 DB 테이블 접두사가 다른 백업은 자동 복원할 수 없습니다.');
-            }
-            (new \GnuCms\Extension\RuntimePermit($this->storageDir))->revokeAll();
-            $this->restoreSqliteArchive($path, $manifest);
-
-            return ['restored' => basename($path), 'safety_backup' => (string) $safety['name']];
-        });
+        throw new RuntimeException('MySQL/MariaDB는 자동 복원을 지원하지 않습니다. DB 복원 절차를 따라 서버 콘솔에서 복원하세요.');
     }
 
     /** 다운로드할 수동 백업의 실제 경로. 이름 검증과 디렉터리 고정을 함께 한다. */
@@ -351,11 +319,7 @@ final class BackupManager
         $token = bin2hex(random_bytes(6));
         $databasePath = $this->archiveDir() . '/.database-' . $token;
         $temporaryArchive = $this->archiveDir() . '/.building-' . $token . '.' . $archiveFormat;
-        $databaseEntry = match ($driver) {
-            'sqlite' => 'database/sqlite.sqlite',
-            'mysql' => 'database/mysql.sql',
-            default => throw new RuntimeException('지원하지 않는 DB 드라이버입니다: ' . $driver),
-        };
+        $databaseEntry = 'database/mysql.sql';
 
         $archive = null;
         try {
@@ -395,7 +359,7 @@ final class BackupManager
                 'reason' => $reason,
                 'database' => [
                     'driver' => $driver,
-                    'format' => $driver === 'mysql' ? 'sql' : 'sqlite3',
+                    'format' => 'sql',
                     'path' => $databaseEntry,
                     'prefix' => $this->db->prefix(),
                 ],
@@ -434,10 +398,6 @@ final class BackupManager
     private function dumpDatabase(string $destination, string $driver): void
     {
         $extensionTables = (new \GnuCms\Extension\PackageSchema($this->db, $this->storageDir))->backupTables();
-        if ($driver === 'sqlite') {
-            $this->db->pdo()->exec("VACUUM INTO '" . str_replace("'", "''", $destination) . "'");
-            return;
-        }
         if ($driver !== 'mysql') {
             throw new RuntimeException('지원하지 않는 DB 드라이버입니다: ' . $driver);
         }
@@ -579,7 +539,7 @@ final class BackupManager
         if (!is_array($manifest) || ($manifest['format'] ?? null) !== self::FORMAT
             || !in_array($manifest['format_version'] ?? null, [1, self::FORMAT_VERSION], true)
             || !is_string($manifest['created_at'] ?? null)
-            || !in_array($manifest['database']['driver'] ?? null, ['sqlite', 'mysql'], true)
+            || !in_array($manifest['database']['driver'] ?? null, ['mysql'], true)
             || !is_string($manifest['database']['prefix'] ?? '')) {
             throw new RuntimeException('지원하는 GNUCMS 전체 백업 형식이 아닙니다.');
         }
@@ -603,161 +563,7 @@ final class BackupManager
             }
             return;
         }
-        if ($driver !== 'sqlite') {
-            throw new RuntimeException('지원하지 않는 DB 백업 형식입니다.');
-        }
-
-        $temporary = $this->archiveDir() . '/.verify-' . bin2hex(random_bytes(6)) . '.sqlite';
-        try {
-            $this->copyArchiveEntry($archive, $archivePath, $entry, $temporary);
-            $copy = Connection::create(['dsn' => 'sqlite:' . $temporary, 'prefix' => $prefix]);
-            $integrity = $copy->pdo()->query('PRAGMA integrity_check')->fetchColumn();
-            if ($integrity !== 'ok' || !(new Schema($copy))->exists()) {
-                throw new RuntimeException('SQLite 무결성 검사에 실패했습니다.');
-            }
-            $copy = null;
-        } catch (Throwable $e) {
-            throw new RuntimeException('SQLite 백업을 열거나 검사할 수 없습니다: ' . $e->getMessage(), 0, $e);
-        } finally {
-            @unlink($temporary);
-        }
-    }
-
-    private function restoreSqliteArchive(string $archive, array $manifest): void
-    {
-        $databaseTarget = $this->sqliteDatabasePath();
-        if ($databaseTarget === null) {
-            throw new RuntimeException('복원할 SQLite 파일 경로를 확인할 수 없습니다.');
-        }
-        $mediaRoots = $this->mediaRoots();
-        $this->assertRestoreTargets($databaseTarget, $mediaRoots);
-
-        $token = bin2hex(random_bytes(6));
-        $prepared = [];
-        try {
-            $archiveHandle = $this->openArchiveForRead($archive);
-            try {
-                $databaseNew = $this->siblingTemporary($databaseTarget, 'new', $token);
-                $this->ensureDirectory(dirname($databaseNew));
-                $this->copyArchiveEntry(
-                    $archiveHandle,
-                    $archive,
-                    (string) $manifest['database']['path'],
-                    $databaseNew
-                );
-                $databasePermissions = is_file($databaseTarget) ? @fileperms($databaseTarget) : false;
-                $databaseMode = is_int($databasePermissions) ? ($databasePermissions & 0777) : 0600;
-                @chmod($databaseNew, $databaseMode);
-                $prepared[] = ['target' => $databaseTarget, 'new' => $databaseNew, 'type' => 'file'];
-
-                $files = is_array($manifest['files'] ?? null) ? $manifest['files'] : [];
-                foreach ($mediaRoots as $name => $target) {
-                    $new = $this->siblingTemporary($target, 'new', $token);
-                    $permissions = is_dir($target) ? @fileperms($target) : false;
-                    $mode = $name === 'extensions' ? 0700 : (is_int($permissions) ? ($permissions & 0777) : 0775);
-                    $this->ensureDirectory($new, $mode);
-                    $prefix = 'files/' . $name . '/';
-                    foreach ($files as $entry => $ignored) {
-                        if (!is_string($entry) || !str_starts_with($entry, $prefix)) {
-                            continue;
-                        }
-                        $relative = substr($entry, strlen($prefix));
-                        if ($relative === '' || !$this->validRelativePath($relative)) {
-                            throw new RuntimeException('복원할 파일 경로가 올바르지 않습니다: ' . $entry);
-                        }
-                        $destination = $new . '/' . $relative;
-                        $this->ensureDirectory(dirname($destination));
-                        $this->copyArchiveEntry($archiveHandle, $archive, $entry, $destination);
-                        @chmod($destination, $name === 'extensions' ? 0600 : 0644);
-                    }
-                    $prepared[] = ['target' => $target, 'new' => $new, 'type' => 'dir'];
-                }
-            } finally {
-                $this->closeArchive($archiveHandle);
-            }
-
-            // WAL 모드였던 SQLite의 옛 sidecar가 새 DB에 붙지 않게 먼저 비우고 따로 치운다.
-            // 이 요청은 복원 뒤 DB를 더 쓰지 않으며 다음 요청은 새 연결을 만든다.
-            $this->db->pdo()->exec('PRAGMA wal_checkpoint(TRUNCATE)');
-            $sidecars = [];
-            foreach (['-wal', '-shm', '-journal'] as $suffix) {
-                $sidecar = $databaseTarget . $suffix;
-                if (!file_exists($sidecar)) continue;
-                $oldSidecar = $this->siblingTemporary($sidecar, 'old', $token);
-                if (!rename($sidecar, $oldSidecar)) {
-                    foreach ($sidecars as $saved) @rename($saved['old'], $saved['target']);
-                    throw new RuntimeException('SQLite 임시 파일을 안전하게 분리하지 못했습니다: ' . $sidecar);
-                }
-                $sidecars[] = ['target' => $sidecar, 'old' => $oldSidecar];
-            }
-            try {
-                $this->swapPrepared($prepared, $token);
-            } catch (Throwable $e) {
-                foreach ($sidecars as $saved) @rename($saved['old'], $saved['target']);
-                throw $e;
-            }
-            foreach ($sidecars as $saved) $this->removePath($saved['old']);
-        } catch (Throwable $e) {
-            foreach ($prepared as $item) {
-                $this->removePath((string) $item['new']);
-            }
-            throw $e;
-        }
-    }
-
-    private function swapPrepared(array $prepared, string $token): void
-    {
-        $swapped = [];
-        try {
-            foreach ($prepared as $item) {
-                $target = (string) $item['target'];
-                $new = (string) $item['new'];
-                $old = $this->siblingTemporary($target, 'old', $token);
-                $hadTarget = file_exists($target) || is_link($target);
-                if ($hadTarget && !rename($target, $old)) {
-                    throw new RuntimeException('현재 데이터를 안전 보관 경로로 옮기지 못했습니다: ' . $target);
-                }
-                if (!rename($new, $target)) {
-                    if ($hadTarget) {
-                        @rename($old, $target);
-                    }
-                    throw new RuntimeException('복원 데이터를 적용하지 못했습니다: ' . $target);
-                }
-                $swapped[] = ['target' => $target, 'old' => $old, 'had_target' => $hadTarget];
-            }
-        } catch (Throwable $e) {
-            foreach (array_reverse($swapped) as $item) {
-                $this->removePath((string) $item['target']);
-                if ($item['had_target']) {
-                    @rename((string) $item['old'], (string) $item['target']);
-                }
-            }
-            throw $e;
-        }
-
-        foreach ($swapped as $item) {
-            if ($item['had_target']) {
-                $this->removePath((string) $item['old']);
-            }
-        }
-    }
-
-    private function assertRestoreTargets(string $database, array $roots): void
-    {
-        $targets = array_merge([$database], array_values($roots));
-        foreach ($targets as $target) {
-            if ($target === '/' || $target === $this->projectRoot || $target === $this->storageDir
-                || is_link($target)) {
-                throw new RuntimeException('안전하지 않은 복원 대상 경로입니다: ' . $target);
-            }
-        }
-        for ($i = 0, $count = count($targets); $i < $count; $i++) {
-            for ($j = $i + 1; $j < $count; $j++) {
-                if ($this->pathsOverlap($targets[$i], $targets[$j])) {
-                    throw new RuntimeException('복원 대상 경로가 서로 겹칩니다. 설정을 확인해 주세요.');
-                }
-            }
-        }
+        throw new RuntimeException('지원하지 않는 DB 백업 형식입니다.');
     }
 
     private function assertMediaRoots(array $roots): void
@@ -951,25 +757,6 @@ final class BackupManager
         }
     }
 
-    private function copyArchiveEntry(object $archive, string $archivePath, string $entry, string $destination): void
-    {
-        $input = $this->openArchiveEntryStream($archive, $archivePath, $entry);
-        $output = @fopen($destination, 'xb');
-        if (!is_resource($output)) {
-            fclose($input);
-            @unlink($destination);
-            throw new RuntimeException('백업 파일을 임시 경로로 복사하지 못했습니다.');
-        }
-        try {
-            if (stream_copy_to_stream($input, $output) === false) {
-                throw new RuntimeException('백업 파일을 읽는 중 오류가 발생했습니다.');
-            }
-        } finally {
-            fclose($input);
-            fclose($output);
-        }
-    }
-
     private function withLock(callable $callback): array
     {
         $this->ensureDirectory($this->storageDir);
@@ -1004,7 +791,7 @@ final class BackupManager
     private function resolveArchive(string $archive): string
     {
         $name = basename($archive);
-        if (preg_match('/^gnucms-(?:sqlite|mysql)-\d{8}-\d{6}(?:-\d+)?\.(?:zip|tar)$/D', $name) !== 1) {
+        if (preg_match('/^gnucms-mysql-\d{8}-\d{6}(?:-\d+)?\.(?:zip|tar)$/D', $name) !== 1) {
             throw new RuntimeException('백업 파일 이름이 올바르지 않습니다.');
         }
         // 웹 라우트는 basename만 전달하므로 저장 폴더 밖을 읽을 수 없다. CLI에서는
@@ -1094,34 +881,6 @@ final class BackupManager
         return $this->db->dialect()->name();
     }
 
-    private function sqliteDatabasePath(): ?string
-    {
-        $dsn = (string) ($this->config['db']['dsn'] ?? '');
-        if (!str_starts_with(strtolower($dsn), 'sqlite:')) {
-            return null;
-        }
-        $path = substr($dsn, 7);
-        if ($path === '' || $path === ':memory:') {
-            return null;
-        }
-
-        return $this->absolutePath($path);
-    }
-
-    private function canRestoreSqlite(): bool
-    {
-        if ($this->driver() !== 'sqlite') return false;
-        $database = $this->sqliteDatabasePath();
-        if ($database === null) return false;
-        try {
-            $this->assertRestoreTargets($database, $this->mediaRoots());
-            $this->assertMediaRoots($this->mediaRoots());
-            return true;
-        } catch (Throwable $e) {
-            return false;
-        }
-    }
-
     /** @return array{uploads:string,editor:string,avatars:string} */
     private function mediaRoots(): array
     {
@@ -1167,15 +926,9 @@ final class BackupManager
         return null;
     }
 
-    /** 비SQLite DB의 덤프 파일을 안전하게 적용하는 운영 절차. 비밀번호는 명령에 넣지 않는다. */
+    /** MySQL/MariaDB 덤프 파일을 안전하게 적용하는 운영 절차. 비밀번호는 명령에 넣지 않는다. */
     private function restoreInstructions(string $driver): array
     {
-        if ($driver === 'sqlite') {
-            return [
-                '관리 화면 또는 php bin/backup.php restore 명령으로 복원할 수 있습니다.',
-                '아카이브의 config/config.php는 자동 교체하지 않으므로 다른 서버로 옮길 때 별도로 비교·적용하세요.',
-            ];
-        }
         $dsn = $this->parseDsn((string) ($this->config['db']['dsn'] ?? ''));
         $host = (string) ($dsn['host'] ?? 'localhost');
         $port = (string) ($dsn['port'] ?? '3306');
@@ -1184,8 +937,10 @@ final class BackupManager
         return [
             '백업 ZIP 또는 TAR에서 database/mysql.sql을 먼저 압축 해제합니다.',
             'mysql --host=' . escapeshellarg($host) . ' --port=' . escapeshellarg($port)
-                . ' --user=' . escapeshellarg($username) . ' ' . escapeshellarg($database) . ' < database/mysql.sql',
+                . ' --user=' . escapeshellarg($username) . ' --password ' . escapeshellarg($database) . ' < database/mysql.sql',
             '복원 전에 서비스 쓰기를 중지하고, DB 비밀번호는 프롬프트나 안전한 옵션 파일로 입력하세요.',
+            'files/의 업로드·에디터·프로필·확장 상태를 설정된 경로에 복원하고, config/의 설정 사본은 새 서버의 접속 정보와 비교해 적용하세요.',
+            '결제·외부 발송을 정지하고 storage/extensions-runtime/의 실행 허용값과 토큰 캐시를 폐기한 뒤 계정과 미완료 발송을 확인하세요.',
         ];
     }
 
@@ -1232,11 +987,6 @@ final class BackupManager
         return $a === $b || str_starts_with($a . '/', $b . '/') || str_starts_with($b . '/', $a . '/');
     }
 
-    private function siblingTemporary(string $target, string $kind, string $token): string
-    {
-        return dirname($target) . '/.' . basename($target) . '.gnucms-restore-' . $kind . '-' . $token;
-    }
-
     private function ensureDirectory(string $directory, int $mode = 0775): void
     {
         if (!is_dir($directory) && !mkdir($directory, $mode, true) && !is_dir($directory)) {
@@ -1244,20 +994,4 @@ final class BackupManager
         }
     }
 
-    private function removePath(string $path): void
-    {
-        if (is_file($path) || is_link($path)) {
-            @unlink($path);
-            return;
-        }
-        if (!is_dir($path)) return;
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            $item->isDir() && !$item->isLink() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
-        }
-        @rmdir($path);
-    }
 }

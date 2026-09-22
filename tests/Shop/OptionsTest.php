@@ -42,7 +42,7 @@ final class OptionsTest extends ShopTestCase
 
     private function stubStore(): \GnuCms\Shop\Store
     {
-        return new \GnuCms\Shop\Store(\GnuCms\Db\Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]));
+        return new \GnuCms\Shop\Store(\GnuCms\Db\Connection::create(self::mysqlConfig()));
     }
 
     public function testExtraOptionsOnlyRequireAnItemName(): void

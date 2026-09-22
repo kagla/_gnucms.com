@@ -465,7 +465,7 @@ final class Schema
         }
 
         try {
-            $this->db->selectOne('SELECT ' . $column . ' FROM ' . $this->db->table($table) . ' LIMIT 1');
+            $this->db->selectOne('SELECT ' . $this->db->q($column) . ' FROM ' . $this->db->table($table) . ' LIMIT 1');
         } catch (DomainError $e) {
             $this->db->execute('ALTER TABLE ' . $this->db->table($table)
                 . ' ADD COLUMN ' . $column . ' ' . $definition);
@@ -817,15 +817,12 @@ final class Schema
             'ALTER TABLE ' . $this->db->table('pages') . ' RENAME TO ' . $this->db->table('contents')
         );
 
-        $mysql = $this->db->dialect()->name() === 'mysql';
         foreach ([
             ['ux_pages_slug', 'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)'],
             ['ix_pages_public', 'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)'],
         ] as [$oldIndex, $createSql]) {
             try {
-                $this->db->execute($mysql
-                    ? 'DROP INDEX ' . $this->db->index($oldIndex) . ' ON ' . $this->db->table('contents')
-                    : 'DROP INDEX ' . $this->db->index($oldIndex));
+                $this->db->execute('DROP INDEX ' . $this->db->index($oldIndex) . ' ON ' . $this->db->table('contents'));
             } catch (DomainError $e) {
                 // 옛 인덱스가 없으면 그대로 둔다
             }
@@ -959,9 +956,7 @@ final class Schema
             return false;
         }
         try {
-            // SQLite는 존재하지 않는 "column"을 문자열 리터럴로 받아들이는 호환 모드가
-            // 있어 여기서는 내부 상수로만 들어오는 인용 없는 이름을 쓴다.
-            $this->db->selectOne('SELECT ' . $column . ' FROM '
+            $this->db->selectOne('SELECT ' . $this->db->q($column) . ' FROM '
                 . $this->db->table($table) . ' LIMIT 1');
             return true;
         } catch (DomainError $e) {
@@ -981,9 +976,7 @@ final class Schema
     {
         try {
             $sql = 'DROP INDEX ' . $this->db->index($index);
-            if ($this->db->dialect()->name() === 'mysql') {
-                $sql .= ' ON ' . $this->db->table($table);
-            }
+            $sql .= ' ON ' . $this->db->table($table);
             $this->db->execute($sql);
         } catch (DomainError $e) {
             // 옛 판에 없거나 이미 정리됐으면 그대로 둔다.
@@ -1194,46 +1187,13 @@ final class Schema
             }
         }
 
-        $name = $this->db->dialect()->name();
-        if ($name === 'sqlite') {
-            $columns = $this->db->select('PRAGMA table_info(' . $this->db->table('users') . ')');
-            foreach ($columns as $column) {
-                if (($column['name'] ?? '') === 'password_hash' && (int) ($column['notnull'] ?? 0) === 1) {
-                    $this->rebuildSqliteUsers();
-                    break;
-                }
-            }
-        } elseif ($name === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' MODIFY password_hash VARCHAR(255) NULL');
-        }
+        $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' MODIFY password_hash VARCHAR(255) NULL');
     }
 
     private function renameUserDisplayNameColumn(): void
     {
-        if ($this->db->dialect()->name() === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-                . ' CHANGE ' . $this->db->q('name') . ' ' . $this->db->q('display_name')
-                . ' VARCHAR(100) NOT NULL');
-            return;
-        }
         $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-            . ' RENAME COLUMN ' . $this->db->q('name') . ' TO ' . $this->db->q('display_name'));
-    }
-
-    private function rebuildSqliteUsers(): void
-    {
-        $this->db->transaction(function (): void {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-                . ' RENAME TO ' . $this->db->table('users_before_oauth'));
-            $this->db->execute($this->expand($this->usersTableStatement()));
-            $columns = 'id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at';
-            $this->db->execute('INSERT INTO ' . $this->db->table('users') . ' (' . $columns . ') SELECT '
-                . $columns . ' FROM ' . $this->db->table('users_before_oauth'));
-            $this->db->execute('DROP TABLE ' . $this->db->table('users_before_oauth'));
-            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_email')
-                . ' ON ' . $this->db->table('users') . ' (email)');
-            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_display_name')
-                . ' ON ' . $this->db->table('users') . ' (display_name)');
-        });
+            . ' CHANGE ' . $this->db->q('name') . ' ' . $this->db->q('display_name')
+            . ' VARCHAR(100) NOT NULL');
     }
 }

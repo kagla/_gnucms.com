@@ -11,7 +11,7 @@ namespace GnuCms\Install;
 final class ServerCheck
 {
     public const MIN_PHP = '8.2.0';
-    public const DRIVERS = ['pdo_sqlite', 'pdo_mysql'];
+    public const DRIVERS = ['pdo_mysql'];
 
     private string $configDir;
     private string $storageDir;
@@ -48,10 +48,10 @@ final class ServerCheck
 
         $drivers = array_values(array_filter(self::DRIVERS, fn (string $d): bool => $this->has($d)));
         $items[] = $this->item(
-            'PDO 드라이버 (sqlite·mysql 중 하나)',
+            'PDO 드라이버 (MySQL/MariaDB)',
             $drivers !== [],
             true,
-            $drivers === [] ? '하나도 없습니다. 호스팅에 요청하세요' : '있음: ' . implode(', ', $drivers)
+            $drivers === [] ? 'pdo_mysql이 없습니다. 호스팅에 요청하세요' : '있음: ' . implode(', ', $drivers)
         );
 
         foreach ([

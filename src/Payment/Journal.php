@@ -31,7 +31,7 @@ final class Journal
     {
         $this->read($id);
         $db = $this->settings->app->db();
-        // 결제 설정 행이 항상 있으므로 최초 주문 기록 생성도 두 DB에서 직렬화된다.
+        // 결제 설정 행이 항상 있으므로 최초 주문 기록 생성도 같은 PG 내에서 직렬화된다.
         return $db->transaction(function () use ($db, $id, $change): array {
             $db->execute('UPDATE ' . $db->table('pay_settings') . ' SET payload = payload WHERE provider = ? AND id IN (?, ?)', [$this->settings->provider, 'test', 'live']);
             $before = $this->read($id);

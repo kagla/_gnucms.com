@@ -403,13 +403,15 @@ final class Dispatch
         // 접수 자체가 실패(mid 없음)했을 수 있다. status = 'accepted' 로도 한 번 더
         // 좁혀 두면, 이 작업을 다시 취소하려 시도할 때(먼저 취소된 mid가 섞여 있어도)
         // 이미 성공적으로 취소된 mid 를 또 부르지 않는다.
-        $sql = 'SELECT DISTINCT mid FROM ' . $this->db->table('message_recipients')
+        $sql = 'SELECT mid FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ? AND mid IS NOT NULL AND status = ?';
         $params = [$jobId, 'accepted'];
         if ($onlyMids !== null) {
             $sql .= ' AND mid IN (' . implode(',', array_fill(0, count($onlyMids), '?')) . ')';
             $params = array_merge($params, array_values($onlyMids));
         }
+        // DB 실행 계획에 따라 묶음 순서가 바뀌지 않도록 접수 순서로 취소한다.
+        $sql .= ' GROUP BY mid ORDER BY MIN(id)';
         $rows = $this->db->select($sql, $params);
         $mids = array_map(static fn (array $row): string => (string) $row['mid'], $rows);
 

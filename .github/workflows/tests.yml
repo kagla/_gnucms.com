@@ -1,0 +1,41 @@
+name: Tests
+on:
+  pull_request:
+  push:
+    branches: [main, feat/core-commerce]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mysql:8.4]
+    services:
+      database:
+        image: ${{ matrix.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-password
+          MYSQL_DATABASE: gnucms_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-only-password || mariadb-admin ping -h localhost -ptest-only-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    env:
+      TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=gnucms_test;charset=utf8mb4
+      TEST_MYSQL_USER: root
+      TEST_MYSQL_PASS: test-only-password
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, fileinfo, openssl, phar, zip
+          coverage: none
+          tools: composer:v2
+      - run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: composer validate --no-check-publish
+      - run: ./vendor/bin/phpunit

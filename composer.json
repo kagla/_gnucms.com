@@ -1,6 +1,6 @@
 {
     "name": "kagla/gnucms",
-    "description": "어느 DB 에서나 도는 게시판",
+    "description": "MySQL/MariaDB 기반 GNUCMS",
     "type": "project",
     "license": "MIT",
     "require": {
@@ -11,7 +11,8 @@
         "league/oauth2-client": "^2.8",
         "phpmailer/phpmailer": "^7.1",
         "slim/psr7": "^1.6",
-        "slim/slim": "^4.12"
+        "slim/slim": "^4.12",
+        "ext-pdo_mysql": "*"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

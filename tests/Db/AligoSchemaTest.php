@@ -31,7 +31,7 @@ final class AligoSchemaTest extends DatabaseTestCase
             $db->execute('DROP TABLE ' . $db->table($table));
         }
         // create() 가 users.phone 을 이미 넣어 두므로, 22 판 이하 설치처럼 지워서
-        // addColumnIfMissing() 경로를 실제로 태운다. 최신 SQLite 와 MySQL 은 둘 다
+        // addColumnIfMissing() 경로를 실제로 태운다. MySQL은
         // ALTER TABLE ... DROP COLUMN 을 지원한다 — 같은 방식을 이미
         // testProfileImageMigrationAddsUserColumns() 가 users 표의 다른 칸에 쓰고 있다.
         $db->execute('ALTER TABLE ' . $db->table('users') . ' DROP COLUMN phone');
@@ -113,7 +113,7 @@ final class AligoSchemaTest extends DatabaseTestCase
     {
         $db = $this->freshDatabase($config);
         $db->execute('DROP INDEX ' . $db->index('ix_message_recipients_fallback')
-            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_recipients')));
+            . ' ON ' . $db->table('message_recipients'));
         self::assertFalse($this->hasIndex($db, $config, 'ix_message_recipients_fallback'));
 
         (new Schema($db))->migrateAligoMessaging();
@@ -124,10 +124,6 @@ final class AligoSchemaTest extends DatabaseTestCase
     private function hasIndex(Connection $db, array $config, string $logicalName, string $table = 'message_recipients'): bool
     {
         $name = $db->prefix() . $logicalName;
-        if (str_starts_with($config['dsn'], 'sqlite:')) {
-            return $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
-                [$name]) !== null;
-        }
         foreach ($db->select('SHOW INDEX FROM ' . $db->table($table)) as $row) {
             if ((string) ($row['Key_name'] ?? '') === $name) {
                 return true;
@@ -151,7 +147,7 @@ final class AligoSchemaTest extends DatabaseTestCase
         $db = $this->freshDatabase($config);
         // 판 23 설치는 이 인덱스가 없다 — scheduled_at 위에 얹혀 있으므로 칸보다 먼저 지운다.
         $db->execute('DROP INDEX ' . $db->index('ix_message_jobs_scheduled')
-            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_jobs')));
+            . ' ON ' . $db->table('message_jobs'));
         $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN scheduled_at');
         $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN cancelled_at');
 
@@ -211,7 +207,7 @@ final class AligoSchemaTest extends DatabaseTestCase
     {
         $db = $this->freshDatabase($config);
         $db->execute('DROP INDEX ' . $db->index('ix_message_jobs_scheduled')
-            . (str_starts_with($config['dsn'], 'sqlite:') ? '' : ' ON ' . $db->table('message_jobs')));
+            . ' ON ' . $db->table('message_jobs'));
         $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN scheduled_at');
         $db->execute('ALTER TABLE ' . $db->table('message_jobs') . ' DROP COLUMN cancelled_at');
         self::assertFalse($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
@@ -221,8 +217,8 @@ final class AligoSchemaTest extends DatabaseTestCase
         self::assertTrue($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
     }
 
-    public function testSchemaVersionIsThirtyOne(): void
+    public function testSchemaVersionIsThirtyTwo(): void
     {
-        self::assertSame('31', Schema::VERSION);
+        self::assertSame('32', Schema::VERSION);
     }
 }

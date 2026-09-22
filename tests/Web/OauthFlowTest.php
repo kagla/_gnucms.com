@@ -40,7 +40,7 @@ final class OauthFlowTest extends WebTestCase
 
     public function testLoginPageCarriesDestinationIntoSocialLoginAndPendingEmailCompletion(): void
     {
-        $app = $this->makeApp(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null], [
+        $app = $this->makeApp(\GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig(), [
             'app' => ['url' => 'https://community.example.com'],
         ], 'default');
         $this->get($app, '/login');

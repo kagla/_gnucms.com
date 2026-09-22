@@ -18,6 +18,21 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    services:
+      database:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-password
+          MYSQL_DATABASE: gnucms_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-only-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    env:
+      TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=gnucms_test;charset=utf8mb4
+      TEST_MYSQL_USER: root
+      TEST_MYSQL_PASS: test-only-password
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -26,8 +41,12 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          extensions: pdo_mysql, mbstring, fileinfo, openssl, phar, zip
           coverage: none
           tools: composer:v2
+
+      - name: Install database client
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
 
       - name: Install development dependencies
         run: composer install --prefer-dist --no-interaction --no-progress

@@ -317,14 +317,9 @@ final class DispatchTest extends DatabaseTestCase
         $this->queueSmsOk(1);
 
         $table = $this->db->table('message_recipients');
-        if (str_starts_with($config['dsn'], 'sqlite:')) {
-            $this->db->execute("CREATE TRIGGER trg_boom BEFORE UPDATE OF status ON $table "
-                . "WHEN NEW.status = 'accepted' BEGIN SELECT RAISE(ABORT, '강제 실패'); END");
-        } else {
-            $this->db->execute("CREATE TRIGGER trg_boom BEFORE UPDATE ON $table FOR EACH ROW "
-                . "BEGIN IF NEW.status = 'accepted' THEN SIGNAL SQLSTATE '45000' "
-                . "SET MESSAGE_TEXT = '강제 실패'; END IF; END");
-        }
+        $this->db->execute("CREATE TRIGGER trg_boom BEFORE UPDATE ON $table FOR EACH ROW "
+            . "BEGIN IF NEW.status = 'accepted' THEN SIGNAL SQLSTATE '45000' "
+            . "SET MESSAGE_TEXT = '강제 실패'; END IF; END");
 
         try {
             $this->dispatch->send(['channel' => 'sms', 'body' => '안녕하세요',

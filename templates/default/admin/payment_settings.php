@@ -30,7 +30,7 @@
 <section class="card settings-card">
   <div class="card-body">
     <h2 class="card-title">결제 실행 상태 <span class="badge badge-soft<?= $settings['enabled'] ? ' badge-success' : '' ?>"><?= $settings['enabled'] ? '허용됨' : '정지됨' ?></span></h2>
-    <p class="card-sub">PG에서 발급받은 상점 코드가 선택한 환경용인지 확인해 주세요. 테스트 결제는 운영 정산에 포함되지 않습니다. 백업을 복원하면 실행 허용이 해제됩니다.</p>
+    <p class="card-sub">PG에서 발급받은 상점 코드가 선택한 환경용인지 확인해 주세요. 테스트 결제는 운영 정산에 포함되지 않습니다. 백업 복원 시 기존 실행 허용값을 폐기한 뒤 다시 허용해 주세요.</p>
     <form method="post" action="<?= $this->url('admin.settings.payment') ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="provider" value="<?= $this->e($provider) ?>"><input type="hidden" name="environment" value="<?= $this->e($environment) ?>"><div class="card-actions form-actions"><button class="btn<?= $settings['enabled'] ? '' : ' btn-primary' ?>" name="action" value="<?= $settings['enabled'] ? 'disable' : 'enable' ?>"<?= !$settings['configured'] ? ' disabled' : '' ?>><?= $settings['enabled'] ? 'API 실행 정지' : 'API 실행 허용' ?></button></div></form>
   </div>
 </section>

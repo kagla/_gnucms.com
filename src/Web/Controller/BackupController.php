@@ -101,20 +101,6 @@ final class BackupController
         return $this->redirect($request, $response, ['backup_deleted' => (string) $result['deleted']]);
     }
 
-    public function deleteAutomatic(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-    {
-        $this->assertAdminRequest($request);
-        try {
-            $result = $this->app->schemaUpgrader()->deleteBackup((string) $args['name']);
-        } catch (Throwable $e) {
-            return $this->renderError($request, $response, $e->getMessage());
-        }
-
-        return $this->redirect($request, $response, [
-            'schema_backup_deleted' => (string) $result['deleted'],
-        ]);
-    }
-
     public function download(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();

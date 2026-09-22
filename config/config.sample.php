@@ -23,9 +23,9 @@ return [
         'kakao' => ['client_id' => '', 'client_secret' => ''],
     ],
 
-    // DSN 은 sqlite: / mysql: 중 하나로 시작한다.
+    // MySQL/MariaDB만 지원한다. 미리 만든 DB와 전용 계정을 지정한다.
     'db' => [
-        'dsn'      => 'sqlite:' . __DIR__ . '/../storage/board.sqlite',
+        'dsn'      => 'mysql:host=localhost;port=3306;dbname=gnucms;charset=utf8mb4',
         'username' => null,
         'password' => null,
         // 한 DB 에 여러 사이트를 둘 때만 사용. 예: site1_ (설치 후에는 바꾸지 않는다)

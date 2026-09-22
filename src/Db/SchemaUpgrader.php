@@ -11,11 +11,9 @@ use Throwable;
 /**
  * 코드를 올린 뒤 첫 요청에서 스키마를 새 판으로 옮긴다. 관리 서버는 없다.
  *
- * 순서: 도장 비교 → 최근 실패면 건너뜀 → 파일 잠금 → 백업(SQLite) → migrateAll → 기록.
- * 실패하면 도장을 찍지 않고 upgrade-failed.json 을 남긴 뒤 MaintenanceRequired 를 던진다.
- * 그 파일이 RETRY_AFTER_SECONDS 안이면 다시 시도하지 않고 바로 점검 화면으로 보낸다.
- * 그 뒤 재시도할 때는 표식에 실패 당시의 도장(stamp)도 같이 적어 두고, 지금 도장과
- * 같을 때만 그 백업을 재사용한다 — 다르면(그 사이 판이 또 바뀜) 남의 백업이므로 새로 뜬다.
+ * 순서: 도장 비교 → 최근 실패면 건너뜀 → 파일 잠금 → migrateAll → 기록.
+ * 배포 전에 관리자 전체 백업 또는 호스팅의 DB 백업을 수행한다.
+ * 실패하면 도장을 찍지 않고 실패 표식을 남겨 재시도 간격을 제한한다.
  */
 final class SchemaUpgrader
 {
@@ -88,18 +86,6 @@ final class SchemaUpgrader
 
             $backup = null;
             try {
-                // 실패 뒤 재시도라면, 그 실패 이전의 원본 스냅숏을 그대로 쓴다.
-                // 매번 새로 VACUUM 하면 5개까지만 남기는 정리 때문에 다섯 번
-                // 재시도한 뒤에는 첫 시도 이전의 깨끗한 백업이 사라진다.
-                // 단, 그 표식이 지금 판(도장)에서 실패했을 때 남긴 것이어야 한다.
-                // 도장이 다르면(예: 그 사이 다른 배포로 판이 또 바뀜) 남의 백업을
-                // 쓰는 셈이라 새로 뜬다.
-                $reusable = $failed['backup'] ?? null;
-                if (is_string($reusable) && $reusable !== '' && is_file($reusable) && ($failed['stamp'] ?? null) === $stored) {
-                    $backup = $reusable;
-                } else {
-                    $backup = $this->backup($stored);
-                }
                 ($this->migrate)();
                 $this->upsertSetting('system.schema_upgraded_at', Clock::now());
                 $this->upsertSetting('system.schema_backup', $backup ?? '');
@@ -122,105 +108,15 @@ final class SchemaUpgrader
      */
     public function status(): array
     {
-        $backups = [];
-        foreach ($this->backupFiles() as $file) {
-            $backups[] = ['name' => basename($file), 'size' => (int) filesize($file), 'mtime' => (int) filemtime($file)];
-        }
-        $backup = $this->setting('system.schema_backup');
-
         return [
             'version'     => Schema::VERSION,
             'stamp'       => (new Schema($this->db))->stamp(),
             'upgraded_at' => $this->setting('system.schema_upgraded_at'),
-            'backup'      => $backup === null || $backup === '' ? null : $backup,
-            'can_backup'  => $this->db->dialect()->name() === 'sqlite',
+            'backup'      => null,
+            'can_backup'  => false,
             'keep'        => self::KEEP_BACKUPS,
-            'backups'     => $backups,
+            'backups'     => [],
         ];
-    }
-
-    /**
-     * 관리 화면에서 선택한 자동 SQLite 백업 하나를 삭제한다.
-     * 스키마 갱신과 겹치지 않게 같은 잠금을 사용하며 백업 폴더 밖 경로는 받지 않는다.
-     *
-     * @return array{deleted:string}
-     */
-    public function deleteBackup(string $name): array
-    {
-        if ($name === '' || $name !== basename($name)
-            || preg_match('/^board-v[0-9A-Za-z]+-\d{8}-\d{6}(?:-\d+)?\.sqlite$/D', $name) !== 1) {
-            throw new \RuntimeException('삭제할 자동 DB 백업 파일 이름이 올바르지 않습니다.');
-        }
-        $directory = $this->storageDir . '/backups';
-        $path = $directory . '/' . $name;
-
-        $lock = @fopen($this->storageDir . '/upgrade.lock', 'c');
-        if ($lock === false) {
-            throw new \RuntimeException('데이터베이스 구조 갱신 잠금 파일을 열 수 없습니다.');
-        }
-        if (!flock($lock, LOCK_EX | LOCK_NB)) {
-            fclose($lock);
-            throw new \RuntimeException('데이터베이스 구조 갱신이 진행 중입니다. 잠시 뒤 다시 시도해 주세요.');
-        }
-        try {
-            if (!is_dir($directory) || is_link($directory)) {
-                throw new \RuntimeException('자동 DB 백업 폴더를 안전하게 열 수 없습니다.');
-            }
-            if (!is_file($path) || is_link($path)) {
-                throw new \RuntimeException('자동 DB 백업 파일을 찾을 수 없습니다: ' . $name);
-            }
-            if (!unlink($path)) {
-                throw new \RuntimeException('자동 DB 백업 파일을 삭제하지 못했습니다: ' . $name);
-            }
-            if ($this->setting('system.schema_backup') === $path) {
-                $this->upsertSetting('system.schema_backup', '');
-            }
-        } finally {
-            flock($lock, LOCK_UN);
-            fclose($lock);
-        }
-
-        return ['deleted' => $name];
-    }
-
-    /** SQLite 면 VACUUM INTO 로 일관된 복사본을 만들고 경로를 돌려준다. 다른 DB 는 null. */
-    private function backup(?string $storedStamp): ?string
-    {
-        if ($this->db->dialect()->name() !== 'sqlite') {
-            return null;
-        }
-        $dir = $this->storageDir . '/backups';
-        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-            throw new \RuntimeException('백업 폴더를 만들 수 없습니다: ' . $dir);
-        }
-        $old = $storedStamp === null ? '0' : (string) strtok($storedStamp, '.');
-        $base = $dir . '/board-v' . preg_replace('/[^0-9A-Za-z]/', '', $old) . '-' . gmdate('Ymd-His');
-        $path = $base . '.sqlite';
-        for ($n = 2; is_file($path); $n++) {
-            $path = $base . '-' . $n . '.sqlite';
-        }
-        // VACUUM INTO 는 쓰는 중에도 안전한 스냅숏을 만든다. 경로의 작은따옴표는 두 겹으로 피한다.
-        $this->db->pdo()->exec("VACUUM INTO '" . str_replace("'", "''", $path) . "'");
-        $this->prune();
-
-        return $path;
-    }
-
-    /** 최근 KEEP_BACKUPS 개만 남긴다. 이름이 판 번호 다음 일시 순이라 자연 정렬 역순이 최신순이다. */
-    private function prune(): void
-    {
-        foreach (array_slice($this->backupFiles(), self::KEEP_BACKUPS) as $old) {
-            @unlink($old);
-        }
-    }
-
-    /** @return string[] 최신순. 이름을 판 번호(자연 정렬) 다음 일시로 내림차순 비교한다. */
-    private function backupFiles(): array
-    {
-        $files = glob($this->storageDir . '/backups/board-v*.sqlite') ?: [];
-        usort($files, static fn (string $a, string $b): int => strnatcmp($b, $a));
-
-        return $files;
     }
 
     private function failurePath(): string

@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ServerCheckTest extends TestCase
 {
-    private const ALL = ['Core', 'pdo', 'pdo_sqlite', 'mbstring', 'fileinfo', 'openssl', 'phar', 'gd', 'zip'];
+    private const ALL = ['Core', 'pdo', 'pdo_mysql', 'mbstring', 'fileinfo', 'openssl', 'phar', 'gd', 'zip'];
 
     private string $dir;
 
@@ -58,22 +58,22 @@ final class ServerCheckTest extends TestCase
 
     public function testNoPdoDriverFails(): void
     {
-        $result = $this->check(array_diff(self::ALL, ['pdo_sqlite']))->run();
+        $result = $this->check(array_diff(self::ALL, ['pdo_mysql']))->run();
 
         self::assertFalse($result['ok']);
-        self::assertStringContainsString('하나도 없습니다', $this->item($result, 'PDO 드라이버')['note']);
+        self::assertStringContainsString('pdo_mysql이 없습니다', $this->item($result, 'PDO 드라이버')['note']);
     }
 
     public function testListsAvailableDrivers(): void
     {
         $result = $this->check(array_merge(self::ALL, ['pdo_mysql']))->run();
 
-        self::assertSame('있음: pdo_sqlite, pdo_mysql', $this->item($result, 'PDO 드라이버')['note']);
+        self::assertSame('있음: pdo_mysql', $this->item($result, 'PDO 드라이버')['note']);
     }
 
     public function testUnsupportedPdoDriverDoesNotSatisfyRequirements(): void
     {
-        $extensions = array_merge(array_diff(self::ALL, ['pdo_sqlite']), ['pdo_unsupported']);
+        $extensions = array_merge(array_diff(self::ALL, ['pdo_mysql']), ['pdo_unsupported']);
         $result = $this->check($extensions)->run();
 
         self::assertFalse($result['ok']);

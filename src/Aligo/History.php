@@ -371,8 +371,7 @@ final class History
      * 포기 시계는 requested_at(접수를 요청한 시각)이 아니라 COALESCE(scheduled_at,
      * requested_at)부터 잰다 — 예약은 접수와 실제 발송 사이에 최대 30일(SendTime::MAX_DAYS)
      * 간격이 날 수 있어서, requested_at 만 보면 5일 뒤로 예약한 건이 나가기도 전에
-     * "결과를 알 수 없음"이 된다. 작업을 봐야 하므로 SELECT 쪽은 JOIN 을 쓰고, UPDATE
-     * 쪽은 SQLite 가 UPDATE...JOIN 을 지원하지 않아 같은 조건을 상관 서브쿼리로 쓴다 —
+     * "결과를 알 수 없음"이 된다. SELECT와 UPDATE는 같은 작업별 기준 시각을 사용한다.
      * DISTINCT job_id 로 작업을 추려 recomputeJob() 을 도는 지금 구조는 그대로 둔다.
      */
     private function giveUpOnStaleRows(): void

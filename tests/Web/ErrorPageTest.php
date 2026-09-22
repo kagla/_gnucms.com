@@ -12,7 +12,6 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 
 final class ErrorPageTest extends WebTestCase
 {
-    private const SQLITE = ['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null];
 
     #[DataProvider('connectionProvider')]
     public function testLoginRequiredRequestRedirectsWithinTheInstallationPath(array $dbConfig): void
@@ -35,7 +34,7 @@ final class ErrorPageTest extends WebTestCase
 
     public function testForbiddenErrorKeepsHomeActionForSignedInMember(): void
     {
-        $app = $this->makeApp(self::SQLITE, [], 'default');
+        $app = $this->makeApp(self::mysqlConfig(), [], 'default');
         $id = $app->users()->createSocial('error-member@example.com', '일반회원');
         $this->get($app, '/login');
         session_start();
@@ -54,7 +53,7 @@ final class ErrorPageTest extends WebTestCase
 
     public function testLoginRequiredJsonRequestKeepsUnauthorizedResponse(): void
     {
-        $app = $this->makeApp(self::SQLITE);
+        $app = $this->makeApp(self::mysqlConfig());
         $request = (new ServerRequestFactory())->createServerRequest('GET', '/admin')
             ->withHeader('Accept', 'application/json');
         $response = Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
@@ -75,7 +74,7 @@ final class ErrorPageTest extends WebTestCase
      */
     public function testMethodNotAllowedRenders405NotInternalError(): void
     {
-        $app = $this->makeApp(self::SQLITE);
+        $app = $this->makeApp(self::mysqlConfig());
 
         $response = $this->request($app, 'POST', '/');
 
@@ -89,7 +88,7 @@ final class ErrorPageTest extends WebTestCase
      */
     public function testInternalErrorHidesDetailsWhenDebugIsOff(): void
     {
-        $app = $this->makeApp(self::SQLITE, ['debug' => false]);
+        $app = $this->makeApp(self::mysqlConfig(), ['debug' => false]);
 
         // posts 테이블을 지워서 정상 요청이 SQL 오류로 실패하게 만든다.
         // Connection 은 이 오류를 DomainError::internal() 로 감싸는데, 그 메시지 안에
@@ -113,7 +112,7 @@ final class ErrorPageTest extends WebTestCase
      */
     public function testValidationErrorRendersFieldDetails(): void
     {
-        $app = $this->makeApp(self::SQLITE);
+        $app = $this->makeApp(self::mysqlConfig());
         $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유게시판']);
 
         $response = $this->get($app, '/boards/free', ['q' => str_repeat('가', 101)]);

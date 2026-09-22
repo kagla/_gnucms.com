@@ -34,7 +34,7 @@ final class BackupManagerTest extends DatabaseTestCase
         file_put_contents($this->root . '/avatars/avatar.png', 'avatar-before');
 
         $this->config = [
-            'db' => ['dsn' => 'sqlite:' . $this->root . '/board.sqlite'],
+            'db' => \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig(),
             'storage' => ['dir' => $this->root],
             'uploads' => ['dir' => $this->root . '/uploads'],
             'editor' => ['dir' => $this->root . '/editor'],
@@ -43,6 +43,7 @@ final class BackupManagerTest extends DatabaseTestCase
         $this->configFile = $this->root . '/config.php';
         file_put_contents($this->configFile, "<?php return ['auth' => ['secret' => 'original-secret']];\n");
         $this->db = Connection::create($this->config['db']);
+        (new Schema($this->db))->drop();
         (new Schema($this->db))->create();
         $this->db->execute(
             'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
@@ -70,9 +71,9 @@ final class BackupManagerTest extends DatabaseTestCase
         $result = $this->manager->create();
 
         self::assertTrue($result['valid']);
-        self::assertSame('sqlite', $result['driver']);
+        self::assertSame('mysql', $result['driver']);
         $extension = class_exists(\ZipArchive::class) ? 'zip' : 'tar';
-        self::assertMatchesRegularExpression('/^gnucms-sqlite-\d{8}-\d{6}\.' . $extension . '$/', $result['name']);
+        self::assertMatchesRegularExpression('/^gnucms-mysql-\d{8}-\d{6}\.' . $extension . '$/', $result['name']);
         $archive = $this->root . '/backups/manual/' . $result['name'];
         self::assertFileExists($archive);
         self::assertFileExists($archive . '.verified.json');
@@ -80,7 +81,7 @@ final class BackupManagerTest extends DatabaseTestCase
         $manifest = json_decode($this->archiveContents($archive, 'manifest.json'), true);
         self::assertSame(BackupManager::FORMAT, $manifest['format']);
         self::assertSame(BackupManager::FORMAT_VERSION, $manifest['format_version']);
-        self::assertSame('database/sqlite.sqlite', $manifest['database']['path']);
+        self::assertSame('database/mysql.sql', $manifest['database']['path']);
         self::assertSame('config/config.php', $manifest['config']['path']);
         self::assertArrayHasKey('files/uploads/2026/09/attachment', $manifest['files']);
         self::assertArrayHasKey('files/editor/content-key/image.jpg', $manifest['files']);
@@ -92,7 +93,7 @@ final class BackupManagerTest extends DatabaseTestCase
 
         $status = $this->manager->status();
         self::assertTrue($status['can_create']);
-        self::assertTrue($status['can_restore']);
+        self::assertFalse($status['can_restore']);
         self::assertSame($extension, $status['preferred_format']);
         self::assertNotNull($status['archives'][0]['verified_at']);
     }
@@ -100,9 +101,6 @@ final class BackupManagerTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testBacksUpSupportedDatabasesWithPrefixedTables(array $dbConfig): void
     {
-        if (str_starts_with($dbConfig['dsn'], 'sqlite:')) {
-            $dbConfig['dsn'] = 'sqlite:' . $this->root . '/prefixed.sqlite';
-        }
         $dbConfig['prefix'] = 'backup_' . bin2hex(random_bytes(4)) . '_';
         $db = Connection::create($dbConfig);
         $schema = new Schema($db);
@@ -136,29 +134,8 @@ final class BackupManagerTest extends DatabaseTestCase
                 self::assertFalse($status['can_restore']);
                 self::assertStringContainsString('mysql --host=', implode("\n", $status['instructions']));
                 $this->expectException(RuntimeException::class);
-                $this->expectExceptionMessage('자동 복원은 SQLite 백업끼리만');
+                $this->expectExceptionMessage('자동 복원을 지원하지 않습니다');
                 $manager->restore($result['name']);
-            } else {
-                self::assertSame('sqlite3', $manifest['database']['format']);
-                self::assertSame('database/sqlite.sqlite', $manifest['database']['path']);
-                self::assertTrue($status['can_restore']);
-
-                try {
-                    $this->manager->restore($result['name']);
-                    self::fail('프리픽스가 다른 설치에 복원할 수 없어야 합니다.');
-                } catch (RuntimeException $e) {
-                    self::assertStringContainsString('테이블 프리픽스가 달라', $e->getMessage());
-                    self::assertSame('before', $this->db->selectOne(
-                        'SELECT setting_value FROM site_settings WHERE setting_key = ?', ['backup_test']
-                    )['setting_value']);
-                }
-
-                $db->execute('DELETE FROM ' . $db->table('site_settings') . ' WHERE setting_key = ?', ['backup_test']);
-                $manager->restore($result['name']);
-                $restored = Connection::create($dbConfig);
-                self::assertSame('prefixed-backup-sentinel', $restored->selectOne(
-                    'SELECT setting_value FROM ' . $restored->table('site_settings') . ' WHERE setting_key = ?', ['backup_test']
-                )['setting_value']);
             }
         } finally {
             $schema->drop();
@@ -199,7 +176,7 @@ final class BackupManagerTest extends DatabaseTestCase
     public function testRejectsAFileThatIsNotAGnuCmsArchive(): void
     {
         $extension = class_exists(\ZipArchive::class) ? 'zip' : 'tar';
-        $name = 'gnucms-sqlite-20260904-000000.' . $extension;
+        $name = 'gnucms-mysql-20260904-000000.' . $extension;
         mkdir($this->root . '/backups/manual', 0775, true);
         file_put_contents($this->root . '/backups/manual/' . $name, 'not an archive');
 
@@ -225,13 +202,8 @@ final class BackupManagerTest extends DatabaseTestCase
         self::assertArrayHasKey('files/extensions/enabled.json', $manifest['files']);
         self::assertArrayNotHasKey('files/extensions/state.lock', $manifest['files']);
         foreach (array_keys($manifest['files']) as $file) self::assertStringNotContainsString('permits', $file);
-        $state->update(static fn (): array => []);
-        $this->db->execute('UPDATE ext_saved SET message = ?', ['after']);
-        $this->manager->restore($saved['name']);
-        $restored = Connection::create($this->config['db']);
-        self::assertSame('before', $restored->selectOne('SELECT message FROM ext_saved')['message']);
-        self::assertSame(['plugins/backup-test'], $state->read());
-        self::assertFalse($permit->allowed('plugins/backup-test', 'revision-1'));
+        self::assertStringContainsString('ext_saved', $this->archiveContents($archive, 'database/mysql.sql'));
+        $this->db->execute('DROP TABLE ext_saved');
     }
 
     public function testRejectsAnArchiveWhoseContentsNoLongerMatchTheManifest(): void
@@ -266,10 +238,6 @@ final class BackupManagerTest extends DatabaseTestCase
         self::assertTrue($verified['valid']);
         self::assertStringEndsWith('.tar', $verified['name']);
 
-        file_put_contents($this->root . '/uploads/2026/09/attachment', 'changed-after-tar');
-        $restored = $this->manager->restore($name);
-        self::assertSame($name, $restored['restored']);
-        self::assertSame('attachment-before', file_get_contents($this->root . '/uploads/2026/09/attachment'));
     }
 
     public function testCreatesZipWhenItIsExplicitlySelected(): void
@@ -299,7 +267,7 @@ final class BackupManagerTest extends DatabaseTestCase
         $archive = $this->root . '/backups/manual/' . $created['name'];
         $manifest = json_decode($this->archiveContents($archive, 'manifest.json'), true);
 
-        self::assertSame('gnucms-sqlite-20260905-013045.tar', $created['name']);
+        self::assertSame('gnucms-mysql-20260905-013045.tar', $created['name']);
         self::assertSame('2026-09-05T01:30:45+09:00', $manifest['created_at']);
     }
 
@@ -355,55 +323,6 @@ final class BackupManagerTest extends DatabaseTestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('삭제할 백업 파일 이름이 올바르지 않습니다');
         $this->manager->delete('../' . $created['name']);
-    }
-
-    public function testRestoresDatabaseAndFilesAfterMakingSafetyBackup(): void
-    {
-        $this->db->pdo()->exec('PRAGMA journal_mode = WAL');
-        $backup = $this->manager->create();
-        $this->db->execute(
-            'UPDATE site_settings SET setting_value = ? WHERE setting_key = ?',
-            ['after', 'backup_test']
-        );
-        file_put_contents($this->root . '/uploads/2026/09/attachment', 'attachment-after');
-        file_put_contents($this->root . '/uploads/2026/09/extra', 'extra');
-        file_put_contents($this->configFile, "<?php return ['changed' => true];\n");
-
-        $result = $this->manager->restore($backup['name']);
-
-        self::assertSame($backup['name'], $result['restored']);
-        self::assertNotSame($backup['name'], $result['safety_backup']);
-        self::assertFileExists($this->root . '/backups/manual/' . $result['safety_backup']);
-        self::assertSame('attachment-before', file_get_contents($this->root . '/uploads/2026/09/attachment'));
-        self::assertFileDoesNotExist($this->root . '/uploads/2026/09/extra');
-        self::assertSame('editor-before', file_get_contents($this->root . '/editor/content-key/image.jpg'));
-        self::assertSame('avatar-before', file_get_contents($this->root . '/avatars/avatar.png'));
-        self::assertStringContainsString("'changed' => true", (string) file_get_contents($this->configFile),
-            '실행 중인 설정 파일은 자동 교체하지 않아야 한다');
-
-        $restored = Connection::create($this->config['db']);
-        self::assertSame('before', $restored->selectOne(
-            'SELECT setting_value FROM site_settings WHERE setting_key = ?', ['backup_test']
-        )['setting_value']);
-        self::assertSame('ok', $restored->pdo()->query('PRAGMA integrity_check')->fetchColumn());
-        self::assertCount(2, $this->manager->status()['archives']);
-    }
-
-    public function testDoesNotRestoreWithoutAFileBackedSqliteDatabase(): void
-    {
-        $memory = Connection::create(['dsn' => 'sqlite::memory:']);
-        (new Schema($memory))->create();
-        $manager = new BackupManager($memory, [
-            'db' => ['dsn' => 'sqlite::memory:'],
-            'uploads' => ['dir' => $this->root . '/uploads'],
-            'editor' => ['dir' => $this->root . '/editor'],
-        ], $this->root . '/memory-storage');
-        $backup = $manager->create();
-
-        self::assertFalse($manager->status()['can_restore']);
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('메모리 SQLite');
-        $manager->restore($backup['name']);
     }
 
     public function testRejectsAnUploadRootThatWouldRecursivelyIncludeBackups(): void

@@ -38,7 +38,7 @@ final class Schema
 
     public static function migrate(Connection $db): void
     {
-        $bin = $db->dialect()->name() === 'mysql' ? ' COLLATE utf8mb4_bin' : '';
+        $bin = ' COLLATE utf8mb4_bin';
         $definitions = [
             'yc_orders' => 'id {AUTO_PK}, number VARCHAR(32)' . $bin . ' NOT NULL UNIQUE,
                 checkout_key VARCHAR(64) NOT NULL UNIQUE, owner_key VARCHAR(64) NOT NULL, user_id BIGINT NULL,
@@ -137,7 +137,7 @@ final class Schema
                 foreach (['is_hit' => ['hit', '히트상품'], 'is_recommended' => ['recommend', '추천상품'], 'is_popular' => ['popular', '인기상품']] as $flag => [$type, $name]) {
                     $ids = array_map('intval', array_column($db->select('SELECT id FROM ' . $products . ' WHERE ' . $flag . ' = 1 ORDER BY id'), 'id'));
                     if ($ids === []) continue;
-                    // 지난 이전이 만든 분류가 아직 있으면 그것에 마저 건다. 칸 삭제가 실패해(옛 SQLite·ALTER 권한·잠금)
+                    // 지난 이전이 만든 분류가 아직 있으면 그것에 마저 건다. 칸 삭제가 실패해(ALTER 권한·잠금)
                     // 갱신이 또 여기로 와도 히트상품-2, -3 이 생기지 않게 — 자료 옮기기를 DDL 과 따로 멱등하게 둔다.
                     $categoryId = isset($recorded[$type]) && $db->selectOne('SELECT id FROM ' . $categories . ' WHERE id = ?', [$recorded[$type]]) !== null ? $recorded[$type] : 0;
                     if ($categoryId === 0) {
@@ -158,7 +158,7 @@ final class Schema
                 if ($moved !== []) self::recordMigratedTypes($db, $moved);
             });
         }
-        // DDL 은 스스로 확정되므로(SQLite·MySQL 모두) 트랜잭션 밖에서 지운다. 없는 칸은 dropColumn() 이 건너뛴다.
+        // MySQL DDL은 스스로 확정되므로 트랜잭션 밖에서 지운다. 없는 칸은 dropColumn() 이 건너뛴다.
         foreach (['is_hit', 'is_recommended', 'is_new', 'is_popular', 'is_discount'] as $column) self::dropColumn($db, 'yc_products', $column);
     }
 
@@ -193,10 +193,7 @@ final class Schema
     private static function indexExists(Connection $db, string $table, string $index): bool
     {
         $physical = $db->prefix() . $index;
-        return match ($db->dialect()->name()) {
-            'sqlite' => $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [$physical]),
-            'mysql' => $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]),
-        } !== null;
+        return $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]) !== null;
     }
 
     /**
@@ -217,27 +214,15 @@ final class Schema
      * 29판: 2자 코드 계층 → 부모 id 트리. slug 칸이 없으면 표를 새 모양으로 바꾸고, 그다음 남은 뒷정리를 한다.
      * MySQL 은 ALTER 와 UPDATE 가 하나씩 확정되므로 갱신이 중간에 끊길 수 있다 — 그래서 뒷정리(옛 code 칸 버리기,
      * path 가 빈 행 채우기)는 갱신마다 상태를 보고 필요할 때만 하며, 끊긴 갱신은 다음 요청이 마저 끝낸다.
-     * SQLite 는 칸을 지우거나 NULL 허용을 바꾸지 못해 표를 다시 만든다(코어의 rebuildSqliteUsers() 와 같은 방식).
      */
     private static function migrateCategoryTree(Connection $db, string $bin): void
     {
         $table = $db->table('yc_categories');
         if (!self::columnExists($db, 'yc_categories', 'slug')) {
-            if ($db->dialect()->name() === 'mysql') {
-                // MySQL 은 DDL 을 스스로 확정하므로 트랜잭션으로 묶지 않는다(묶으면 커밋이 "열린 트랜잭션 없음" 으로 터진다).
-                $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
-            } else {
-                $keep = 'id, parent_id, depth, name, sort_order, active, no_coupon, head_html, tail_html, list_columns, list_rows, image_width, image_height, extra, created_at, updated_at';
-                $db->transaction(function () use ($db, $table, $keep, $bin): void {
-                    $old = $db->table('yc_categories_before_tree');
-                    $db->execute('ALTER TABLE ' . $table . ' RENAME TO ' . $old);
-                    $db->execute('CREATE TABLE ' . $table . ' (' . strtr(self::categoriesDefinition($bin), $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
-                    $db->execute('INSERT INTO ' . $table . ' (' . $keep . ", slug, path, legacy_code) SELECT " . $keep . ", 'c' || id, '', code FROM " . $old);
-                    $db->execute('DROP TABLE ' . $old);
-                });
-            }
+            // MySQL 은 DDL 을 스스로 확정하므로 트랜잭션으로 묶지 않는다(묶으면 커밋이 "열린 트랜잭션 없음" 으로 터진다).
+            $db->execute('ALTER TABLE ' . $table . ' ADD COLUMN slug VARCHAR(200)' . $bin . ' NOT NULL DEFAULT \'\', ADD COLUMN path VARCHAR(255) NOT NULL DEFAULT \'\', ADD COLUMN legacy_code VARCHAR(10)' . $bin . ' NULL');
         }
-        // 옛 코드는 legacy_code 로만 남는다(MySQL). SQLite 는 표를 다시 만들 때 이미 옮겼다.
+        // 옛 코드는 legacy_code로만 남는다.
         if (self::columnExists($db, 'yc_categories', 'code')) {
             $db->execute('UPDATE ' . $table . ' SET legacy_code = code WHERE legacy_code IS NULL');
             self::dropColumn($db, 'yc_categories', 'code');

@@ -9,12 +9,10 @@
   <?php if (!empty($backup_error)): ?><div class="alert alert-error"><span><?= $this->icon('info', 18) ?></span><span><?= $this->e($backup_error) ?></span></div><?php endif ?>
   <?php if (($query['backup_created'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_created']) ?></code> 전체 백업을 만들고 검증했습니다.</span></div><?php endif ?>
   <?php if (($query['backup_uploaded'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_uploaded']) ?></code> 백업을 업로드하고 검증했습니다.</span></div><?php endif ?>
-  <?php if (($query['backup_verified'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_verified']) ?></code>의 형식과 체크섬, DB 무결성이 올바릅니다.</span></div><?php endif ?>
-  <?php if (($query['backup_restored'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_restored']) ?></code>을 복원했습니다. 복원 직전 상태는 <code><?= $this->e((string) ($query['safety_backup'] ?? '')) ?></code>에 보관했습니다.</span></div><?php endif ?>
+  <?php if (($query['backup_verified'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_verified']) ?></code>의 형식과 파일 체크섬이 올바릅니다.</span></div><?php endif ?>
   <?php if (($query['backup_deleted'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['backup_deleted']) ?></code> 백업을 삭제했습니다.</span></div><?php endif ?>
-  <?php if (($query['schema_backup_deleted'] ?? '') !== ''): ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span><code><?= $this->e((string) $query['schema_backup_deleted']) ?></code> 자동 DB 백업을 삭제했습니다.</span></div><?php endif ?>
   <h2 class="form-section-title">데이터베이스 상태</h2><dl class="schema-facts"><div><dt>판 번호</dt><dd><?= $this->e($schema['version']) ?> <small class="schema-stamp"><?= $this->e($schema['stamp']) ?></small></dd></div><div><dt>마지막으로 옮긴 시각</dt><dd><?= $schema['upgraded_at'] !== null ? $this->date($schema['upgraded_at'], 'Y-m-d H:i:s') . ' ' . $this->e((string) $site['timezone']) : '설치 이후 없음' ?></dd></div><div><dt>마지막 백업</dt><dd><?= $schema['backup'] !== null ? $this->e(basename($schema['backup'])) : '없음' ?></dd></div></dl>
-  <?php if (!$schema['can_backup']): ?><p class="schema-note">스키마 갱신 직전 자동 DB 백업은 SQLite에서만 만듭니다. 아래 전체 백업은 사용 가능한 네이티브 DB 도구를 이용합니다.</p><?php elseif ($schema['backups'] === []): ?><p class="schema-note">아직 자동 DB 백업이 없습니다. 판이 바뀔 때 <code>storage/backups/</code>에 최근 <?= $this->e((string) $schema['keep']) ?>개까지 남깁니다.</p><?php else: ?><div class="overflow-x-auto"><table class="table table-sm schema-backups"><thead><tr><th>자동 DB 백업</th><th>크기</th><th>만든 시각 (<?= $this->e((string) $site['timezone']) ?>)</th><th>관리</th></tr></thead><tbody><?php foreach ($schema['backups'] as $item): ?><tr><td><code><?= $this->e($item['name']) ?></code></td><td><?= $this->e(number_format($item['size'] / 1024, 1)) ?> KB</td><td><?= $this->date((int) $item['mtime'], 'Y-m-d H:i:s') ?></td><td><form method="post" action="<?= $this->url('admin.schema-backups.delete', ['name' => $item['name']]) ?>" onsubmit="return confirm('이 자동 DB 백업을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-xs btn-error btn-outline" type="submit">삭제</button></form></td></tr><?php endforeach ?></tbody></table></div><?php endif ?>
+  <p class="schema-note">배포 전에 아래 전체 백업 또는 호스팅의 DB 백업을 수행하세요. MySQL/MariaDB 구조 갱신은 자동 백업을 만들지 않습니다.</p>
 
   <div class="form-section backup-section"><h2 class="form-section-title">전체 수동 백업</h2>
     <p class="schema-note">DB, 첨부 파일, 에디터 이미지, 프로필 이미지와 복원에 필요한 설정을 하나의 압축 파일로 보관합니다. 파일명과 화면 시각은 현재 사이트 시간대(<code><?= $this->e((string) $site['timezone']) ?></code>)를 사용합니다. 옮길 서버 환경에 맞춰 ZIP 또는 TAR를 선택하세요. 설정에는 DB 비밀번호와 암호화 키가 포함될 수 있으므로 내려받은 파일도 비공개로 보관하세요.</p>
@@ -29,7 +27,7 @@
 
     <div class="backup-import"><h3>내려받은 백업 가져오기</h3>
       <form method="post" action="<?= $this->url('admin.backups.upload') ?>?csrf_token=<?= rawurlencode($csrf_token) ?>" enctype="multipart/form-data" class="backup-import-form"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><label class="fieldset"><span class="fieldset-legend">GNUCMS ZIP 또는 TAR 백업 파일</span><input class="file-input file-input-bordered" type="file" name="backup_file" accept=".zip,.tar,application/zip,application/x-tar" required></label><button class="btn btn-sm" type="submit">업로드하고 검증</button></form>
-      <p class="schema-note"><?php if ((int) $backup_upload_max_mb > 0): ?>현재 서버의 웹 업로드 한도는 약 <?= $this->e((string) $backup_upload_max_mb) ?>MB입니다. <?php endif ?>더 큰 파일은 서버의 안전한 폴더에 올린 뒤 CLI에서 <code>verify</code>와 <code>restore</code>를 실행하세요. 파일명이 바뀌어도 내부 정보로 판별하며 기존 백업은 덮어쓰지 않습니다.</p>
+      <p class="schema-note"><?php if ((int) $backup_upload_max_mb > 0): ?>현재 서버의 웹 업로드 한도는 약 <?= $this->e((string) $backup_upload_max_mb) ?>MB입니다. <?php endif ?>더 큰 파일은 서버의 안전한 폴더에 올린 뒤 CLI에서 <code>verify</code>를 실행한 뒤 아래 DB 복원 절차를 따르세요. 파일명이 바뀌어도 내부 정보로 판별하며 기존 백업은 덮어쓰지 않습니다.</p>
     </div>
 
     <?php if ($backup['archives'] === []): ?>
@@ -45,7 +43,6 @@
           <a class="btn btn-xs" href="<?= $this->url('admin.backups.download', ['name' => $item['name']]) ?>">내려받기</a>
           <form method="post" action="<?= $this->url('admin.backups.verify', ['name' => $item['name']]) ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-xs" type="submit">검증</button></form>
         </div><div class="backup-danger-actions">
-          <?php if ($backup['can_restore'] && ($item['driver'] ?? null) === 'sqlite' && !isset($item['error'])): ?><details><summary class="btn btn-xs btn-warning btn-outline">복원</summary><form method="post" action="<?= $this->url('admin.backups.restore', ['name' => $item['name']]) ?>" class="backup-restore-form"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><label><span>현재 DB와 파일을 이 백업으로 바꿉니다.<br>계속하려면 아래 칸에 <strong>복원</strong>을 입력하세요.</span><input class="input input-xs" type="text" name="confirmation" placeholder="복원" aria-label="복원 확인 문구" autocomplete="off" spellcheck="false" required></label><button class="btn btn-warning btn-xs" type="submit">확인하고 복원</button></form></details><?php endif ?>
           <form method="post" action="<?= $this->url('admin.backups.delete', ['name' => $item['name']]) ?>" onsubmit="return confirm('이 전체 백업을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-xs btn-error btn-outline" type="submit">삭제</button></form>
         </div></div>
         </td>
@@ -53,7 +50,7 @@
       </tbody></table></div>
     <?php endif ?>
 
-    <?php if ($backup['driver'] !== 'sqlite'): ?><div class="backup-instructions"><h3>DB 복원 절차</h3><p class="schema-note">원격 DB는 권한·버전·실행 시간 차이 때문에 웹에서 자동 복원하지 않습니다. 전체 백업을 내려받고 쓰기를 중지한 뒤 아래 절차를 서버 콘솔에서 실행하세요.</p><ol><?php foreach ($backup['instructions'] as $instruction): ?><li><code><?= $this->e($instruction) ?></code></li><?php endforeach ?></ol></div><?php endif ?>
+    <div class="backup-instructions"><h3>DB 복원 절차</h3><p class="schema-note">원격 DB는 권한·버전·실행 시간 차이 때문에 웹에서 자동 복원하지 않습니다. 전체 백업을 내려받고 쓰기를 중지한 뒤 아래 절차를 서버 콘솔에서 실행하세요.</p><ol><?php foreach ($backup['instructions'] as $instruction): ?><li><code><?= $this->e($instruction) ?></code></li><?php endforeach ?></ol></div>
   </div>
 
   <div class="form-section"><h2 class="form-section-title">업로드 파일 정리</h2>

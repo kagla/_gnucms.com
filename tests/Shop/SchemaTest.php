@@ -47,7 +47,7 @@ final class SchemaTest extends ShopTestCase
     {
         $this->setupShop($config);
         $db = $this->app->db();
-        // pay_by·payment_id 는 인덱스가 있어 SQLite 가 컬럼을 바로 지우지 못한다 — 결제 이전에는 그 인덱스도 없었으므로 먼저 지운다.
+        // 결제 이전 스키마를 재현하므로 결제 인덱스도 먼저 지운다.
         foreach (['yc_order_pay_by', 'yc_order_payment'] as $index) {
             $db->execute('DROP INDEX ' . $db->index($index) . ($db->dialect()->name() === 'mysql' ? ' ON ' . $db->table('yc_orders') : ''));
         }
@@ -125,7 +125,6 @@ final class SchemaTest extends ShopTestCase
         foreach (self::INDEXES as $index => $table) {
             $physical = $db->prefix() . $index;
             $exists = match ($db->dialect()->name()) {
-                'sqlite' => $db->selectOne("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [$physical]),
                 'mysql' => $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]),
             };
             self::assertNotNull($exists, $index);
@@ -168,7 +167,7 @@ final class SchemaTest extends ShopTestCase
 
     /**
      * 31판: 칸 삭제가 듣지 않아 갱신이 또 돌아도 분류는 늘지 않는다. 지난 이전이 만든 분류를 다시 쓴다 —
-     * 옛 SQLite·ALTER 권한이 없는 MySQL·잠금 대기로 DROP COLUMN 이 실패하면 다음 요청이 또 여기로 온다.
+     * ALTER 권한이 없는 MySQL·잠금 대기로 DROP COLUMN 이 실패하면 다음 요청이 또 여기로 온다.
      */
     #[DataProvider('connectionProvider')]
     public function testMigrateReusesTheCategoriesAnEarlierRunCreated(array $config): void

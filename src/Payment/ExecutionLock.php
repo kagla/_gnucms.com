@@ -6,7 +6,7 @@ namespace GnuCms\Payment;
 
 use GnuCms\Error\DomainError;
 
-/** 결제 중 복원을 막는다. 결제 요청끼리의 동시성은 DB와 결제 요청 키로 제어한다. */
+/** 결제 요청과 코어 갱신·백업의 동시 실행을 막는다. 결제 요청끼리는 DB와 요청 키로 제어한다. */
 final class ExecutionLock
 {
     public static function run(string $storage, callable $work): mixed

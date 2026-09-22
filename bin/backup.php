@@ -8,9 +8,8 @@ declare(strict_types=1);
  *   php bin/backup.php create --format=zip
  *   php bin/backup.php create --format=tar
  *   php bin/backup.php list
- *   php bin/backup.php verify gnucms-sqlite-20260904-120000.zip
- *   php bin/backup.php restore gnucms-sqlite-20260904-120000.zip --yes
- *   php bin/backup.php delete gnucms-sqlite-20260904-120000.zip --yes
+ *   php bin/backup.php verify gnucms-mysql-20260904-120000.zip
+ *   php bin/backup.php delete gnucms-mysql-20260904-120000.zip --yes
  *   php bin/backup.php create --config=/경로/config.php
  */
 
@@ -45,7 +44,6 @@ $usage = static function (): void {
     fwrite(STDERR, "  php bin/backup.php create [--format=zip|tar] [--config=/경로/config.php]\n");
     fwrite(STDERR, "  php bin/backup.php list [--config=/경로/config.php]\n");
     fwrite(STDERR, "  php bin/backup.php verify 백업파일.zip|백업파일.tar [--config=/경로/config.php]\n");
-    fwrite(STDERR, "  php bin/backup.php restore 백업파일.zip|백업파일.tar --yes [--config=/경로/config.php]\n");
     fwrite(STDERR, "  php bin/backup.php delete 백업파일.zip|백업파일.tar --yes [--config=/경로/config.php]\n");
 };
 
@@ -97,7 +95,7 @@ try {
     }
     if ($action === 'verify') {
         $result = $manager->verify($archive);
-        echo "백업 형식, 파일 체크섬과 DB 무결성이 올바릅니다.\n";
+        echo "백업 형식과 파일 체크섬이 올바릅니다.\n";
         echo "파일: {$result['name']}\n";
         echo "DB: {$result['driver']}\n";
         echo "SHA-256: {$result['sha256']}\n";
