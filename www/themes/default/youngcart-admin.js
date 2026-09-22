@@ -66,7 +66,7 @@
     var saveStatus=editForm.querySelector('[data-yc-save-status]');
     function dirty(){if(saveStatus){saveStatus.textContent='저장하지 않은 변경사항이 있습니다.';saveStatus.dataset.dirty='true';}}
     editForm.addEventListener('input',dirty);editForm.addEventListener('change',dirty);
-    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra],[data-yc-add-category],[data-yc-remove-category],[data-yc-add-main-category],[data-yc-remove-main-category]')){dirty();}});
+    editForm.addEventListener('click',function(event){if(event.target.closest('[data-yc-copy-down],[data-yc-move],[data-yc-remove-relation],[data-yc-add-extra],[data-yc-remove-extra],[data-yc-add-category],[data-yc-remove-category],[data-yc-add-main-category],[data-yc-remove-main-category]')){dirty();}});
     editForm.addEventListener('invalid',function(event){reveal(event.target);},true);
   });
   // Give existing compact fieldsets and tables unambiguous accessible input names.
@@ -126,12 +126,120 @@
   });
   var form=document.querySelector('[data-yc-product-form]');
   if(!form){return;}
-  // 조합 표: 같은 열의 아래 행에 값 복사
+  // 영카트처럼 서버가 만든 옵션 목록만 바꾼다. 상품 본문·이미지는 전송하지 않는다.
+  var combine=form.querySelector('[data-yc-combine]'),combinations=form.querySelector('[data-yc-combinations]'),combineStatus=form.querySelector('[data-yc-combine-status]');
+  if(combine&&combinations&&combineStatus&&window.fetch){
+    var combining=false;
+    function combinationMessage(message,error){
+      combineStatus.textContent=message;combineStatus.className=error?'text-error':'muted';combineStatus.hidden=false;
+    }
+    function syncOptionStock(){
+      var hasOptions=!!combinations.querySelector('[data-yc-combos] tbody tr'),note=form.querySelector('[data-yc-option-stock-note]');
+      ['stock','stock_alert'].forEach(function(name){
+        var input=form.elements[name];if(!input){return;}
+        input.readOnly=hasOptions;
+        if(hasOptions){input.title='선택옵션이 있는 상품은 조합별 재고를 씁니다';}else{input.removeAttribute('title');}
+      });
+      if(note){note.hidden=!hasOptions;}
+    }
+    // JS가 없으면 기존 POST를 쓰고, JS가 있으면 편집기 등의 폼 제출 처리도 실행하지 않는다.
+    combine.type='button';
+    form.addEventListener('submit',function(event){if(combining){event.preventDefault();}});
+    combine.addEventListener('click',function(){
+      if(combining){return;}
+      // 많은 조합도 PHP의 max_input_vars에 잘리지 않도록 JSON으로 보낸다.
+      var body={action:'combine',option_group:{},option_values:{},options:{}};
+      [].slice.call(form.elements).forEach(function(input){
+        if(input.disabled||(/^(checkbox|radio)$/.test(input.type)&&!input.checked)){return;}
+        if(input.name==='csrf_token'||input.name==='id'){body[input.name]=input.value;return;}
+        var group=/^(option_group|option_values)\[(\d+)\]$/.exec(input.name),row=/^options\[(\d+)\]\[(value[123]|price|stock|stock_alert|active)\]$/.exec(input.name);
+        if(group){body[group[1]][group[2]]=input.value;}
+        if(row){if(!body.options[row[1]]){body.options[row[1]]={};}body.options[row[1]][row[2]]=input.value;}
+      });
+      // 요청 중 옵션 편집·중복 생성·저장이 서로 덮어쓰지 않게 잠시 막는다.
+      var locked=[].slice.call(form.querySelectorAll('#section-options input,#section-options button,button[type=submit]')).filter(function(input){return !input.disabled;});
+      locked.forEach(function(input){input.disabled=true;});
+      combining=true;combinations.setAttribute('aria-busy','true');combinationMessage('조합을 생성하고 있습니다.',false);
+      // name="action" 입력 요소가 form.action을 가리므로 HTML 속성에서 주소를 읽는다.
+      fetch(form.getAttribute('action'),{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(response){
+          return response.json().then(function(data){
+            if(!response.ok){throw new Error(data.error&&data.error.message||'조합을 생성하지 못했습니다. 다시 시도해 주세요.');}
+            if(typeof data.html!=='string'||typeof data.message!=='string'){throw new Error('조합 응답을 확인할 수 없습니다. 다시 시도해 주세요.');}
+            return data;
+          });
+        })
+        .then(function(data){
+          combinations.innerHTML=data.html;labelFields(combinations);syncOptionStock();
+          combinationMessage(data.message,false);
+          form.dispatchEvent(new Event('input',{bubbles:true}));
+        })
+        .catch(function(error){combinationMessage(error instanceof SyntaxError||error instanceof TypeError?'조합을 생성하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.':error.message,true);})
+        .finally(function(){locked.forEach(function(input){input.disabled=false;});combining=false;combinations.removeAttribute('aria-busy');});
+    });
+  }
+  function renumberExtras(body){
+    [].slice.call(body.rows).forEach(function(row,index){row.querySelectorAll('input[name]').forEach(function(input){input.name=input.name.replace(/extras\[\d+\]/,'extras['+index+']');});});
+  }
+  // 손잡이에서만 정렬을 시작하고, 실제 입력 행을 옮겨 작성 중인 값을 유지한다.
+  var extraBody=form.querySelector('[data-yc-extras] tbody'),extraDrag=null;
+  if(extraBody){
+    if(window.Sortable){
+      new Sortable(extraBody,{
+        draggable:'tr',handle:'[data-yc-extra-drag]',direction:'vertical',
+        animation:window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:180,
+        easing:'cubic-bezier(.2,0,0,1)',forceFallback:true,fallbackTolerance:4,
+        ghostClass:'yc-extra-placeholder',chosenClass:'yc-extra-chosen',fallbackClass:'yc-extra-floating',
+        scrollSensitivity:60,scrollSpeed:10,
+        onChoose:function(event){
+          extraDrag={order:[].slice.call(extraBody.rows),cancel:false};
+          event.item.querySelector('[data-yc-extra-drag]').focus({preventScroll:true});
+        },
+        onStart:function(event){
+          // 떠 있는 복제 행은 표의 열 너비를 유지하되 폼 제출·접근성 트리에서 제외한다.
+          var ghost=Sortable.ghost;
+          ghost.setAttribute('aria-hidden','true');ghost.style.opacity='1';
+          [].slice.call(event.item.cells).forEach(function(cell,index){ghost.cells[index].style.width=cell.getBoundingClientRect().width+'px';});
+          ghost.querySelectorAll('input,button').forEach(function(input){input.disabled=true;input.removeAttribute('name');});
+          ghost.querySelectorAll('[id]').forEach(function(element){element.removeAttribute('id');});
+        },
+        onMove:function(){if(extraDrag&&extraDrag.cancel){return false;}},
+        onEnd:function(event){
+          var drag=extraDrag;extraDrag=null;
+          if(drag.cancel||/cancel$/.test(event.originalEvent&&event.originalEvent.type)){
+            drag.order.forEach(function(row){extraBody.appendChild(row);});
+          }
+          renumberExtras(extraBody);
+          event.item.querySelector('[data-yc-extra-drag]').focus({preventScroll:true});
+          if(drag.order.some(function(row,index){return extraBody.rows[index]!==row;})){
+            form.dispatchEvent(new Event('input',{bubbles:true}));
+          }
+        },
+        onUnchoose:function(){if(!Sortable.active){extraDrag=null;}}
+      });
+      // DOM 이동 중 포커스가 풀려도 Escape를 받을 수 있도록 문서에서 처리한다.
+      document.addEventListener('keydown',function(event){
+        if(extraDrag&&event.key==='Escape'){event.preventDefault();extraDrag.cancel=true;}
+      });
+    }
+    extraBody.addEventListener('keydown',function(event){
+      if(extraDrag){return;}
+      var handle=event.target.closest('[data-yc-extra-drag]');
+      if(!handle||!['ArrowUp','ArrowDown'].includes(event.key)){return;}
+      event.preventDefault();
+      var row=handle.closest('tr'),target=event.key==='ArrowUp'?row.previousElementSibling:row.nextElementSibling;
+      if(!target){return;}
+      extraBody.insertBefore(row,event.key==='ArrowUp'?target:target.nextElementSibling);
+      renumberExtras(extraBody);handle.focus();form.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+  }
+  // 선택·추가옵션 표: 같은 열의 아래 행에 값 복사
   form.addEventListener('click',function(event){
     var button=event.target.closest('[data-yc-copy-down]');
     if(button){
-      var field=button.getAttribute('data-yc-copy-down'),row=button.closest('tr'),value=row.querySelector('input[name$="['+field+']"]').value,next=row.nextElementSibling;
-      while(next){var input=next.querySelector('input[name$="['+field+']"]');if(input){input.value=value;}next=next.nextElementSibling;}
+      var field=button.getAttribute('data-yc-copy-down'),row=button.closest('tr'),selector='input:not([type=hidden])[name$="['+field+']"]',source=row.querySelector(selector),next=row.nextElementSibling;
+      var property=source.type==='checkbox'?'checked':'value';
+      while(next){var input=next.querySelector(selector);if(input){input[property]=source[property];}next=next.nextElementSibling;}
     }
     var move=event.target.closest('[data-yc-move]');
     if(move){
@@ -152,10 +260,19 @@
     if(removeCategory){removeCategory.closest('[data-yc-category-row-item]').remove();}
     var addExtra=event.target.closest('[data-yc-add-extra]');
     if(addExtra){
-      var body=form.querySelector('[data-yc-extras] tbody'),rows=body.querySelectorAll('tr'),index=rows.length,template=rows[rows.length-1].cloneNode(true);
-      [].slice.call(template.querySelectorAll('input')).forEach(function(input){input.name=input.name.replace(/extras\[\d+\]/,'extras['+index+']');if(input.type==='text'){input.value='';}});
-      body.appendChild(template);
-      labelFields(body);
+      var body=form.querySelector('[data-yc-extras] tbody'),extraTemplate=form.querySelector('template[data-yc-extra-row]'),source=extraTemplate?extraTemplate.content.firstElementChild:body.lastElementChild;
+      if(source){
+        var index=body.rows.length,newRow=source.cloneNode(true);
+        newRow.querySelectorAll('input').forEach(function(input){input.name=input.name.replace(/extras\[\d+\]/,'extras['+index+']');if(input.type==='text'){input.value='';}});
+        body.appendChild(newRow);labelFields(newRow);newRow.querySelector('input:not([type=hidden])').focus();
+      }
+    }
+    var removeExtra=event.target.closest('[data-yc-remove-extra]');
+    if(removeExtra){
+      var row=removeExtra.closest('tr'),body=row.parentElement,next=row.nextElementSibling||row.previousElementSibling;
+      row.remove();
+      renumberExtras(body);
+      var focus=next?next.querySelector('input:not([type=hidden])'):form.querySelector('[data-yc-add-extra]');if(focus){focus.focus();}
     }
   });
   // 상품정보고시 군 전환

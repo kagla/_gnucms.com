@@ -35,7 +35,7 @@ final class Service
         $this->banner = new HomeBanner($this->store, $this->settings, $this->images);
         $this->products = new Catalog\Products($this->store, $app->htmlSanitizer(), $app->contentImages(), $this->images, $this->options, $this->categories);
         $this->listing = new Catalog\Listing($this->store, $this->settings, $this->options);
-        $this->cart = new Commerce\Cart($this->products, $this->settings);
+        $this->cart = new Commerce\Cart($this->products, $this->settings, $this->store);
         $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
         $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
     }

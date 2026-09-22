@@ -1,6 +1,4 @@
-<section class="yc-panel"><h2>주문 상품 <small><?= count($order['items']) ?>개 항목</small></h2>
-  <?php foreach ($order['items'] as $item): ?><div class="yc-order-line"><div><strong><?= $this->e($item['product_name']) ?></strong><?php if ($item['option_label'] !== ''): ?><p class="muted"><?= $item['kind'] === 'extra' ? '추가 구성 · ' : '' ?><?= $this->e($item['option_label']) ?></p><?php endif ?><small class="muted"><?= number_format((int) $item['unit_price']) ?>원 · <?= (int) $item['quantity'] ?>개</small></div><strong><?= number_format((int) $item['total']) ?>원</strong></div><?php endforeach ?>
-</section>
+<?php $this->insert('_order_products', ['items' => $order['items'], 'unit_prices' => true]) ?>
 <section class="yc-panel"><h2>배송 정보</h2><dl class="yc-detail-list"><div><dt>받는 분</dt><dd><?= $this->e($order['recipient']) ?> · <?= $this->e($order['recipient_phone']) ?></dd></div><div><dt>주소</dt><dd>(<?= $this->e($order['postcode']) ?>) <?= $this->e($order['address'] . ' ' . $order['address_detail']) ?></dd></div><?php if ($order['delivery_note'] !== ''): ?><div><dt>배송 요청</dt><dd><?= $this->e($order['delivery_note']) ?></dd></div><?php endif ?>
   <?php if ($order['carrier'] !== ''): ?><div><dt>운송장</dt><dd><?= $this->e($order['carrier'] . ' · ' . $order['tracking_number']) ?></dd></div><?php endif ?>
 </dl>

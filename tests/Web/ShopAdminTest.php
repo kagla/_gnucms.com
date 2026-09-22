@@ -13,6 +13,9 @@ use GnuCms\Tests\Payment\FakeTransport;
 use GnuCms\Tests\Payment\Fixtures;
 use GnuCms\Tests\Shop\ImagesTest;
 use GnuCms\Tests\Support\WebTestCase;
+use GnuCms\Web\Kernel;
+use Psr\Http\Message\ResponseInterface;
+use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\UploadedFile;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -599,9 +602,10 @@ final class ShopAdminTest extends WebTestCase
         $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['a']]));
         self::assertMatchesRegularExpression('/name="stock"[^>]* readonly/', $edit);
         self::assertStringContainsString('조합별 재고를 씁니다', $edit);
+        self::assertStringContainsString('data-yc-option-stock-note>', $edit);
         $editPlain = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['b']]));
         self::assertDoesNotMatchRegularExpression('/name="stock"[^>]* readonly/', $editPlain);
-        self::assertStringNotContainsString('조합별 재고를 씁니다', $editPlain);
+        self::assertStringContainsString('data-yc-option-stock-note hidden>', $editPlain);
         $optionId = (int) $this->shop->products->get($seed['a'])['options']['select'][0]['id'];
         $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock'));
         self::assertStringContainsString('name="rows[' . $optionId . '][stock]"', $optionStock);
@@ -665,6 +669,10 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('data-yc-add-category', $form);
         self::assertStringNotContainsString('name="category2_id"', $form);
         self::assertStringContainsString('<template data-yc-category-row>', $form);
+        self::assertStringContainsString('name="extras[0][value1]"', $form);
+        self::assertStringNotContainsString('name="extras[1][value1]"', $form);
+        self::assertSame(1, preg_match('/<div class="yc-save-bar">(.*?)<\/form>/s', $form, $saveBar));
+        self::assertStringNotContainsString('target="_blank"', $saveBar[1]);
         // 선택옵션 세 줄의 예시는 서로 다르다(색상 → 사이즈 → 소재).
         foreach (['그룹 이름 (예: 색상)', '값 (예: 빨강,파랑)', '그룹 이름 (예: 사이즈)', '값 (예: S,M,L)', '그룹 이름 (예: 소재)', '값 (예: 면,린넨)'] as $placeholder) self::assertStringContainsString('placeholder="' . $placeholder . '"', $form);
         // 진열 유형 깃발은 없앴다 — 체크도, "유형 다른 상품에도 적용" 칩도 없다.
@@ -683,7 +691,11 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="options[3][value2]" value="M"', $body);
         self::assertStringContainsString('value="폼 상품"', $body);
         self::assertSame(0, $this->shop->products->stats()['products'] - 2);
-        $response = $this->postWithFiles($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['extra_category_ids' => [(string) $seed['other']['id']]])), ['images' => [ImagesTest::png(120, 120)]]);
+        $extras = [
+            ['value1' => '포장', 'value2' => '선물 포장', 'price' => '700', 'stock' => '9', 'stock_alert' => '1', 'active' => '1'],
+            ['value1' => '포장', 'value2' => '기본 포장', 'price' => '0', 'stock' => '5', 'stock_alert' => '1', 'active' => '0'],
+        ];
+        $response = $this->postWithFiles($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['extra_category_ids' => [(string) $seed['other']['id']], 'extras' => $extras])), ['images' => [ImagesTest::png(120, 120)]]);
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
         $product = $this->shop->products->byCode('F1');
         self::assertSame('/admin/shop/products/edit?id=' . $product['id'] . '&saved=1', $response->getHeaderLine('Location'));
@@ -697,7 +709,14 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="apply_fields[]" value="active" checked', $this->body($response));
         $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $product['id']]));
         self::assertStringContainsString('href="/shop/item?id=' . rawurlencode($product['code']) . '" target="_blank"', $edit); // 도구 막대의 "쇼핑몰 보기"
+        self::assertSame(1, preg_match('/<div class="yc-save-bar">(.*?)<\/form>/s', $edit, $saveBar));
+        self::assertStringContainsString('href="/shop/item?id=' . rawurlencode($product['code']) . '" target="_blank" rel="noopener"', $saveBar[1]);
+        self::assertStringContainsString('상품 보기', $saveBar[1]);
         self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
+        self::assertCount(2, $product['options']['extra']);
+        self::assertStringContainsString('name="extras[0][value2]" value="선물 포장"', $edit);
+        self::assertStringContainsString('name="extras[1][value2]" value="기본 포장"', $edit);
+        self::assertStringNotContainsString('name="extras[2][value1]"', $edit);
         self::assertStringContainsString('image_delete[]', $edit); self::assertStringContainsString($product['images'][0]['filename'], $edit);
         self::assertSame((int) $seed['other']['id'], (int) $this->shop->products->get((int) $product['id'])['categories'][2]['id']);
         self::assertMatchesRegularExpression('/name="extra_category_ids\[\]".*?<option value="' . (int) $seed['other']['id'] . '"[^>]* selected>/s', $edit);
@@ -705,6 +724,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
         $product = $this->shop->products->get((int) $product['id']);
         self::assertSame('수정됨', $product['name']); self::assertSame([], $product['images']);
+        self::assertSame([], $product['options']['extra'], '폼에서 제거한 추가옵션은 상품 저장 시 삭제된다.');
         $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($this->productForm((int) $seed['top']['id'], ['id' => (string) $product['id'], 'version' => '0', 'name' => '충돌'])));
         self::assertSame(422, $response->getStatusCode());
         self::assertStringContainsString('다른 관리자가 먼저 저장', $this->body($response));
@@ -780,5 +800,119 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('name="options[0][stock]" value="7"', $body);
         self::assertStringContainsString('name="options[1][value1]" value="파랑"', $body);
         self::assertSame(1, (int) $this->shop->products->get($seed['a'])['options']['select'][0]['stock']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testExtraOptionNamesAndReorderedRowsAreSavedWithoutChangingTheirIds(array $config): void
+    {
+        $this->setupShop($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $extras = [
+            ['value1' => '기존 그룹', 'value2' => '기존 포장', 'price' => '100', 'stock' => '5', 'active' => '1'],
+            ['value2' => '리본', 'price' => '200', 'stock' => '7', 'active' => '1'],
+            ['value2' => '카드', 'price' => '300', 'stock' => '9', 'active' => '0'],
+        ];
+        $input = $this->productForm((int) $seed['top']['id'], ['extras' => $extras]);
+        $response = $this->post($this->app, '/admin/shop/products/new', $this->csrf($input));
+        self::assertSame(303, $response->getStatusCode());
+        $product = $this->shop->products->byCode('F1');
+        $ids = array_column($product['options']['extra'], 'id', 'value2');
+        $input['id'] = (string) $product['id'];
+        $input['version'] = (string) $product['version'];
+        $input['extras'] = [$extras[2], $extras[0], $extras[1]];
+        $response = $this->post($this->app, '/admin/shop/products/edit', $this->csrf($input));
+        self::assertSame(303, $response->getStatusCode());
+        $after = $this->shop->products->get((int) $product['id']);
+        self::assertSame(['카드', '기존 포장', '리본'], array_column($after['options']['extra'], 'value2'));
+        foreach ($after['options']['extra'] as $row) self::assertSame($ids[$row['value2']], $row['id']);
+        self::assertSame('기존 그룹', $after['options']['extra'][1]['value1']);
+        self::assertSame('', $after['options']['extra'][2]['value1']);
+        $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $product['id']]));
+        self::assertStringNotContainsString('<th>그룹명</th>', $edit);
+        self::assertStringContainsString('type="hidden" name="extras[1][value1]" value="기존 그룹"', $edit);
+        self::assertStringContainsString('name="extras[0][value2]" value="카드"', $edit);
+        self::assertStringContainsString('name="extras[2][value2]" value="리본"', $edit);
+        $public = $this->body($this->get($this->app, '/shop/item', ['id' => 'F1']));
+        self::assertStringContainsString('>리본<small>', $public);
+        self::assertStringNotContainsString(' / 리본', $public);
+        self::assertStringContainsString('기존 그룹 / 기존 포장', $public);
+    }
+
+    private function combineAjax(string $page, array $input): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/admin/shop/products/' . $page)
+            ->withHeader('Accept', 'application/json')->withHeader('Content-Type', 'application/json');
+        $request->getBody()->write(json_encode(['action' => 'combine'] + $input, JSON_THROW_ON_ERROR));
+        return Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAjaxCombinationsReturnOnlyTheTableAndPreserveDraftValuesWithoutSaving(array $config): void
+    {
+        $this->setupShop($config);
+        $seed = $this->seedProducts();
+        $this->signIn(true);
+        $input = ['option_group' => [1 => '색상', 2 => '크기'], 'option_values' => [1 => '빨강,파랑', 2 => 'S,0']];
+        $response = $this->combineAjax('new', $this->csrf($input));
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('application/json; charset=utf-8', $response->getHeaderLine('Content-Type'));
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        $data = json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR);
+        self::assertStringContainsString('4개 조합', $data['message']);
+        self::assertStringContainsString('name="options[3][value2]" value="0"', $data['html']);
+        self::assertStringNotContainsString('<form', $data['html']);
+        self::assertStringNotContainsString('<script', $data['html']);
+        self::assertStringNotContainsString('<html', $data['html']);
+        self::assertSame(2, $this->shop->products->stats()['products']);
+
+        $product = $this->shop->products->get($seed['a']);
+        $input = ['id' => (string) $seed['a'], 'option_group' => [1 => '색상'], 'option_values' => [1 => '빨강,파랑'],
+            'options' => [['value1' => '빨강', 'value2' => '', 'value3' => '', 'price' => '-500', 'stock' => '7', 'stock_alert' => '2', 'active' => '0']]];
+        $response = $this->combineAjax('edit', $this->csrf($input));
+        self::assertSame(200, $response->getStatusCode());
+        $data = json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR);
+        foreach (['price' => '-500', 'stock' => '7', 'stock_alert' => '2'] as $field => $value) {
+            self::assertStringContainsString('name="options[0][' . $field . ']" value="' . $value . '"', $data['html']);
+        }
+        self::assertStringNotContainsString('name="options[0][active]" value="1" checked', $data['html']);
+        self::assertStringContainsString('name="options[1][stock]" value="9999"', $data['html']);
+        self::assertSame($product, $this->shop->products->get($seed['a']));
+
+        // 빈 그룹으로 표를 비울 수 있고, 입력값은 HTML로 실행되지 않게 이스케이프한다.
+        $response = $this->combineAjax('new', $this->csrf([]));
+        self::assertSame('', trim(json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR)['html']));
+        $response = $this->combineAjax('new', $this->csrf(['option_group' => [1 => '색상'], 'option_values' => [1 => 'A&B']]));
+        $html = json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR)['html'];
+        self::assertStringContainsString('A&amp;B', $html);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAjaxCombinationsValidateInputAndRequireAdminAndCsrf(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $cases = [
+            ['option_group' => [1 => '색상']],
+            ['option_group' => [1 => '색상'], 'option_values' => [1 => '<img src=x onerror=alert(1)>']],
+            ['option_group' => [2 => '크기'], 'option_values' => [2 => 'S']],
+            ['option_group' => [1 => '색상'], 'option_values' => [1 => implode(',', range(1, 21))]],
+            ['option_group' => [1 => '색상', 2 => '크기', 3 => '소재'], 'option_values' => array_fill(1, 3, implode(',', range(1, 11)))],
+        ];
+        foreach ($cases as $input) {
+            $response = $this->combineAjax('new', $this->csrf($input));
+            self::assertSame(422, $response->getStatusCode());
+            $data = json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR);
+            self::assertNotEmpty($data['error']['message']);
+            self::assertArrayNotHasKey('html', $data);
+        }
+        self::assertSame(403, $this->combineAjax('new', [])->getStatusCode());
+        self::assertSame(404, $this->combineAjax('edit', $this->csrf(['id' => '999']))->getStatusCode());
+        $this->signIn(false);
+        self::assertSame(403, $this->combineAjax('new', $this->csrf([]))->getStatusCode());
+        session_start(); $_SESSION = []; session_write_close();
+        $response = $this->combineAjax('new', []);
+        self::assertSame(401, $response->getStatusCode());
+        self::assertArrayHasKey('error', json_decode($this->body($response), true, 512, JSON_THROW_ON_ERROR));
     }
 }

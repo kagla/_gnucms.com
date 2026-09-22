@@ -8,6 +8,8 @@ use GnuCms\Error\DomainError;
 use GnuCms\Shop\Catalog\Options;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\ProductInfo;
+use GnuCms\Support\Json;
+use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
@@ -27,13 +29,21 @@ final class ProductFormController extends AdminBase
             return $this->form($request, $response, $data, $product === null ? $this->defaults($request) : $this->values($product), $product);
         }
         $action = $input['action'] ?? '';
+        $ajaxCombine = $action === 'combine' && stripos($request->getHeaderLine('Accept'), 'application/json') !== false;
         try {
             if ($action === 'combine') {
                 $draft = Options::draft($input, array_merge($product['options']['select'] ?? [], Options::rows($input['options'] ?? [])));
+                $data['notice'] = count($draft['rows']) . '개 조합을 만들었습니다. 가격·재고를 확인한 뒤 상품 저장을 눌러 주세요.';
+                if ($ajaxCombine) {
+                    $response->getBody()->write(Json::encode([
+                        'html' => View::forShop($request)->fetch('admin/_option_combinations', ['options_rows' => $draft['rows']]),
+                        'message' => $data['notice'],
+                    ]));
+                    return $response->withHeader('Content-Type', 'application/json; charset=utf-8')->withHeader('Cache-Control', 'no-store');
+                }
                 $values = $input;
                 for ($i = 1; $i <= Options::MAX_GROUPS; $i++) $values['option_group'][$i] = $draft['groups'][$i - 1] ?? '';
                 $values['options'] = $draft['rows'];
-                $data['notice'] = count($draft['rows']) . '개 조합을 만들었습니다. 가격·재고를 확인한 뒤 상품 저장을 눌러 주세요.';
                 return $this->form($request, $response, $data, $values, $product);
             }
             if ($action !== 'save') throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
@@ -47,7 +57,7 @@ final class ProductFormController extends AdminBase
             }
             return $response;
         } catch (DomainError $e) {
-            if ($e->status() === 404) throw $e;
+            if ($ajaxCombine || $e->status() === 404) throw $e;
             $data['errors'] = $e->details() ?: [$e->getMessage()];
             return $this->form($request, $response->withStatus($e->status()), $data, $input, $product);
         }

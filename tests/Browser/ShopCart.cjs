@@ -42,6 +42,15 @@ const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], 
     await page.setViewport({width: 1280, height: 960});
     await open();
     assert.equal(await page.$('.yc-brand, .yc-manage-link, .yc-header-main'), null);
+    assert.equal(await page.$eval('.yc-cart-toolbar strong', el => el.textContent), '담은 상품 3개 항목');
+    assert.equal(await page.$eval('.yc-title span', el => el.textContent), '3');
+    assert.equal(await page.$$eval('.yc-cart-image', images => images.length), 3);
+    assert.equal(await page.$$eval('[data-yc-cart-extras] .yc-cart-image,[data-yc-cart-extras] h2', elements => elements.length), 0);
+    assert.equal(await page.$$eval('[data-yc-cart-product="10"]>.yc-cart-item', elements => elements.length), 2);
+    assert.equal(await page.$$eval('[data-yc-cart-product="10"] [data-yc-cart-extras]', elements => elements.length), 1);
+    assert.equal(await page.$eval('[data-yc-cart-line="20:202"]', el => el.closest('[data-yc-cart-product]').dataset.ycCartProduct), '20');
+    assert.equal(await page.$eval('[data-yc-cart-line="10:201"]', el => el.closest('[data-yc-cart-product]').dataset.ycCartProduct), '10');
+
     assert.equal(await page.$eval('.yc-header-actions', el => el.parentElement.classList.contains('yc-header-bottom')), true);
     assert.equal(await searchOpen(), false);
     await page.focus(searchToggle); await page.keyboard.press('Enter');
@@ -77,6 +86,12 @@ const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], 
     await setQty(101, '3');
     await page.focus(plus(102)); await page.keyboard.press('Space');
     assert.equal(await value(102), '2');
+    await page.click(minus(201)); await page.click(minus(201));
+    assert.equal(await value(201), '0', 'additional components can be removed by saving zero');
+    assert.equal(await page.$eval(minus(201), el => el.disabled), true);
+    assert.equal(await value(101), '3');
+    assert.equal(await value(102), '2');
+    await page.click(plus(201));
     assert.equal(posts.length, 0, 'Quantity buttons must not submit the cart');
     for (const width of [360, 390, 768, 1280]) {
       await page.setViewport({width, height: 960});
@@ -101,6 +116,7 @@ const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], 
           const [minus, input, plus] = Array.from(control.children, el => el.getBoundingClientRect());
           return minus.right <= input.left + 1 && input.right <= plus.left + 1 && Math.abs(minus.top - plus.top) < 1 && Math.abs(minus.top + minus.height / 2 - input.top - input.height / 2) < 1;
         })), true, 'Minus, quantity and plus stay aligned in that order');
+        if (width === 390 || width === 1280) await page.screenshot({path: '/tmp/gnucms-cart-components-' + width + '-' + theme + '.png', fullPage: true});
       }
     }
     await submit(save);
@@ -108,9 +124,12 @@ const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], 
     assert.equal(posts.at(-1).data.get('quantities[10:101]'), '3');
     assert.equal(posts.at(-1).data.get('quantities[10:102]'), '2');
     assert.equal(posts.at(-1).data.get('csrf_token'), 'browser-test-csrf');
+    assert.equal(posts.at(-1).data.get('quantities[10:201]'), '1');
     await open(); await setQty(101, '');
     await submit('.yc-remove[value="10:101"]');
     assert.equal(posts.at(-1).data.get('remove'), '10:101', 'Delete works even when quantity is invalid');
+    await open(); await submit('.yc-remove[value="10:201"]');
+    assert.equal(posts.at(-1).data.get('remove'), '10:201');
     await page.setJavaScriptEnabled(false); await open();
     await page.click(searchToggle); assert.equal(await searchOpen(), true);
     await page.type(searchInput, '셔츠'); await submit(search + ' button[type=submit]');

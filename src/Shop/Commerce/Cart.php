@@ -9,6 +9,7 @@ use GnuCms\Shop\Catalog\Products;
 use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
+use GnuCms\Shop\Store;
 
 /** 세션에는 식별자와 수량만 저장한다. 금액·판매 상태는 매 조회마다 다시 읽는다. */
 final class Cart
@@ -16,7 +17,22 @@ final class Cart
     public const MAX_LINES = 100;
     public const MAX_QUANTITY = 9999;
 
-    public function __construct(private Products $products, private Settings $settings) {}
+    public function __construct(private Products $products, private Settings $settings, private Store $store) {}
+
+    /** 상단 배지는 본상품·선택옵션의 수량만 센다. 추가옵션 여부는 한 번에 조회한다. */
+    public function productQuantity(array $cart): int
+    {
+        $ids = array_values(array_unique(array_filter(array_column($cart, 'option_id'))));
+        $extras = [];
+        if ($ids !== []) {
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $extras = array_fill_keys(array_column($this->store->select('SELECT id FROM ' . $this->store->table('yc_options')
+                . " WHERE kind = 'extra' AND id IN (" . $marks . ')', $ids), 'id'), true);
+        }
+        $quantity = 0;
+        foreach ($cart as $item) if (!isset($extras[(int) $item['option_id']])) $quantity += (int) $item['quantity'];
+        return $quantity;
+    }
 
     public function add(array $cart, array $input): array
     {
@@ -61,6 +77,23 @@ final class Cart
         return $cart;
     }
 
+    /** 담기 실패 후 화면을 갱신할 재고. 예약하지 않으며 기존 장바구니 수량은 따로 알린다. */
+    public function availability(int $productId, array $cart): array
+    {
+        $product = $this->products->get($productId);
+        $selling = (int) $product['active'] === 1 && (int) ($product['categories'][1]['active'] ?? 0) === 1
+            && (int) $product['phone_inquiry'] !== 1 && (int) $product['sold_out'] !== 1;
+        $items = [];
+        $rows = $product['options']['select'] === [] ? [null] : [];
+        foreach ([...$rows, ...$product['options']['select'], ...$product['options']['extra']] as $row) {
+            $id = $row === null ? 0 : (int) $row['id'];
+            $stock = $selling && ($row === null || (int) $row['active'] === 1) ? Stock::cell($product, $row)['stock'] : 0;
+            $items[$id] = ['stock' => max(0, min(self::MAX_QUANTITY, $stock)),
+                'in_cart' => (int) ($cart[$productId . ':' . $id]['quantity'] ?? 0)];
+        }
+        return ['product_id' => $productId, 'items' => (object) $items];
+    }
+
     public function update(array $cart, array $quantities): array
     {
         foreach ($quantities as $key => $quantity) {
@@ -98,9 +131,10 @@ final class Cart
                     foreach (['select', 'extra'] as $kind) foreach ($product['options'][$kind] as $row) {
                         if ((int) $row['id'] === $item['option_id']) $option = $row;
                     }
-                    if ($option === null || (int) $option['active'] !== 1) throw DomainError::validation(['option' => '선택한 옵션은 더 이상 판매하지 않습니다.']);
+                    if ($option === null) throw DomainError::validation(['option' => '선택한 옵션은 더 이상 판매하지 않습니다.']);
                     $item['kind'] = $option['kind'];
                     $item['label'] = implode(' / ', array_filter([$option['value1'], $option['value2'], $option['value3']], static fn ($v) => $v !== ''));
+                    if ((int) $option['active'] !== 1) throw DomainError::validation(['option' => '선택한 옵션은 더 이상 판매하지 않습니다.']);
                 } elseif ($product['options']['select'] !== []) {
                     throw DomainError::validation(['option' => '필수 옵션을 선택해 주세요.']);
                 }
@@ -118,7 +152,7 @@ final class Cart
                 $groups[$item['product_id']]['subtotal'] += $item['total'];
             } catch (DomainError $e) {
                 $item['error'] = implode(' ', $e->details() ?: [$e->getMessage()]);
-                $errors[$key] = $item['name'] . ': ' . $item['error'];
+                $errors[$key] = $item['name'] . ($item['label'] === '' ? '' : ' / ' . $item['label']) . ': ' . $item['error'];
             }
             $items[] = $item;
         }
@@ -132,7 +166,7 @@ final class Cart
         $subtotal = array_sum(array_column($items, 'total'));
         $quote = ['items' => $items, 'errors' => $errors, 'subtotal' => $subtotal, 'shipping_fee' => $delivery['prepaid'],
             'cod_fee' => $delivery['cod'], 'shipping' => $delivery['lines'], 'total' => $subtotal + $delivery['prepaid'],
-            'quantity' => array_sum(array_column($items, 'quantity'))];
+            'quantity' => array_sum(array_column(array_filter($items, static fn ($item) => $item['kind'] !== 'extra'), 'quantity'))];
         // 가격뿐 아니라 배송 방식·옵션·수량·구매 안내가 바뀌어도 다시 검토하게 한다.
         $quote['fingerprint'] = hash('sha256', json_encode([$items, $delivery, $this->settings->all()['order_notice']], JSON_THROW_ON_ERROR));
         return $quote;

@@ -64,7 +64,7 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
       <?php $field('point', '포인트 (정액 또는 0~99%)', 'number', ['min' => 0]); $field('supply_point', '추가옵션 포인트', 'number', ['min' => 0]); ?></div>
     <div class="yc-checks"><?php $checkRow('tax_free', '비과세', 'tax_free'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('point', '포인트') ?></div></div>
     <?php $locked = $options_rows !== [] ? ['readonly' => 'readonly', 'title' => '선택옵션이 있는 상품은 조합별 재고를 씁니다'] : []; ?>
-    <?php if ($locked !== []): ?><p class="muted">선택옵션이 있는 상품은 조합별 재고를 씁니다. 아래 재고와 통보 기준은 쓰이지 않으며 <a href="#section-options">선택옵션</a> 표에서 관리합니다.</p><?php endif ?>
+    <p class="muted" data-yc-option-stock-note<?= $locked === [] ? ' hidden' : '' ?>>선택옵션이 있는 상품은 조합별 재고를 씁니다. 아래 재고와 통보 기준은 쓰이지 않으며 <a href="#section-options">선택옵션</a> 표에서 관리합니다.</p>
     <div class="yc-fields"><?php $field('stock', '재고 (선택옵션 없을 때)', 'number', ['min' => 0] + $locked); $field('stock_alert', '재고 통보 기준', 'number', ['min' => 0] + $locked); $field('buy_min', '최소 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); $field('buy_max', '최대 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); ?></div>
     <div class="yc-checks"><?php $checkRow('sold_out', '품절 표시'); $checkRow('restock_notify', '재입고 알림 신청 허용'); ?><div class="yc-check-row yc-check-row-note"><?php $apply('buy', '구매수량') ?></div></div>
   </div></section>
@@ -95,33 +95,19 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
         <input class="input input-bordered input-sm" type="text" name="option_group[<?= $i ?>]" value="<?= $this->e((string) ($values['option_group'][$i] ?? '')) ?>" maxlength="100" placeholder="그룹 이름 (예: <?= $examples[$i][0] ?>)" aria-label="옵션 <?= $i ?> 그룹 이름">
         <input class="input input-bordered input-sm" type="text" name="option_values[<?= $i ?>]" value="<?= $this->e((string) ($values['option_values'][$i] ?? '')) ?>" placeholder="값 (예: <?= $examples[$i][1] ?>)" aria-label="옵션 <?= $i ?> 값"></div>
     <?php endfor ?></div>
-    <button class="btn btn-sm" type="submit" name="action" value="combine" formnovalidate>조합 생성</button>
-    <?php if (isset($errors['options']) || isset($errors['option_values'])): ?><p class="validator-hint"><?= $this->e($errors['options'] ?? $errors['option_values']) ?></p><?php endif ?>
-    <?php if ($options_rows !== []): ?>
-      <div class="overflow-x-auto"><table class="table table-sm yc-combo-table" data-yc-combos><thead><tr><th>조합</th><th>차액</th><th>재고</th><th>통보</th><th>사용</th></tr></thead><tbody>
-        <?php foreach ($options_rows as $i => $row): ?><tr>
-          <td><?= $this->e(implode(' / ', array_filter([$row['value1'], $row['value2'], $row['value3']], static fn ($x) => $x !== ''))) ?><?php for ($k = 1; $k <= 3; $k++): ?><input type="hidden" name="options[<?= $i ?>][value<?= $k ?>]" value="<?= $this->e($row['value' . $k]) ?>"><?php endfor ?></td>
-          <td><div class="yc-option-input-group"><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][price]" value="<?= $this->e($row['price']) ?>"><button class="btn btn-xs" type="button" data-yc-copy-down="price" title="이 차액을 아래 모든 조합에 복사" aria-label="이 차액을 아래 모든 조합에 복사">↓</button></div></td>
-          <td><div class="yc-option-input-group"><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][stock]" value="<?= $this->e($row['stock']) ?>" min="0"><button class="btn btn-xs" type="button" data-yc-copy-down="stock" title="이 재고를 아래 모든 조합에 복사" aria-label="이 재고를 아래 모든 조합에 복사">↓</button></div></td>
-          <td><input class="input input-bordered input-xs" type="number" name="options[<?= $i ?>][stock_alert]" value="<?= $this->e($row['stock_alert']) ?>" min="0"></td>
-          <td><label class="yc-option-enabled" title="체크하면 이 옵션을 판매에 사용합니다."><input type="hidden" name="options[<?= $i ?>][active]" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="options[<?= $i ?>][active]" value="1"<?= (string) $row['active'] === '1' ? ' checked' : '' ?>> 사용</label></td>
-        </tr><?php endforeach ?>
-      </tbody></table></div>
-    <?php endif ?>
+    <button class="btn btn-sm" type="submit" name="action" value="combine" data-yc-combine formnovalidate>조합 생성</button>
+    <?php $optionError = $errors['option_group'] ?? $errors['options'] ?? $errors['option_values'] ?? ''; ?>
+    <p class="<?= $optionError === '' ? 'muted' : 'text-error' ?>" data-yc-combine-status role="status" aria-live="polite"<?= $optionError === '' ? ' hidden' : '' ?>><?= $this->e($optionError) ?></p>
+    <div data-yc-combinations><?php $this->insert('admin/_option_combinations', ['options_rows' => $options_rows]) ?></div>
   </div></section>
   <section class="card" id="section-extras"><div class="card-body"><h2 class="card-title">추가옵션</h2>
-    <p class="muted">그룹명·항목명·절대가·재고를 행으로 입력합니다. 비어 있는 행은 무시합니다.</p>
+    <p class="muted" id="yc-extra-order-help">항목명과 가격·재고를 입력합니다. 왼쪽 손잡이를 드래그하거나 손잡이에 초점을 두고 위아래 방향키로 순서를 바꿀 수 있습니다. 비어 있는 행은 무시합니다.</p>
     <?php if (isset($errors['extras'])): ?><p class="validator-hint"><?= $this->e($errors['extras']) ?></p><?php endif ?>
-    <div class="overflow-x-auto"><table class="table table-sm" data-yc-extras><thead><tr><th>그룹명</th><th>항목명</th><th>가격</th><th>재고</th><th>통보</th><th>사용</th></tr></thead><tbody>
-      <?php $extraRows = array_merge($extras_rows, array_fill(0, 3, ['value1' => '', 'value2' => '', 'value3' => '', 'price' => '0', 'stock' => '9999', 'stock_alert' => '100', 'active' => '1'])); foreach ($extraRows as $i => $row): ?><tr>
-        <td><input class="input input-bordered input-xs" type="text" name="extras[<?= $i ?>][value1]" value="<?= $this->e($row['value1']) ?>" maxlength="100"></td>
-        <td><input class="input input-bordered input-xs" type="text" name="extras[<?= $i ?>][value2]" value="<?= $this->e($row['value2']) ?>" maxlength="100"></td>
-        <td><input class="input input-bordered input-xs" type="number" name="extras[<?= $i ?>][price]" value="<?= $this->e($row['price']) ?>" min="0"></td>
-        <td><input class="input input-bordered input-xs" type="number" name="extras[<?= $i ?>][stock]" value="<?= $this->e($row['stock']) ?>" min="0"></td>
-        <td><input class="input input-bordered input-xs" type="number" name="extras[<?= $i ?>][stock_alert]" value="<?= $this->e($row['stock_alert']) ?>" min="0"></td>
-        <td><input type="hidden" name="extras[<?= $i ?>][active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="extras[<?= $i ?>][active]" value="1"<?= (string) $row['active'] === '1' ? ' checked' : '' ?>></td>
-      </tr><?php endforeach ?>
+    <div class="overflow-x-auto"><table class="table table-sm yc-extras-table" data-yc-extras><thead><tr><th class="yc-extra-control">순서</th><th>항목명</th><th>가격</th><th>재고</th><th>통보</th><th>사용</th><th class="yc-extra-control">삭제</th></tr></thead><tbody>
+      <?php $emptyExtra = ['value1' => '', 'value2' => '', 'value3' => '', 'price' => '0', 'stock' => '9999', 'stock_alert' => '100', 'active' => '1']; ?>
+      <?php foreach ($extras_rows ?: [$emptyExtra] as $i => $row) $this->insert('admin/_extra_option_row', ['i' => $i, 'row' => $row]); ?>
     </tbody></table></div>
+    <template data-yc-extra-row><?php $this->insert('admin/_extra_option_row', ['i' => 0, 'row' => $emptyExtra]) ?></template>
     <button class="btn btn-xs" type="button" data-yc-add-extra>행 추가</button>
   </div></section>
   <section class="card" id="section-shipping"><div class="card-body"><h2 class="card-title">배송비</h2>
@@ -161,7 +147,8 @@ $extraRow = function (string $selected) use ($catOptions): void { ?>
     <label class="label cursor-pointer"><input class="radio radio-sm" type="radio" name="apply_scope" value="category"<?= $v('apply_scope') === 'category' ? ' checked' : '' ?>> 같은 대표 분류의 모든 상품</label>
     <label class="label cursor-pointer"><input class="radio radio-sm" type="radio" name="apply_scope" value="all"<?= $v('apply_scope') === 'all' ? ' checked' : '' ?>> 전체 상품</label>
   </div></details>
-  <?php $this->insert('admin/_save_bar', ['save_label' => '상품 저장', 'save_action' => true, 'back_url' => $admin_url . '/products']) ?>
+  <?php $this->insert('admin/_save_bar', ['save_label' => '상품 저장', 'save_action' => true, 'back_url' => $admin_url . '/products', 'view_url' => $public_view_url ?? '']) ?>
 </form>
+<script src="<?= $this->e($this->base) ?>/vendor/sortablejs/Sortable-1.15.7.min.js" defer></script>
 <?php $this->insert('admin/_editor', ['values' => ['image_key' => $values['image_key']], 'editor_required' => false, 'editor_height' => 300]) ?>
 <?php $this->stop() ?>

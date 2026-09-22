@@ -156,6 +156,14 @@
 .yc-admin-page .yc-option-input-group>.btn{flex:none;width:34px;height:34px;min-height:34px;padding:0}
 .yc-admin-page .yc-option-enabled{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.5rem;white-space:nowrap;font-size:13px;cursor:pointer}
 .yc-admin-page .yc-option-enabled>.checkbox{flex:none;width:20px;height:20px}
+.yc-admin-page .yc-extras-table .yc-extra-control{width:1%;white-space:nowrap}
+.yc-admin-page .yc-extra-control>.btn{width:32px;height:34px;min-height:34px;padding:0}
+.yc-admin-page .yc-extras-table .yc-extra-name{width:100%;min-width:10rem}
+.yc-admin-page .yc-extra-drag{cursor:grab;touch-action:none;user-select:none}
+.yc-admin-page .yc-extras-table .yc-extra-placeholder{background:var(--yc-soft);outline:2px dashed var(--yc-accent);outline-offset:-2px}
+.yc-admin-page .yc-extra-placeholder>td{opacity:.25}
+.yc-admin-page .yc-extras-table .yc-extra-floating{display:table;table-layout:fixed;background:var(--yc-paper);box-shadow:0 8px 24px #0003;outline:1px solid var(--yc-accent)}
+.yc-admin-page .yc-extra-chosen .yc-extra-drag{cursor:grabbing}
 .yc-admin-page .yc-edit-form .yc-checks{display:grid;gap:.65rem;padding:.4rem 0 .8rem}
 .yc-admin-page .yc-edit-form .yc-checks .label{margin:0}
 /* 체크 한 줄: 항목은 왼쪽, "다른 상품에도 적용"은 오른쪽 끝. 접두어만 있는 줄(포인트·구매수량·배송비)은 왼쪽에 둔다. */

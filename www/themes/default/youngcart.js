@@ -210,14 +210,111 @@
         }
       });
     }
+    var purchaseFeedback = purchase.querySelector('[data-yc-purchase-feedback]');
+    if (purchaseFeedback && window.fetch) {
+      var pendingPurchase = false;
+      function showPurchaseErrors(messages) {
+        var list = purchaseFeedback.querySelector('[data-yc-purchase-errors]');
+        list.replaceChildren();
+        messages.forEach(function (message) { var li = document.createElement('li'); li.textContent = message; list.appendChild(li); });
+        purchaseFeedback.hidden = false;
+        purchaseFeedback.focus({preventScroll: true});
+        purchaseFeedback.scrollIntoView({block: 'center', behavior: 'instant'});
+      }
+      function refreshStock(availability) {
+        if (!availability || String(availability.product_id) !== purchase.elements.namedItem('product_id').value || !availability.items) return;
+        var items = availability.items;
+        function cell(id) { return items[id] || {stock: 0, in_cart: 0}; }
+        function refreshInput(input, id, maximum) {
+          var current = cell(id), previousMax = Number(input.max);
+          input.max = String(Math.min(maximum, current.stock));
+          var row = input.closest('.yc-extra-row,[data-yc-selected-option],[data-yc-single-quantity]');
+          if (!row) return;
+          var note = row.querySelector('[data-yc-stock-note]');
+          var remaining = Math.max(0, Number(input.max) - current.in_cart);
+          if (!note && previousMax === Number(input.max) && (input.valueAsNumber || 0) <= remaining) {
+            input.dispatchEvent(new Event('change', {bubbles: true})); return;
+          }
+          if (!note) {
+            note = document.createElement('span'); note.className = 'yc-stock-note'; note.dataset.ycStockNote = '';
+            note.id = 'yc-stock-note-' + id; row.appendChild(note);
+            input.setAttribute('aria-describedby', ((input.getAttribute('aria-describedby') || '') + ' ' + note.id).trim());
+          }
+          note.textContent = '현재 담을 수 있는 수량: ' + remaining + '개' + (current.in_cart > 0 ? ' (장바구니에 ' + current.in_cart + '개 담김)' : '');
+          input.setAttribute('aria-invalid', String(input.valueAsNumber > Number(input.max)));
+          input.dispatchEvent(new Event('change', {bubbles: true}));
+          if (input.valueAsNumber > 0) { var details = input.closest('details'); if (details) details.open = true; }
+        }
+        if (option) Array.from(option.options).forEach(function (entry) {
+          if (!entry.value) return;
+          entry.dataset.stock = String(cell(entry.value).stock); entry.disabled = cell(entry.value).stock < 1;
+        });
+        if (sequential) {
+          data.items.forEach(function (item) { item.stock = cell(item.id).stock; });
+          // Keep the selected rows; update only the available choices and their current stock.
+          steps.forEach(function (step, index) {
+            var value = step.value;
+            if (index === 0 || steps[index - 1].value !== '') { populate(index); step.value = value; }
+            else reset(index);
+          });
+        }
+        if (multiple) selectedItems.forEach(function (entry, id) {
+          entry.row.querySelector('[data-yc-line-meta]').textContent = '현재 재고 ' + entry.item.stock.toLocaleString('ko-KR') + '개 · ' + (entry.item.price === 0 ? '추가금액 없음' : '옵션 금액 ' + money(entry.item.price));
+          refreshInput(entry.input, id, originalMax);
+        });
+        else {
+          if (!option) originalMax = Math.min(originalMax, cell(0).stock);
+          refreshInput(quantity, option ? option.value : 0, originalMax);
+        }
+        extras.forEach(function (input) { var id = /^extras\[(\d+)\]$/.exec(input.name); if (id) refreshInput(input, id[1], 9999); });
+        update();
+      }
+      purchase.addEventListener('submit', function (event) {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        if (pendingPurchase) return;
+        var submitter = event.submitter || buyButtons[0], submitLabel = submitter.textContent;
+        var body = new URLSearchParams(new FormData(purchase));
+        body.set('action', submitter.value === 'buy' ? 'buy' : 'cart');
+        var locked = Array.from(purchase.querySelectorAll('input,select,button')).filter(function (input) { return !input.disabled; });
+        locked.forEach(function (input) { input.disabled = true; });
+        pendingPurchase = true; purchase.setAttribute('aria-busy', 'true'); purchaseFeedback.hidden = true; submitter.textContent = '재고 확인 중…';
+        function unlock() {
+          locked.forEach(function (input) { input.disabled = false; });
+          pendingPurchase = false; purchase.removeAttribute('aria-busy'); submitter.textContent = submitLabel; update();
+          extras.forEach(function (input) { input.dispatchEvent(new Event('change', {bubbles: true})); });
+        }
+        fetch(purchase.getAttribute('action'), {method: 'POST', credentials: 'same-origin', headers: {'Accept': 'application/json'}, body: body})
+          .then(function (response) { return response.json().then(function (result) { return {ok: response.ok, data: result}; }); })
+          .then(function (result) {
+            if (!result.ok) {
+              unlock(); refreshStock(result.data.availability);
+              var error = result.data.error || {}, messages = Object.values(error.details || {}).filter(function (message) { return typeof message === 'string'; });
+              showPurchaseErrors(messages.length ? messages : [error.message || '구매 내용을 확인하고 다시 시도해 주세요.']);
+              return;
+            }
+            if (typeof result.data.redirect !== 'string') throw new Error('Unexpected purchase response');
+            var next = new URL(result.data.redirect, window.location.href);
+            if (next.origin !== window.location.origin) throw new Error('Unexpected purchase destination');
+            window.location.assign(next.href);
+          })
+          .catch(function () {
+            unlock();
+            showPurchaseErrors(['처리 결과를 확인하지 못했습니다. 장바구니를 확인한 뒤 다시 시도해 주세요. 입력한 내용은 유지됩니다.']);
+          });
+      });
+      purchase.addEventListener('input', function (event) {
+        if (event.target.hasAttribute('aria-invalid')) event.target.setAttribute('aria-invalid', String(!event.target.validity.valid));
+      });
+    }
     purchase.addEventListener('input', function (event) { if (!event.target.matches('[data-yc-option-step]')) update(); });
     purchase.addEventListener('change', update);
     update();
   }
-  document.querySelectorAll('[data-yc-cart-quantity]').forEach(function (control) {
+  document.querySelectorAll('[data-yc-quantity-controls],[data-yc-cart-quantity]').forEach(function (control) {
     var input = control.querySelector('input[type=number]');
-    var minus = control.querySelector('[data-yc-cart-minus]');
-    var plus = control.querySelector('[data-yc-cart-plus]');
+    var minus = control.querySelector('[data-yc-quantity-minus],[data-yc-cart-minus]');
+    var plus = control.querySelector('[data-yc-quantity-plus],[data-yc-cart-plus]');
     if (!input || !minus || !plus) return;
     function updateButtons() {
       minus.disabled = input.disabled || (input.valueAsNumber || 0) <= Number(input.min);

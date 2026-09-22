@@ -44,6 +44,8 @@ final class CommerceTest extends ShopTestCase
         $cart = $this->cart($product, 2, ['option_id' => $select, 'extras' => [$extra => '1'], 'price' => '1', 'total' => '1']);
         $quote = $this->shop->cart->quote($cart, [], true);
         self::assertSame(20000, $quote['total']);
+        self::assertSame(2, $quote['quantity'], '추가 구성은 상품 수량에 합산하지 않는다.');
+        self::assertSame(2, $this->shop->cart->productQuantity($cart));
         $order = $this->place($cart);
         self::assertSame(20000, (int) $order['total']);
         self::assertSame(3, (int) $this->shop->store->get('yc_options', $select)['stock']);
@@ -77,6 +79,14 @@ final class CommerceTest extends ShopTestCase
         $input = ['product_id' => $product['id'], 'selections' => [$s => 2, $m => 1], 'extras' => [$extra => 1], 'price' => 1, 'total' => 1];
         $cart = $this->shop->cart->add([], $input);
         self::assertCount(3, $cart);
+        self::assertSame(3, $this->shop->cart->productQuantity($cart));
+        $withoutS = $this->shop->cart->update($cart, [$product['id'] . ':' . $s => 0]);
+        self::assertArrayHasKey($product['id'] . ':' . $extra, $withoutS, '같은 상품의 다른 선택옵션이 남으면 공통 추가 구성도 유지한다.');
+        self::assertSame([], $this->shop->cart->update($withoutS, [$product['id'] . ':' . $m => 0]));
+        $withoutExtra = $this->shop->cart->update($cart, [$product['id'] . ':' . $extra => 0]);
+        self::assertCount(2, $withoutExtra);
+        self::assertArrayHasKey($product['id'] . ':' . $s, $withoutExtra);
+        self::assertArrayHasKey($product['id'] . ':' . $m, $withoutExtra);
         self::assertSame(33000, $this->shop->cart->quote($cart, [], true)['total']);
         $this->reject(fn () => $this->shop->cart->add($cart, ['product_id' => $product['id'], 'selections' => [$m => 2]]), '최대');
         self::assertSame(1, $cart[$product['id'] . ':' . $m]['quantity']);

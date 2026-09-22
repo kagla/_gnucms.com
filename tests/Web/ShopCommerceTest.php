@@ -41,6 +41,104 @@ final class ShopCommerceTest extends WebTestCase
         $this->get($this->app, '/shop/item', ['id' => 'DEMO']);
         self::assertSame(303, $this->post($this->app, '/shop/cart/add', $this->form(['product_id' => $this->product['id'], 'quantity' => $qty]))->getStatusCode());
     }
+    private function cartAjax(array $input): \Psr\Http\Message\ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/shop/cart/add')
+            ->withHeader('Accept', 'application/json')->withHeader('Content-Type', 'application/x-www-form-urlencoded')
+            ->withParsedBody($input);
+        return Kernel::create($this->app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAjaxCartStockChangesPreserveSessionsAndReturnCurrentOptionAvailability(array $config): void
+    {
+        $this->setupShop($config);
+        $id = (int) $this->product['id'];
+        $extra = $this->shop->store->insert('yc_options', ['product_id' => $id, 'kind' => 'extra', 'value1' => '', 'value2' => '선물 포장',
+            'value3' => '', 'price' => 1000, 'stock' => 8, 'stock_alert' => 0, 'active' => 1, 'sort_order' => 0]);
+        $this->get($this->app, '/shop/item', ['id' => 'DEMO']);
+        $input = $this->form(['product_id' => $id, 'quantity' => 1, 'extras' => [$extra => 2]]);
+        $added = $this->cartAjax($input);
+        self::assertSame(200, $added->getStatusCode());
+        self::assertSame('application/json; charset=utf-8', $added->getHeaderLine('Content-Type'));
+        self::assertSame('no-store', $added->getHeaderLine('Cache-Control'));
+        self::assertSame('/shop/cart?added=1', json_decode($this->body($added), true)['redirect']);
+        $cart = $_SESSION['yc_cart'];
+        $this->shop->store->update('yc_options', $extra, ['stock' => 3]);
+        $failed = $this->cartAjax($input);
+        self::assertSame(422, $failed->getStatusCode());
+        $data = json_decode($this->body($failed), true);
+        self::assertStringContainsString('선물 포장', $data['error']['details'][$id . ':' . $extra]);
+        self::assertSame(['stock' => 3, 'in_cart' => 2], $data['availability']['items'][$extra]);
+        self::assertSame(['stock' => 10, 'in_cart' => 1], $data['availability']['items'][0]);
+        self::assertSame($cart, $_SESSION['yc_cart'], '재고 오류가 있으면 어느 행도 부분 저장하지 않는다.');
+        self::assertSame(3, (int) $this->shop->store->get('yc_options', $extra)['stock']);
+        $buy = $this->cartAjax($input + ['action' => 'buy']);
+        self::assertSame(200, $buy->getStatusCode(), $this->body($buy));
+        self::assertSame('/shop/checkout?flow=buy', json_decode($this->body($buy), true)['redirect']);
+        self::assertSame($cart, $_SESSION['yc_cart']);
+        $buyCart = $_SESSION['yc_buy'];
+        $this->shop->store->update('yc_options', $extra, ['stock' => 0]);
+        $failedBuy = $this->cartAjax($input + ['action' => 'buy']);
+        self::assertSame(422, $failedBuy->getStatusCode());
+        self::assertSame(['stock' => 0, 'in_cart' => 0], json_decode($this->body($failedBuy), true)['availability']['items'][$extra]);
+        self::assertSame($buyCart, $_SESSION['yc_buy']);
+        self::assertSame($cart, $_SESSION['yc_cart']);
+        $this->shop->store->update('yc_options', $extra, ['stock' => 5, 'active' => 0]);
+        self::assertSame(0, json_decode($this->body($this->cartAjax($input)), true)['availability']['items'][$extra]['stock']);
+        $this->shop->store->delete('yc_options', 'id = ?', [$extra]);
+        $deleted = $this->cartAjax($input);
+        self::assertSame(422, $deleted->getStatusCode());
+        self::assertArrayNotHasKey($extra, json_decode($this->body($deleted), true)['availability']['items']);
+        self::assertSame($cart, $_SESSION['yc_cart']);
+        self::assertSame(403, $this->cartAjax(['product_id' => $id, 'quantity' => 1])->getStatusCode());
+        self::assertSame(404, $this->cartAjax($this->form(['product_id' => []]))->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testExtraComponentsStayInsideTheirProductAcrossCartCheckoutAndReceipt(array $config): void
+    {
+        $this->setupShop($config);
+        $id = (int) $this->product['id'];
+        $extra = $this->shop->store->insert('yc_options', ['product_id' => $id, 'kind' => 'extra', 'value2' => '선물 포장', 'price' => 1000, 'stock' => 8]);
+        $this->get($this->app, '/shop/item', ['id' => 'DEMO']);
+        $added = $this->post($this->app, '/shop/cart/add', $this->form(['product_id' => $id, 'quantity' => 2, 'extras' => [$extra => 2]]));
+        self::assertSame(303, $added->getStatusCode());
+        $cart = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('담은 상품 1개 항목', $cart);
+        self::assertStringContainsString('aria-label="담은 수량 2개"', $cart);
+        self::assertSame(1, substr_count($cart, 'class="yc-cart-image"'));
+        self::assertSame(1, substr_count($cart, '<h2>테스트 상품</h2>'));
+        self::assertStringContainsString('data-yc-cart-product="' . $id . '"', $cart);
+        self::assertStringContainsString('data-yc-cart-extras', $cart);
+        self::assertStringContainsString('<h4>선물 포장</h4>', $cart);
+        self::assertStringContainsString('name="quantities[' . $id . ':' . $extra . ']" value="2" min="0"', $cart);
+        self::assertSame(26000, $this->shop->cart->quote($_SESSION['yc_cart'])['subtotal']);
+        $public = $this->body($this->get($this->app, '/shop/item', ['id' => 'DEMO']));
+        self::assertStringContainsString('aria-label="담은 수량 2개"', $public);
+        // 판매를 중지한 추가 구성도 본상품으로 잘못 세거나 따로 표시하지 않는다.
+        $this->shop->store->update('yc_options', $extra, ['active' => 0]);
+        $inactive = $this->body($this->get($this->app, '/shop/cart'));
+        self::assertStringContainsString('담은 상품 1개 항목', $inactive);
+        self::assertStringContainsString('<h4>선물 포장</h4>', $inactive);
+        self::assertStringContainsString('선택한 옵션은 더 이상 판매하지 않습니다.', $inactive);
+        self::assertStringContainsString('aria-label="담은 수량 2개"', $inactive);
+        $this->shop->store->update('yc_options', $extra, ['active' => 1]);
+        $checkout = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertStringContainsString('주문 상품 <small>1개 항목</small>', $checkout);
+        self::assertStringContainsString('data-yc-order-product="' . $id . '"', $checkout);
+        self::assertStringContainsString('data-yc-order-extras', $checkout);
+        self::assertStringContainsString('<strong>선물 포장</strong>', $checkout);
+        $placed = $this->post($this->app, '/shop/checkout', $this->checkout());
+        self::assertSame(303, $placed->getStatusCode(), $this->body($placed));
+        $receipt = $this->body($this->get($this->app, '/shop/order', ['number' => $this->numberFrom($placed)]));
+        self::assertStringContainsString('주문 상품 <small>1개 항목</small>', $receipt);
+        self::assertStringContainsString('data-yc-order-extras', $receipt);
+        self::assertStringContainsString('<strong>선물 포장</strong>', $receipt);
+        self::assertSame(6, (int) $this->shop->store->get('yc_options', $extra)['stock']);
+        self::assertSame(8, (int) $this->shop->store->get('yc_products', $id)['stock']);
+    }
+
     private function checkout(array $overrides = []): array
     {
         $response = $this->get($this->app, '/shop/checkout');

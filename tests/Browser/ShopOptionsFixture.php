@@ -24,7 +24,8 @@ $options = [
     'select_groups' => array_slice(['색상', '사이즈', '재질'], 0, $count),
     'select' => array_map(static fn (array $row): array => array_combine(['id', 'value1', 'value2', 'value3', 'price', 'stock', 'active'], $row), $rows),
     'extra_groups' => ['포장'],
-    'extra' => [['id' => 201, 'value1' => '포장', 'value2' => '선물 포장', 'value3' => '', 'price' => 2000, 'stock' => 4, 'active' => 1]],
+    'extra' => [['id' => 201, 'value1' => '포장', 'value2' => '선물 포장', 'value3' => '', 'price' => 2000, 'stock' => 4, 'active' => 1],
+        ['id' => 202, 'value1' => '', 'value2' => '품절 추가 구성', 'value3' => '', 'price' => 0, 'stock' => 0, 'active' => 1]],
 ];
 $product = ['id' => 10, 'price' => 10000, 'stock' => 10, 'buy_min' => 1, 'buy_max' => 10, 'options' => $options];
 $view = AdminViewFixture::view('/cms')->forShop();

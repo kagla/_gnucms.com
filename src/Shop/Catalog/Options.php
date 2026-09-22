@@ -115,7 +115,8 @@ final class Options
             $group = Input::text($row['value1'] ?? '', 'extras', 100);
             $name = Input::text($row['value2'] ?? '', 'extras', 100);
             if ($group === '' && $name === '') continue;
-            if ($group === '' || $name === '' || preg_match('/[<>"\']/', $group . $name)) throw DomainError::validation(['extras' => '추가옵션은 그룹명과 항목명을 함께 입력하고 <>"\' 문자를 쓸 수 없습니다.']);
+            // 새 추가옵션은 항목명만 쓴다. 기존 그룹은 조합 키·옵션 ID를 보존하기 위해 유지한다.
+            if ($name === '' || preg_match('/[<>"\']/', $group . $name)) throw DomainError::validation(['extras' => '추가옵션 항목명을 입력하고 <>"\' 문자를 쓸 수 없습니다.']);
             if (!in_array($group, $extraGroups, true)) $extraGroups[] = $group;
             $key = $group . "\x1e" . $name;
             if (isset($extraSeen[$key])) throw DomainError::validation(['extras' => '중복된 추가옵션이 있습니다: ' . $group . ' ' . $name]);

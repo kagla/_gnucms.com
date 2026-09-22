@@ -12,15 +12,23 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
   const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
   try {
     const page = await browser.newPage(), posts = [], errors = [];
-    let html = '';
+    let html = '', failure = null, held = null, holdNext = false;
     await page.setRequestInterception(true);
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
       const url = new URL(request.url());
       if (request.method() === 'POST') {
         posts.push({path: url.pathname, data: new URLSearchParams(request.postData())});
+        if (request.headers().accept === 'application/json') {
+          if (holdNext) { holdNext = false; held = request; return; }
+          if (failure === 'network') return request.abort('failed');
+          if (failure === 'html') return request.respond({status: 502, contentType: 'text/html', body: 'Bad gateway'});
+          if (failure) return request.respond({status: failure.status || 422, contentType: 'application/json', body: JSON.stringify(failure)});
+          return request.respond({status: 200, contentType: 'application/json', body: JSON.stringify({redirect: posts.at(-1).data.get('action') === 'buy' ? '/cms/shop/checkout?flow=buy' : '/cms/shop/cart?added=1'})});
+        }
         return request.respond({status: 200, body: 'submitted'});
       }
+      if (['/cms/shop/cart', '/cms/shop/checkout'].includes(url.pathname)) return request.respond({status: 200, body: 'cart or checkout'});
       if (url.pathname === '/cms/shop/item') return request.respond({status: 200, contentType: 'text/html', body: html});
       if (['/vendor/daisyui/daisyui.css', '/themes/default/theme.css', '/themes/default/youngcart.css', '/themes/default/youngcart.js'].includes(url.pathname)) {
         return request.respond({status: 200, contentType: url.pathname.endsWith('.js') ? 'text/javascript' : 'text/css', body: fs.readFileSync(path.join(root, 'www', url.pathname))});
@@ -39,6 +47,10 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     const selectionOrder = () => page.$$eval('[data-yc-selected-option]', rows => rows.map(row => Number(row.dataset.ycSelectedOption)));
     const qty = id => line(id) + ' [data-yc-line-quantity]';
     const setQty = (id, value) => page.$eval(qty(id), (el, value) => { el.value = value; el.dispatchEvent(new Event('input', {bubbles: true})); }, value);
+    const extra = '[name="extras[201]"]';
+    const extraControls = '[data-yc-quantity-controls]:has(' + extra + ')';
+    const extraMinus = extraControls + ' [data-yc-quantity-minus]';
+    const extraPlus = extraControls + ' [data-yc-quantity-plus]';
     const cart = 'button[value=cart]';
     const submit = async () => { await Promise.all([page.waitForNavigation(), page.click(cart)]); };
     await page.setViewport({width: 1280, height: 960});
@@ -87,7 +99,27 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     await setQty(101, '4');
     assert.equal(await page.$eval(qty(101), el => el.validity.rangeOverflow), true);
     await setQty(101, '2');
-    await page.$eval('[name="extras[201]"]', el => { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    await page.click('.yc-extras summary');
+    assert.equal(await page.$eval(extraMinus, el => el.disabled), true);
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '0');
+    await page.click(extraPlus);
+    assert.equal(await value(extra), '1');
+    assert.equal(await text('[data-yc-total]'), '23,000원');
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '0');
+    assert.equal(await text('[data-yc-total]'), '21,000원');
+    for (let i = 0; i < 5; i++) await page.click(extraPlus);
+    assert.equal(await value(extra), '4');
+    assert.equal(await page.$eval(extraPlus, el => el.disabled), true);
+    assert.equal(await text('[data-yc-total]'), '29,000원');
+    await page.$eval(extra, el => { el.value = '5'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    assert.equal(await page.$eval(extra, el => el.validity.rangeOverflow), true);
+    await page.$eval(extra, el => { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    assert.equal(await page.$eval(extraPlus, el => el.disabled), false);
+    assert.equal(await page.$eval('[name="extras[202]"]', el => el.disabled), true);
+    assert.equal(await page.$$eval('[data-yc-quantity-controls]:has([name="extras[202]"]) button', buttons => buttons.every(button => button.disabled)), true);
+    assert.equal(posts.length, 0, 'quantity controls must never submit the purchase form');
     assert.equal(await text('[data-yc-total]'), '23,000원');
     await select(0, '파랑');
     assert.equal(await value(step(1)), '');
@@ -120,6 +152,10 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
       if (count === 0) {
         assert.equal(await page.$(step(0)), null);
         assert.equal(await value('[name=option_id]'), '0');
+        await page.click('.yc-extras summary'); await page.click(extraPlus);
+        assert.equal(await text('[data-yc-total]'), '12,000원');
+        await page.click(extraMinus);
+        assert.equal(await text('[data-yc-total]'), '10,000원');
       } else {
         await select(0, '0');
         if (count > 1) await select(1, 'S');
@@ -148,12 +184,18 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     assert.equal(await fieldDisabled(1), true);
     assert.equal(await fieldDisabled(2), true);
     assert.equal(await page.$eval(cart, el => el.disabled), false);
+    await page.click('.yc-extras summary');
     for (const width of [360, 390, 768]) {
       await page.setViewport({width, height: 960});
       for (const theme of ['light', 'dark']) {
         await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         assert.equal(await page.$eval(step(0), el => getComputedStyle(el).appearance), 'auto');
+        assert.equal(await page.$eval(extraControls, control => {
+          const children = [...control.children].map(el => el.getBoundingClientRect());
+          return children.every(rect => rect.width >= 38 && rect.height >= 40) && children[0].right <= children[1].left + 1 && children[1].right <= children[2].left + 1;
+        }), true, 'extra quantity controls stay in minus/input/plus order on mobile');
+        if (width === 390) await page.screenshot({path: '/tmp/gnucms-extra-quantity-' + theme + '.png', fullPage: true});
       }
     }
     for (const id of [107, 108]) await page.click(line(id) + ' [data-yc-line-remove]');
@@ -170,13 +212,83 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     assert.equal(await page.$eval(qty(101), el => el.validity.customError), true);
     await setQty(101, '1');
     assert.equal(await page.$eval(qty(101), el => el.validity.valid), true);
+    // Stock may change after the product page was opened. Failed adds stay on the product.
+    await open(2); await select(0, '0'); await select(1, 'S');
+    await page.click('.yc-extras summary');
+    await page.$eval(extra, el => { el.value = '4'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    failure = {error: {message: '입력값을 확인해 주세요.', details: {'10:201': '선물 포장: 재고가 부족합니다. 구매 가능 수량: 2개 <script>bad()</script>'}},
+      availability: {product_id: 10, items: {101: {stock: 3, in_cart: 0}, 102: {stock: 4, in_cart: 0}, 201: {stock: 2, in_cart: 1}, 202: {stock: 0, in_cart: 0}}}};
+    const feedbackBox = '[data-yc-purchase-feedback]';
+    const failedSubmit = async (button = cart) => {
+      const before = posts.length;
+      await page.click(button);
+      await page.waitForFunction(() => !document.querySelector('[data-yc-purchase]').hasAttribute('aria-busy') && !document.querySelector('[data-yc-purchase-feedback]').hidden);
+      assert.equal(posts.length, before + 1);
+      assert.equal(new URL(page.url()).pathname, '/cms/shop/item');
+    };
+    await failedSubmit();
+    assert.equal(await value(extra), '4', 'failed requests must preserve the requested quantity');
+    assert.equal(await value(qty(101)), '1');
+    assert.equal(await page.$eval(extra, el => el.max), '2');
+    assert.equal(await page.$eval(extra, el => el.validity.rangeOverflow), true);
+    assert.equal(await page.$eval(extraPlus, el => el.disabled), true);
+    assert.match(await text('.yc-extra-row:has(' + extra + ') [data-yc-stock-note]'), /현재 담을 수 있는 수량: 1개.*장바구니에 1개/);
+    assert.match(await text(feedbackBox), /<script>bad\(\)<\/script>/);
+    assert.equal(await page.$(feedbackBox + ' script'), null);
+    await page.screenshot({path: '/tmp/gnucms-purchase-stock-error.png', fullPage: true});
+    await page.click(extraMinus); // Correct to the current stock limit without auto-changing the submitted request.
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '1');
+    failure = null;
+    await Promise.all([page.waitForNavigation(), page.click('button[value=buy]')]);
+    assert.equal(new URL(page.url()).pathname, '/cms/shop/checkout');
+    assert.equal(posts.at(-1).data.get('action'), 'buy');
+    assert.equal(posts.at(-1).data.get('extras[201]'), '1');
+    // Base products also stay editable; zero-stock extras can be removed without removing the product.
+    await open(0); await page.click('.yc-extras summary'); await page.click(extraPlus);
+    failure = {error: {message: '추가옵션이 품절되었습니다.'}, availability: {product_id: 10, items: {0: {stock: 10, in_cart: 0}, 201: {stock: 0, in_cart: 0}}}};
+    await failedSubmit(); assert.equal(await value(extra), '1');
+    await page.click(extraMinus); assert.equal(await value(extra), '0');
+    assert.equal(await page.$eval(extra, el => el.validity.valid), true);
+    failure = null; await submit(); assert.equal(posts.at(-1).data.get('extras[201]'), '0');
+    // A selected combination that sold out remains visible until explicitly removed.
+    await open(2); await select(0, '0'); await select(1, 'S');
+    failure = {error: {message: '선택옵션이 품절되었습니다.'}, availability: {product_id: 10, items: {101: {stock: 0, in_cart: 0}, 102: {stock: 4, in_cart: 0}, 201: {stock: 4, in_cart: 0}}}};
+    await failedSubmit();
+    assert.equal(await value(qty(101)), '1'); assert.equal(await page.$eval(qty(101), el => el.max), '0');
+    assert.equal(await disabled(1, 'S'), true);
+    await page.click(line(101) + ' [data-yc-line-remove]'); await select(1, 'M');
+    failure = null; await submit(); assert.equal(posts.at(-1).data.has('selections[101]'), false);
+    await open(0);
+    for (const error of ['network', 'html', {status: 403, error: {message: '화면을 새로고침해 주세요.'}}]) {
+      failure = error; await failedSubmit();
+      assert.equal(await value('[name=quantity]'), '1');
+    }
+    failure = null; holdNext = true;
+    await page.click(cart);
+    while (!held) await new Promise(resolve => setTimeout(resolve, 10));
+    const beforeDuplicate = posts.length;
+    assert.equal(await text(cart), '재고 확인 중…');
+    assert.equal(await page.$eval('[name=quantity]', el => el.disabled), true);
+    await page.$eval('[data-yc-purchase]', form => { form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); });
+    assert.equal(posts.length, beforeDuplicate, 'pending submission cannot create a second request');
+    await held.respond({status: 422, contentType: 'application/json', body: JSON.stringify({error: {message: '재고를 다시 확인해 주세요.'}})}); held = null;
+    await page.waitForFunction(() => !document.querySelector('[data-yc-purchase]').hasAttribute('aria-busy'));
+    assert.equal(await page.$eval('[name=quantity]', el => el.disabled), false);
+    assert.equal(await text(cart), '장바구니 담기');
     await page.setJavaScriptEnabled(false); await open();
     assert.equal(await visible('[data-yc-option-stages]'), false);
     assert.equal(await visible('[data-yc-option-fallback]'), true);
+    await page.click('.yc-extras summary');
+    assert.equal(await visible(extraPlus), false);
+    assert.equal(await visible(extraMinus), false);
+    assert.equal(await visible(extra), true);
+    await page.$eval(extra, el => { el.value = '2'; });
     await page.select('[name=option_id]', '101'); await submit();
+    assert.equal(posts.at(-1).data.get('extras[201]'), '2');
     assert.equal(posts.at(-1).data.get('option_id'), '101');
     assert.equal(posts.at(-1).data.has('option_step[1]'), false);
     assert.deepEqual(errors, []);
-    console.log('Shop option browser checks passed: multiple combinations, per-row quantity/removal, stock and combined limits, totals/submission, dependent fields, mobile/dark and no-JS fallback.');
+    console.log('Shop option browser checks passed: multiple combinations, per-row quantity/removal, stock and combined limits, totals/submission, AJAX stock changes, preserved drafts, sold-out recovery, pending requests/network errors, dependent fields, mobile/dark and no-JS fallback.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

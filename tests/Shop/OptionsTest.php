@@ -45,6 +45,19 @@ final class OptionsTest extends ShopTestCase
         return new \GnuCms\Shop\Store(\GnuCms\Db\Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]));
     }
 
+    public function testExtraOptionsOnlyRequireAnItemName(): void
+    {
+        $options = new Options($this->stubStore());
+        $result = $options->validate(10000, [], [], [['value2' => '리본'], ['value1' => '', 'value2' => ''], ['value2' => '0']]);
+        self::assertSame(['리본', '0'], array_column($result['extra'], 'value2'));
+        self::assertSame(['', ''], array_column($result['extra'], 'value1'));
+        self::assertSame([0, 1], array_column($result['extra'], 'sort_order'));
+        foreach ([[['value2' => '리본'], ['value2' => '리본']], [['value2' => '<img>']], [['value2' => '리본', 'price' => '-1']], [['value1' => '기존 그룹', 'value2' => '']]] as $rows) {
+            try { $options->validate(10000, [], [], $rows); self::fail('Invalid extra options must be rejected'); }
+            catch (DomainError $e) { self::assertArrayHasKey('extras', $e->details()); }
+        }
+    }
+
     #[DataProvider('connectionProvider')]
     public function testReplaceKeepsStockSoldOutAndPageJson(array $config): void
     {

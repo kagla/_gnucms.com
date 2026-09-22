@@ -41,14 +41,27 @@ final class CommerceController
         $_SESSION['yc_cart'] ??= [];
         $_SESSION['yc_owner'] ??= bin2hex(random_bytes(32));
         $_SESSION['yc_guest_orders'] ??= [];
-        $data['cart_count'] = array_sum(array_column($_SESSION['yc_cart'], 'quantity'));
+        $data['cart_count'] = $this->service->cart->productQuantity($_SESSION['yc_cart']);
         if ($page === 'cart/add') {
+            $json = stripos($request->getHeaderLine('Accept'), 'application/json') !== false;
+            $buy = ($input['action'] ?? '') === 'buy';
             try {
-                $buy = ($input['action'] ?? '') === 'buy';
                 $cart = $this->service->cart->add($buy ? [] : $_SESSION['yc_cart'], $input);
                 $_SESSION[$buy ? 'yc_buy' : 'yc_cart'] = $cart;
-                return $this->redirect($response, $url . ($buy ? '/checkout?flow=buy' : '/cart?added=1'));
+                $next = $url . ($buy ? '/checkout?flow=buy' : '/cart?added=1');
+                return $json ? $this->json($response, ['redirect' => $next]) : $this->redirect($response, $next);
             } catch (DomainError $e) {
+                if ($e->status() >= 500) throw $e;
+                if ($json) {
+                    $availability = null;
+                    if ($e->status() === 422 && ($id = Input::filterId($input['product_id'] ?? null)) !== null) {
+                        try { $availability = $this->service->cart->availability($id, $buy ? [] : $_SESSION['yc_cart']); }
+                        catch (DomainError $missing) { if ($missing->status() !== 404) throw $missing; }
+                    }
+                    return $this->json($response->withStatus($e->status()), [
+                        'error' => ['message' => $e->getMessage(), 'details' => $e->details()], 'availability' => $availability,
+                    ]);
+                }
                 $data['errors'] = $e->details() ?: [$e->getMessage()];
                 $response = $response->withStatus($e->status());
                 $page = $data['page'] = 'cart';
@@ -174,6 +187,12 @@ final class CommerceController
             }
         }
         return $view->render($response, 'checkout', $data);
+    }
+
+    private function json(ResponseInterface $response, array $data): ResponseInterface
+    {
+        $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        return $response->withHeader('Content-Type', 'application/json; charset=utf-8');
     }
 
     private function grantGuest(int $id): void
