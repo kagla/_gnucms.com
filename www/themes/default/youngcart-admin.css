@@ -135,9 +135,6 @@
 .yc-admin-page .yc-edit-form .fieldset:has(+.fieldset){margin-bottom:.2rem}
 .yc-admin-page .yc-edit-form .yc-fields{gap:0 1.25rem;grid-template-columns:repeat(3,minmax(0,1fr))}
 .yc-admin-page .yc-edit-form .yc-fields>.fieldset :is(input,select){width:100%}
-/* 상품 폼은 칸이 많아 한 줄에 넷을 두고, 상품 코드·상품명처럼 혼자 한 줄을 쓰는 글 칸은 절반 폭이면 충분하다. */
-.yc-admin-page .yc-edit-form-wide .yc-fields{grid-template-columns:repeat(4,minmax(0,1fr))}
-.yc-admin-page .yc-edit-form .fieldset.yc-field-half :is(.input,.select){width:50%}
 /* 추가 분류: 한 줄에 분류 선택 + 제거 단추. */
 .yc-admin-page .yc-category-rows{display:grid;gap:.5rem;margin-bottom:.6rem}
 .yc-admin-page .yc-category-row{display:flex;gap:.5rem;align-items:center}
@@ -209,7 +206,7 @@
 .yc-admin-page .yc-alert-summary{outline-offset:3px}
 .yc-admin-page .yc-alert-summary>div>strong{display:block;margin-bottom:.5rem;font-size:14px}
 .yc-admin-page .yc-table-hint{display:none}
-@media(min-width:1600px){.yc-admin-page .yc-edit-form .yc-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.yc-admin-page .yc-edit-form-wide .yc-fields{grid-template-columns:repeat(4,minmax(0,1fr))}.yc-admin-page .yc-settings-block .yc-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:1600px){.yc-admin-page .yc-edit-form .yc-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.yc-admin-page .yc-settings-block .yc-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:1150px){
   .yc-admin-page .yc-admin-nav .tab{padding:0 .8rem}
   .yc-admin-page .yc-quick-links{grid-template-columns:1fr}
@@ -279,7 +276,6 @@
   .yc-admin-page .yc-form-nav{margin-bottom:1rem;padding:.65rem 0;gap:.35rem}
   .yc-admin-page .yc-form-nav a{font-size:12px}
   .yc-admin-page .yc-edit-form .yc-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 .85rem}
-  .yc-admin-page .yc-edit-form .fieldset.yc-field-half :is(.input,.select){width:100%}
   .yc-admin-page .yc-edit-form .fieldset-legend{font-size:12px;line-height:1.5}
   .yc-admin-page .yc-edit-form .card-title{font-size:16px}
   .yc-admin-page .yc-edit-form .yc-checks{gap:.75rem}
