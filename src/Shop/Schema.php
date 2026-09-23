@@ -19,6 +19,8 @@ final class Schema
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
         'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history'];
 
+    public const ORDER_COLUMNS = ['default_address' => 'SMALLINT NOT NULL DEFAULT 0'];
+
     /** 결제 칸. 새 설치는 CREATE 문에, 결제 이전에 만든 yc_orders 에는 addColumn() 이 넣는다. */
     public const PAYMENT_COLUMNS = [
         'payment_method' => 'VARCHAR(20) NOT NULL DEFAULT \'\'',
@@ -41,8 +43,9 @@ final class Schema
         $bin = ' COLLATE utf8mb4_bin';
         $definitions = [
             'yc_orders' => 'id {AUTO_PK}, number VARCHAR(32)' . $bin . ' NOT NULL UNIQUE,
-                checkout_key VARCHAR(64) NOT NULL UNIQUE, owner_key VARCHAR(64) NOT NULL, user_id BIGINT NULL,
-                guest_password VARCHAR(255) NOT NULL, status VARCHAR(20) NOT NULL,
+                checkout_key VARCHAR(64) NOT NULL UNIQUE, owner_key VARCHAR(64) NOT NULL, user_id BIGINT NOT NULL,
+                default_address SMALLINT NOT NULL DEFAULT 0,
+                status VARCHAR(20) NOT NULL,
                 buyer_name VARCHAR(100) NOT NULL, email VARCHAR(191) NOT NULL, phone VARCHAR(30) NOT NULL,
                 recipient VARCHAR(100) NOT NULL, recipient_phone VARCHAR(30) NOT NULL, postcode VARCHAR(10) NOT NULL,
                 address VARCHAR(250) NOT NULL, address_detail VARCHAR(250) NOT NULL, delivery_note VARCHAR(500) NOT NULL,
@@ -91,7 +94,8 @@ final class Schema
         foreach ($definitions as $table => $definition) {
             $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
         }
-        foreach (self::PAYMENT_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
+        foreach (self::PAYMENT_COLUMNS + self::ORDER_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
+        self::migrateMemberOrders($db);
         $db->execute("UPDATE " . $db->table('yc_orders') . " SET payment_provider = 'inicis' WHERE payment_provider = '' AND payment_id <> '' AND payment_method IN ('card', 'easy_pay', 'bank_transfer', 'virtual_account')");
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
         self::dropColumn($db, 'yc_categories', 'image_key');
@@ -271,6 +275,18 @@ final class Schema
         $parts = [];
         foreach (self::PAYMENT_COLUMNS as $column => $definition) $parts[] = $column . ' ' . $definition;
         return implode(', ', $parts);
+    }
+
+    /** 기존 비회원 주문은 보존한다. 새 주문은 서비스에서 회원 ID를 필수로 받는다. */
+    private static function migrateMemberOrders(Connection $db): void
+    {
+        $column = $db->selectOne('SELECT IS_NULLABLE AS nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+            [$db->tableName('yc_orders'), 'user_id']);
+        if (($column['nullable'] ?? '') === 'YES'
+            && $db->selectOne('SELECT id FROM ' . $db->table('yc_orders') . ' WHERE user_id IS NULL LIMIT 1') === null) {
+            $db->execute('ALTER TABLE ' . $db->table('yc_orders') . ' MODIFY COLUMN user_id BIGINT NOT NULL');
+        }
+        self::dropColumn($db, 'yc_orders', 'guest_password');
     }
 
     /** 칸이 있는지 본다. 이름은 이 파일의 상수로만 들어온다. */

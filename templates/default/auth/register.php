@@ -44,7 +44,7 @@
         <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">휴대폰번호<?php if ($site['signup_phone'] !== 'required'): ?> <span class="legend-hint">선택</span><?php endif ?></legend>
           <label class="input input-bordered input-block">
-            <input type="tel" name="phone" inputmode="numeric" autocomplete="tel" value="<?= $this->e($values['phone'] ?? '') ?>" placeholder="010-1234-5678"<?php if ($site['signup_phone'] === 'required'): ?> required<?php endif ?>>
+            <input type="tel" name="phone" inputmode="numeric" autocomplete="tel" value="<?= $this->e(\GnuCms\Aligo\PhoneNumber::format((string) ($values['phone'] ?? ''))) ?>" placeholder="010-1234-5678"<?php if ($site['signup_phone'] === 'required'): ?> required<?php endif ?>>
           </label>
           <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
         </fieldset>

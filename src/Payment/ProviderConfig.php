@@ -12,8 +12,8 @@ final class ProviderConfig
     public static function fields(string $provider): array
     {
         if ($provider !== 'inicis') throw DomainError::internal('결제사를 확인해 주세요.');
-        $names = ['merchant_id' => '상점 아이디 (MID)', 'sign_key' => '웹표준 결제 SignKey', 'hash_key' => '모바일 금액 위변조 Hash Key',
-            'api_key' => 'INIAPI Key', 'client_ip' => '결제 요청 서버 IPv4 주소'];
+        $names = ['merchant_id' => '상점 아이디 (MID)', 'sign_key' => '기존 웹표준 결제 SignKey (기존 거래가 있을 때만)', 'hash_key' => 'PayPro 금액 위변조 Hash Key',
+            'api_key' => 'INIAPI Key', 'client_ip' => '기본 요청 서버 IPv4 주소'];
         $fields = [];
         foreach ($names as $key => $label) {
             $fields[$key] = ['label' => $label, 'secret' => !in_array($key, ['merchant_id', 'client_ip'], true), 'multiline' => false];
@@ -24,7 +24,7 @@ final class ProviderConfig
     public static function manual(string $provider): string
     {
         self::fields($provider);
-        return 'https://manual.inicis.com/pay/';
+        return 'https://manual.inicis.com/inipaypro/';
     }
 
     public static function validate(string $provider, array $input, array $before, string $environment = 'test'): array
@@ -38,14 +38,18 @@ final class ProviderConfig
             }
             $value = trim($value);
             if ($value === '' && $field['secret'] && ($data['merchant_id'] ?? '') === ($before['merchant_id'] ?? null)) $value = $before[$key] ?? '';
+            if ($value === '' && $key === 'sign_key') { $data[$key] = ''; continue; }
             if ($value === '') throw DomainError::validation([$key => $field['label'] . '을 입력해 주세요.']);
             if (preg_match('/[\r\n]/', $value)) throw DomainError::validation([$key => '한 줄로 입력해 주세요.']);
             $data[$key] = $value;
         }
         if (!preg_match('/^[A-Za-z0-9]{10}$/D', $data['merchant_id'])) throw DomainError::validation(['merchant_id' => 'PG에서 발급한 상점 코드를 확인해 주세요.']);
         if (!filter_var($data['client_ip'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) throw DomainError::validation(['client_ip' => '서버의 IPv4 주소를 입력해 주세요.']);
-        foreach (['sign_key', 'hash_key', 'api_key'] as $key) {
+        foreach (['hash_key', 'api_key'] as $key) {
             if (strlen($data[$key]) < 16 || preg_match('/\s/', $data[$key])) throw DomainError::validation([$key => '발급받은 인증키를 확인해 주세요.']);
+        }
+        if ($data['sign_key'] !== '' && (strlen($data['sign_key']) < 16 || preg_match('/\s/', $data['sign_key']))) {
+            throw DomainError::validation(['sign_key' => '발급받은 인증키를 확인해 주세요.']);
         }
         return $data;
     }

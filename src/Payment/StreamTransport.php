@@ -39,7 +39,7 @@ final class StreamTransport implements Transport
             if (preg_match('~^HTTP/\S+ (\d{3})~', $line, $m)) $status = (int) $m[1];
         }
         $data = is_string($raw) ? json_decode($raw, true, 64) : null;
-        if ($data === null && is_string($raw) && str_contains($url, 'mobile.inicis.com/smart/')) {
+        if ($data === null && is_string($raw) && (str_contains($url, 'mobile.inicis.com/smart/') || str_contains($url, 'paypro.inicis.com/payment/v1/rest/'))) {
             parse_str($raw, $data);
             foreach ($data as $key => $value) {
                 if (!is_string($value)) throw DomainError::serviceUnavailable('결제 응답 형식이 올바르지 않습니다.');
@@ -60,6 +60,6 @@ final class StreamTransport implements Transport
     public static function allowed(string $url, string $method = 'POST'): bool
     {
         if ($method !== 'POST') return false;
-        return (bool) preg_match('~^https://(?:(?:stg)?iniapi\.inicis\.com/v2/pg/(?:inquiry|refund|partialRefund)|(?:fc|ks|stg)stdpay\.inicis\.com/api/[A-Za-z0-9]+|(?:fc|ks|stg)mobile\.inicis\.com/smart/(?:payReq|payNetCancel)\.ini)$~D', $url);
+        return (bool) preg_match('~^https://(?:(?:stg)?iniapi\.inicis\.com/v2/pg/(?:inquiry|refund|partialRefund)|(?:fc|ks|stg)stdpay\.inicis\.com/api/[A-Za-z0-9]+|(?:fc|ks|stg)mobile\.inicis\.com/smart/(?:payReq|payNetCancel)\.ini|(?:fc|ks|stg)paypro\.inicis\.com/payment/v1/rest/(?:payAppl|payNetCancel)\.ini)$~D', $url);
     }
 }

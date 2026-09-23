@@ -19,7 +19,15 @@ final class Cart
 
     public function __construct(private Products $products, private Settings $settings, private Store $store) {}
 
-    /** 상단 배지는 본상품·선택옵션의 수량만 센다. 추가옵션 여부는 한 번에 조회한다. */
+    /** 장바구니 배지는 옵션·수량과 관계없이 상품 종류를 센다. */
+    public function productCount(array $cart): int
+    {
+        $products = [];
+        foreach ($cart as $line) $products[(int) $line['product_id']] = true;
+        return count($products);
+    }
+
+    /** 본상품·선택옵션의 총수량. 추가옵션 여부는 한 번에 조회한다. */
     public function productQuantity(array $cart): int
     {
         $ids = array_values(array_unique(array_filter(array_column($cart, 'option_id'))));
@@ -96,9 +104,17 @@ final class Cart
 
     public function update(array $cart, array $quantities): array
     {
+        $availability = [];
         foreach ($quantities as $key => $quantity) {
             if (!isset($cart[$key])) throw DomainError::validation(['cart' => '장바구니가 변경되었습니다. 새로고침해 주세요.']);
             $qty = Input::int($quantity, 'quantity', 0, self::MAX_QUANTITY);
+            if ($qty > (int) $cart[$key]['quantity']) {
+                $productId = (int) $cart[$key]['product_id'];
+                $availability[$productId] ??= (array) $this->availability($productId, $cart)['items'];
+                $optionId = (int) $cart[$key]['option_id'];
+                $stock = (int) ($availability[$productId][$optionId]['stock'] ?? 0);
+                if ($qty > $stock) throw DomainError::validation(['quantity' => '재고가 부족합니다. 구매 가능 수량: ' . $stock . '개']);
+            }
             if ($qty === 0) unset($cart[$key]);
             else $cart[$key]['quantity'] = $qty;
         }
@@ -121,7 +137,7 @@ final class Cart
         foreach ($cart as $key => $line) {
             $item = ['key' => $key, 'product_id' => (int) $line['product_id'], 'option_id' => (int) $line['option_id'],
                 'quantity' => (int) $line['quantity'], 'name' => '판매가 종료된 상품', 'code' => '', 'image' => null,
-                'label' => '', 'kind' => 'base', 'price' => 0, 'total' => 0, 'error' => ''];
+                'label' => '', 'kind' => 'base', 'price' => 0, 'total' => 0, 'available' => 0, 'error' => ''];
             try {
                 $product = $products[$item['product_id']] ??= $this->products->get($item['product_id']);
                 $item['name'] = $product['name']; $item['code'] = $product['code'];
@@ -141,8 +157,6 @@ final class Cart
                 if ((int) $product['active'] !== 1 || (int) ($product['categories'][1]['active'] ?? 0) !== 1 || (int) $product['phone_inquiry'] === 1) {
                     throw DomainError::validation(['product' => '현재 구매할 수 없는 상품입니다.']);
                 }
-                $stock = Stock::cell($product, $option)['stock'];
-                if ((int) $product['sold_out'] === 1 || $item['quantity'] > $stock) throw DomainError::validation(['stock' => '재고가 부족합니다. 구매 가능 수량: ' . ((int) $product['sold_out'] === 1 ? 0 : $stock) . '개']);
                 Input::int($item['quantity'], 'quantity', 1, self::MAX_QUANTITY);
                 $item['price'] = $item['kind'] === 'extra' ? (int) $option['price'] : (int) $product['price'] + (int) ($option['price'] ?? 0);
                 if ($item['price'] < 0) throw DomainError::validation(['price' => '상품 가격을 확인할 수 없습니다.']);
@@ -150,6 +164,10 @@ final class Cart
                 $groups[$item['product_id']] ??= ['product' => $product, 'quantity' => 0, 'subtotal' => 0];
                 $groups[$item['product_id']]['quantity'] += $item['kind'] === 'extra' ? 0 : $item['quantity'];
                 $groups[$item['product_id']]['subtotal'] += $item['total'];
+                // 재고 오류가 있어도 예상 금액은 실제 단가와 입력 수량으로 표시한다.
+                $stock = Stock::cell($product, $option)['stock'];
+                $item['available'] = (int) $product['sold_out'] === 1 ? 0 : max(0, min(self::MAX_QUANTITY, $stock));
+                if ((int) $product['sold_out'] === 1 || $item['quantity'] > $stock) throw DomainError::validation(['stock' => '재고가 부족합니다. 구매 가능 수량: ' . ((int) $product['sold_out'] === 1 ? 0 : $stock) . '개']);
             } catch (DomainError $e) {
                 $item['error'] = implode(' ', $e->details() ?: [$e->getMessage()]);
                 $errors[$key] = $item['name'] . ($item['label'] === '' ? '' : ' / ' . $item['label']) . ': ' . $item['error'];

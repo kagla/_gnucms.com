@@ -22,11 +22,13 @@ final class GatewayTest extends DatabaseTestCase
     private array $config;
     private array $order;
 
-    private function setupGateway(array $db): void
+    private function setupGateway(array $db, ?string $serverIp = null): void
     {
         $this->root = sys_get_temp_dir() . '/gnucms-payment-' . bin2hex(random_bytes(10));
         $db['prefix'] = 'pg' . bin2hex(random_bytes(4)) . '_';
-        $this->app = new App(['db' => $db, 'storage' => ['dir' => $this->root], 'auth' => ['secret' => bin2hex(random_bytes(32))]]);
+        $appConfig = ['db' => $db, 'storage' => ['dir' => $this->root], 'auth' => ['secret' => bin2hex(random_bytes(32))]];
+        if ($serverIp !== null) $appConfig['payment'] = ['inicis' => ['client_ip' => $serverIp]];
+        $this->app = new App($appConfig);
         (new Schema($this->app->db()))->create();
         $this->settings = new Settings($this->app, 'inicis');
         $this->config = Fixtures::config('inicis'); $this->settings->save('test', $this->config); $this->settings->enable('test', true);
@@ -100,15 +102,50 @@ final class GatewayTest extends DatabaseTestCase
     {
         $this->setupGateway($db);
         $options = $this->checkout(); $fields = $options['fields'];
-        self::assertSame('inicis', $options['kind']); self::assertSame($this->config['merchant_id'], $fields['mid']);
-        self::assertSame('13000', $fields['price']); self::assertSame('WON', $fields['currency']);
-        self::assertSame(hash('sha256', 'oid=' . $this->order['id'] . '&price=13000&timestamp=' . $fields['timestamp']), $fields['signature']);
-        self::assertSame(hash('sha256', 'oid=' . $this->order['id'] . '&price=13000&signKey=' . $this->config['sign_key'] . '&timestamp=' . $fields['timestamp']), $fields['verification']);
+        self::assertSame('inicis-pro', $options['kind']); self::assertSame($this->config['merchant_id'], $fields['P_MID']);
+        self::assertSame('https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', $options['script']);
+        self::assertSame('13000', $fields['P_AMT']); self::assertSame('WEB', $fields['P_DEVICE_TYPE']);
+        self::assertArrayNotHasKey('P_CLOSE_URL', $fields);
+        self::assertSame(['email' => 'buyer@example.test'], json_decode($fields['P_RESERVED'], true, 4, JSON_THROW_ON_ERROR));
+        self::assertSame(base64_encode(hash('sha512', '13000' . $this->order['id'] . $fields['P_TIMESTAMP'] . $this->config['hash_key'], true)), $fields['P_CHKFAKE']);
         foreach (['sign_key', 'hash_key', 'api_key'] as $key) self::assertStringNotContainsString($this->config[$key], json_encode($options));
         $mobile = $this->checkout('mobile'); $m = $mobile['fields'];
-        self::assertSame('https://stgmobile.inicis.com/smart/payment/', $mobile['action']);
+        self::assertSame('inicis-pro', $mobile['kind']); self::assertSame('MOBILE', $m['P_DEVICE_TYPE']);
+        self::assertSame($fields['P_RESERVED'], $m['P_RESERVED']);
         self::assertSame(base64_encode(hash('sha512', '13000' . $this->order['id'] . $m['P_TIMESTAMP'] . $this->config['hash_key'], true)), $m['P_CHKFAKE']);
         self::assertSame([], $this->http->calls);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPayProCallbackApprovesOnlyTheMatchingMerchantOrderAndAmount(array $db): void
+    {
+        $this->setupGateway($db); $this->checkout();
+        $callback = ['P_STATUS' => '00', 'P_MID' => $this->config['merchant_id'], 'P_OID' => $this->order['id'],
+            'P_AMT' => '13000', 'P_AUTH_TID' => bin2hex(random_bytes(20)), 'P_IDCNAME' => 'stg'];
+        foreach ([['P_MID' => 'other00000'], ['P_OID' => 'wrong'], ['P_AMT' => '1'], ['P_IDCNAME' => 'evil']] as $change) {
+            $this->rejected(fn () => $this->gateway->complete($this->order, array_replace($callback, $change)));
+        }
+        self::assertSame([], $this->http->calls);
+        $tid = bin2hex(random_bytes(20));
+        $this->response(['P_STATUS' => '00', 'P_MID' => $this->config['merchant_id'], 'P_OID' => $this->order['id'],
+            'P_AMT' => '13000', 'P_TYPE' => 'CARD', 'P_APPL_TID' => $tid]);
+        $this->gateway->complete($this->order, $callback);
+        self::assertSame('https://stgpaypro.inicis.com/payment/v1/rest/payAppl.ini', $this->http->calls[0]['url']);
+        self::assertSame($callback['P_AUTH_TID'], $this->http->calls[0]['body']['P_AUTH_TID']);
+        self::assertSame($tid, (new Journal($this->settings))->read($this->order['id'])['approved']['tid']);
+        $this->gateway->complete($this->order, $callback); self::assertCount(1, $this->http->calls);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testPayProTestMerchantUsesTheTrustedIdcReturnedByAuthentication(array $db): void
+    {
+        $this->setupGateway($db); $this->checkout();
+        $callback = ['P_STATUS' => '00', 'P_MID' => $this->config['merchant_id'], 'P_OID' => $this->order['id'],
+            'P_AMT' => '13000', 'P_AUTH_TID' => bin2hex(random_bytes(20)), 'P_IDCNAME' => 'fc'];
+        $this->response(['P_STATUS' => '00', 'P_MID' => $this->config['merchant_id'], 'P_OID' => $this->order['id'],
+            'P_AMT' => '13000', 'P_TYPE' => 'CARD', 'P_APPL_TID' => bin2hex(random_bytes(20))]);
+        $this->gateway->complete($this->order, $callback);
+        self::assertSame('https://fcpaypro.inicis.com/payment/v1/rest/payAppl.ini', $this->http->calls[0]['url']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -122,12 +159,25 @@ final class GatewayTest extends DatabaseTestCase
         self::assertSame('13000', $this->http->calls[0]['body']['price']);
         $this->response($payment); self::assertTrue($this->gateway->fetch($this->order)['valid']);
         $last = end($this->http->calls); self::assertSame('https://stginiapi.inicis.com/v2/pg/inquiry', $last['url']);
+        self::assertSame($this->config['client_ip'], $last['body']['clientIp']);
         self::assertSame($payment['tid'], $last['body']['data']['tid']);
         $signed = $last['body'];
         self::assertSame(hash('sha512', $this->config['api_key'] . $this->config['merchant_id'] . 'inquiry' . $signed['timestamp'] . StreamTransport::json($signed['data'])), $signed['hashData']);
         foreach ([['mid' => 'other00000'], ['oid' => bin2hex(random_bytes(16))], ['price' => '1'], ['tid' => 'wrong'], ['cardInfo' => ['currencyCode' => 'USD']], ['cardInfo' => []], ['approvedDate' => '20260230']] as $change) {
             $this->response(array_replace($payment, $change)); self::assertFalse($this->gateway->fetch($this->order)['valid']);
         }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testServerSpecificIpOverridesSharedMerchantDefaultForApiRequests(array $db): void
+    {
+        $this->setupGateway($db, '198.51.100.25');
+        $payment = $this->approve();
+        $this->response($payment);
+        self::assertTrue($this->gateway->fetch($this->order)['valid']);
+        $last = end($this->http->calls);
+        self::assertSame('198.51.100.25', $last['body']['clientIp']);
+        self::assertSame($this->config['client_ip'], $this->settings->credentials($this->order['config_revision'])['client_ip']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -162,7 +212,7 @@ final class GatewayTest extends DatabaseTestCase
     public function testPartialRefundUsesRemainingBalanceAndSeparateCancellationTransaction(array $db): void
     {
         $this->setupGateway($db); $payment = $this->approve(); $key = 'refund-' . bin2hex(random_bytes(16)); $partTid = bin2hex(random_bytes(20));
-        $this->response(['resultCode' => '00', 'prtcTid' => $partTid, 'prtcDate' => '20260906', 'prtcTime' => '130000', 'prtcPrice' => '3000', 'prtcRemains' => '10000']);
+        $this->response(['resultCode' => '00', 'tid' => $partTid, 'prtcTid' => $payment['tid'], 'prtcDate' => '20260906', 'prtcTime' => '130000', 'prtcPrice' => '3000', 'prtcRemains' => '10000']);
         $refund = $this->gateway->cancel($this->order, 3000, 13000, '반품', $key);
         $last = end($this->http->calls); self::assertSame('10000', $last['body']['data']['confirmPrice']);
         self::assertSame('3000', $last['body']['data']['price']); self::assertSame($partTid, $refund['id']);
@@ -215,6 +265,8 @@ final class GatewayTest extends DatabaseTestCase
         self::assertTrue(StreamTransport::allowed('https://stginiapi.inicis.com/v2/pg/partialRefund'));
         self::assertTrue(StreamTransport::allowed('https://fcstdpay.inicis.com/api/payAuth'));
         self::assertTrue(StreamTransport::allowed('https://stgmobile.inicis.com/smart/payReq.ini'));
+        self::assertTrue(StreamTransport::allowed('https://stgpaypro.inicis.com/payment/v1/rest/payAppl.ini'));
+        self::assertTrue(StreamTransport::allowed('https://fcpaypro.inicis.com/payment/v1/rest/payNetCancel.ini'));
         self::assertFalse(StreamTransport::allowed('http://iniapi.inicis.com/v2/pg/inquiry'));
         self::assertFalse(StreamTransport::allowed('https://iniapi.inicis.com/v2/pg/inquiry', 'GET'));
         self::assertFalse(StreamTransport::allowed('https://spl.kcp.co.kr/gw/mod/v1/cancel'));

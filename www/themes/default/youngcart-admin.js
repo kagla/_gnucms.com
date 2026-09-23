@@ -2,6 +2,57 @@
   'use strict';
   var root=document.querySelector('.yc-admin-page');
   if(!root){return;}
+  var inicisLive=root.querySelector('[data-yc-inicis-live]');
+  if(inicisLive){
+    var paymentEnvironments=[].slice.call(root.querySelectorAll('input[name="payment_environment"]'));
+    var inicisAnimation=null;
+    function syncInicisLive(animate){
+      var show=paymentEnvironments.some(function(input){return input.checked&&input.value==='live';});
+      inicisLive.inert=!show;
+      if(!animate||!inicisLive.animate||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
+        if(inicisAnimation){inicisAnimation.cancel();inicisAnimation=null;}
+        inicisLive.style.height='';inicisLive.style.overflow='';
+        inicisLive.hidden=!show;
+        return;
+      }
+      if(!inicisAnimation&&inicisLive.hidden===!show){return;}
+      var start=inicisLive.hidden?0:inicisLive.getBoundingClientRect().height;
+      var startOpacity=inicisLive.hidden?0:Number(window.getComputedStyle(inicisLive).opacity);
+      if(inicisAnimation){var previous=inicisAnimation;inicisAnimation=null;previous.cancel();}
+      inicisLive.hidden=false;
+      inicisLive.style.height='';
+      var end=show?inicisLive.getBoundingClientRect().height:0;
+      inicisLive.style.height=start+'px';
+      inicisLive.style.overflow='hidden';
+      inicisAnimation=inicisLive.animate([{height:start+'px',opacity:startOpacity},{height:end+'px',opacity:show?1:0}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'});
+      var current=inicisAnimation;
+      current.onfinish=function(){
+        if(inicisAnimation!==current){return;}
+        inicisAnimation=null;
+        inicisLive.style.height='';inicisLive.style.overflow='';
+        inicisLive.hidden=!show;
+      };
+    }
+    paymentEnvironments.forEach(function(input){input.addEventListener('change',function(){syncInicisLive(true);});});
+    syncInicisLive(false);
+  }
+  var orderStatusForm=root.querySelector('[data-yc-order-status-form]');
+  if(orderStatusForm){
+    var statusSelect=orderStatusForm.querySelector('select[name="status"]');
+    var cancelFields=orderStatusForm.querySelector('[data-yc-admin-cancel-fields]');
+    var statusNote=orderStatusForm.querySelector('[data-yc-status-note]');
+    if(statusSelect&&cancelFields){
+      var reasonSelect=cancelFields.querySelector('select[name="cancel_reason"]');
+      function syncCancelFields(){
+        var cancelling=statusSelect.value==='cancelled';
+        cancelFields.hidden=!cancelling;
+        if(reasonSelect){reasonSelect.required=cancelling;}
+        if(statusNote){statusNote.hidden=cancelling;}
+      }
+      statusSelect.addEventListener('change',syncCancelFields);
+      syncCancelFields();
+    }
+  }
   var shell=root.closest('.admin-content'),siteLink=shell&&shell.querySelector('.navbar-end>a');
   if(siteLink){siteLink.title=siteLink.textContent.trim();}
   // 누른 제출 단추의 동작. event.submitter 가 없는 엔진(Safari 15.4 이전)에서는 초점과 폼 안을 뒤지고, 그래도 모르면 빈 문자열이다.

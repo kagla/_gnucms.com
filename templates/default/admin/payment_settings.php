@@ -21,6 +21,7 @@
       <?php foreach ($fields as $name => $field): ?>
       <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="payment-<?= $this->e($name) ?>"><?= $this->e($field['label']) ?></label></legend>
         <input class="input input-bordered input-block" id="payment-<?= $this->e($name) ?>" type="<?= $field['secret'] ? 'password' : 'text' ?>" name="<?= $this->e($name) ?>" value="<?= $field['secret'] ? '' : $this->e($settings[$name] ?? '') ?>" autocomplete="<?= $field['secret'] ? 'new-password' : 'off' ?>"<?= !$field['secret'] ? ' required' : '' ?> placeholder="<?= $field['secret'] && $settings['configured'] ? '같은 상점에서 비워두면 현재 값 유지' : '' ?>">
+        <?php if ($provider === 'inicis' && $name === 'client_ip'): ?><p class="muted">여러 서버에서 요청하면 각 서버의 config/config.php에 payment.inicis.client_ip를 지정합니다. 비워 두면 이 기본값을 사용합니다.</p><?php endif ?>
       </fieldset>
       <?php endforeach ?>
       <div class="card-actions form-actions"><button class="btn btn-primary" name="action" value="save">설정 저장</button></div>

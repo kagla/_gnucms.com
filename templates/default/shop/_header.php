@@ -19,7 +19,7 @@
         </form>
       </details>
       <a href="<?= $this->e($url) ?>/orders"<?= in_array($page ?? '', ['orders', 'order'], true) ? ' aria-current="page"' : '' ?>><?= $this->icon('document', 21) ?><span>주문 조회</span></a>
-      <a class="yc-cart-link" href="<?= $this->e($url) ?>/cart"<?= ($page ?? '') === 'cart' ? ' aria-current="page"' : '' ?>><?= $this->icon('gift', 21) ?><span>장바구니</span><?php if (($cart_count ?? 0) > 0): ?><b class="yc-count" aria-label="담은 수량 <?= (int) $cart_count ?>개"><?= $cart_count > 99 ? '99+' : (int) $cart_count ?></b><?php endif ?></a>
+      <a class="yc-cart-link" href="<?= $this->e($url) ?>/cart"<?= ($page ?? '') === 'cart' ? ' aria-current="page"' : '' ?>><?= $this->icon('gift', 21) ?><span>장바구니</span><?php if (($cart_count ?? 0) > 0): ?><b class="yc-count" aria-label="담은 상품 <?= (int) $cart_count ?>종"><?= $cart_count > 99 ? '99+' : (int) $cart_count ?></b><?php endif ?></a>
     </div>
   </div>
 </header>

@@ -27,6 +27,12 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
 }
 ?>
 <?php $this->insert('admin/_form_nav', ['sections' => ['settings-visible' => '공개', 'settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-payment' => '결제', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
+<form id="yc-inicis-live-form" method="post" action="<?= $this->url('admin.settings.payment') ?>" autocomplete="off">
+  <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+  <input type="hidden" name="provider" value="inicis">
+  <input type="hidden" name="environment" value="live">
+  <input type="hidden" name="return_to" value="shop">
+</form>
 <form class="yc-edit-form" method="post" enctype="multipart/form-data" action="<?= $this->e($admin_url) ?>/settings">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <section class="card" id="settings-visible"><div class="card-body"><h2 class="card-title">공개</h2>
@@ -44,6 +50,18 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
       <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $label): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_environment" value="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? ' checked' : '' ?>> <?= $label ?></label><?php endforeach ?>
       <span class="muted">주문서의 카드 결제는 이 환경이 결제 설정에서 허용돼 있을 때만 보입니다.</span></fieldset>
+    <div data-yc-inicis-live<?= ($values['payment_environment'] ?? 'live') === 'live' ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>이니시스 운영 연동 <span class="badge badge-soft<?= $inicis_live['enabled'] ? ' badge-success' : '' ?>"><?= $inicis_live['enabled'] ? '실행 허용' : ($inicis_live['configured'] ? '실행 정지' : '미설정') ?></span></h3>
+      <p class="muted">운영 MID와 발급받은 인증키를 입력합니다. IPv4는 공통 기본값이며 여러 서버가 결제를 요청하면 각 서버의 config/config.php에서 payment.inicis.client_ip를 설정합니다. 저장 후 API 실행을 허용해야 운영 카드 결제가 나타납니다.</p>
+      <div class="yc-fields">
+        <?php foreach ($inicis_fields as $name => $field): ?><fieldset class="fieldset"><legend class="fieldset-legend"><label for="yc-inicis-live-<?= $this->e($name) ?>"><?= $this->e($field['label']) ?></label></legend>
+          <input class="input input-bordered input-sm" id="yc-inicis-live-<?= $this->e($name) ?>" form="yc-inicis-live-form" type="<?= $field['secret'] ? 'password' : 'text' ?>" name="<?= $this->e($name) ?>" value="<?= $field['secret'] ? '' : $this->e((string) ($inicis_live[$name] ?? '')) ?>" autocomplete="<?= $field['secret'] ? 'new-password' : 'off' ?>"<?= $field['secret'] ? '' : ' required' ?> placeholder="<?= $field['secret'] && $inicis_live['configured'] ? '같은 MID에서 비워두면 현재 값 유지' : '' ?>">
+        </fieldset><?php endforeach ?>
+      </div>
+      <div class="card-actions"><button class="btn btn-primary" type="submit" form="yc-inicis-live-form" name="action" value="save">운영 연동 설정 저장</button>
+        <button class="btn btn-outline" type="submit" form="yc-inicis-live-form" name="action" value="<?= $inicis_live['enabled'] ? 'disable' : 'enable' ?>"<?= !$inicis_live['configured'] ? ' disabled' : '' ?>><?= $inicis_live['enabled'] ? 'API 실행 정지' : 'API 실행 허용' ?></button>
+        <a class="link" href="<?= $this->url('admin.settings.payment') ?>?provider=inicis&amp;environment=test">테스트 환경 설정</a>
+      </div>
+    </div></div>
     <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="payment_manual_enabled" value="1"<?= ($values['payment_manual_enabled'] ?? '0') === '1' ? ' checked' : '' ?>> 무통장입금 사용</label>
     <div class="yc-fields">
       <?php foreach (['bank' => '은행', 'account' => '계좌번호', 'holder' => '예금주'] as $key => $label): $name = 'payment_manual_' . $key; ?>

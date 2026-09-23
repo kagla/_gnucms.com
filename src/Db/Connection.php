@@ -200,7 +200,7 @@ final class Connection
 
             return $statement;
         } catch (PDOException $e) {
-            throw DomainError::internal('쿼리 실행에 실패했습니다: ' . $e->getMessage() . ' | SQL: ' . $sql);
+            throw DomainError::internal('쿼리 실행에 실패했습니다: ' . $e->getMessage() . ' | SQL: ' . $sql, $e);
         }
     }
 }

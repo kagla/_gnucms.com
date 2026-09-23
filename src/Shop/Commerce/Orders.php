@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace GnuCms\Shop\Commerce;
 
-use GnuCms\Auth\PasswordThrottle;
+use DateTimeImmutable;
+use DateTimeZone;
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
 use GnuCms\Support\Clock;
+use PDOException;
 
 final class Orders
 {
@@ -21,21 +23,42 @@ final class Orders
 
     public function __construct(private Store $store, private Cart $cart, private Settings $settings) {}
 
-    public function submitted(string $key, string $owner, ?int $userId): ?array
+    /** 저장된 기본 배송지를 먼저 쓰고, 없으면 가장 최근 주문의 배송지를 사용한다. */
+    public function defaultAddressFor(int $userId): ?array
     {
-        $row = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_orders') . ' WHERE checkout_key = ? AND owner_key = ?', [$key, $owner]);
-        if ($row !== null && ($row['user_id'] === null ? $userId !== null : (int) $row['user_id'] !== $userId)) return null;
-        return $row;
+        return $this->store->selectOne('SELECT recipient, recipient_phone, postcode, address, address_detail, delivery_note FROM '
+            . $this->store->table('yc_orders') . ' WHERE user_id = ? ORDER BY default_address DESC, id DESC LIMIT 1', [$userId]);
     }
 
-    public function place(array $lines, array $input, string $key, string $owner, ?int $userId, string $fingerprint, array $shipping = [], array $payment = []): array
+    /** 기본 배송지를 먼저 보여 주고, 같은 수령지의 중복 주문은 한 번만 표시한다. */
+    public function previousAddressesFor(int $userId): array
+    {
+        $orders = $this->store->select('SELECT id, recipient, recipient_phone, postcode, address, address_detail, delivery_note, default_address FROM '
+            . $this->store->table('yc_orders') . ' WHERE user_id = ? ORDER BY default_address DESC, id DESC LIMIT 200', [$userId]);
+        $addresses = []; $seen = [];
+        foreach ($orders as $order) {
+            $key = json_encode([$order['recipient'], $order['recipient_phone'], $order['postcode'], $order['address'], $order['address_detail']], JSON_THROW_ON_ERROR);
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $addresses[] = $order;
+            if (count($addresses) === 10) break;
+        }
+        return $addresses;
+    }
+
+    public function submitted(string $key, string $owner, int $userId): ?array
+    {
+        return $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_orders') . ' WHERE checkout_key = ? AND owner_key = ? AND user_id = ?', [$key, $owner, $userId]);
+    }
+
+    public function place(array $lines, array $input, string $key, string $owner, int $userId, string $fingerprint, array $shipping = [], array $payment = []): array
     {
         if (!preg_match('/^[a-f0-9]{64}$/D', $key) || !preg_match('/^[a-f0-9]{64}$/D', $owner)) throw DomainError::forbidden('주문서를 다시 열어 주세요.');
         if ($existing = $this->submitted($key, $owner, $userId)) return $this->get((int) $existing['id']);
-        $buyer = $this->validate($input, $userId === null);
+        $buyer = $this->validateCheckout($input);
         if ($lines === []) throw DomainError::validation(['cart' => '주문할 상품을 담아 주세요.']);
         try {
-            $id = $this->store->transaction(function () use ($lines, $buyer, $key, $owner, $userId, $fingerprint, $shipping, $payment): int {
+            $id = $this->store->transaction(function () use ($lines, $buyer, $input, $key, $owner, $userId, $fingerprint, $shipping, $payment): int {
                 // 관리자의 상품/옵션 편집과 주문을 상품 ID 순으로 직렬화한다.
                 $ids = array_values(array_unique(array_column($lines, 'product_id'))); sort($ids, SORT_NUMERIC);
                 foreach ($ids as $id) $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $id]);
@@ -43,9 +66,17 @@ final class Orders
                 if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
                 if (!hash_equals($quote['fingerprint'], $fingerprint)) throw DomainError::validation(['quote' => '상품 또는 배송비가 변경되었습니다. 아래 최신 주문 내용을 확인하고 다시 주문해 주세요.']);
                 $now = Clock::timestamp();
-                $number = gmdate('Ymd', $now) . '-' . strtoupper(bin2hex(random_bytes(6)));
-                $id = $this->store->insert('yc_orders', $buyer + ['number' => $number, 'checkout_key' => $key, 'owner_key' => $owner,
-                    'user_id' => $userId, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
+                $prefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone('Asia/Seoul'))->format('ymd-His');
+                $start = random_int(0, 9999);
+                do { $step = random_int(1, 9999); } while ($step % 2 === 0 || $step % 5 === 0);
+                $saveDefault = ($input['save_default_address'] ?? '') === '1';
+                if ($saveDefault) {
+                    // 같은 회원의 동시 주문이 둘 다 기본값이 되지 않도록 회원 행으로 직렬화한다.
+                    $this->store->selectOne('SELECT id FROM ' . $this->store->table('users') . ' WHERE id = ? FOR UPDATE', [$userId]);
+                    $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET default_address = 0 WHERE user_id = ? AND default_address = 1', [$userId]);
+                }
+                $orderData = $buyer + ['checkout_key' => $key, 'owner_key' => $owner,
+                    'user_id' => $userId, 'default_address' => $saveDefault ? 1 : 0, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
                     'cod_fee' => $quote['cod_fee'], 'total' => $quote['total'], 'shipping_detail' => json_encode($quote['shipping'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     'order_notice' => $this->settings->all()['order_notice'], 'carrier' => '', 'tracking_number' => '',
                     'payment_method' => (string) ($payment['method'] ?? ''), 'payment_id' => (string) ($payment['id'] ?? ''),
@@ -53,7 +84,19 @@ final class Orders
                     'payment_environment' => (string) ($payment['environment'] ?? ''), 'payment_revision' => (string) ($payment['revision'] ?? ''),
                     'paid_at' => 0, 'paid_amount' => 0, 'refunded_amount' => 0, 'pay_by' => (int) ($payment['pay_by'] ?? 0),
                     'payment_detail' => $payment === [] ? '' : json_encode($payment['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                    'created_at' => $now, 'updated_at' => $now]);
+                    'created_at' => $now, 'updated_at' => $now];
+                $id = null;
+                // 난수에서 시작해 0000~9999를 중복 없이 순회한다. DB 고유 제약이 동시 주문도 보호한다.
+                for ($attempt = 0; $attempt < 10000; $attempt++) {
+                    $number = $prefix . sprintf('%04d', ($start + $attempt * $step) % 10000);
+                    try {
+                        $id = $this->store->insert('yc_orders', $orderData + ['number' => $number]);
+                        break;
+                    } catch (DomainError $e) {
+                        if (!$this->numberConflict($e, $number)) throw $e;
+                    }
+                }
+                if ($id === null) throw DomainError::serviceUnavailable('주문번호를 발급할 수 없습니다. 잠시 후 다시 시도해 주세요.');
                 foreach ($quote['items'] as $item) {
                     $optionId = $item['option_id'] ?: null;
                     $cell = Stock::cellOfItem($item);
@@ -63,17 +106,24 @@ final class Orders
                     $this->store->insert('yc_order_items', ['order_id' => $id, 'product_id' => $item['product_id'], 'option_id' => $optionId,
                         'kind' => $item['kind'], 'product_code' => $item['code'], 'product_name' => $item['name'], 'option_label' => $item['label'],
                         'image' => $item['image'] ?? '', 'unit_price' => $item['price'], 'quantity' => $item['quantity'], 'total' => $item['total']]);
-                    $this->store->logStock($item['product_id'], $optionId, -$item['quantity'], 'order', $number, $userId === null ? 'guest' : 'user:' . $userId);
+                    $this->store->logStock($item['product_id'], $optionId, -$item['quantity'], 'order', $number, 'user:' . $userId);
                 }
-                $this->history($id, 'pending', $userId === null ? 'guest' : 'user:' . $userId, '주문을 접수했습니다.');
+                $this->history($id, 'pending', 'user:' . $userId, '주문을 접수했습니다.');
                 return $id;
             });
         } catch (DomainError $e) {
-            // 유일 키 제약으로 경합한 동일 요청도 최초 주문을 반환한다.
+            // 유일 키 제약으로 경합한 동일 주문서 요청은 최초 주문을 반환한다.
             if ($existing = $this->submitted($key, $owner, $userId)) return $this->get((int) $existing['id']);
             throw $e;
         }
         return $this->get($id);
+    }
+
+    private function numberConflict(DomainError $error, string $number): bool
+    {
+        $cause = $error->getPrevious();
+        return $cause instanceof PDOException && (int) ($cause->errorInfo[1] ?? 0) === 1062
+            && $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE number = ? FOR UPDATE', [$number]) !== null;
     }
 
     public function get(int $id): array
@@ -87,30 +137,34 @@ final class Orders
         return $order;
     }
 
-    public function owned(string $number, ?int $userId, array $guestIds): array
+    public function owned(string $number, int $userId): array
     {
-        $order = $this->store->selectOne('SELECT id, user_id FROM ' . $this->store->table('yc_orders') . ' WHERE number = ?', [$number]);
-        if ($order === null || ($order['user_id'] === null ? !in_array((int) $order['id'], $guestIds, true) : ($userId === null || (int) $order['user_id'] !== $userId))) {
-            throw DomainError::notFound('주문을 찾을 수 없습니다. 주문 조회에서 확인해 주세요.');
-        }
+        $order = $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE number = ? AND user_id = ?', [$number, $userId]);
+        if ($order === null) throw DomainError::notFound('주문을 찾을 수 없습니다. 주문 조회에서 확인해 주세요.');
         return $this->get((int) $order['id']);
     }
 
-    public function lookup(array $input, ?string $ip): array
+    /** URL 참조값에는 주문번호 대신 주문 생성 때 발급한 추측 불가능한 난수 키를 쓴다. */
+    public static function reference(array $order): string
     {
-        $throttle = new PasswordThrottle($this->store->db, $ip);
-        $key = 'youngcart:order-lookup';
-        $throttle->assertNotLocked($key);
-        $number = Input::text($input['number'] ?? '', 'number', 32);
-        $email = Input::text($input['email'] ?? '', 'email', 191);
-        $password = is_string($input['password'] ?? null) ? $input['password'] : '';
-        $order = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_orders') . ' WHERE number = ?', [$number]);
-        // 존재 여부와 회원 주문 여부를 같은 메시지로 처리한다.
-        $valid = $order !== null && $order['user_id'] === null && strcasecmp($order['email'], $email) === 0 && strlen($password) <= 72;
-        $verified = password_verify($password, $valid ? $order['guest_password'] : '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
-        if (!$valid || !$verified) throw DomainError::validation(['password' => $throttle->recordFailureMessage($key, '주문번호, 이메일 또는 비밀번호가 일치하지 않습니다.')]);
-        $throttle->clear($key);
-        return $this->get((int) $order['id']);
+        return (string) $order['checkout_key'];
+    }
+
+    public function ownedReference(string $reference, int $userId): array
+    {
+        if (preg_match('/^[a-f0-9]{64}$/D', $reference)) {
+            $order = $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE checkout_key = ? AND user_id = ?', [$reference, $userId]);
+            if ($order !== null) return $this->get((int) $order['id']);
+        }
+
+        // 기존 주문 링크는 한 번 열 수 있게 두고, 컨트롤러에서 새 URL로 이동시킨다.
+        if (preg_match('/^(.{1,32})-([a-f0-9]{32})$/D', $reference, $match)) {
+            $order = $this->owned($match[1], $userId);
+            $legacy = $match[1] . '-' . substr(hash_hmac('sha256', 'shop-order-url:' . $match[1], (string) $order['checkout_key']), 0, 32);
+            if (hash_equals($legacy, $reference)) return $order;
+        }
+
+        throw DomainError::notFound('주문을 찾을 수 없습니다. 주문 조회에서 확인해 주세요.');
     }
 
     public function listing(?int $userId, string $status = '', int $page = 1, bool $admin = false, string $search = ''): array
@@ -146,7 +200,9 @@ final class Orders
         }
         $carrier = $to === 'shipped' ? Input::text($input['carrier'] ?? '', 'carrier', 100, false) : null;
         $tracking = $to === 'shipped' ? Input::text($input['tracking_number'] ?? '', 'tracking_number', 100, false) : null;
-        $note = Input::text($input['note'] ?? '', 'note', 500);
+        $note = $to === 'cancelled' && $customer
+            ? CancellationReason::note($input)
+            : Input::text($input['note'] ?? '', 'note', 500);
         $this->store->transaction(function () use ($id, $from, $to, $actor, $carrier, $tracking, $note): void {
             $changed = $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET status = ?, updated_at = ? WHERE id = ? AND status = ?', [$to, Clock::timestamp(), $id, $from]);
             if ($changed !== 1) throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
@@ -296,7 +352,8 @@ final class Orders
         $this->store->insert('yc_order_history', ['order_id' => $id, 'status' => $status, 'actor' => mb_substr($actor, 0, 100), 'note' => $note, 'created_at' => Clock::timestamp()]);
     }
 
-    private function validate(array $input, bool $guest): array
+    /** 결제창을 열기 전에도 주문자·배송지 입력을 동일한 규칙으로 확인한다. */
+    public function validateCheckout(array $input): array
     {
         $row = []; $errors = [];
         $fields = ['buyer_name' => ['주문자 이름', 100, false], 'email' => ['이메일', 191, false], 'phone' => ['연락처', 30, false],
@@ -312,10 +369,7 @@ final class Orders
         }
         if (isset($row['postcode']) && !preg_match('/^[0-9]{5}$/D', $row['postcode'])) $errors['postcode'] = '우편번호 5자리를 입력해 주세요.';
         if (($input['agree'] ?? '') !== '1') $errors['agree'] = '주문 내용과 배송을 위한 정보 제공을 확인해 주세요.';
-        $password = $input['password'] ?? '';
-        if ($guest && (!is_string($password) || strlen($password) < 8 || strlen($password) > 72)) $errors['password'] = '비회원 주문 조회 비밀번호는 8~72바이트로 입력해 주세요.';
         if ($errors !== []) throw DomainError::validation($errors);
-        $row['guest_password'] = $guest ? password_hash($password, PASSWORD_DEFAULT) : '';
         return $row;
     }
 }

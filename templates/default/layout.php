@@ -404,6 +404,7 @@
   });
 })();
 </script>
+<script src="<?= $this->asset('phone-format.js') ?>" defer></script>
 <?php $this->start('scripts') ?><?php $this->stop() ?>
 </body>
 </html>

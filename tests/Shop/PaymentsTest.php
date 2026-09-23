@@ -94,6 +94,32 @@ final class PaymentsTest extends ShopTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testDeclinedAuthenticationKeepsApprovalReadyAndUsesANewPaymentIdOnRetry(array $config): void
+    {
+        $this->setupPayments($config);
+        $product = $this->product(['price' => '150']);
+        $cart = $this->shop->cart->add([], ['product_id' => $product['id'], 'quantity' => 1]);
+        $input = $this->buyer(['payment_method' => 'card']);
+        $token = bin2hex(random_bytes(32));
+        $owner = bin2hex(random_bytes(32));
+        $userId = $this->app->users()->create('buyer@example.test', '', '구매자');
+        $fingerprint = $this->shop->cart->quote($cart, [], true)['fingerprint'];
+        $payment = $this->shop->payments->forPlacing($input);
+        $intent = $this->shop->checkoutIntents->stage($cart, $input, $token, $owner, $userId, $fingerprint, [], $payment, 'buy');
+        $this->shop->checkoutIntents->checkout($intent, 'web', 'https://shop.example.test/shop/checkout',
+            'https://shop.example.test/shop/pay/callback?provider=inicis');
+
+        $this->shop->checkoutIntents->decline($intent, 'V901');
+        self::assertSame('declined', $this->shop->checkoutIntents->find($payment['id'])['status']);
+        self::assertSame('ready', $this->app->paymentGateway('inicis')->approvalState(\GnuCms\Shop\Commerce\CheckoutIntents::gatewayOrder($intent)));
+        self::assertSame([], $this->http->calls);
+
+        $retry = $this->shop->checkoutIntents->stage($cart, $input, $token, $owner, $userId, $fingerprint, [],
+            $this->shop->payments->forPlacing($input), 'buy', $payment['id']);
+        self::assertNotSame($payment['id'], $retry['payment']['id']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testMethodsFollowThePaymentSettingsAndTheManualAccount(array $config): void
     {
         $this->setupPayments($config);
@@ -319,7 +345,7 @@ final class PaymentsTest extends ShopTestCase
         $this->queueApproval($card, bin2hex(random_bytes(20)));
         $paidCard = $this->shop->payments->complete($card, $this->authCallback($card));
         $cardKey = bin2hex(random_bytes(16));
-        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'prtcTid' => bin2hex(random_bytes(20))]];
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'tid' => bin2hex(random_bytes(20)), 'prtcTid' => $paidCard['payment']['tid']]];
         self::assertSame(2000, (int) $this->shop->payments->refund($paidCard, 2000, '부분 환불', $cardKey, 'admin')['refunded_amount']);
         // 결제사 환불은 성공했는데 응답이 유실돼 관리자가 같은 요청을 다시 보낸 경우(주문 상태는 아직 그대로다).
         $calls = count($this->http->calls);
@@ -512,7 +538,7 @@ final class PaymentsTest extends ShopTestCase
         $tid = bin2hex(random_bytes(20));
         $this->queueApproval($card, $tid);
         $paid = $this->shop->payments->complete($card, $this->authCallback($card));
-        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'prtcTid' => bin2hex(random_bytes(20))]];
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'prtcDate' => '20260921', 'prtcTime' => '090000', 'prtcPrice' => '2000', 'prtcRemains' => '10000', 'tid' => bin2hex(random_bytes(20)), 'prtcTid' => $paid['payment']['tid']]];
         $after = $this->shop->payments->refund($paid, 2000, '배송비 조정', bin2hex(random_bytes(16)), 'admin');
         self::assertSame(2000, (int) $after['refunded_amount']);
         self::assertSame('paid', $after['status']);

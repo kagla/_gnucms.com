@@ -38,6 +38,9 @@ final class AdminController extends AdminBase
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
         $data['payment_providers'] = $this->service->app->paymentProviders()->labels();
+        $livePayment = $this->service->app->paymentSettings('inicis');
+        $data['inicis_live'] = $livePayment->summary('live');
+        $data['inicis_fields'] = $livePayment->definition()->fields();
         $data['types'] = Settings::TYPE_LABELS;
         $data['categories'] = $this->service->categories->optionDetails();
         $current = $this->service->settings->all();
@@ -58,6 +61,9 @@ final class AdminController extends AdminBase
             }
         }
         if (($data['input']['saved'] ?? '') === '1') $data['notice'] = '설정을 저장했습니다.';
+        if (($data['input']['payment_saved'] ?? '') === '1') $data['notice'] = '이니시스 운영 설정을 저장했습니다. 카드 결제를 사용하려면 API 실행을 허용해 주세요.';
+        if (($data['input']['payment_enabled'] ?? '') === '1') $data['notice'] = '이니시스 운영 결제 실행을 허용했습니다.';
+        if (($data['input']['payment_disabled'] ?? '') === '1') $data['notice'] = '이니시스 운영 결제 실행을 정지했습니다.';
         $data['values'] = $this->flatten($this->service->settings->all());
         return $this->render($request, $response, 'settings', $data);
     }

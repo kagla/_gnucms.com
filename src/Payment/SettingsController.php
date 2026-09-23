@@ -9,6 +9,7 @@ use GnuCms\View\View;
 use GnuCms\Web\Csrf;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Slim\Routing\RouteContext;
 
 /** 설정 → 결제. 전체 관리자 전용이며 POST는 세션 CSRF를 검사한다. */
 final class SettingsController
@@ -28,6 +29,7 @@ final class SettingsController
         $settings = $this->settings->app->paymentSettings((string) ($input['provider'] ?? 'inicis'));
         $provider = $settings->definition();
         $notice = '';
+        $completedAction = '';
         $errors = [];
         try {
             if ($request->getMethod() === 'POST') {
@@ -35,9 +37,11 @@ final class SettingsController
                 if ($action === 'save') {
                     $settings->save($environment, $input);
                     $notice = '설정을 저장했습니다. 상점 코드와 환경을 확인한 뒤 API 실행을 허용해 주세요.';
+                    $completedAction = 'payment_saved';
                 } elseif (in_array($action, ['enable', 'disable'], true)) {
                     $settings->enable($environment, $action === 'enable');
                     $notice = $action === 'enable' ? 'API 실행을 허용했습니다.' : 'API 실행을 정지했습니다.';
+                    $completedAction = $action === 'enable' ? 'payment_enabled' : 'payment_disabled';
                 } else {
                     throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
                 }
@@ -45,6 +49,10 @@ final class SettingsController
         } catch (DomainError $e) {
             $response = $response->withStatus($e->status());
             $errors = $e->status() >= 500 ? ['설정 저장에 실패했습니다. 암호화 키와 저장소 상태를 확인해 주세요.'] : ($e->details() ?: [$e->getMessage()]);
+        }
+        if ($completedAction !== '' && ($input['return_to'] ?? '') === 'shop' && $provider->id() === 'inicis' && $environment === 'live') {
+            $url = RouteContext::fromRequest($request)->getBasePath() . '/admin/shop/settings?' . $completedAction . '=1#settings-payment';
+            return $response->withStatus(303)->withHeader('Location', $url)->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
         }
         return View::fromRequest($request)->render(
             $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer'),

@@ -69,8 +69,8 @@ final class Payments
     public static function gatewayOrder(array $order): array
     {
         $items = $order['items'] ?? [];
-        $first = (string) ($items[0]['product_name'] ?? '주문');
-        $name = count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first;
+        $first = (string) ($items[0]['product_name'] ?? $items[0]['name'] ?? '주문');
+        $name = (string) ($order['order_name'] ?? (count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first));
         return ['id' => (string) $order['payment_id'], 'provider' => (string) ($order['payment_provider'] ?? ''), 'environment' => (string) $order['payment_environment'],
             'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'method' => (string) $order['payment_method'], 'order_name' => $name,
             'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at']];
@@ -79,7 +79,7 @@ final class Payments
     /** PG가 인증 결과를 보낼 주소. 주문의 원장 키와 그 주문·결제사·설정 판의 HMAC 을 싣는다. */
     public function callbackUrl(array $order, string $callbackBase): string
     {
-        return $callbackBase . '?order=' . $order['payment_id'] . '&state=' . CallbackToken::create($this->app, self::gatewayOrder($order));
+        return $callbackBase . (str_contains($callbackBase, '?') ? '&' : '?') . 'order=' . $order['payment_id'] . '&state=' . CallbackToken::create($this->app, self::gatewayOrder($order));
     }
 
     /** 결제창 정의. 결제 대기이고 기한 안인 결제사 주문만. */

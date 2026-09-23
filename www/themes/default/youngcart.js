@@ -1,5 +1,254 @@
 (function () {
   'use strict';
+  function showCartStockFeedback(input) {
+    var info = input.closest('.yc-cart-item-info');
+    if (!info) return;
+    var feedback = info.querySelector('[data-yc-stock-attempt]');
+    if (!feedback) {
+      feedback = document.createElement('p');
+      feedback.className = 'yc-inline-error';
+      feedback.setAttribute('data-yc-stock-attempt', '');
+      feedback.setAttribute('role', 'alert');
+      var bottom = info.querySelector('.yc-cart-item-bottom');
+      info.insertBefore(feedback, bottom);
+    }
+    feedback.textContent = '재고가 부족합니다. 구매 가능 수량: ' + Number(input.max).toLocaleString('ko-KR') + '개';
+  }
+  function clearCartStockFeedback(input) {
+    var feedback = input.closest('.yc-cart-item-info')?.querySelector('[data-yc-stock-attempt]');
+    if (feedback) feedback.remove();
+  }
+  function placePurchaseQuantityMessage(row, message) {
+    var controls = row.querySelector('.yc-selected-option-bottom,.yc-option-quantity-controls');
+    if (controls) row.insertBefore(message, controls);
+    else row.appendChild(message);
+  }
+  function showPurchaseQuantityFeedback(input) {
+    var row = input.closest('.yc-extra-row,[data-yc-selected-option],[data-yc-single-quantity]');
+    if (!row) return;
+    var feedback = row.querySelector('[data-yc-quantity-feedback]');
+    if (!feedback) {
+      feedback = document.createElement('span');
+      feedback.className = 'yc-quantity-feedback';
+      feedback.setAttribute('data-yc-quantity-feedback', '');
+      feedback.setAttribute('role', 'alert');
+      placePurchaseQuantityMessage(row, feedback);
+    }
+    var maximum = Number(input.max), stock = Number(input.dataset.ycStock);
+    feedback.textContent = stock <= maximum ? '재고가 부족합니다. 구매 가능 수량: ' + stock.toLocaleString('ko-KR') + '개'
+      : '최대 구매 수량: ' + maximum.toLocaleString('ko-KR') + '개';
+  }
+  function clearPurchaseQuantityFeedback(input) {
+    var feedback = input.closest('.yc-extra-row,[data-yc-selected-option],[data-yc-single-quantity]')?.querySelector('[data-yc-quantity-feedback]');
+    if (feedback) feedback.remove();
+  }
+  var cartForm = document.querySelector('[data-yc-cart-form]');
+  if (cartForm) {
+    var selectAll = cartForm.querySelector('[data-yc-cart-select-all]');
+    var productChecks = Array.from(cartForm.querySelectorAll('[data-yc-cart-select]'));
+    var deleteSelected = cartForm.querySelector('[data-yc-cart-delete-selected]');
+    var checkoutSelected = cartForm.querySelector('[data-yc-cart-checkout]');
+    var selectionValid = checkoutSelected ? checkoutSelected.dataset.ycCartValid !== 'false' : false;
+    var lastSelection = null;
+    var selectedCount = cartForm.querySelector('[data-yc-cart-selected-count]');
+    var saveStatus = cartForm.querySelector('[data-yc-cart-save-status]');
+    var cartTotal = function (name) { return cartForm.querySelector('[data-yc-cart-total="' + name + '"]'); };
+    var previewRequest = 0;
+    var previewTimer = null;
+    function updateCartTotals(data) {
+      var subtotal = cartTotal('subtotal');
+      var shipping = cartTotal('shipping');
+      var cod = cartTotal('cod');
+      var total = cartTotal('total');
+      if (subtotal) subtotal.textContent = new Intl.NumberFormat('ko-KR').format(data.subtotal) + '원';
+      if (shipping) shipping.textContent = data.shipping_fee === 0 ? '무료' : new Intl.NumberFormat('ko-KR').format(data.shipping_fee) + '원';
+      if (cod) cod.textContent = new Intl.NumberFormat('ko-KR').format(data.cod_fee) + '원';
+      if (total && total.firstChild) total.firstChild.nodeValue = new Intl.NumberFormat('ko-KR').format(data.total);
+      if (typeof data.valid === 'boolean') selectionValid = data.valid;
+      if (checkoutSelected) checkoutSelected.disabled = !selectionValid || !productChecks.some(function (checkbox) { return checkbox.checked; });
+    }
+    function requestCartPreview(saveQuantities) {
+      var request = ++previewRequest;
+      selectionValid = false;
+      if (checkoutSelected) checkoutSelected.disabled = true;
+      var inputs = Array.from(cartForm.querySelectorAll('.yc-cart-item input[type="number"]'));
+      if (inputs.some(function (input) { return !input.validity.valid && !input.validity.rangeOverflow; })) {
+        if (saveQuantities && saveStatus) { saveStatus.hidden = false; saveStatus.textContent = '수량을 확인해 주세요.'; }
+        return;
+      }
+      var body = new URLSearchParams(new FormData(cartForm));
+      body.set('cart_action', saveQuantities ? 'update_quantities' : 'preview_selection');
+      body.delete('remove');
+      if (saveQuantities && saveStatus) { saveStatus.hidden = true; saveStatus.textContent = ''; }
+      fetch(cartForm.action, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: body.toString() })
+        .then(function (response) { if (!response.ok) throw new Error('cart preview'); return response.json(); })
+        .then(function (data) {
+          if (request !== previewRequest) return;
+          if (data.saved) applySavedCartLines(data);
+          updateCartTotals(data);
+          if (data.saved && saveStatus) saveStatus.hidden = true;
+        })
+        .catch(function () { if (saveQuantities && saveStatus) { saveStatus.hidden = false; saveStatus.textContent = '수량 저장에 실패했습니다. 다시 시도해 주세요.'; } });
+    }
+    function updateCartSelection() {
+      var selected = productChecks.filter(function (checkbox) { return checkbox.checked; }).length;
+      if (selectAll) {
+        selectAll.checked = productChecks.length > 0 && selected === productChecks.length;
+        selectAll.indeterminate = selected > 0 && selected < productChecks.length;
+      }
+      if (deleteSelected) deleteSelected.disabled = selected === 0;
+      if (checkoutSelected) checkoutSelected.disabled = selected === 0;
+      if (selectedCount) selectedCount.textContent = String(selected);
+      var selectionKey = productChecks.filter(function (checkbox) { return checkbox.checked; }).map(function (checkbox) { return checkbox.value; }).join(',');
+      if (selectionKey !== lastSelection) { lastSelection = selectionKey; selectionValid = false; }
+      if (checkoutSelected) checkoutSelected.disabled = selected === 0 || !selectionValid;
+      if (selected === 0) {
+        previewRequest++;
+        updateCartTotals({ subtotal: 0, shipping_fee: 0, cod_fee: 0, total: 0 });
+        return;
+      }
+      requestCartPreview(false);
+    }
+    function applySavedCartLines(data) {
+      if (!Array.isArray(data.lines)) return;
+      var totals = new Map(data.lines.map(function (line) { return [line.key, line]; }));
+      var removed = false;
+      Array.from(cartForm.querySelectorAll('[data-yc-cart-line]')).forEach(function (line) {
+        var key = line.dataset.ycCartLine;
+        if (!totals.has(key)) { line.remove(); removed = true; return; }
+        var current = totals.get(key);
+        var amount = line.querySelector('[data-yc-cart-line-total]');
+        if (amount) amount.textContent = new Intl.NumberFormat('ko-KR').format(current.total) + '원';
+        var input = line.querySelector('input[type="number"]');
+        if (input) {
+          input.max = String(Math.max(Number(input.min) || 0, current.available));
+          input.setAttribute('aria-invalid', current.error ? 'true' : 'false');
+        }
+        var error = line.querySelector('[data-yc-cart-error]');
+        if (current.error && error) error.textContent = current.error;
+        else if (current.error) {
+          error = document.createElement('p');
+          error.className = 'yc-inline-error';
+          error.setAttribute('data-yc-cart-error', '');
+          error.setAttribute('role', 'alert');
+          error.textContent = current.error;
+          line.querySelector('.yc-cart-item-info').insertBefore(error, line.querySelector('.yc-cart-item-bottom'));
+        } else if (error) error.remove();
+      });
+      Array.from(cartForm.querySelectorAll('[data-yc-cart-product]')).forEach(function (product) {
+        var options = product.querySelectorAll('.yc-cart-options .yc-cart-item').length;
+        if (options === 0) { product.remove(); removed = true; return; }
+        var title = product.querySelector('.yc-cart-product-info>span');
+        if (title) title.textContent = options + '개 선택 구성';
+        var extras = product.querySelector('[data-yc-cart-extras]');
+        if (extras && extras.querySelectorAll('.yc-cart-item').length === 0) extras.remove();
+      });
+      if (removed) refreshCartCounts(data);
+    }
+    function refreshCartCounts(data) {
+      productChecks = Array.from(cartForm.querySelectorAll('[data-yc-cart-select]'));
+      var products = Array.from(cartForm.querySelectorAll('[data-yc-cart-product]'));
+      var titleCount = document.querySelector('.yc-page-heading .yc-title span');
+      if (titleCount) titleCount.textContent = String(products.length);
+      var badge = document.querySelector('.yc-cart-link .yc-count');
+      if (data.cart_count > 0 && badge) {
+        badge.textContent = String(Math.min(99, data.cart_count)) + (data.cart_count > 99 ? '+' : '');
+        badge.setAttribute('aria-label', '담은 상품 ' + data.cart_count + '종');
+      } else if (data.cart_count > 0) {
+        var link = document.querySelector('.yc-cart-link');
+        if (link) {
+          badge = document.createElement('b');
+          badge.className = 'yc-count';
+          badge.textContent = String(Math.min(99, data.cart_count)) + (data.cart_count > 99 ? '+' : '');
+          badge.setAttribute('aria-label', '담은 상품 ' + data.cart_count + '종');
+          link.appendChild(badge);
+        }
+      } else if (badge) badge.remove();
+      if (products.length === 0) { window.location.reload(); return; }
+      updateCartSelection();
+    }
+    function postCartAction(action, removeKey) {
+      var body = new URLSearchParams(new FormData(cartForm));
+      body.set('cart_action', action);
+      if (removeKey) body.set('remove', removeKey);
+      return fetch(cartForm.action, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: body.toString() })
+        .then(function (response) { if (!response.ok) throw new Error('cart update'); return response.json(); });
+    }
+    cartForm.addEventListener('input', function (event) {
+      if (!event.target.matches('.yc-cart-item input[type="number"]')) return;
+      if (event.target.validity.rangeOverflow) {
+        showCartStockFeedback(event.target);
+        event.target.value = event.target.max;
+      } else clearCartStockFeedback(event.target);
+      window.clearTimeout(previewTimer);
+      previewTimer = window.setTimeout(function () { requestCartPreview(true); }, 250);
+    });
+    cartForm.addEventListener('change', function (event) {
+      if (!event.target.matches('.yc-cart-item input[type="number"]')) return;
+      window.clearTimeout(previewTimer);
+      requestCartPreview(true);
+    });
+    cartForm.addEventListener('click', function (event) {
+      var removeButton = event.target.closest('[data-yc-cart-remove]');
+      if (removeButton) {
+        event.preventDefault();
+        var section = removeButton.closest('[data-yc-cart-product]');
+        var line = removeButton.closest('[data-yc-cart-line]');
+        postCartAction('remove_line', removeButton.value).then(function (data) {
+          if (line.closest('.yc-cart-options')) {
+            line.remove();
+            if (section.querySelectorAll('.yc-cart-options .yc-cart-item').length === 0) section.remove();
+            else {
+              var title = section.querySelector('.yc-cart-product-info>span');
+              if (title) title.textContent = section.querySelectorAll('.yc-cart-options .yc-cart-item').length + '개 선택 구성';
+            }
+          } else {
+            var extras = line.closest('[data-yc-cart-extras]');
+            line.remove();
+            if (extras && extras.querySelectorAll('.yc-cart-item').length === 0) extras.remove();
+          }
+          updateCartTotals(data);
+          refreshCartCounts(data);
+        }).catch(function () { window.location.reload(); });
+      }
+      var deleteButton = event.target.closest('[data-yc-cart-delete-selected]');
+      if (deleteButton) {
+        event.preventDefault();
+        var selectedIds = productChecks.filter(function (checkbox) { return checkbox.checked; }).map(function (checkbox) { return checkbox.value; });
+        postCartAction('delete_selected').then(function (data) {
+          selectedIds.forEach(function (id) {
+            var product = cartForm.querySelector('[data-yc-cart-product="' + CSS.escape(id) + '"]');
+            if (product) product.remove();
+          });
+          updateCartTotals(data);
+          refreshCartCounts(data);
+        }).catch(function () { window.location.reload(); });
+      }
+    });
+    if (selectAll) selectAll.addEventListener('change', function () {
+      productChecks.forEach(function (checkbox) { checkbox.checked = selectAll.checked; });
+      updateCartSelection();
+    });
+    productChecks.forEach(function (checkbox) { checkbox.addEventListener('change', updateCartSelection); });
+    updateCartSelection();
+  }
+  var checkoutForm = document.querySelector('[data-yc-checkout]');
+  if (checkoutForm) {
+    var manualTransfer = checkoutForm.querySelector('[data-yc-manual-transfer]');
+    if (manualTransfer) {
+      var depositor = manualTransfer.querySelector('[name="depositor"]');
+      function updateManualTransfer() {
+        var selected = checkoutForm.querySelector('[name="payment_method"]:checked');
+        var show = selected && selected.value === 'manual_transfer';
+        manualTransfer.hidden = !show;
+        if (depositor) depositor.disabled = !show;
+      }
+      checkoutForm.addEventListener('change', function (event) {
+        if (event.target.matches('[name="payment_method"]')) updateManualTransfer();
+      });
+      updateManualTransfer();
+    }
+  }
   var purchase = document.querySelector('[data-yc-purchase]');
   if (purchase) {
     var option = purchase.querySelector('[data-yc-option]');
@@ -45,6 +294,7 @@
       row.querySelector('[data-yc-line-meta]').textContent = '재고 ' + item.stock.toLocaleString('ko-KR') + '개 · ' + (item.price === 0 ? '추가금액 없음' : '옵션 금액 ' + money(item.price));
       input.name = 'selections[' + item.id + ']';
       input.max = String(Math.min(originalMax, item.stock));
+      input.dataset.ycStock = String(item.stock);
       input.value = String(initialQuantity || 1);
       input.setAttribute('aria-label', names + ' 수량');
       var remove = row.querySelector('[data-yc-line-remove]');
@@ -58,7 +308,11 @@
         var button = row.querySelector('[data-yc-line-' + control[0] + ']');
         button.setAttribute('aria-label', names + ' 수량 ' + control[2]);
         button.addEventListener('click', function () {
+          if (control[1] > 0 && (Number(input.value) || 0) >= Number(input.max)) {
+            showPurchaseQuantityFeedback(input); return;
+          }
           input.value = String(Math.min(Number(input.max), Math.max(1, (Number(input.value) || 1) + control[1])));
+          clearPurchaseQuantityFeedback(input);
           selectionNotice = ''; update();
         });
       });
@@ -75,7 +329,7 @@
         entry.input.setCustomValidity('');
         entry.row.querySelector('[data-yc-line-total]').textContent = lineTotal.toLocaleString('ko-KR') + '원';
         entry.row.querySelector('[data-yc-line-minus]').disabled = qty <= 1;
-        entry.row.querySelector('[data-yc-line-plus]').disabled = qty >= Number(entry.input.max);
+        entry.row.querySelector('[data-yc-line-plus]').setAttribute('aria-disabled', String(qty >= Number(entry.input.max)));
       });
       var limit = count < Number(quantity.min) ? '상품 수량을 합계 ' + quantity.min + '개 이상 선택해 주세요.' :
         productMax > 0 && count > productMax ? '상품 수량은 합계 ' + productMax + '개까지 선택할 수 있어요.' : '';
@@ -144,8 +398,13 @@
       if (multiple) { updateSelections(); return; }
       var selected = option && option.options[option.selectedIndex];
       var price = Number(purchase.dataset.price) + (selected ? Number(selected.dataset.price || 0) : 0);
-      if (selected && selected.value) quantity.max = String(Math.min(originalMax, Number(selected.dataset.stock)));
-      else quantity.max = String(originalMax);
+      var previousMaximum = quantity.max, previousStock = quantity.dataset.ycStock;
+      if (selected && selected.value) {
+        quantity.max = String(Math.min(originalMax, Number(selected.dataset.stock)));
+        quantity.dataset.ycStock = selected.dataset.stock;
+      } else quantity.max = String(originalMax);
+      if (quantity.max !== previousMaximum || quantity.dataset.ycStock !== previousStock) clearPurchaseQuantityFeedback(quantity);
+      quantity.dispatchEvent(new Event('yc:quantity-limits'));
       var amount = price * Math.max(0, Number(quantity.value) || 0);
       extras.forEach(function (input) { amount += Number(input.dataset.ycExtraPrice) * Math.max(0, Number(input.value) || 0); });
       total.textContent = option && !option.value ? '옵션을 선택해 주세요' : amount.toLocaleString('ko-KR') + '원';
@@ -227,7 +486,9 @@
         function cell(id) { return items[id] || {stock: 0, in_cart: 0}; }
         function refreshInput(input, id, maximum) {
           var current = cell(id), previousMax = Number(input.max);
+          clearPurchaseQuantityFeedback(input);
           input.max = String(Math.min(maximum, current.stock));
+          input.dataset.ycStock = String(current.stock);
           var row = input.closest('.yc-extra-row,[data-yc-selected-option],[data-yc-single-quantity]');
           if (!row) return;
           var note = row.querySelector('[data-yc-stock-note]');
@@ -237,7 +498,7 @@
           }
           if (!note) {
             note = document.createElement('span'); note.className = 'yc-stock-note'; note.dataset.ycStockNote = '';
-            note.id = 'yc-stock-note-' + id; row.appendChild(note);
+            note.id = 'yc-stock-note-' + id; placePurchaseQuantityMessage(row, note);
             input.setAttribute('aria-describedby', ((input.getAttribute('aria-describedby') || '') + ' ' + note.id).trim());
           }
           note.textContent = '현재 담을 수 있는 수량: ' + remaining + '개' + (current.in_cart > 0 ? ' (장바구니에 ' + current.in_cart + '개 담김)' : '');
@@ -307,6 +568,14 @@
         if (event.target.hasAttribute('aria-invalid')) event.target.setAttribute('aria-invalid', String(!event.target.validity.valid));
       });
     }
+    purchase.addEventListener('input', function (event) {
+      var input = event.target;
+      if (!(input instanceof HTMLInputElement) || !input.matches('[data-yc-quantity],[data-yc-line-quantity],[data-yc-extra-price]')) return;
+      if (input.validity.rangeOverflow) {
+        showPurchaseQuantityFeedback(input);
+        if (Number(input.max) >= Number(input.min)) input.value = input.max;
+      } else clearPurchaseQuantityFeedback(input);
+    }, true);
     purchase.addEventListener('input', function (event) { if (!event.target.matches('[data-yc-option-step]')) update(); });
     purchase.addEventListener('change', update);
     update();
@@ -318,18 +587,28 @@
     if (!input || !minus || !plus) return;
     function updateButtons() {
       minus.disabled = input.disabled || (input.valueAsNumber || 0) <= Number(input.min);
-      plus.disabled = input.disabled || input.valueAsNumber >= Number(input.max);
+      plus.disabled = input.disabled;
+      if (input.valueAsNumber >= Number(input.max)) plus.setAttribute('aria-disabled', 'true');
+      else plus.removeAttribute('aria-disabled');
     }
     [[minus, -1], [plus, 1]].forEach(function (entry) {
       entry[0].addEventListener('click', function () {
         var current = Number.isFinite(input.valueAsNumber) ? Math.trunc(input.valueAsNumber) : 0;
+        if (entry[1] > 0 && current >= Number(input.max)) {
+          if (control.matches('[data-yc-cart-quantity]')) showCartStockFeedback(input);
+          else showPurchaseQuantityFeedback(input);
+          return;
+        }
         input.value = String(Math.min(Number(input.max), Math.max(Number(input.min), current + entry[1])));
+        if (control.matches('[data-yc-cart-quantity]')) clearCartStockFeedback(input);
+        else clearPurchaseQuantityFeedback(input);
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
       entry[0].hidden = false;
     });
     input.addEventListener('input', updateButtons);
     input.addEventListener('change', updateButtons);
+    input.addEventListener('yc:quantity-limits', updateButtons);
     updateButtons();
   });
   var gallery = document.querySelector('[data-yc-gallery]');
@@ -344,15 +623,6 @@
         thumbs.forEach(function (thumb) { thumb.removeAttribute('aria-current'); });
         button.setAttribute('aria-current', 'true');
       });
-    });
-  }
-  var copy = document.querySelector('[data-yc-copy-buyer]');
-  if (copy) {
-    copy.hidden = false;
-    copy.addEventListener('click', function () {
-      document.getElementById('yc-recipient').value = document.getElementById('yc-buyer_name').value;
-      document.getElementById('yc-recipient_phone').value = document.getElementById('yc-phone').value;
-      document.getElementById('yc-postcode').focus();
     });
   }
   var errors = document.querySelector('[data-yc-errors]');

@@ -50,9 +50,10 @@ final class Routes
             $map('GET', '/' . $page, static fn ($request, $response) => $shop->handle($page, $request, $response));
         }
         $map('GET', '/c/{slug}', static fn ($request, $response, array $args) => $shop->handle('category', $request, $response, $args))->setName('shop.category');
-        foreach (['cart', 'checkout', 'orders'] as $page) foreach (['GET', 'POST'] as $method) {
+        foreach (['cart', 'checkout'] as $page) foreach (['GET', 'POST'] as $method) {
             $map($method, '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }
+        $map('GET', '/orders', static fn ($request, $response) => $commerce->handle('orders', $request, $response));
         $map('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response));
         foreach (['cart/add', 'order/cancel'] as $page) {
             $map('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));

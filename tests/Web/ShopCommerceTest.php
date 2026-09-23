@@ -105,22 +105,22 @@ final class ShopCommerceTest extends WebTestCase
         $added = $this->post($this->app, '/shop/cart/add', $this->form(['product_id' => $id, 'quantity' => 2, 'extras' => [$extra => 2]]));
         self::assertSame(303, $added->getStatusCode());
         $cart = $this->body($this->get($this->app, '/shop/cart'));
-        self::assertStringContainsString('담은 상품 1개 항목', $cart);
+        self::assertStringContainsString('담은 상품 1종 <span class="muted">· 선택 구성 1개</span>', $cart);
         self::assertStringContainsString('aria-label="담은 수량 2개"', $cart);
         self::assertSame(1, substr_count($cart, 'class="yc-cart-image"'));
         self::assertSame(1, substr_count($cart, '<h2>테스트 상품</h2>'));
         self::assertStringContainsString('data-yc-cart-product="' . $id . '"', $cart);
         self::assertStringContainsString('data-yc-cart-extras', $cart);
-        self::assertStringContainsString('<h4>선물 포장</h4>', $cart);
-        self::assertStringContainsString('name="quantities[' . $id . ':' . $extra . ']" value="2" min="0"', $cart);
+        self::assertStringContainsString('<h3>선물 포장</h3>', $cart);
+        self::assertStringContainsString('name="quantities[' . $id . ':' . $extra . ']" value="2" min="1"', $cart);
         self::assertSame(26000, $this->shop->cart->quote($_SESSION['yc_cart'])['subtotal']);
         $public = $this->body($this->get($this->app, '/shop/item', ['id' => 'DEMO']));
         self::assertStringContainsString('aria-label="담은 수량 2개"', $public);
         // 판매를 중지한 추가 구성도 본상품으로 잘못 세거나 따로 표시하지 않는다.
         $this->shop->store->update('yc_options', $extra, ['active' => 0]);
         $inactive = $this->body($this->get($this->app, '/shop/cart'));
-        self::assertStringContainsString('담은 상품 1개 항목', $inactive);
-        self::assertStringContainsString('<h4>선물 포장</h4>', $inactive);
+        self::assertStringContainsString('담은 상품 1종 <span class="muted">· 선택 구성 1개</span>', $inactive);
+        self::assertStringContainsString('<h3>선물 포장</h3>', $inactive);
         self::assertStringContainsString('선택한 옵션은 더 이상 판매하지 않습니다.', $inactive);
         self::assertStringContainsString('aria-label="담은 수량 2개"', $inactive);
         $this->shop->store->update('yc_options', $extra, ['active' => 1]);
@@ -216,17 +216,18 @@ final class ShopCommerceTest extends WebTestCase
         $this->setupShop($config); $this->enablePayments();
         $order = $this->placeCardOrder();
         $html = $this->body($this->get($this->app, '/shop/pay', ['number' => $order['number']]));
-        self::assertStringContainsString('INIStdPay.js', $html);
-        self::assertStringContainsString('name="oid" value="' . $order['payment_id'] . '"', $html);
-        self::assertStringContainsString('name="price" value="' . $order['total'] . '"', $html);
-        self::assertStringContainsString('name="returnUrl" value="https://shop.example.test/shop/pay/callback?order=' . $order['payment_id'], $html);
-        self::assertStringContainsString('name="closeUrl" value="https://shop.example.test/shop/order?number=' . rawurlencode($order['number']) . '&amp;pay=closed"', $html);
+        self::assertStringContainsString('INIPayPro_v2.js', $html);
+        self::assertStringContainsString('테스트 결제', $html);
+        self::assertStringContainsString('name="P_OID" value="' . $order['payment_id'] . '"', $html);
+        self::assertStringContainsString('name="P_AMT" value="' . $order['total'] . '"', $html);
+        self::assertStringContainsString('name="P_NEXT_URL" value="https://shop.example.test/shop/pay/callback?order=' . $order['payment_id'], $html);
+        self::assertStringNotContainsString('name="P_CLOSE_URL"', $html);
 
         session_start(); $_SESSION['yc_guest_orders'] = []; session_write_close();
         self::assertSame(404, $this->get($this->app, '/shop/pay', ['number' => $order['number']])->getStatusCode());
     }
 
-    /** 모바일 브라우저는 스크립트 결제창이 아니라 이니시스 모바일 폼(EUC-KR)을 직접 제출한다. */
+    /** 모바일 브라우저도 PayPro 스크립트를 사용하되 기기 유형을 MOBILE로 전달한다. */
     #[DataProvider('connectionProvider')]
     public function testPayPageRendersTheInicisMobileFormForAPhone(array $config): void
     {
@@ -234,12 +235,12 @@ final class ShopCommerceTest extends WebTestCase
         $order = $this->placeCardOrder();
         $html = $this->body($this->get($this->app, '/shop/pay', ['number' => $order['number']],
             ['HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148']));
-        self::assertStringContainsString('name="P_INI_PAYMENT" value="CARD"', $html);
-        self::assertStringContainsString('action="https://stgmobile.inicis.com/smart/payment/"', $html);
-        self::assertStringContainsString('accept-charset="EUC-KR"', $html);
+        self::assertStringContainsString('name="P_PAY_TYPE" value="CARD"', $html);
+        self::assertStringContainsString('name="P_DEVICE_TYPE" value="MOBILE"', $html);
+        self::assertStringContainsString('accept-charset="UTF-8"', $html);
         self::assertStringContainsString('id="yc-pay-form"', $html);
-        self::assertStringContainsString('id="yc-pay-button" type="submit"', $html);
-        self::assertStringNotContainsString('INIStdPay.js', $html);
+        self::assertStringContainsString('id="yc-pay-button" type="button"', $html);
+        self::assertStringContainsString('INIPayPro_v2.js', $html);
     }
 
     #[DataProvider('connectionProvider')]
@@ -265,6 +266,7 @@ final class ShopCommerceTest extends WebTestCase
 
         $page = $this->body($this->get($this->app, '/shop/order', ['number' => $order['number']]));
         self::assertStringContainsString('결제 완료', $page);
+        self::assertStringContainsString('테스트 결제', $page);
         self::assertStringNotContainsString('주문 취소', $page);
         // 원장은 승인 완료(confirmed)로 남지만, 끝난 주문에 "확인 중"을 보여 주면 안 된다.
         self::assertStringNotContainsString('결제 결과를 확인하는 중', $page);
@@ -402,6 +404,7 @@ final class ShopCommerceTest extends WebTestCase
         $this->add();
         $html = $this->body($this->get($this->app, '/shop/checkout'));
         self::assertStringContainsString('name="payment_method" value="card"', $html);
+        self::assertStringContainsString('테스트 결제', $html);
         self::assertStringContainsString('name="payment_method" value="manual_transfer"', $html);
         self::assertStringContainsString('국민은행 123-45', $html);
         self::assertStringNotContainsString('이 화면에서는 결제되지 않습니다', $html);
@@ -603,7 +606,8 @@ final class ShopCommerceTest extends WebTestCase
         $input = $this->checkout(['email' => 'bad', 'agree' => '0']);
         $response = $this->post($this->app, '/shop/checkout', $input);
         self::assertSame(422, $response->getStatusCode());
-        self::assertStringContainsString('value="테스트 주문자"', $this->body($response));
+        self::assertStringContainsString('value="테스트 수령인"', $this->body($response));
+        self::assertStringNotContainsString('name="buyer_name"', $this->body($response));
         self::assertStringNotContainsString($input['password'], $this->body($response));
         self::assertSame(0, $this->shop->orders->listing(null, '', 1, true)['total']);
         self::assertSame(1, count($_SESSION['yc_cart']));
@@ -625,10 +629,12 @@ final class ShopCommerceTest extends WebTestCase
         self::assertStringContainsString('data-yc-cart-plus', $body);
         self::assertStringContainsString('주문서 작성', $body);
 
-        $this->post($this->app, '/shop/cart', $this->form(['quantities' => [$key => '11']]));
+        $overStock = $this->post($this->app, '/shop/cart', $this->form(['quantities' => [$key => '11']]));
+        self::assertSame(422, $overStock->getStatusCode());
+        self::assertStringContainsString('구매 가능 수량: 10개', $this->body($overStock));
+        self::assertSame(3, $_SESSION['yc_cart'][$key]['quantity']);
         $body = $this->body($this->get($this->app, '/shop/cart'));
-        self::assertStringContainsString('구매 가능 수량: 10개', $body);
-        self::assertStringNotContainsString('href="/shop/checkout"', $body);
+        self::assertStringContainsString('36,000원', $body);
         self::assertSame(10, (int) $this->shop->products->get((int) $this->product['id'])['stock']);
         self::assertSame(303, $this->post($this->app, '/shop/cart', $this->form(['remove' => $key]))->getStatusCode());
         self::assertSame([], $_SESSION['yc_cart']);
@@ -660,6 +666,8 @@ final class ShopCommerceTest extends WebTestCase
         self::assertSame(303, $this->post($this->app, '/shop/cart/add', $this->form(['product_id' => $this->product['id'], 'quantity' => 1, 'action' => 'buy']))->getStatusCode());
         $first = $this->app->users()->create('first@example.test', '', '첫번째회원');
         $second = $this->app->users()->create('second@example.test', '', '두번째회원');
+        $this->app->users()->updatePhone($first, '01011112222');
+        $this->app->users()->updatePhone($second, '01033334444');
         foreach ([null, $first, $second] as $userId) {
             session_start();
             if ($userId === null) unset($_SESSION['user_id'], $_SESSION['session_epoch']);
@@ -671,8 +679,16 @@ final class ShopCommerceTest extends WebTestCase
                 $response = $this->get($this->app, '/shop/checkout', ['flow' => $flow, 'user_id' => (string) $first]);
                 self::assertSame(200, $response->getStatusCode());
                 self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
-                $this->assertCheckoutValues($this->body($response), ['buyer_name' => $name, 'email' => $email, 'recipient' => $name,
-                    'phone' => '', 'recipient_phone' => '', 'postcode' => '', 'address' => '']);
+                $body = $this->body($response);
+                if ($userId === null) {
+                    self::assertStringNotContainsString('name="buyer_name"', $body);
+                    self::assertStringNotContainsString('name="phone"', $body);
+                    $this->assertCheckoutValues($body, ['email' => '', 'recipient' => '', 'recipient_phone' => '', 'postcode' => '', 'address' => '']);
+                } else {
+                    $phone = $userId === $first ? '01011112222' : '01033334444';
+                    $this->assertCheckoutValues($body, ['buyer_name' => $name, 'email' => $email, 'recipient' => $name,
+                        'phone' => $phone, 'recipient_phone' => $phone, 'postcode' => '', 'address' => '']);
+                }
             }
         }
         foreach (['social@oauth.local', 'social@users.gnucms.charmgen.com'] as $index => $email) {
@@ -689,6 +705,8 @@ final class ShopCommerceTest extends WebTestCase
     {
         $this->setupShop($config); $this->add();
         $body = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertStringNotContainsString('name="buyer_name"', $body);
+        self::assertStringNotContainsString('name="phone"', $body);
         self::assertStringContainsString('data-yc-postcode-search', $body);
         self::assertStringContainsString('youngcart-postcode.js', $body);
         self::assertStringNotContainsString('t1.kakaocdn.net', $body, 'The SDK is loaded on demand');
@@ -706,31 +724,102 @@ final class ShopCommerceTest extends WebTestCase
         self::assertStringContainsString('04524', $order);
         self::assertStringContainsString('테스트길 10 (건물 &amp; 별관)', $order);
         self::assertStringContainsString('202호', $order);
+        $placed = $this->shop->orders->listing(null, '', 1, true)['items'][0];
+        self::assertSame($input['recipient'], $placed['buyer_name']);
+        self::assertSame($input['recipient_phone'], $placed['phone']);
     }
 
     #[DataProvider('connectionProvider')]
-    public function testCheckoutKeepsMemberEditsThroughRefreshErrorsAndOrder(array $config): void
+    public function testCheckoutLocksMemberIdentityAndKeepsDeliveryEditsThroughRefreshAndOrder(array $config): void
     {
         $this->setupShop($config); $this->add();
         $userId = $this->app->users()->create('member@example.test', '', '가입한이름');
+        $this->app->users()->updatePhone($userId, '01012345678');
         session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
         $input = $this->checkout(['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test', 'recipient' => '', 'agree' => '0']);
         unset($input['password']);
         $invalid = $this->post($this->app, '/shop/checkout', $input);
         self::assertSame(422, $invalid->getStatusCode());
-        $this->assertCheckoutValues($this->body($invalid), ['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test', 'recipient' => '']);
+        $this->assertCheckoutValues($this->body($invalid), ['buyer_name' => '가입한이름', 'email' => 'member@example.test', 'phone' => '01012345678', 'recipient' => '']);
         $refresh = $this->post($this->app, '/shop/checkout', array_replace($input, ['action' => 'refresh', 'buyer_name' => '', 'email' => '']));
         self::assertSame(200, $refresh->getStatusCode());
-        $this->assertCheckoutValues($this->body($refresh), ['buyer_name' => '', 'email' => '', 'recipient' => '', 'phone' => $input['phone'], 'address' => $input['address']]);
+        $this->assertCheckoutValues($this->body($refresh), ['buyer_name' => '가입한이름', 'email' => 'member@example.test', 'recipient' => '', 'phone' => '01012345678', 'address' => $input['address']]);
         $order = $this->post($this->app, '/shop/checkout', array_replace($input, ['recipient' => '선물 수령인', 'agree' => '1']));
         self::assertSame(303, $order->getStatusCode());
         $body = $this->body($this->get($this->app, $order->getHeaderLine('Location')));
-        self::assertStringContainsString('다른 주문자', $body);
-        self::assertStringContainsString('delivery@example.test', $body);
+        self::assertStringContainsString('가입한이름', $body);
+        self::assertStringContainsString('member@example.test', $body);
+        self::assertStringNotContainsString('delivery@example.test', $body);
         self::assertStringContainsString('선물 수령인', $body);
         $user = $this->app->users()->findById($userId);
         self::assertSame('가입한이름', $user['display_name']);
         self::assertSame('member@example.test', $user['email']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testOrderLinksUseOpaqueReferencesAndStillCheckTheMember(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $owner = $this->app->users()->create('link-owner@example.test', '', '구매회원');
+        $other = $this->app->users()->create('link-other@example.test', '', '다른회원');
+        session_start(); $_SESSION['user_id'] = $owner; $_SESSION['session_epoch'] = 0; session_write_close();
+        $input = $this->checkout();
+        unset($input['password']);
+        $placed = $this->post($this->app, '/shop/checkout', $input);
+        self::assertSame(303, $placed->getStatusCode());
+        parse_str((string) parse_url($placed->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        $reference = (string) ($query['ref'] ?? '');
+        $order = $this->shop->orders->listing($owner)['items'][0];
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', $reference);
+        self::assertSame($order['checkout_key'], $reference);
+        self::assertStringNotContainsString($order['number'], $reference);
+        self::assertArrayNotHasKey('number', $query);
+        $detail = $this->get($this->app, '/shop/order', ['ref' => $reference]);
+        self::assertSame(200, $detail->getStatusCode());
+        self::assertSame('no-referrer', $detail->getHeaderLine('Referrer-Policy'));
+        self::assertStringContainsString('/shop/order?ref=' . $reference, $this->body($this->get($this->app, '/shop/orders')));
+        $invalid = substr($reference, 0, -1) . (str_ends_with($reference, 'a') ? 'b' : 'a');
+        self::assertSame(404, $this->get($this->app, '/shop/order', ['ref' => $invalid])->getStatusCode());
+        self::assertSame('/shop/order?ref=' . $reference,
+            $this->get($this->app, '/shop/order', ['number' => $order['number']])->getHeaderLine('Location'));
+        $legacyReference = $order['number'] . '-' . substr(hash_hmac('sha256', 'shop-order-url:' . $order['number'], $order['checkout_key']), 0, 32);
+        $legacy = $this->get($this->app, '/shop/order', ['ref' => $legacyReference]);
+        self::assertSame(303, $legacy->getStatusCode());
+        self::assertSame('/shop/order?ref=' . $reference, $legacy->getHeaderLine('Location'));
+        session_start(); $_SESSION['user_id'] = $other; $_SESSION['session_epoch'] = 0; session_write_close();
+        self::assertSame(404, $this->get($this->app, '/shop/order', ['ref' => $reference])->getStatusCode());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testCheckoutPrefillsAddressFromOrdersAndPreservesDefaultForOneOffDelivery(array $config): void
+    {
+        $this->setupShop($config); $this->add();
+        $userId = $this->app->users()->create('buyer@example.test', '', '구매회원');
+        $this->app->users()->updatePhone($userId, '01011112222');
+        session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
+        $first = $this->checkout(['recipient' => '기본 수령인', 'recipient_phone' => '01022223333', 'postcode' => '04524',
+            'address' => '기본길 1', 'address_detail' => '101호', 'save_default_address' => '1']);
+        unset($first['password']);
+        self::assertSame(303, $this->post($this->app, '/shop/checkout', $first)->getStatusCode());
+        $this->add();
+        $page = $this->body($this->get($this->app, '/shop/checkout'));
+        $this->assertCheckoutValues($page, ['buyer_name' => '구매회원', 'phone' => '01011112222', 'email' => 'buyer@example.test',
+            'recipient' => '기본 수령인', 'recipient_phone' => '01022223333', 'postcode' => '04524', 'address' => '기본길 1', 'address_detail' => '101호']);
+        self::assertStringContainsString('yc-buyer-readonly', $page);
+        $input = $this->checkout(['recipient' => '임시 수령인', 'recipient_phone' => '01099998888', 'postcode' => '06236', 'address' => '임시길 2']);
+        unset($input['password']);
+        self::assertSame(303, $this->post($this->app, '/shop/checkout', $input)->getStatusCode());
+        self::assertSame('기본 수령인', $this->shop->orders->defaultAddressFor($userId)['recipient']);
+        $this->add();
+        $input = $this->checkout(['recipient' => '새 기본 수령인', 'save_default_address' => '1']);
+        unset($input['password']);
+        self::assertSame(303, $this->post($this->app, '/shop/checkout', $input)->getStatusCode());
+        self::assertSame('새 기본 수령인', $this->shop->orders->defaultAddressFor($userId)['recipient']);
+        self::assertSame(1, (int) $this->shop->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->shop->store->table('yc_orders') . ' WHERE user_id = ? AND default_address = 1', [$userId])['c']);
+        $firstOrder = $this->shop->store->selectOne('SELECT recipient, address, default_address FROM ' . $this->shop->store->table('yc_orders') . ' WHERE user_id = ? ORDER BY id ASC LIMIT 1', [$userId]);
+        self::assertSame('기본 수령인', $firstOrder['recipient']);
+        self::assertSame('기본길 1', $firstOrder['address']);
+        self::assertSame(0, (int) $firstOrder['default_address']);
     }
 
     private function assertCheckoutValues(string $body, array $expected): void

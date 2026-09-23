@@ -41,7 +41,7 @@ final class ShopController
             if (!$admin) throw DomainError::notFound('이미지를 찾을 수 없습니다.');
         }
         $data['menu'] = $this->service->categories->children(null, true, true);
-        $data['cart_count'] = $this->service->cart->productQuantity($_SESSION['yc_cart'] ?? []);
+        $data['cart_count'] = $this->service->cart->productCount($_SESSION['yc_cart'] ?? []);
         $sort = $query['sort'] ?? '';
         $dir = ($query['dir'] ?? '') === 'asc' ? 'asc' : 'desc';
         if (preg_match('/^([a-z]+)_(asc|desc)$/D', $query['sortdir'] ?? '', $m)) { $sort = $m[1]; $dir = $m[2]; }

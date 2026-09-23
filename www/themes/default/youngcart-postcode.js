@@ -46,7 +46,26 @@
     field.dispatchEvent(new Event('input', { bubbles: true }));
     field.dispatchEvent(new Event('change', { bubbles: true }));
   }
+  // 검색 스크립트를 사용할 수 있을 때만 직접 입력을 잠근다.
+  postcode.readOnly = true; address.readOnly = true;
   search.hidden = false;
+  var previous = document.querySelector('[data-yc-previous-address]');
+  var recipient = document.getElementById('yc-recipient');
+  var phone = document.getElementById('yc-recipient_phone');
+  var deliveryNote = document.getElementById('yc-delivery_note');
+  if (previous && recipient && phone && deliveryNote) previous.addEventListener('change', function () {
+    var selected = previous.selectedOptions[0];
+    if (!selected || !selected.value) return;
+    var fresh = selected.value === 'new';
+    [[recipient, selected.dataset.recipient], [phone, selected.dataset.recipientPhone],
+      [postcode, selected.dataset.postcode], [address, selected.dataset.address],
+      [detail, selected.dataset.addressDetail], [deliveryNote, selected.dataset.deliveryNote]].forEach(function (entry) {
+      entry[0].value = fresh ? '' : (entry[1] || '');
+      changed(entry[0]);
+    });
+    close(false);
+    if (fresh) recipient.focus();
+  });
   search.addEventListener('click', function () {
     var current = ++attempt;
     panel.hidden = false; panel.setAttribute('aria-busy', 'true'); host.replaceChildren();
@@ -74,6 +93,7 @@
           selected = selected.trim() + (extra.length ? ' (' + extra.join(', ') + ')' : '');
           if (postcode.value !== data.zonecode || address.value !== selected) { detail.value = ''; changed(detail); }
           postcode.value = data.zonecode; address.value = selected;
+          postcode.readOnly = true; address.readOnly = true;
           changed(postcode); changed(address);
           close(false);
           detail.focus();
@@ -84,6 +104,7 @@
     }).catch(function () {
       if (current !== attempt) return;
       close(false);
+      postcode.readOnly = false; address.readOnly = false;
       message('주소 검색을 불러오지 못했습니다. 다시 시도하거나 우편번호와 주소를 직접 입력해 주세요.');
       search.focus();
     });

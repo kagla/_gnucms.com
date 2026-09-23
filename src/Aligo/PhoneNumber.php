@@ -60,9 +60,9 @@ final class PhoneNumber
         return $digits;
     }
 
-    public static function format(string $digits): string
+    public static function format(string $value): string
     {
-        $digits = self::digits($digits);
+        $digits = self::digits($value);
         if (preg_match('/^(01[016789])(\d{3,4})(\d{4})$/D', $digits, $m) === 1) {
             return $m[1] . '-' . $m[2] . '-' . $m[3];
         }
@@ -76,7 +76,8 @@ final class PhoneNumber
             return $m[1] . '-' . $m[2];
         }
 
-        return $digits;
+        // 국제번호 등 국내 형식에 맞지 않는 값은 원문을 보존한다.
+        return $value;
     }
 
     /**

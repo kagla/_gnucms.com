@@ -24,6 +24,7 @@ final class Service
     public readonly Commerce\Cart $cart;
     public readonly Commerce\Orders $orders;
     public readonly Commerce\Payments $payments;
+    public readonly Commerce\CheckoutIntents $checkoutIntents;
 
     public function __construct(public readonly App $app)
     {
@@ -38,5 +39,6 @@ final class Service
         $this->cart = new Commerce\Cart($this->products, $this->settings, $this->store);
         $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
         $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
+        $this->checkoutIntents = new Commerce\CheckoutIntents($app, $this->cart, $this->orders, $this->payments);
     }
 }

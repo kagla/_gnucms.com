@@ -27,7 +27,11 @@
       <option value="">옵션을 선택해 주세요</option>
       <?php foreach ($opts['select'] as $option): $available = (int) $option['active'] === 1 && (int) $option['stock'] > 0; ?><option value="<?= (int) $option['id'] ?>" data-price="<?= (int) $option['price'] ?>" data-stock="<?= $available ? (int) $option['stock'] : 0 ?>"<?= !$available ? ' disabled' : '' ?>><?= $this->e(implode(' / ', array_filter([$option['value1'], $option['value2'], $option['value3']], static fn ($v) => $v !== ''))) ?><?= (int) $option['price'] !== 0 ? ' (' . ((int) $option['price'] > 0 ? '+' : '') . number_format((int) $option['price']) . '원)' : '' ?><?= $available ? ' · 재고 ' . number_format((int) $option['stock']) . '개' : ' · 품절' ?></option><?php endforeach ?>
     </select></label><?php else: ?><input type="hidden" name="option_id" value="0"><?php endif ?>
-    <label class="yc-option-row" data-yc-single-quantity><span>수량</span><input class="input input-bordered yc-quantity" type="number" name="quantity" value="<?= $minimum ?>" min="<?= $minimum ?>" max="<?= min(9999, (int) $product['buy_max'] ?: 9999, $opts['select'] === [] ? (int) $product['stock'] : 9999) ?>" required data-yc-quantity></label>
+    <div class="yc-option-row" data-yc-single-quantity><label for="yc-product-quantity">수량</label><div class="yc-option-quantity-controls" data-yc-quantity-controls>
+      <button type="button" data-yc-quantity-minus aria-label="상품 수량 줄이기" hidden>−</button>
+      <input class="input input-bordered yc-quantity" type="number" id="yc-product-quantity" name="quantity" value="<?= $minimum ?>" min="<?= $minimum ?>" max="<?= min(9999, (int) $product['buy_max'] ?: 9999, $opts['select'] === [] ? (int) $product['stock'] : 9999) ?>" required data-yc-quantity data-yc-stock="<?= $opts['select'] === [] ? (int) $product['stock'] : 9999 ?>">
+      <button type="button" data-yc-quantity-plus aria-label="상품 수량 늘리기" hidden>+</button>
+    </div></div>
     <?php if ($opts['extra'] !== []): ?><details class="yc-extras"><summary>추가 구성 선택 <span class="muted">선택사항</span></summary>
       <?php foreach ($opts['extra'] as $option):
         if ((int) $option['active'] !== 1) continue;
@@ -39,7 +43,7 @@
         <label for="<?= $extraId ?>"><?= $this->e($extraName) ?><small><?= number_format((int) $option['price']) ?>원<?= $extraSoldOut ? ' · 품절' : '' ?></small></label>
         <div class="yc-option-quantity-controls" data-yc-quantity-controls>
           <button type="button" data-yc-quantity-minus aria-label="<?= $this->e($extraName) ?> 수량 줄이기" hidden>−</button>
-          <input class="input input-bordered" type="number" id="<?= $extraId ?>" name="extras[<?= (int) $option['id'] ?>]" min="0" max="<?= min(9999, (int) $option['stock']) ?>" value="0" inputmode="numeric" data-yc-extra-price="<?= (int) $option['price'] ?>" aria-label="<?= $this->e($extraName) ?> 수량"<?= $extraSoldOut ? ' disabled' : '' ?>>
+          <input class="input input-bordered" type="number" id="<?= $extraId ?>" name="extras[<?= (int) $option['id'] ?>]" min="0" max="<?= min(9999, (int) $option['stock']) ?>" value="0" inputmode="numeric" data-yc-extra-price="<?= (int) $option['price'] ?>" data-yc-stock="<?= (int) $option['stock'] ?>" aria-label="<?= $this->e($extraName) ?> 수량"<?= $extraSoldOut ? ' disabled' : '' ?>>
           <button type="button" data-yc-quantity-plus aria-label="<?= $this->e($extraName) ?> 수량 늘리기" hidden>+</button>
         </div>
       </div>

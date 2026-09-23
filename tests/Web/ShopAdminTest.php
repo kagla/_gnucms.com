@@ -272,6 +272,35 @@ final class ShopAdminTest extends WebTestCase
         self::assertTrue($this->shop->settings->all()['show_tax']);
     }
 
+    #[DataProvider('connectionProvider')]
+    public function testShopSettingsCanSaveAndEnableLiveInicisWithoutExposingKeys(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('id="yc-inicis-live-form"', $page);
+        self::assertStringContainsString('id="yc-inicis-live-merchant_id" form="yc-inicis-live-form"', $page);
+        self::assertStringContainsString('id="yc-inicis-live-hash_key" form="yc-inicis-live-form" type="password"', $page);
+        self::assertStringContainsString('name="environment" value="live"', $page);
+
+        $credentials = Fixtures::config('inicis');
+        unset($credentials['sign_key']); // 신규 PayPro 운영 상점에는 기존 웹표준 SignKey가 필요 없다.
+        $saved = $this->post($this->app, '/admin/settings/payment', $this->csrf($credentials +
+            ['provider' => 'inicis', 'environment' => 'live', 'return_to' => 'shop', 'action' => 'save']));
+        self::assertSame(303, $saved->getStatusCode());
+        self::assertSame('/admin/shop/settings?payment_saved=1#settings-payment', $saved->getHeaderLine('Location'));
+        self::assertFalse($this->app->paymentSettings()->available('live'));
+        self::assertSame('', $this->app->paymentSettings()->current('live')['sign_key']);
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('value="' . $credentials['merchant_id'] . '"', $page);
+        self::assertStringNotContainsString($credentials['hash_key'], $page);
+
+        $enabled = $this->post($this->app, '/admin/settings/payment', $this->csrf(
+            ['provider' => 'inicis', 'environment' => 'live', 'return_to' => 'shop', 'action' => 'enable']));
+        self::assertSame('/admin/shop/settings?payment_enabled=1#settings-payment', $enabled->getHeaderLine('Location'));
+        self::assertTrue($this->app->paymentSettings()->available('live'));
+    }
+
     private function settingsForm(array $overrides): array
     {
         $form = [];

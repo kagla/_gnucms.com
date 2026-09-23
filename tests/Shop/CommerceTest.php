@@ -61,6 +61,28 @@ final class CommerceTest extends ShopTestCase
     }
 
     #[DataProvider('connectionProvider')]
+    public function testExtraPriceRemainsVisibleWhenRequestedQuantityExceedsStock(array $config): void
+    {
+        $this->setupShop($config);
+        $product = $this->product(['extras' => [['value1' => '선물 포장', 'price' => '2000', 'stock' => '5']]]);
+        $extra = (int) $product['options']['extra'][0]['id'];
+        $cart = $this->cart($product, 1, ['extras' => [$extra => 5]]);
+        $key = $product['id'] . ':' . $extra;
+        $this->shop->store->update('yc_options', $extra, ['stock' => 3]);
+
+        $quote = $this->shop->cart->quote($cart);
+        $extraLine = array_values(array_filter($quote['items'], static fn (array $item): bool => $item['kind'] === 'extra'))[0];
+
+        self::assertSame(2000, $extraLine['price']);
+        self::assertSame(10000, $extraLine['total']);
+        self::assertStringContainsString('재고가 부족합니다', $extraLine['error']);
+        $this->reject(fn () => $this->shop->cart->update($cart, [$key => 6]), '재고');
+        $reduced = $this->shop->cart->update($cart, [$key => 3]);
+        $reducedExtras = array_values(array_filter($this->shop->cart->quote($reduced)['items'], static fn (array $item): bool => $item['kind'] === 'extra'));
+        self::assertSame(6000, $reducedExtras[0]['total']);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testMultipleSelectionsValidateTogetherAndReserveEachCombination(array $config): void
     {
         $this->setupShop($config);

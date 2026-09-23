@@ -64,7 +64,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '32';
+    public const VERSION = '34';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.

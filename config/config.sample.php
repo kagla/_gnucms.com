@@ -32,6 +32,10 @@ return [
         'prefix'   => '',
     ],
 
+    // 여러 서버가 같은 결제 설정 DB를 쓸 때 각 서버의 요청 IPv4를 개별 지정한다.
+    // 비워 두면 관리자 결제 설정의 기본 요청 서버 IPv4를 사용한다.
+    'payment' => ['inicis' => ['client_ip' => '']],
+
     // 세션·메일·설정 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.
     'auth' => [
         'secret' => 'CHANGE-ME-32-BYTES-OR-LONGER-RANDOM-STRING',

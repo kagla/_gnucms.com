@@ -12,24 +12,18 @@ final class InicisGateway extends DirectGateway
 {
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
+        if ((int) $order['total'] > 999999999) throw DomainError::validation(['amount' => '카드 결제 한도를 초과했습니다.']);
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
-        $timestamp = (string) (Clock::timestamp() * 1000);
-        if ($device === 'mobile') {
-            if ((int) $order['total'] > 99999999) throw DomainError::validation(['amount' => '모바일 결제 한도를 초과했습니다.']);
-            return ['kind' => 'form', 'action' => 'https://' . ($config['environment'] === 'test' ? 'stgmobile' : 'mobile') . '.inicis.com/smart/payment/', 'charset' => 'EUC-KR', 'fields' => [
-                'P_INI_PAYMENT' => 'CARD', 'P_MID' => $config['merchant_id'], 'P_OID' => $order['id'], 'P_AMT' => (string) $order['total'],
-                'P_GOODS' => mb_strcut($order['order_name'], 0, 40, 'UTF-8'), 'P_UNAME' => mb_strcut($customer['name'], 0, 30, 'UTF-8'),
-                'P_MOBILE' => $customer['phone'], 'P_EMAIL' => $customer['email'], 'P_NEXT_URL' => $callbackUrl,
-                'P_TIMESTAMP' => $timestamp, 'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp), 'P_RESERVED' => 'centerCd=Y&amt_hash=Y', 'P_CHARSET' => 'utf8',
-            ]];
-        }
-        return ['kind' => 'inicis', 'script' => 'https://' . ($config['environment'] === 'test' ? 'stgstdpay' : 'stdpay') . '.inicis.com/stdjs/INIStdPay.js', 'fields' => [
-            'version' => '1.0', 'gopaymethod' => 'Card', 'mid' => $config['merchant_id'], 'oid' => $order['id'], 'price' => (string) $order['total'],
-            'timestamp' => $timestamp, 'use_chkfake' => 'Y', 'signature' => self::signature(['oid' => $order['id'], 'price' => (string) $order['total'], 'timestamp' => $timestamp]),
-            'verification' => self::signature(['oid' => $order['id'], 'price' => (string) $order['total'], 'signKey' => $config['sign_key'], 'timestamp' => $timestamp]),
-            'mKey' => hash('sha256', $config['sign_key']), 'currency' => 'WON', 'goodname' => mb_strcut($order['order_name'], 0, 40, 'UTF-8'),
-            'buyername' => mb_strcut($customer['name'], 0, 30, 'UTF-8'), 'buyertel' => $customer['phone'], 'buyeremail' => $customer['email'],
-            'returnUrl' => $callbackUrl, 'closeUrl' => $returnUrl, 'acceptmethod' => 'centerCd(Y)', 'charset' => 'UTF-8',
+        $timestamp = (string) (int) (microtime(true) * 1000);
+        return ['kind' => 'inicis-pro', 'script' => 'https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', 'fields' => [
+            'P_MID' => $config['merchant_id'], 'P_OID' => $order['id'], 'P_PAY_TYPE' => 'CARD',
+            'P_DEVICE_TYPE' => $device === 'mobile' ? 'MOBILE' : 'WEB', 'P_IDCCODE' => 'Y',
+            'P_AMT' => (string) $order['total'], 'P_GOODS' => mb_strcut($order['order_name'], 0, 80, 'UTF-8'),
+            'P_UNAME' => mb_strcut($customer['name'], 0, 30, 'UTF-8'), 'P_NEXT_URL' => $callbackUrl,
+            'P_RESERVED' => json_encode(['email' => $customer['email']], JSON_THROW_ON_ERROR),
+            // PayPro는 결과 콜백 뒤에도 닫기 주소로 이동할 수 있어 주문 완료 이동을 덮어쓴다.
+            'P_CHARSET' => 'UTF-8', 'P_TIMESTAMP' => $timestamp,
+            'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp),
         ]];
     }
 
@@ -54,8 +48,29 @@ final class InicisGateway extends DirectGateway
         return $mobile && $cancel ? 'https://' . $host . '/smart/payNetCancel.ini' : $url;
     }
 
+    private function proUrl(array $callback, bool $cancel = false): string
+    {
+        $idc = strtolower(self::value($callback, 'P_IDCNAME', 3));
+        // PayPro 안내대로 응답의 IDC를 쓰되, 요청 가능한 호스트는 알려진 세 IDC로 제한한다.
+        if (!in_array($idc, ['fc', 'ks', 'stg'], true)) {
+            throw new DomainError('PAY_IDC_INVALID', '이니시스 IDC 코드를 확인할 수 없습니다.', 403);
+        }
+        return 'https://' . $idc . 'paypro.inicis.com/payment/v1/rest/' . ($cancel ? 'payNetCancel' : 'payAppl') . '.ini';
+    }
+
     protected function validateCallback(array $config, array $order, array $callback): void
     {
+        if (isset($callback['P_AUTH_TID'])) {
+            if (self::value($callback, 'P_STATUS', 4) !== '00'
+                || self::value($callback, 'P_MID', 10) !== $config['merchant_id']
+                || self::value($callback, 'P_OID', 40) !== $order['id']
+                || self::amount($callback['P_AMT'] ?? null) !== (int) $order['total']) {
+                throw DomainError::validation(['payment' => '인증 결과의 상점·주문·금액을 확인해 주세요.']);
+            }
+            self::value($callback, 'P_AUTH_TID', 40);
+            $this->proUrl($callback);
+            return;
+        }
         $mobile = isset($callback['P_STATUS']);
         if ($mobile) {
             if (self::value($callback, 'P_STATUS', 4) !== '00' || self::amount($callback['P_AMT'] ?? null) !== (int) $order['total']) throw DomainError::validation(['payment' => '인증이 완료되지 않았거나 결제 금액이 다릅니다.']);
@@ -70,6 +85,7 @@ final class InicisGateway extends DirectGateway
 
     protected function approve(array $config, array $order, array $callback): array
     {
+        if (isset($callback['P_AUTH_TID'])) return $this->approvePro($config, $order, $callback);
         $mobile = isset($callback['P_STATUS']); $timestamp = (string) (Clock::timestamp() * 1000);
         $body = $mobile ? ['P_MID' => $config['merchant_id'], 'P_TID' => $callback['P_TID']] : [
             'mid' => $config['merchant_id'], 'authToken' => $callback['authToken'], 'timestamp' => $timestamp,
@@ -92,11 +108,39 @@ final class InicisGateway extends DirectGateway
         }
     }
 
+    private function approvePro(array $config, array $order, array $callback): array
+    {
+        $body = ['P_MID' => $config['merchant_id'], 'P_AUTH_TID' => $callback['P_AUTH_TID'],
+            'P_AMT' => (string) $order['total'], 'P_CHARSET' => 'UTF-8'];
+        try {
+            $response = $this->request($this->proUrl($callback), $body, true);
+            if (($response['P_STATUS'] ?? '') !== '00'
+                || ($response['P_MID'] ?? '') !== $config['merchant_id']
+                || ($response['P_OID'] ?? '') !== $order['id']
+                || self::amount($response['P_AMT'] ?? null) !== (int) $order['total']
+                || ($response['P_TYPE'] ?? '') !== 'CARD') {
+                throw DomainError::serviceUnavailable('승인 결과가 주문과 일치하지 않습니다. PG에서 상태를 확인해 주세요.');
+            }
+            return ['tid' => self::value($response, 'P_APPL_TID', 40)];
+        } catch (\Throwable $error) {
+            $timestamp = (string) (int) (microtime(true) * 1000);
+            $cancel = $body + ['P_OID' => $order['id'], 'P_CANCEL_MSG' => 'Merchant approval verification failed',
+                'P_TIMESTAMP' => $timestamp, 'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp)];
+            try { $this->request($this->proUrl($callback, true), $cancel, true); } catch (\Throwable) {}
+            throw $error;
+        }
+    }
+
     private function api(array $config, string $type, array $data): array
     {
         $timestamp = self::now();
+        $serverIp = $this->settings->app->config('payment.inicis.client_ip');
+        $clientIp = $serverIp === null || $serverIp === '' ? $config['client_ip'] : $serverIp;
+        if (!is_string($clientIp) || !filter_var($clientIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            throw DomainError::serviceUnavailable('이니시스 요청 서버 IPv4 주소를 확인해 주세요.');
+        }
         return $this->request('https://' . ($config['environment'] === 'test' ? 'stginiapi' : 'iniapi') . '.inicis.com/v2/pg/' . $type,
-            ['mid' => $config['merchant_id'], 'type' => $type, 'timestamp' => $timestamp, 'clientIp' => $config['client_ip'],
+            ['mid' => $config['merchant_id'], 'type' => $type, 'timestamp' => $timestamp, 'clientIp' => $clientIp,
                 'hashData' => hash('sha512', $config['api_key'] . $config['merchant_id'] . $type . $timestamp . StreamTransport::json($data)), 'data' => $data]);
     }
 
@@ -144,7 +188,8 @@ final class InicisGateway extends DirectGateway
         if (($result['resultCode'] ?? '') !== '00') throw DomainError::serviceUnavailable('이니시스 환불이 확정되지 않았습니다. PG 내역을 확인해 주세요.');
         $at = self::date(($result[$full ? 'cancelDate' : 'prtcDate'] ?? '') . ($result[$full ? 'cancelTime' : 'prtcTime'] ?? ''));
         if ($at < 1) throw DomainError::serviceUnavailable('환불 시간을 확인하지 못했습니다.');
-        if (!$full && (self::amount($result['prtcPrice'] ?? null) !== $amount || self::amount($result['prtcRemains'] ?? null) !== $remaining - $amount)) throw DomainError::serviceUnavailable('환불 금액을 확인하지 못했습니다.');
-        return ['id' => $full ? $tid . '-full' : self::value($result, 'prtcTid', 40), 'amount' => $amount, 'at' => $at];
+        if (!$full && (self::amount($result['prtcPrice'] ?? null) !== $amount || self::amount($result['prtcRemains'] ?? null) !== $remaining - $amount
+            || ($result['prtcTid'] ?? null) !== $tid)) throw DomainError::serviceUnavailable('환불 금액과 원거래를 확인하지 못했습니다.');
+        return ['id' => $full ? $tid . '-full' : self::value($result, 'tid', 40), 'amount' => $amount, 'at' => $at];
     }
 }

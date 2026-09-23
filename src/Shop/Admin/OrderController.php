@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Shop\Admin;
 
 use GnuCms\Error\DomainError;
+use GnuCms\Shop\Commerce\CancellationReason;
 use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Shop\Commerce\Payments;
 use GnuCms\Shop\Input;
@@ -37,13 +38,13 @@ final class OrderController extends AdminBase
                     'refund-confirm' => $this->service->payments->confirmRefund($order, self::refundKey($data),
                         Input::text($data['input']['reference'] ?? '', 'reference', 100, false), $data['actor']),
                     'refund-unprocessed' => $this->service->payments->dismissRefund($order, self::refundKey($data)),
-                    default => $this->service->orders->transition($id, Input::text($data['input']['from'] ?? '', 'from', 20),
-                        Input::text($data['input']['status'] ?? '', 'status', 20), $data['actor'], $data['input']),
+                    default => $this->transition($id, $data),
                 };
                 return $this->redirect($response, $data['admin_url'] . '/orders/detail?id=' . $id . '&saved=' . ($action === '' ? '1' : $action));
             } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
         }
         $data['order'] = $this->service->orders->get($id);
+        $data['cancel_reasons'] = CancellationReason::OPTIONS;
         $data['next'] = array_values(array_diff(Orders::NEXT[$data['order']['status']], ['paid']));
         $data['is_pg'] = $this->service->payments->isPgOrder($data['order']);
         $provider = $data['is_pg'] ? $this->service->app->paymentProviders()->get($data['order']['payment_provider']) : null;
@@ -56,6 +57,15 @@ final class OrderController extends AdminBase
             'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.', default => '',
         };
         return $this->render($request, $response, 'order', $data);
+    }
+
+    private function transition(int $id, array $data): array
+    {
+        $from = Input::text($data['input']['from'] ?? '', 'from', 20);
+        $status = Input::text($data['input']['status'] ?? '', 'status', 20);
+        $input = $data['input'];
+        if ($status === 'cancelled') $input['note'] = CancellationReason::note($input);
+        return $this->service->orders->transition($id, $from, $status, $data['actor'], $input);
     }
 
     /** 대조·정리 폼이 돌려주는 결제 원장의 환불 요청 키. 화면에 뿌린 값 그대로 온다. */
@@ -73,7 +83,7 @@ final class OrderController extends AdminBase
         if (!preg_match('/^[a-f0-9]{32}$/D', $key)) throw DomainError::validation(['refund' => '환불 요청을 다시 열어 주세요.']);
         $after = $this->service->payments->refund($order, $amount, $reason, $key, $data['actor']);
         if (($data['input']['cancel_order'] ?? '') === '1' && (int) $after['refunded_amount'] >= (int) $after['paid_amount'] && in_array('cancelled', Orders::NEXT[$after['status']], true)) {
-            $this->service->orders->transition((int) $after['id'], $after['status'], 'cancelled', $data['actor'], ['note' => '환불 뒤 주문을 취소했습니다.']);
+            $this->service->orders->transition((int) $after['id'], $after['status'], 'cancelled', $data['actor'], ['note' => '환불 뒤 주문 취소 · ' . $reason]);
         }
     }
 }

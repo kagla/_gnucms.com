@@ -18,7 +18,7 @@ final class InicisProvider implements Provider
     {
         if ($current !== null && $current['merchant_id'] === $revision['merchant_id']) {
             foreach ($this->fields() as $key => $field) {
-                if ($field['secret'] || $key === 'client_ip') $revision[$key] = $current[$key];
+                if (($field['secret'] && ($current[$key] ?? '') !== '') || $key === 'client_ip') $revision[$key] = $current[$key];
             }
         }
         return $revision;
