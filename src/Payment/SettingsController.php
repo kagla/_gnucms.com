@@ -36,12 +36,8 @@ final class SettingsController
                 $action = $input['action'] ?? '';
                 if ($action === 'save') {
                     $settings->save($environment, $input);
-                    $notice = '설정을 저장했습니다. 상점 코드와 환경을 확인한 뒤 API 실행을 허용해 주세요.';
+                    $notice = '결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
                     $completedAction = 'payment_saved';
-                } elseif (in_array($action, ['enable', 'disable'], true)) {
-                    $settings->enable($environment, $action === 'enable');
-                    $notice = $action === 'enable' ? 'API 실행을 허용했습니다.' : 'API 실행을 정지했습니다.';
-                    $completedAction = $action === 'enable' ? 'payment_enabled' : 'payment_disabled';
                 } else {
                     throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
                 }
@@ -50,7 +46,11 @@ final class SettingsController
             $response = $response->withStatus($e->status());
             $errors = $e->status() >= 500 ? ['설정 저장에 실패했습니다. 암호화 키와 저장소 상태를 확인해 주세요.'] : ($e->details() ?: [$e->getMessage()]);
         }
-        if ($completedAction !== '' && ($input['return_to'] ?? '') === 'shop' && $provider->id() === 'inicis' && $environment === 'live') {
+        if ($completedAction !== '' && ($input['return_to'] ?? '') === 'shop' && $provider->id() === 'inicis') {
+            $selectedEnvironment = $input['payment_environment'] ?? null;
+            if (is_string($selectedEnvironment) && in_array($selectedEnvironment, ['live', 'test'], true)) {
+                $this->settings->app->shop()->settings->setPaymentEnvironment($selectedEnvironment);
+            }
             $url = RouteContext::fromRequest($request)->getBasePath() . '/admin/shop/settings?' . $completedAction . '=1#settings-payment';
             return $response->withStatus(303)->withHeader('Location', $url)->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
         }
@@ -61,5 +61,25 @@ final class SettingsController
                 'label' => $provider->label(), 'environment' => $environment,
                 'settings' => $settings->summary($environment), 'notice' => $notice, 'errors' => $errors]
         );
+    }
+
+    /** 저장된 PG 비밀키는 관리자가 명시적으로 요청할 때만 전송한다. */
+    public function secret(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->settings->app->guestAcl()->assertGlobalAdmin();
+        Csrf::assert($request);
+        $input = $request->getParsedBody();
+        $input = is_array($input) ? $input : [];
+        $environment = is_string($input['environment'] ?? null) ? $input['environment'] : '';
+        $field = is_string($input['field'] ?? null) ? $input['field'] : '';
+        $secret = $this->settings->secret($environment, $field);
+        $response->getBody()->write((string) json_encode(
+            ['secret' => $secret],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+        return $response
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Referrer-Policy', 'no-referrer');
     }
 }

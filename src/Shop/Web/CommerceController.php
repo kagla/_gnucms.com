@@ -38,14 +38,20 @@ final class CommerceController
         $data['settings'] = $this->service->settings->all();
         // 영수증(order)은 예외다. 공개를 끄기 전에 받은 주문과 진행 중인 결제가 돌아올 곳이다.
         if (!$data['settings']['visible'] && $page !== 'order') return $view->render($response, 'closed', $data);
-        if ($userId === null && in_array($page, ['checkout', 'orders', 'order', 'order/cancel'], true)) {
+        if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel'], true)) {
             $destination = $url . match ($page) {
-                'checkout' => '/checkout' . (($input['flow'] ?? '') === 'buy' ? '?flow=buy' : ''),
+                'checkout', 'checkout/previous-addresses' => '/checkout' . (($input['flow'] ?? '') === 'buy' ? '?flow=buy' : ''),
                 'orders' => '/orders',
                 default => '/order' . (is_string($input['ref'] ?? null) ? '?ref=' . rawurlencode($input['ref'])
                     : (is_string($input['number'] ?? null) ? '?number=' . rawurlencode($input['number']) : '')),
             };
             return $this->redirect($response, LoginRedirect::loginUrl(RouteContext::fromRequest($request)->getRouteParser(), $destination));
+        }
+        if ($page === 'checkout/previous-addresses') {
+            if ($userId === null) throw DomainError::forbidden('로그인이 필요합니다.');
+            $search = Input::text($input['q'] ?? '', 'q', 100);
+            $pageNumber = $this->page($input['page'] ?? '1');
+            return $this->json($response, $this->service->orders->previousAddressesPageFor($userId, $search, $pageNumber));
         }
         $data['menu'] = $this->service->categories->children(null, true, true);
         $_SESSION['yc_cart'] ??= [];
@@ -180,7 +186,8 @@ final class CommerceController
                 }
             }
             $number = $order['number'];
-            if ($page === 'order' && $order['status'] !== 'pending' && $this->service->payments->isPgOrder($order)) {
+            $virtualAccountIssued = $order['payment_method'] === 'virtual_account' && isset($order['payment']['virtual_account']);
+            if ($page === 'order' && ($order['status'] !== 'pending' || $virtualAccountIssued) && $this->service->payments->isPgOrder($order)) {
                 $intent = $this->service->checkoutIntents->find($order['payment_id'], $order['payment_provider']);
                 $token = $intent['token'] ?? '';
                 if ($intent !== null && ($intent['owner'] ?? '') === $_SESSION['yc_owner']
@@ -197,7 +204,6 @@ final class CommerceController
                     }
                     if ($flow === 'buy') $_SESSION['yc_buy'] = [];
                     unset($_SESSION['yc_buy_source'], $_SESSION['yc_checkout'][$token]);
-                    $_SESSION['yc_just_ordered'] = $number;
                     $data['cart_count'] = $this->service->cart->productCount($_SESSION['yc_cart']);
                 }
             }
@@ -221,14 +227,13 @@ final class CommerceController
             $data['pay_state'] = in_array($payState, ['closed', 'failed'], true) ? $payState : '';
             $pgPending = $order['status'] === 'pending' && $this->service->payments->isPgOrder($order);
             $overdue = (int) $order['pay_by'] > 0 && (int) $order['pay_by'] <= \GnuCms\Support\Clock::timestamp();
-            $data['pay_url'] = $pgPending && !$overdue ? $url . '/pay?ref=' . rawurlencode(Orders::reference($order)) : null;
+            $data['pay_url'] = $pgPending && !$overdue && !$virtualAccountIssued ? $url . '/pay?ref=' . rawurlencode(Orders::reference($order)) : null;
             $data['pay_expired'] = $pgPending && $overdue;
             // 원장을 읽지 못하면(표 없음·키 교체) 진행 중 표시만 포기한다. 주문 상세 자체는 열려야 한다.
             try { $data['pay_in_progress'] = $this->service->payments->inProgress($order); }
             catch (\Throwable) { $data['pay_in_progress'] = false; }
+            if ($virtualAccountIssued && $order['status'] === 'pending') $data['pay_in_progress'] = false;
             $data['method_labels'] = \GnuCms\Shop\Commerce\Payments::METHODS;
-            $data['just_ordered'] = ($_SESSION['yc_just_ordered'] ?? null) === $number;
-            unset($_SESSION['yc_just_ordered']);
             return $view->render($response, 'order', $data);
         }
         throw DomainError::notFound('페이지를 찾을 수 없습니다.');
@@ -259,10 +264,12 @@ final class CommerceController
         if ($cart === []) return $this->redirect($response, $data['url'] . '/cart');
         $member = $this->service->app->users()->findById($userId);
         if ($member === null) throw DomainError::forbidden('회원정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
-        // 주문자 정보는 화면 입력 없이 계정 값에서 가져온다.
-        $input['buyer_name'] = (string) $member['display_name'];
-        $input['phone'] = ($member['phone'] ?? '') !== '' ? (string) $member['phone'] : ($input['recipient_phone'] ?? '');
-        if (!UserRepository::isSocialPlaceholderEmail((string) $member['email'])) $input['email'] = (string) $member['email'];
+        // 주문자 정보는 주문서에서 수정할 수 있으며 회원 프로필은 바꾸지 않는다.
+        if (!$post) {
+            $input['buyer_name'] = (string) $member['display_name'];
+            $input['phone'] = (string) ($member['phone'] ?? '');
+            $input['email'] = UserRepository::isSocialPlaceholderEmail((string) $member['email']) ? '' : (string) $member['email'];
+        }
         $choices = $post ? ($input['shipping'] ?? []) : ($_SESSION['yc_shipping_' . $flow] ?? []);
         if (!is_array($choices)) throw DomainError::validation(['shipping' => '배송 방식을 확인해 주세요.']);
         $quote = $this->service->cart->quote($cart, $choices, true);
@@ -277,9 +284,30 @@ final class CommerceController
         }
         if (!$post && ($input['pay'] ?? '') === 'declined') {
             $code = $input['code'] ?? '';
-            $data['errors']['payment'] = '카드 인증을 완료하지 못했습니다.'
-                . (is_string($code) && preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code) ? ' 이니시스 응답 코드: ' . $code . '.' : '')
-                . ' 결제 내역을 확인한 뒤 다시 시도해 주세요.';
+            $message = '';
+            $declinedMethod = '';
+            $reference = $input['reference'] ?? '';
+            $sessionPaymentId = $_SESSION['yc_checkout'][$token]['payment_id'] ?? '';
+            $paymentId = is_string($reference) && preg_match('/^[a-f0-9]{32}$/D', $reference)
+                && is_string($sessionPaymentId) && hash_equals($sessionPaymentId, $reference)
+                    ? $reference
+                    : (is_string($sessionPaymentId) && preg_match('/^[a-f0-9]{32}$/D', $sessionPaymentId) ? $sessionPaymentId : '');
+            if ($paymentId !== '') {
+                $declined = $this->service->checkoutIntents->find($paymentId);
+                if (($declined['status'] ?? '') === 'declined') {
+                    $message = (string) ($declined['failure_message'] ?? '');
+                    $declinedMethod = (string) ($declined['payment']['method'] ?? '');
+                }
+            }
+            $guidance = match ($declinedMethod) {
+                'bank_transfer' => '실시간 계좌이체가 거절된 경우 계좌를 개설한 금융기관에 문의하거나 다른 결제수단을 선택해 주세요.',
+                'mobile' => '휴대폰 결제 한도와 가입 상태를 확인하거나 다른 결제수단을 선택해 주세요.',
+                'virtual_account' => '가상계좌 발급이 거절되었습니다. 다른 결제수단을 선택해 주세요.',
+                default => '결제 정보를 확인하거나 다른 결제수단을 선택해 주세요.',
+            };
+            $data['errors']['payment'] = '결제사가 결제를 거절했습니다. ' . $guidance
+                . ($message !== '' ? ' ' . $message : '')
+                . (is_string($code) && preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code) ? ' 응답 코드: ' . $code . '.' : '');
         }
         if (!$post && ($input['pay'] ?? '') === 'refunded') $data['errors']['payment'] = '결제 후 주문 조건이 변경되어 접수하지 못했습니다. 승인 금액의 전액 취소를 요청했습니다.';
         if (!$post && ($input['pay'] ?? '') === 'review') {
@@ -295,7 +323,7 @@ final class CommerceController
                     ->consume('yc_order', $this->service->app->guestAcl(), is_string($ip) ? $ip : null);
                 $this->service->payments->expireOverdue();
                 $payment = $this->service->payments->forPlacing($input);
-                if (($payment['method'] ?? '') === 'card') {
+                if (in_array(($payment['method'] ?? ''), Orders::PG_METHODS, true)) {
                     $intent = $this->service->checkoutIntents->stage($cart, $input, $token, $_SESSION['yc_owner'], $userId,
                         $issued['fingerprint'], $choices, $payment, $flow, $issued['payment_id'] ?? null);
                     $site = rtrim((string) $this->service->app->config('app.url', GNUCMS_URL), '/');
@@ -319,7 +347,6 @@ final class CommerceController
                     }
                     $_SESSION['yc_' . $flow] = [];
                     unset($_SESSION['yc_buy_source']);
-                    $_SESSION['yc_just_ordered'] = $order['number'];
                     return $this->redirect($response, $data['url'] . '/order?ref=' . rawurlencode(Orders::reference($order)));
                 }
             } catch (DomainError $e) {
@@ -334,10 +361,18 @@ final class CommerceController
         $data += ['flow' => $flow, 'checkout_token' => $token, 'quote' => $quote, 'payment_methods' => $methods, 'payment' => $this->service->settings->all()['payment']];
         $data['errors'] += $quote['errors'];
         $data['input'] = $this->safeValues($input);
-        $data['buyer_email_missing'] = UserRepository::isSocialPlaceholderEmail((string) $member['email']);
-        $data['previous_addresses'] = $this->service->orders->previousAddressesFor($userId);
+        $data['profile_buyer_name'] = (string) $member['display_name'];
+        $data['profile_phone'] = (string) ($member['phone'] ?? '');
+        $data['profile_email'] = UserRepository::isSocialPlaceholderEmail((string) $member['email']) ? '' : (string) $member['email'];
+        $data['has_previous_addresses'] = $this->service->orders->hasPreviousAddressesFor($userId);
         if (!$post) {
-            $address = $data['previous_addresses'][0] ?? null;
+            $address = $this->service->orders->defaultAddressFor($userId);
+            if ($address !== null) {
+                // 기본 배송지(없으면 최근 주문)에 저장된 주문자 정보도 다음 주문서 기본값으로 쓴다.
+                $data['input']['buyer_name'] = (string) $address['buyer_name'];
+                $data['input']['phone'] = (string) $address['phone'];
+                $data['input']['email'] = (string) $address['email'];
+            }
             $data['input'] += $address ?? ['recipient' => $member['display_name'], 'recipient_phone' => (string) ($member['phone'] ?? '')];
         }
         return $view->render($response, 'checkout', $data);

@@ -40,6 +40,7 @@ final class Settings
             'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
             'payment' => ['provider' => 'inicis', 'environment' => 'live',
+                'methods' => ['card' => true, 'bank_transfer' => false, 'virtual_account' => false, 'mobile' => false],
                 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
                 'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]],
         ];
@@ -67,6 +68,23 @@ final class Settings
         $all = $this->all();
         [$section, $type] = array_pad(explode('.', $name, 2), 2, null);
         return $type === null ? $all[$section] : $all[$section][$type];
+    }
+
+    /** 결제 연동 저장 폼에서 선택한 새 주문의 결제 환경만 바꾼다. */
+    public function setPaymentEnvironment(string $environment): array
+    {
+        if (!in_array($environment, ['test', 'live'], true)) throw DomainError::validation(['payment_environment' => '결제 환경을 확인해 주세요.']);
+        $settings = $this->all();
+        $settings['payment']['environment'] = $environment;
+        $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->store->transaction(function () use ($payload): void {
+            if ($this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_settings') . " WHERE id = 'settings'") === null) {
+                $this->store->insert('yc_settings', ['id' => 'settings', 'payload' => $payload]);
+            } else {
+                $this->store->db->update('yc_settings', ['payload' => $payload], 'id = :id', ['id' => 'settings']);
+            }
+        });
+        return $settings;
     }
 
     public function save(array $input, ?string $bannerImage = null): array
@@ -143,6 +161,10 @@ final class Settings
         }
         $environment = $input['payment_environment'] ?? null;
         if (in_array($environment, ['test', 'live'], true)) $payment['environment'] = $environment;
+        $methodKeys = ['card', 'bank_transfer', 'virtual_account', 'mobile'];
+        if (array_intersect(array_map(static fn (string $key): string => 'payment_method_' . $key, $methodKeys), array_keys($input)) !== []) {
+            foreach ($methodKeys as $key) $payment['methods'][$key] = $bool('payment_method_' . $key);
+        }
         if (array_key_exists('payment_manual_enabled', $input) || array_key_exists('payment_manual_account', $input)) {
             $payment['manual'] = ['enabled' => $bool('payment_manual_enabled'),
                 'bank' => Input::text($input['payment_manual_bank'] ?? '', 'payment_manual_bank', 50),

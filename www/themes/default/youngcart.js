@@ -1,5 +1,27 @@
 (function () {
   'use strict';
+  var copyOrderNumber = document.querySelector('[data-copy-order-number]');
+  if (copyOrderNumber) copyOrderNumber.addEventListener('click', function () {
+    var number = document.querySelector('[data-order-number]');
+    if (!number) return;
+    var value = number.textContent.trim();
+    var copied = false;
+    function fallbackCopy() {
+      var field = document.createElement('textarea');
+      field.value = value; field.setAttribute('readonly', '');
+      field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.appendChild(field); field.select();
+      try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
+      field.remove(); finish();
+    }
+    function finish() {
+      copyOrderNumber.textContent = copied ? '복사됨' : '복사 실패';
+      window.setTimeout(function () { copyOrderNumber.textContent = '복사'; }, 1800);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(value).then(function () { copied = true; finish(); }).catch(fallbackCopy);
+    } else fallbackCopy();
+  });
   function showCartStockFeedback(input) {
     var info = input.closest('.yc-cart-item-info');
     if (!info) return;
@@ -234,6 +256,111 @@
   }
   var checkoutForm = document.querySelector('[data-yc-checkout]');
   if (checkoutForm) {
+    var previousAddress = checkoutForm.querySelector('[data-yc-previous-address]');
+    var previousDialog = checkoutForm.querySelector('[data-yc-previous-dialog]');
+    var openPrevious = checkoutForm.querySelector('[data-yc-open-previous]');
+    if (previousAddress && previousDialog && openPrevious) {
+      var previousList = previousDialog.querySelector('[data-yc-previous-list]');
+      var previousSearch = previousDialog.querySelector('[data-yc-previous-search]');
+      var previousCount = previousDialog.querySelector('[data-yc-previous-count]');
+      var previousPageLabel = previousDialog.querySelector('[data-yc-previous-page]');
+      var previousBack = previousDialog.querySelector('[data-yc-previous-prev]');
+      var previousForward = previousDialog.querySelector('[data-yc-previous-next]');
+      var previousPage = 1;
+      var previousTotalPages = 1;
+      var previousRequest = 0;
+      var previousSearchTimer = null;
+      function renderPreviousAddresses(data) {
+        previousList.replaceChildren();
+        data.items.forEach(function (item) {
+          var button = document.createElement('button');
+          button.type = 'button'; button.className = 'yc-previous-option';
+          var heading = document.createElement('span'); heading.className = 'yc-previous-option-heading';
+          if (Number(item.default_address) === 1) {
+            var badge = document.createElement('strong'); badge.className = 'yc-previous-default'; badge.textContent = '기본 배송지'; heading.appendChild(badge);
+          }
+          var recipient = document.createElement('strong'); recipient.textContent = item.recipient; heading.appendChild(recipient);
+          var date = document.createElement('small'); date.textContent = item.created_label; heading.appendChild(date);
+          var addressLine = document.createElement('span'); addressLine.className = 'yc-previous-option-address';
+          addressLine.textContent = '(' + item.postcode + ') ' + item.address + (item.address_detail ? ' ' + item.address_detail : '');
+          button.append(heading, addressLine);
+          button.addEventListener('click', function () { applyPreviousAddress(item); });
+          previousList.appendChild(button);
+        });
+        previousCount.textContent = data.total ? data.total + '개 주소' : (previousSearch.value ? '검색 결과가 없습니다.' : '불러올 주소가 없습니다.');
+        previousPage = data.page;
+        previousTotalPages = data.total_pages;
+        previousPageLabel.textContent = data.total ? previousPage + ' / ' + previousTotalPages : '0 / 0';
+        previousBack.disabled = previousPage <= 1;
+        previousForward.disabled = previousPage >= previousTotalPages;
+      }
+      function loadPreviousAddresses(page) {
+        var request = ++previousRequest;
+        var body = new URLSearchParams({
+          csrf_token: checkoutForm.querySelector('[name="csrf_token"]').value,
+          page: String(page), q: previousSearch.value.trim()
+        });
+        previousCount.textContent = '주소를 불러오는 중입니다.';
+        previousList.replaceChildren();
+        previousBack.disabled = true; previousForward.disabled = true;
+        fetch(previousDialog.dataset.endpoint, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: body.toString(), credentials: 'same-origin' })
+          .then(function (response) { if (!response.ok) throw new Error('주소를 불러오지 못했습니다.'); return response.json(); })
+          .then(function (data) { if (request === previousRequest) renderPreviousAddresses(data); })
+          .catch(function () {
+            if (request !== previousRequest) return;
+            previousCount.textContent = '주소를 불러오지 못했습니다. 다시 시도해 주세요.';
+            previousPageLabel.textContent = '0 / 0';
+          });
+      }
+      function applyPreviousAddress(item) {
+        var value = item === 'new' ? 'new' : String(item.id);
+        var option = Array.from(previousAddress.options).find(function (entry) { return entry.value === value; });
+        if (!option && item !== 'new') {
+          option = document.createElement('option'); option.value = value;
+          option.dataset.buyerName = item.buyer_name; option.dataset.buyerPhone = item.phone; option.dataset.email = item.email;
+          option.dataset.recipient = item.recipient; option.dataset.recipientPhone = item.recipient_phone;
+          option.dataset.postcode = item.postcode; option.dataset.address = item.address;
+          option.dataset.addressDetail = item.address_detail; option.dataset.deliveryNote = item.delivery_note;
+          option.textContent = item.recipient + ' · (' + item.postcode + ') ' + item.address + ' ' + item.address_detail;
+          previousAddress.appendChild(option);
+        }
+        previousAddress.value = value;
+        previousAddress.dispatchEvent(new Event('change', { bubbles: true }));
+        previousDialog.close();
+        openPrevious.focus();
+      }
+      openPrevious.addEventListener('click', function () {
+        previousDialog.showModal();
+        loadPreviousAddresses(1);
+        previousSearch.focus();
+      });
+      previousDialog.querySelector('[data-yc-previous-new]').addEventListener('click', function () { applyPreviousAddress('new'); });
+      previousDialog.querySelector('[data-yc-close-previous]').addEventListener('click', function () { previousDialog.close(); openPrevious.focus(); });
+      previousSearch.addEventListener('input', function () {
+        previousRequest++;
+        window.clearTimeout(previousSearchTimer);
+        previousSearchTimer = window.setTimeout(function () { loadPreviousAddresses(1); }, 250);
+      });
+      previousBack.addEventListener('click', function () { if (previousPage > 1) loadPreviousAddresses(previousPage - 1); });
+      previousForward.addEventListener('click', function () { if (previousPage < previousTotalPages) loadPreviousAddresses(previousPage + 1); });
+      previousDialog.addEventListener('click', function (event) { if (event.target === previousDialog) previousDialog.close(); });
+    }
+    var copyBuyerName = checkoutForm.querySelector('[data-yc-copy-buyer-name]');
+    if (copyBuyerName) copyBuyerName.addEventListener('click', function () {
+      var buyerName = checkoutForm.querySelector('[name="buyer_name"]');
+      var buyerPhone = checkoutForm.querySelector('[name="phone"]');
+      var recipient = checkoutForm.querySelector('[name="recipient"]');
+      if (!buyerName || !recipient) return;
+      recipient.value = buyerName.value;
+      recipient.dispatchEvent(new Event('input', { bubbles: true }));
+      recipient.dispatchEvent(new Event('change', { bubbles: true }));
+      var recipientPhone = checkoutForm.querySelector('[name="recipient_phone"]');
+      if (buyerPhone && recipientPhone) {
+        recipientPhone.value = buyerPhone.value;
+        recipientPhone.dispatchEvent(new Event('input', { bubbles: true }));
+        recipientPhone.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
     var manualTransfer = checkoutForm.querySelector('[data-yc-manual-transfer]');
     if (manualTransfer) {
       var depositor = manualTransfer.querySelector('[name="depositor"]');

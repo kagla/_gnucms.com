@@ -53,6 +53,7 @@ final class Routes
         foreach (['cart', 'checkout'] as $page) foreach (['GET', 'POST'] as $method) {
             $map($method, '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }
+        $map('POST', '/checkout/previous-addresses', static fn ($request, $response) => $commerce->handle('checkout/previous-addresses', $request, $response));
         $map('GET', '/orders', static fn ($request, $response) => $commerce->handle('orders', $request, $response));
         $map('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response));
         foreach (['cart/add', 'order/cancel'] as $page) {
@@ -79,6 +80,9 @@ final class Routes
             }
         }
         $map('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        $map('GET', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true)
+            ->setName('admin.shop.payment-failures');
+        $map('POST', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true);
         $map('POST', '/products/copy', static fn ($request, $response) => $product->handle('products/copy', $request, $response), true);
         $map('GET', '/products/search', static fn ($request, $response) => $product->handle('products/search', $request, $response), true);
 

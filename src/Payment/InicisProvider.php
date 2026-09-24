@@ -23,7 +23,7 @@ final class InicisProvider implements Provider
         }
         return $revision;
     }
-    public function methods(): array { return ['card']; }
+    public function methods(): array { return ['card', 'bank_transfer', 'virtual_account', 'mobile']; }
     public function supportsPartialRefund(): bool { return true; }
     public function checkoutTemplate(): string { return 'payment/inicis'; }
     public function gateway(Settings $settings): Gateway { return new InicisGateway($settings); }

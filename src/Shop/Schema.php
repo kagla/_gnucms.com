@@ -96,7 +96,7 @@ final class Schema
         }
         foreach (self::PAYMENT_COLUMNS + self::ORDER_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
         self::migrateMemberOrders($db);
-        $db->execute("UPDATE " . $db->table('yc_orders') . " SET payment_provider = 'inicis' WHERE payment_provider = '' AND payment_id <> '' AND payment_method IN ('card', 'easy_pay', 'bank_transfer', 'virtual_account')");
+        $db->execute("UPDATE " . $db->table('yc_orders') . " SET payment_provider = 'inicis' WHERE payment_provider = '' AND payment_id <> '' AND payment_method IN ('card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile')");
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
         self::dropColumn($db, 'yc_categories', 'image_key');
         self::migrateCategoryTree($db, $bin);

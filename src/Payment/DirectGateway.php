@@ -31,7 +31,7 @@ abstract class DirectGateway implements Gateway
         foreach ([$returnUrl, $callbackUrl] as $url) if (!filter_var($url, FILTER_VALIDATE_URL) || parse_url($url, PHP_URL_SCHEME) !== 'https'
             || parse_url($url, PHP_URL_USER) !== null || preg_match('/[\r\n]/', $url)) throw DomainError::validation(['url' => '사이트 주소를 공개 HTTPS 주소로 설정해 주세요.']);
         $this->journal->change($order['id'], static function (array $state) use ($order): array {
-            if (in_array($state['approval'] ?? '', ['pending', 'confirmed'], true)) throw DomainError::validation(['payment' => '이미 요청한 결제 결과를 먼저 확인해 주세요.']);
+            if (in_array($state['approval'] ?? '', ['pending', 'confirmed', 'declined'], true)) throw DomainError::validation(['payment' => '이미 요청한 결제 결과를 먼저 확인해 주세요.']);
             return $state + ['approval' => 'ready', 'created_at' => Clock::timestamp(), 'revision' => $order['config_revision'], 'refunds' => []];
         });
         return $config;
@@ -50,13 +50,25 @@ abstract class DirectGateway implements Gateway
         $send = false;
         $this->journal->change($order['id'], static function (array $state) use (&$send): array {
             if ($state === []) throw DomainError::forbidden('결제 준비 기록이 없습니다.');
-            if (in_array($state['approval'], ['pending', 'confirmed'], true)) return $state;
+            if (in_array($state['approval'], ['pending', 'confirmed', 'declined'], true)) return $state;
             $send = true; $state['approval'] = 'pending';
             return $state;
         });
         if (!$send) return;
         // 통신/DB 실패 시 pending을 남겨 새 승인·재승인을 막는다.
-        $payment = $this->approve($config, $order, $callback);
+        try {
+            $payment = $this->approve($config, $order, $callback);
+        } catch (DomainError $error) {
+            if ($error->code() === 'PAYMENT_DECLINED') {
+                $this->journal->change($order['id'], static function (array $state) use ($error): array {
+                    $state['approval'] = 'declined';
+                    $state['failure'] = ['code' => (string) ($error->details()['pg_status'] ?? ''),
+                        'message' => (string) ($error->details()['pg_message'] ?? '')];
+                    return $state;
+                });
+            }
+            throw $error;
+        }
         $this->journal->change($order['id'], static function (array $state) use ($payment): array {
             $state['approval'] = 'confirmed'; $state['approved'] = $payment;
             return $state;

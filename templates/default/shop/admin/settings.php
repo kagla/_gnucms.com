@@ -27,12 +27,13 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
 }
 ?>
 <?php $this->insert('admin/_form_nav', ['sections' => ['settings-visible' => '공개', 'settings-banner' => '메인 배너', 'settings-shipping' => '배송·주문', 'settings-payment' => '결제', 'settings-notices' => '고객 안내', 'settings-main' => '메인 진열', 'settings-lists' => '목록 화면', 'settings-detail' => '상품 상세']]) ?>
-<form id="yc-inicis-live-form" method="post" action="<?= $this->url('admin.settings.payment') ?>" autocomplete="off">
+<?php foreach (['live', 'test'] as $env): ?><form id="yc-inicis-<?= $env ?>-form" method="post" action="<?= $this->url('admin.settings.payment') ?>" autocomplete="off">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <input type="hidden" name="provider" value="inicis">
-  <input type="hidden" name="environment" value="live">
+  <input type="hidden" name="environment" value="<?= $env ?>">
+  <input type="hidden" name="payment_environment" value="<?= $env ?>">
   <input type="hidden" name="return_to" value="shop">
-</form>
+</form><?php endforeach ?>
 <form class="yc-edit-form" method="post" enctype="multipart/form-data" action="<?= $this->e($admin_url) ?>/settings">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
   <section class="card" id="settings-visible"><div class="card-body"><h2 class="card-title">공개</h2>
@@ -45,23 +46,36 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <div class="yc-fields"><?php $num('shipping_fee', '기본 배송비 (원)', 0, 9999999); $num('shipping_free_minimum', '무료배송 기준 금액 (원)', 0, 9999999); ?></div>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 카드 결제와 무통장입금은 아래 결제 항목에서 설정합니다.</span></label>
   </div></section>
-  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">카드 결제는 설정 → 결제에서 저장하고 실행을 허용한 PG 환경을 씁니다. 무통장입금은 아래 계좌를 안내하고 관리자가 입금을 확인합니다.</p>
+  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">새 주문에서 사용할 환경을 고르고, 해당 환경의 MID와 인증 키를 저장하세요. 선택한 환경의 결제 설정과 결제 수단에 따라 주문서에 결제 방법이 표시됩니다. 무통장입금은 아래 계좌를 안내하고 관리자가 입금을 확인합니다.</p>
     <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider"><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">새 주문에 적용합니다. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
       <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $label): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_environment" value="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? ' checked' : '' ?>> <?= $label ?></label><?php endforeach ?>
-      <span class="muted">주문서의 카드 결제는 이 환경이 결제 설정에서 허용돼 있을 때만 보입니다.</span></fieldset>
-    <div data-yc-inicis-live<?= ($values['payment_environment'] ?? 'live') === 'live' ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>이니시스 운영 연동 <span class="badge badge-soft<?= $inicis_live['enabled'] ? ' badge-success' : '' ?>"><?= $inicis_live['enabled'] ? '실행 허용' : ($inicis_live['configured'] ? '실행 정지' : '미설정') ?></span></h3>
-      <p class="muted">운영 MID와 발급받은 인증키를 입력합니다. IPv4는 공통 기본값이며 여러 서버가 결제를 요청하면 각 서버의 config/config.php에서 payment.inicis.client_ip를 설정합니다. 저장 후 API 실행을 허용해야 운영 카드 결제가 나타납니다.</p>
+      <span class="muted">선택한 환경과 아래 결제 수단이 새 주문에 적용됩니다.</span></fieldset>
+    <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $envLabel): $environmentSettings = $inicis_environments[$env]; $formId = 'yc-inicis-' . $env . '-form'; ?>
+    <div data-yc-inicis-panel="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>이니시스 <?= $envLabel ?> 연동 <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= $environmentSettings['configured'] ? '설정 완료' : '미설정' ?></span></h3>
+      <p class="muted"><?= $envLabel ?> MID와 발급받은 인증키를 입력합니다. 결제 환경에서 운영 또는 테스트를 선택하고 설정을 저장하면 해당 환경이 주문서에 적용됩니다. 저장된 키를 비워 두면 기존 값이 유지됩니다.</p>
       <div class="yc-fields">
-        <?php foreach ($inicis_fields as $name => $field): ?><fieldset class="fieldset"><legend class="fieldset-legend"><label for="yc-inicis-live-<?= $this->e($name) ?>"><?= $this->e($field['label']) ?></label></legend>
-          <input class="input input-bordered input-sm" id="yc-inicis-live-<?= $this->e($name) ?>" form="yc-inicis-live-form" type="<?= $field['secret'] ? 'password' : 'text' ?>" name="<?= $this->e($name) ?>" value="<?= $field['secret'] ? '' : $this->e((string) ($inicis_live[$name] ?? '')) ?>" autocomplete="<?= $field['secret'] ? 'new-password' : 'off' ?>"<?= $field['secret'] ? '' : ' required' ?> placeholder="<?= $field['secret'] && $inicis_live['configured'] ? '같은 MID에서 비워두면 현재 값 유지' : '' ?>">
+        <?php foreach ($inicis_fields as $name => $field): ?><fieldset class="fieldset"><legend class="fieldset-legend"><label for="yc-inicis-<?= $env ?>-<?= $this->e($name) ?>"><?= $this->e($field['label']) ?></label></legend>
+          <?php if ($field['secret']): ?><label class="input input-bordered input-block">
+            <input id="yc-inicis-<?= $env ?>-<?= $this->e($name) ?>" form="<?= $formId ?>" type="password" name="<?= $this->e($name) ?>" value="" autocomplete="new-password" placeholder="<?= !empty($environmentSettings[$name . '_set']) ? str_repeat('*', (int) ($environmentSettings[$name . '_length'] ?? 0)) : ($environmentSettings['configured'] ? '저장된 키 없음 · 새 키 입력' : '') ?>">
+            <button class="pw-toggle" type="button" data-yc-inicis-key-toggle data-secret-url="<?= $this->url('admin.settings.payment.secret') ?>" data-csrf="<?= $this->e($csrf_token) ?>" data-environment="<?= $env ?>" data-field="<?= $this->e($name) ?>" data-key-set="<?= !empty($environmentSettings[$name . '_set']) ? '1' : '0' ?>" aria-pressed="false" aria-label="<?= $this->e($field['label']) ?> 표시" title="<?= $this->e($field['label']) ?> 표시">
+              <span class="pw-ico pw-ico-show" aria-hidden="true"><?= $this->icon('eye', 17) ?></span>
+              <span class="pw-ico pw-ico-hide" aria-hidden="true"><?= $this->icon('eye-off', 17) ?></span>
+            </button>
+          </label><?php else: ?>
+          <input class="input input-bordered input-sm" id="yc-inicis-<?= $env ?>-<?= $this->e($name) ?>" form="<?= $formId ?>" type="text" name="<?= $this->e($name) ?>" value="<?= $this->e((string) ($environmentSettings[$name] ?? '')) ?>" autocomplete="off" required>
+          <?php endif ?>
+          <?php if ($name === 'client_ip'): ?><p class="muted">여러 서버에서 요청하면 각 서버의 config/config.php에 payment.inicis.client_ip를 지정합니다. 비워 두면 이 기본값을 사용합니다.</p><?php endif ?>
         </fieldset><?php endforeach ?>
       </div>
-      <div class="card-actions"><button class="btn btn-primary" type="submit" form="yc-inicis-live-form" name="action" value="save">운영 연동 설정 저장</button>
-        <button class="btn btn-outline" type="submit" form="yc-inicis-live-form" name="action" value="<?= $inicis_live['enabled'] ? 'disable' : 'enable' ?>"<?= !$inicis_live['configured'] ? ' disabled' : '' ?>><?= $inicis_live['enabled'] ? 'API 실행 정지' : 'API 실행 허용' ?></button>
-        <a class="link" href="<?= $this->url('admin.settings.payment') ?>?provider=inicis&amp;environment=test">테스트 환경 설정</a>
-      </div>
+      <div class="card-actions"><button class="btn btn-primary" type="submit" form="<?= $formId ?>" name="action" value="save"><?= $envLabel ?> 설정 저장</button></div>
     </div></div>
+    <?php endforeach ?>
+    <h3 class="yc-settings-subtitle">온라인 결제 수단</h3><div class="yc-fields">
+      <?php foreach (['card' => '카드 결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'mobile' => '휴대폰 결제'] as $method => $label): ?>
+      <label class="label"><input type="hidden" name="payment_method_<?= $method ?>" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="payment_method_<?= $method ?>" value="1"<?= ($values['payment_method_' . $method] ?? ($method === 'card' ? '1' : '0')) === '1' ? ' checked' : '' ?>> <?= $label ?></label>
+      <?php endforeach ?>
+    </div><p class="muted">가상계좌는 발급 후 입금 통보를 확인해 결제 완료로 바꿉니다. 휴대폰 결제는 실물 상품 유형으로 요청합니다. 지원 여부는 MID 계약과 결제 환경에 따라 다릅니다.</p>
     <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="payment_manual_enabled" value="1"<?= ($values['payment_manual_enabled'] ?? '0') === '1' ? ' checked' : '' ?>> 무통장입금 사용</label>
     <div class="yc-fields">
       <?php foreach (['bank' => '은행', 'account' => '계좌번호', 'holder' => '예금주'] as $key => $label): $name = 'payment_manual_' . $key; ?>
@@ -70,8 +84,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
         <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
       <?php endforeach ?>
     </div>
-    <div class="yc-fields"><?php $num('payment_deadline_card', '카드 결제 기한 (시간)', 1, 72); $num('payment_deadline_manual_transfer', '무통장 입금 기한 (시간)', 1, 720); $num('payment_deadline_virtual_account', '가상계좌 입금 기한 (시간)', 1, 720); ?></div>
-    <p class="muted">기한이 지난 미결제 주문은 자동으로 취소되고 재고가 돌아갑니다.</p>
+    <div class="yc-fields"><?php $num('payment_deadline_card', '카드·계좌이체·휴대폰 결제 기한 (시간)', 1, 72); $num('payment_deadline_manual_transfer', '무통장 입금 기한 (시간)', 1, 720); $num('payment_deadline_virtual_account', '가상계좌 입금 기한 (시간)', 1, 720); ?></div>
+    <p class="muted">기한이 지난 미결제 주문은 자동으로 취소되고 재고가 돌아갑니다. 가상계좌 기한은 발급 계좌의 입금 마감에도 적용됩니다.</p>
   </div></section>
   <section class="card" id="settings-notices"><div class="card-body"><h2 class="card-title">고객 안내문</h2><p class="muted">상품 상세의 배송정보·교환정보 탭에 표시됩니다.</p>
     <fieldset class="fieldset"><legend class="fieldset-legend">배송정보 탭</legend><textarea class="textarea textarea-bordered textarea-block" name="shipping_content" rows="6"><?= $this->e((string) ($values['shipping_content'] ?? '')) ?></textarea></fieldset>

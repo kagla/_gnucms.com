@@ -79,6 +79,19 @@ final class PayController
     /** ExternalRequests 처리기: 승인·조회 뒤 주문 화면으로 보낸다. 실패는 pay=failed 로 알린다. */
     public function callback(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        if (($request->getQueryParams()['event'] ?? '') === 'notify') {
+            $order = $this->orderFromQuery($request);
+            $body = $request->getParsedBody();
+            if ($order === null || $order['payment_method'] !== 'virtual_account' || !is_array($body)
+                || ($body['P_STATUS'] ?? '') !== '02' || ($body['P_TYPE'] ?? '') !== 'VBANK'
+                || ($body['P_OID'] ?? '') !== $order['payment_id'] || (string) ($body['P_AMT'] ?? '') !== (string) $order['total']) {
+                throw DomainError::forbidden('가상계좌 입금 통보를 확인할 수 없습니다.');
+            }
+            $updated = $this->service->payments->sync($order);
+            if ($updated['status'] !== 'paid') throw DomainError::serviceUnavailable('가상계좌 입금 결과가 아직 확인되지 않았습니다.');
+            $response->getBody()->write('OK');
+            return $response->withHeader('Content-Type', 'text/plain; charset=utf-8')->withHeader('Cache-Control', 'no-store');
+        }
         $order = $this->orderFromQuery($request);
         $intent = $order === null ? $this->intentFromQuery($request) : null;
         if ($order === null && $intent === null) throw DomainError::forbidden('주문서를 확인할 수 없습니다.');
@@ -87,7 +100,8 @@ final class PayController
             $code = $body['P_STATUS'];
             if (preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code)) {
                 try {
-                    $this->service->checkoutIntents->decline($intent, $code);
+                    $message = $body['P_RMESG'] ?? $body['P_RMESG1'] ?? '';
+                    $this->service->checkoutIntents->decline($intent, $code, is_string($message) ? $message : '');
                     error_log('GNUCMS payment authentication failed: ' . $intent['payment']['id'] . ' (status=' . $code . ')');
                     $destination = '/checkout?flow=' . rawurlencode($intent['flow']) . '&pay=declined&code=' . rawurlencode($code);
                 } catch (DomainError) {
@@ -117,13 +131,14 @@ final class PayController
             if ($order !== null && $order['status'] !== 'pending') $suffix = '';
             if ($intent !== null && is_string($id)) {
                 $updated = $this->service->checkoutIntents->find($id, $intent['payment']['provider']);
-                $payState = match ($updated['status'] ?? '') { 'refunded' => 'refunded', 'needs_review', 'approval_review' => 'review', default => 'failed' };
+                $payState = match ($updated['status'] ?? '') { 'refunded' => 'refunded', 'declined' => 'declined', 'needs_review', 'approval_review' => 'review', default => 'failed' };
+                if ($payState === 'declined') $failureCode = (string) ($updated['failure_code'] ?? '');
             }
         }
         $destination = $order !== null ? '/order?ref=' . rawurlencode(Orders::reference($order)) . $suffix
             : '/checkout?flow=' . rawurlencode($intent['flow']) . '&pay=' . $payState
-                . (in_array($payState, ['failed', 'review'], true) ? '&reference=' . rawurlencode($intent['payment']['id']) : '')
-                . ($payState === 'failed' ? '&code=' . rawurlencode($failureCode) : '');
+                . (in_array($payState, ['failed', 'review', 'declined'], true) ? '&reference=' . rawurlencode($intent['payment']['id']) : '')
+                . (in_array($payState, ['failed', 'declined'], true) && $failureCode !== '' ? '&code=' . rawurlencode($failureCode) : '');
         return $response->withStatus(303)->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer')
             ->withHeader('Location', $this->siteUrl() . $this->routePrefix . $destination);
     }

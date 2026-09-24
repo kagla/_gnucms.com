@@ -125,6 +125,8 @@ final class Routes
         $payment = new \GnuCms\Payment\SettingsController($app->paymentSettings());
         $slim->get('/admin/settings/payment', [$payment, 'handle'])->setName('admin.settings.payment');
         $slim->post('/admin/settings/payment', [$payment, 'handle']);
+        $slim->post('/admin/settings/payment/secret', [$payment, 'secret'])
+            ->setName('admin.settings.payment.secret');
         $slim->get('/admin/settings/notifications', [$aligo, 'notifications'])
             ->setName('admin.settings.notifications');
         $slim->post('/admin/settings/notifications/save', [$aligo, 'saveNotifications'])

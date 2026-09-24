@@ -18,18 +18,20 @@ use GnuCms\Support\Clock;
  */
 final class Payments
 {
-    public const METHODS = ['card' => '카드 결제', 'easy_pay' => '간편결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'manual_transfer' => '무통장입금'];
+    public const METHODS = ['card' => '카드 결제', 'easy_pay' => '간편결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'mobile' => '휴대폰 결제', 'manual_transfer' => '무통장입금'];
 
     public function __construct(private App $app, private Settings $settings, private Orders $orders) {}
 
-    /** 주문서에 보일 수단. 현재 쇼핑몰은 카드와 무통장을 지원한다. 켜져 있지 않은 수단은 목록에 없다. */
+    /** 주문서에 보일 수단. PG 계약·설정에서 켠 수단과 무통장입금만 노출한다. */
     public function methods(): array
     {
         $payment = $this->settings->all()['payment'];
         $methods = [];
         $provider = $this->app->paymentProviders()->get($payment['provider']);
         if ($this->app->paymentSettings($provider->id())->available($payment['environment'])) {
-            foreach (array_intersect($provider->methods(), ['card']) as $method) $methods[$method] = self::METHODS[$method];
+            foreach (array_intersect($provider->methods(), array_keys(array_filter($payment['methods'] ?? ['card' => true]))) as $method) {
+                if (isset(self::METHODS[$method])) $methods[$method] = self::METHODS[$method];
+            }
         }
         if ($payment['manual']['enabled'] && $payment['manual']['account'] !== '') $methods['manual_transfer'] = self::METHODS['manual_transfer'];
         return $methods;
@@ -54,7 +56,7 @@ final class Payments
         return $spec + ['provider' => $payment['provider'], 'id' => bin2hex(random_bytes(16)), 'environment' => $payment['environment'], 'revision' => $summary['revision']];
     }
 
-    /** 카드·간편결제·계좌이체는 카드 기한을, 가상계좌·무통장은 제 기한을 쓴다. */
+    /** 즉시 승인 수단은 카드 기한을, 가상계좌·무통장은 각자 설정한 기한을 쓴다. */
     private static function deadlineKey(string $method): string
     {
         return in_array($method, ['virtual_account', 'manual_transfer'], true) ? $method : 'card';
@@ -73,7 +75,7 @@ final class Payments
         $name = (string) ($order['order_name'] ?? (count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first));
         return ['id' => (string) $order['payment_id'], 'provider' => (string) ($order['payment_provider'] ?? ''), 'environment' => (string) $order['payment_environment'],
             'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'method' => (string) $order['payment_method'], 'order_name' => $name,
-            'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at']];
+            'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at'], 'pay_by' => (int) ($order['pay_by'] ?? 0)];
     }
 
     /** PG가 인증 결과를 보낼 주소. 주문의 원장 키와 그 주문·결제사·설정 판의 HMAC 을 싣는다. */
@@ -138,10 +140,13 @@ final class Payments
 
     private function applyFetched(array $order, array $payment, string $note): array
     {
+        if (($payment['status'] ?? '') === 'PENDING' && ($payment['valid'] ?? false)
+            && $order['payment_method'] === 'virtual_account') return $this->orders->get((int) $order['id']);
         if (($payment['status'] ?? '') !== 'PAID' || !($payment['valid'] ?? false)) throw DomainError::serviceUnavailable('승인 결과를 확인하지 못했습니다. 관리자에게 문의해 주세요.');
         try {
             return $this->orders->markPaid((int) $order['id'], 'pg:' . $order['payment_provider'], (int) $order['total'],
-                ['tid' => (string) $payment['transaction_id'], 'label' => self::label($order)], (int) $payment['paid_at'], $note);
+                ['tid' => (string) $payment['transaction_id'], 'label' => self::label($order)]
+                    + (isset($payment['card']) ? ['card' => $payment['card']] : []) + ($payment['detail'] ?? []), (int) $payment['paid_at'], $note);
         } catch (DomainError $e) {
             // 결제 대기가 아닌 주문에 승인이 도착했다. 주문은 그대로 두고 환불 필요만 적은 뒤 그대로 올린다.
             if (!array_key_exists('status', $e->details())) throw $e;
@@ -167,6 +172,9 @@ final class Payments
         $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
         if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
         if ($this->isPgOrder($order)) {
+            if (in_array($order['payment_method'], ['virtual_account', 'mobile'], true)) {
+                throw DomainError::validation(['refund' => '가상계좌·휴대폰 결제 환불은 이니시스 관리자에서 처리한 뒤 이 주문의 결제 조회를 눌러 환불 내역을 맞춰 주세요.']);
+            }
             if ($amount < $remaining && !$this->app->paymentProviders()->get($order['payment_provider'])->supportsPartialRefund()) {
                 throw DomainError::validation(['refund' => '이 결제사는 부분 환불을 지원하지 않습니다.']);
             }
@@ -212,6 +220,7 @@ final class Payments
     public function inProgress(array $order): bool
     {
         if (!$this->isPgOrder($order)) return false;
+        if ($order['payment_method'] === 'virtual_account' && isset($order['payment']['virtual_account'])) return false;
         return in_array($this->app->paymentGateway((string) $order['payment_provider'])->approvalState(self::gatewayOrder($order)), ['pending', 'confirmed'], true);
     }
 

@@ -19,31 +19,50 @@ final class Orders
     public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
     public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
-    public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account'];
+    public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
 
     public function __construct(private Store $store, private Cart $cart, private Settings $settings) {}
 
     /** 저장된 기본 배송지를 먼저 쓰고, 없으면 가장 최근 주문의 배송지를 사용한다. */
     public function defaultAddressFor(int $userId): ?array
     {
-        return $this->store->selectOne('SELECT recipient, recipient_phone, postcode, address, address_detail, delivery_note FROM '
+        return $this->store->selectOne('SELECT buyer_name, phone, email, recipient, recipient_phone, postcode, address, address_detail, delivery_note FROM '
             . $this->store->table('yc_orders') . ' WHERE user_id = ? ORDER BY default_address DESC, id DESC LIMIT 1', [$userId]);
     }
 
-    /** 기본 배송지를 먼저 보여 주고, 같은 수령지의 중복 주문은 한 번만 표시한다. */
-    public function previousAddressesFor(int $userId): array
+    public function hasPreviousAddressesFor(int $userId): bool
     {
-        $orders = $this->store->select('SELECT id, recipient, recipient_phone, postcode, address, address_detail, delivery_note, default_address FROM '
-            . $this->store->table('yc_orders') . ' WHERE user_id = ? ORDER BY default_address DESC, id DESC LIMIT 200', [$userId]);
-        $addresses = []; $seen = [];
-        foreach ($orders as $order) {
-            $key = json_encode([$order['recipient'], $order['recipient_phone'], $order['postcode'], $order['address'], $order['address_detail']], JSON_THROW_ON_ERROR);
-            if (isset($seen[$key])) continue;
-            $seen[$key] = true;
-            $addresses[] = $order;
-            if (count($addresses) === 10) break;
+        $orders = $this->store->table('yc_orders');
+        return $this->store->selectOne('SELECT id FROM ' . $orders . ' WHERE user_id = ? LIMIT 1', [$userId]) !== null;
+    }
+
+    /** 주소별 대표 주문만 페이지 단위로 조회한다. */
+    public function previousAddressesPageFor(int $userId, string $search, int $page, int $pageSize = 8): array
+    {
+        $orders = $this->store->table('yc_orders');
+        $grouped = '(SELECT postcode, address, address_detail, '
+            . 'MAX(CASE WHEN default_address = 1 THEN id ELSE 0 END) AS default_order_id, MAX(id) AS latest_order_id '
+            . 'FROM ' . $orders . ' WHERE user_id = ? GROUP BY postcode, address, address_detail) a';
+        $join = ' FROM ' . $grouped . ' INNER JOIN ' . $orders . ' o ON o.id = CASE WHEN a.default_order_id > 0 THEN a.default_order_id ELSE a.latest_order_id END';
+        $where = '';
+        $filterParams = [];
+        if ($search !== '') {
+            $where = ' WHERE EXISTS (SELECT 1 FROM ' . $orders . ' s WHERE s.user_id = ? AND s.postcode = a.postcode AND s.address = a.address AND s.address_detail = a.address_detail'
+                . ' AND (s.recipient LIKE ? OR s.recipient_phone LIKE ? OR s.postcode LIKE ? OR s.address LIKE ? OR s.address_detail LIKE ?))';
+            $like = '%' . $search . '%';
+            $filterParams = [$userId, $like, $like, $like, $like, $like];
         }
-        return $addresses;
+        $count = (int) ($this->store->selectOne('SELECT COUNT(*) AS total' . $join . $where, [$userId, ...$filterParams])['total'] ?? 0);
+        $pageSize = max(1, min(50, $pageSize));
+        $totalPages = max(1, (int) ceil($count / $pageSize));
+        $page = max(1, min($totalPages, $page));
+        $offset = ($page - 1) * $pageSize;
+        $items = $this->store->select('SELECT o.id, o.buyer_name, o.phone, o.email, o.recipient, o.recipient_phone, o.postcode, o.address, o.address_detail, o.delivery_note, o.default_address, o.created_at'
+            . $join . $where . ' ORDER BY (a.default_order_id > 0) DESC, a.latest_order_id DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset,
+            [$userId, ...$filterParams]);
+        foreach ($items as &$item) $item['created_label'] = date('Y.m.d', (int) $item['created_at']);
+        unset($item);
+        return ['items' => $items, 'total' => $count, 'page' => $page, 'total_pages' => $totalPages];
     }
 
     public function submitted(string $key, string $owner, int $userId): ?array
@@ -64,7 +83,7 @@ final class Orders
                 foreach ($ids as $id) $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $id]);
                 $quote = $this->cart->quote($lines, $shipping, true);
                 if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
-                if (!hash_equals($quote['fingerprint'], $fingerprint)) throw DomainError::validation(['quote' => '상품 또는 배송비가 변경되었습니다. 아래 최신 주문 내용을 확인하고 다시 주문해 주세요.']);
+                if (!hash_equals($quote['fingerprint'], $fingerprint)) throw DomainError::validation(['quote' => '주문 내용 또는 배송 조건이 변경되었습니다. 상품·옵션·수량·배송비와 안내를 다시 확인해 주세요.']);
                 $now = Clock::timestamp();
                 $prefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone('Asia/Seoul'))->format('ymd-His');
                 $start = random_int(0, 9999);
@@ -182,8 +201,25 @@ final class Orders
         $sql = ' FROM ' . $this->store->table('yc_orders') . ($where === [] ? '' : ' WHERE ' . implode(' AND ', $where));
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c' . $sql, $params)['c'];
         $page = max(1, min(100000, $page));
-        return ['items' => $this->store->select('SELECT *' . $sql . ' ORDER BY id DESC LIMIT 20 OFFSET ' . (($page - 1) * 20), $params),
-            'total' => $total, 'page' => $page, 'total_pages' => max(1, (int) ceil($total / 20))];
+        $items = $this->store->select('SELECT *' . $sql . ' ORDER BY id DESC LIMIT 20 OFFSET ' . (($page - 1) * 20), $params);
+        if (!$admin && $items !== []) {
+            $ids = array_map(static fn (array $order): int => (int) $order['id'], $items);
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $lines = $this->store->select('SELECT order_id, product_name, option_label, quantity FROM '
+                . $this->store->table('yc_order_items') . " WHERE kind <> 'extra' AND order_id IN ({$marks}) ORDER BY id", $ids);
+            $byOrder = [];
+            foreach ($lines as $line) {
+                $name = (string) $line['product_name'];
+                if ((string) $line['option_label'] !== '') $name .= ' · ' . $line['option_label'];
+                $byOrder[(int) $line['order_id']][] = $name . ' × ' . (int) $line['quantity'];
+            }
+            foreach ($items as &$order) {
+                $order['product_summary'] = $byOrder[(int) $order['id']] ?? [];
+                $order['product_count'] = count($order['product_summary']);
+            }
+            unset($order);
+        }
+        return ['items' => $items, 'total' => $total, 'page' => $page, 'total_pages' => max(1, (int) ceil($total / 20))];
     }
 
     public function transition(int $id, string $from, string $to, string $actor, array $input = [], bool $customer = false): array
@@ -191,6 +227,12 @@ final class Orders
         if ($to === 'paid') throw DomainError::validation(['status' => '결제 완료는 결제 확인으로만 바뀝니다.']);
         if (!in_array($to, self::NEXT[$from] ?? [], true) || ($customer && ($from !== 'pending' || $to !== 'cancelled'))) {
             throw DomainError::validation(['status' => '현재 주문 상태에서는 이 작업을 할 수 없습니다.']);
+        }
+        if ($from === 'pending' && $to === 'cancelled' && $actor !== 'system') {
+            $current = $this->get($id);
+            if ($current['payment_method'] === 'virtual_account' && isset($current['payment']['virtual_account'])) {
+                throw DomainError::validation(['status' => '가상계좌가 발급된 주문은 입금 기한이 지나면 자동 취소됩니다.']);
+            }
         }
         if ($to === 'cancelled' && $from !== 'pending') {
             $current = $this->get($id);

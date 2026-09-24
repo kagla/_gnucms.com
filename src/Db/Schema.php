@@ -32,6 +32,7 @@ final class Schema
         'ux_password_attempts', 'ix_comments_parent',
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
+        'ix_pay_transactions_event',
         'ux_write_rate_limits',
         'ix_message_recipients_job', 'ix_message_recipients_mid', 'ix_message_recipients_fallback',
         'ux_alimtalk_templates_code', 'ix_message_jobs_created', 'ix_message_jobs_scheduled',
@@ -64,7 +65,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '34';
+    public const VERSION = '35';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -298,7 +299,7 @@ final class Schema
     {
         return [
             'CREATE TABLE pay_settings (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, PRIMARY KEY (provider, id)){SUFFIX}',
-            'CREATE TABLE pay_transactions (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, PRIMARY KEY (provider, id)){SUFFIX}',
+            'CREATE TABLE pay_transactions (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, event_indexed SMALLINT NOT NULL DEFAULT 0, event_status VARCHAR(24) NOT NULL DEFAULT \'\', event_at BIGINT NOT NULL DEFAULT 0, environment VARCHAR(8) NOT NULL DEFAULT \'\', payment_method VARCHAR(24) NOT NULL DEFAULT \'\', amount BIGINT NOT NULL DEFAULT 0, failure_code VARCHAR(32) NOT NULL DEFAULT \'\', PRIMARY KEY (provider, id)){SUFFIX}',
             'CREATE TABLE pay_inicis_settings (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
             'CREATE TABLE pay_inicis_transactions (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
         ];
@@ -311,6 +312,16 @@ final class Schema
             preg_match('/^CREATE TABLE (\w+)/', $sql, $m);
             if (!$this->tableExists($m[1])) $this->db->execute($this->expand($sql));
         }
+        foreach ([
+            'event_indexed' => 'SMALLINT NOT NULL DEFAULT 0',
+            'event_status' => "VARCHAR(24) NOT NULL DEFAULT ''",
+            'event_at' => 'BIGINT NOT NULL DEFAULT 0',
+            'environment' => "VARCHAR(8) NOT NULL DEFAULT ''",
+            'payment_method' => "VARCHAR(24) NOT NULL DEFAULT ''",
+            'amount' => 'BIGINT NOT NULL DEFAULT 0',
+            'failure_code' => "VARCHAR(32) NOT NULL DEFAULT ''",
+        ] as $column => $definition) $this->addColumnIfMissing('pay_transactions', $column, $definition);
+        $this->createIndexIfMissing('ix_pay_transactions_event', 'CREATE INDEX ix_pay_transactions_event ON pay_transactions (provider, event_status, event_at)');
         // 암호문을 그대로 옮겨 설정 판·콜백·미확정 승인/환불 기록을 보존한다.
         // 재실행해도 공통 원장의 더 최신 상태를 덮어쓰지 않는다.
         foreach (['settings', 'transactions'] as $kind) {

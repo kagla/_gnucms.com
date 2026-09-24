@@ -7,7 +7,6 @@ namespace GnuCms\Payment;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
 use GnuCms\Mail\SecretCipher;
-use GnuCms\Extension\RuntimePermit;
 
 /** PG별 공통 결제 설정. 이전 주문의 조회·환불에 필요한 암호화 설정 판을 보존한다. */
 final class Settings
@@ -23,9 +22,6 @@ final class Settings
     }
 
     public function definition(): Provider { return $this->app->paymentProviders()->get($this->provider); }
-
-    /** 실행 허용값의 키. 플러그인 시절 키(plugins/payment-inicis)와 다르므로 업그레이드 후 다시 허용해야 한다. */
-    public function key(): string { return 'payment-' . $this->provider; }
 
     public static function environment(string $environment): string
     {
@@ -63,13 +59,12 @@ final class Settings
 
     public function available(string $environment): bool
     {
-        $row = $this->current($environment);
-        return $row !== null && (new RuntimePermit($this->app->storageDir()))->allowed($this->key() . '/' . $environment, $row['revision']);
+        return $this->current($environment) !== null;
     }
 
     public function requireEnabled(string $environment): void
     {
-        if (!$this->available($environment)) throw DomainError::serviceUnavailable('결제 설정에서 API 실행을 허용해 주세요.');
+        if (!$this->available($environment)) throw DomainError::serviceUnavailable('선택한 결제 환경의 연동 설정을 저장해 주세요.');
     }
 
     public function summary(string $environment): array
@@ -77,10 +72,25 @@ final class Settings
         $row = $this->current($environment);
         $public = [];
         foreach ($this->definition()->fields() as $key => $field) {
-            if (!$field['secret']) $public[$key] = $row[$key] ?? '';
+            if ($field['secret']) {
+                $secret = (string) ($row[$key] ?? '');
+                $public[$key . '_set'] = $secret !== '';
+                $public[$key . '_length'] = strlen($secret);
+            }
+            else $public[$key] = $row[$key] ?? '';
         }
         return ['configured' => $row !== null, 'enabled' => $this->available($environment),
             'revision' => $row['revision'] ?? '', 'environment' => $environment] + $public;
+    }
+
+    /** 관리자 화면에서 요청한 비밀 필드 하나만 반환한다. */
+    public function secret(string $environment, string $field): string
+    {
+        $definition = $this->definition()->fields()[$field] ?? null;
+        if (!is_array($definition) || empty($definition['secret'])) {
+            throw DomainError::notFound('지원하지 않는 결제 인증 정보입니다.');
+        }
+        return (string) (($this->current($environment) ?? [])[$field] ?? '');
     }
 
     public function save(string $environment, array $input): void
@@ -94,7 +104,6 @@ final class Settings
         $before = $this->row($environment);
         $data = $this->definition()->validate($input, $this->current($environment) ?? [], $environment)
             + ['integration' => 'direct-v1', 'environment' => $environment, 'revision' => bin2hex(random_bytes(16))];
-        (new RuntimePermit($this->app->storageDir()))->set($this->key() . '/' . $environment, null);
         $payload = $this->cipher->encrypt(json_encode($data, JSON_THROW_ON_ERROR));
         $db = $this->app->db();
         $db->transaction(function () use ($db, $data, $environment, $before, $payload): void {
@@ -104,12 +113,4 @@ final class Settings
         });
     }
 
-    public function enable(string $environment, bool $enabled): void
-    {
-        ExecutionLock::settings($this->app->storageDir(), function () use ($environment, $enabled): void {
-            $row = $this->current($environment);
-            if ($enabled && $row === null) throw DomainError::validation(['settings' => '설정을 먼저 저장해 주세요.']);
-            (new RuntimePermit($this->app->storageDir()))->set($this->key() . '/' . $environment, $enabled ? $row['revision'] : null);
-        });
-    }
 }

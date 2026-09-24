@@ -2,39 +2,48 @@
   'use strict';
   var root=document.querySelector('.yc-admin-page');
   if(!root){return;}
-  var inicisLive=root.querySelector('[data-yc-inicis-live]');
-  if(inicisLive){
-    var paymentEnvironments=[].slice.call(root.querySelectorAll('input[name="payment_environment"]'));
-    var inicisAnimation=null;
-    function syncInicisLive(animate){
-      var show=paymentEnvironments.some(function(input){return input.checked&&input.value==='live';});
-      inicisLive.inert=!show;
-      if(!animate||!inicisLive.animate||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
-        if(inicisAnimation){inicisAnimation.cancel();inicisAnimation=null;}
-        inicisLive.style.height='';inicisLive.style.overflow='';
-        inicisLive.hidden=!show;
-        return;
-      }
-      if(!inicisAnimation&&inicisLive.hidden===!show){return;}
-      var start=inicisLive.hidden?0:inicisLive.getBoundingClientRect().height;
-      var startOpacity=inicisLive.hidden?0:Number(window.getComputedStyle(inicisLive).opacity);
-      if(inicisAnimation){var previous=inicisAnimation;inicisAnimation=null;previous.cancel();}
-      inicisLive.hidden=false;
-      inicisLive.style.height='';
-      var end=show?inicisLive.getBoundingClientRect().height:0;
-      inicisLive.style.height=start+'px';
-      inicisLive.style.overflow='hidden';
-      inicisAnimation=inicisLive.animate([{height:start+'px',opacity:startOpacity},{height:end+'px',opacity:show?1:0}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'});
-      var current=inicisAnimation;
-      current.onfinish=function(){
-        if(inicisAnimation!==current){return;}
-        inicisAnimation=null;
-        inicisLive.style.height='';inicisLive.style.overflow='';
-        inicisLive.hidden=!show;
-      };
+  root.querySelectorAll('[data-yc-inicis-key-toggle]').forEach(function(button){
+    var input=button.parentElement&&button.parentElement.querySelector('input');
+    if(!input){return;}
+    var revealedStored=false,changed=false,loading=false;
+    function state(visible){
+      input.type=visible?'text':'password';
+      button.setAttribute('aria-pressed',visible?'true':'false');
+      var label=button.getAttribute('aria-label').replace(/ (표시|숨기기)$/,'');
+      button.setAttribute('aria-label',label+(visible?' 숨기기':' 표시'));
+      button.title=button.getAttribute('aria-label');
     }
-    paymentEnvironments.forEach(function(input){input.addEventListener('change',function(){syncInicisLive(true);});});
-    syncInicisLive(false);
+    input.addEventListener('input',function(){changed=true;revealedStored=false;});
+    if(input.form){input.form.addEventListener('submit',function(){if(revealedStored&&!changed){input.value='';}});}
+    button.addEventListener('click',async function(){
+      if(input.type==='text'){
+        state(false);if(revealedStored&&!changed){input.value='';revealedStored=false;}input.focus();return;
+      }
+      if(input.value!==''||button.dataset.keySet!=='1'){state(true);input.focus();return;}
+      if(loading){return;}loading=true;button.disabled=true;
+      try{
+        var body=new URLSearchParams({csrf_token:button.dataset.csrf,environment:button.dataset.environment,field:button.dataset.field});
+        var response=await fetch(button.dataset.secretUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
+        if(!response.ok){throw new Error('request failed');}
+        var data=await response.json();input.value=typeof data.secret==='string'?data.secret:'';
+        revealedStored=true;changed=false;state(true);input.focus();input.setSelectionRange(input.value.length,input.value.length);
+      }catch(error){window.alert('저장된 결제 키를 불러오지 못했습니다. 다시 로그인한 뒤 시도해 주세요.');}
+      finally{loading=false;button.disabled=false;}
+    });
+  });
+  var inicisPanels=[].slice.call(root.querySelectorAll('[data-yc-inicis-panel]'));
+  if(inicisPanels.length){
+    var paymentEnvironments=[].slice.call(root.querySelectorAll('input[name="payment_environment"]'));
+    function syncInicisEnvironment(){
+      var selected=paymentEnvironments.find(function(input){return input.checked;});
+      inicisPanels.forEach(function(panel){
+        var show=selected&&panel.dataset.ycInicisPanel===selected.value;
+        panel.hidden=!show;
+        panel.inert=!show;
+      });
+    }
+    paymentEnvironments.forEach(function(input){input.addEventListener('change',syncInicisEnvironment);});
+    syncInicisEnvironment();
   }
   var orderStatusForm=root.querySelector('[data-yc-order-status-form]');
   if(orderStatusForm){

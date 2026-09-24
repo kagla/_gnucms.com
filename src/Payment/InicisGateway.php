@@ -12,19 +12,28 @@ final class InicisGateway extends DirectGateway
 {
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
-        if ((int) $order['total'] > 999999999) throw DomainError::validation(['amount' => '카드 결제 한도를 초과했습니다.']);
+        if ((int) $order['total'] > 999999999) throw DomainError::validation(['amount' => '결제 한도를 초과했습니다.']);
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $timestamp = (string) (int) (microtime(true) * 1000);
-        return ['kind' => 'inicis-pro', 'script' => 'https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', 'fields' => [
-            'P_MID' => $config['merchant_id'], 'P_OID' => $order['id'], 'P_PAY_TYPE' => 'CARD',
+        $method = match ($order['method']) { 'bank_transfer' => 'BANK', 'virtual_account' => 'VBANK', 'mobile' => 'HPP', default => 'CARD' };
+        $reserved = ['email' => $customer['email'], 'phonenum' => $customer['phone']];
+        if ($method === 'VBANK' && (int) ($order['pay_by'] ?? 0) > 0) {
+            $due = (new \DateTimeImmutable('@' . (int) $order['pay_by']))->setTimezone(new \DateTimeZone('Asia/Seoul'));
+            $reserved['vbank_dt'] = $due->format('Ymd'); $reserved['vbank_tm'] = $due->format('Hi');
+        }
+        $fields = [
+            'P_MID' => $config['merchant_id'], 'P_OID' => $order['id'], 'P_PAY_TYPE' => $method,
             'P_DEVICE_TYPE' => $device === 'mobile' ? 'MOBILE' : 'WEB', 'P_IDCCODE' => 'Y',
             'P_AMT' => (string) $order['total'], 'P_GOODS' => mb_strcut($order['order_name'], 0, 80, 'UTF-8'),
             'P_UNAME' => mb_strcut($customer['name'], 0, 30, 'UTF-8'), 'P_NEXT_URL' => $callbackUrl,
-            'P_RESERVED' => json_encode(['email' => $customer['email']], JSON_THROW_ON_ERROR),
+            'P_RESERVED' => json_encode($reserved, JSON_THROW_ON_ERROR),
             // PayPro는 결과 콜백 뒤에도 닫기 주소로 이동할 수 있어 주문 완료 이동을 덮어쓴다.
             'P_CHARSET' => 'UTF-8', 'P_TIMESTAMP' => $timestamp,
             'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp),
-        ]];
+        ];
+        if ($method === 'HPP') $fields['P_HPP_METHOD'] = '2';
+        if ($method === 'VBANK') $fields['P_NOTI_URL'] = $callbackUrl . '&event=notify';
+        return ['kind' => 'inicis-pro', 'script' => 'https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', 'fields' => $fields];
     }
 
     private static function signature(array $fields): string
@@ -114,15 +123,35 @@ final class InicisGateway extends DirectGateway
             'P_AMT' => (string) $order['total'], 'P_CHARSET' => 'UTF-8'];
         try {
             $response = $this->request($this->proUrl($callback), $body, true);
+            $status = $response['P_STATUS'] ?? null;
+            if (is_string($status) && $status !== '' && $status !== '00') {
+                $message = $response['P_RMESG'] ?? $response['P_RMESG1'] ?? '';
+                if (!is_string($message)) $message = '';
+                $message = trim(preg_replace('/[\x00-\x1f\x7f]/u', ' ', $message) ?? '');
+                if ($message !== '') $message = mb_substr($message, 0, 200, 'UTF-8');
+                throw new DomainError('PAYMENT_DECLINED', '이니시스에서 결제를 거절했습니다.', 422,
+                    ['pg_status' => preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $status) ? $status : '', 'pg_message' => $message]);
+            }
+            $expectedType = match ($order['method']) { 'bank_transfer' => 'BANK', 'virtual_account' => 'VBANK', 'mobile' => 'HPP', default => 'CARD' };
             if (($response['P_STATUS'] ?? '') !== '00'
                 || ($response['P_MID'] ?? '') !== $config['merchant_id']
                 || ($response['P_OID'] ?? '') !== $order['id']
                 || self::amount($response['P_AMT'] ?? null) !== (int) $order['total']
-                || ($response['P_TYPE'] ?? '') !== 'CARD') {
+                || ($response['P_TYPE'] ?? '') !== $expectedType) {
                 throw DomainError::serviceUnavailable('승인 결과가 주문과 일치하지 않습니다. PG에서 상태를 확인해 주세요.');
             }
-            return ['tid' => self::value($response, 'P_APPL_TID', 40)];
+            $payment = ['tid' => self::value($response, 'P_APPL_TID', 40)];
+            if ($expectedType === 'VBANK') {
+                $payment['virtual_account'] = [
+                    'bank' => self::value($response, 'P_FN_NM', 100), 'account' => self::value($response, 'P_VACT_NUM', 40),
+                    'holder' => self::value($response, 'P_VACT_NAME', 40), 'due_date' => self::value($response, 'P_VACT_DATE', 8),
+                    'due_time' => self::value($response, 'P_VACT_TIME', 6),
+                ];
+            }
+            return $payment;
         } catch (\Throwable $error) {
+            // PG가 명시적으로 승인 거절을 반환한 경우에는 승인된 거래가 아니므로 망취소하지 않는다.
+            if ($error instanceof DomainError && $error->code() === 'PAYMENT_DECLINED') throw $error;
             $timestamp = (string) (int) (microtime(true) * 1000);
             $cancel = $body + ['P_OID' => $order['id'], 'P_CANCEL_MSG' => 'Merchant approval verification failed',
                 'P_TIMESTAMP' => $timestamp, 'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp)];
@@ -149,12 +178,38 @@ final class InicisGateway extends DirectGateway
         $tid = $state['approved']['tid'] ?? $order['transaction_id'] ?? '';
         $data = $this->api($config, 'inquiry', $tid !== '' ? ['tid' => $tid] : ['oid' => $order['id']]);
         if (($data['resultCode'] ?? '') !== 'SUCCESS') throw DomainError::serviceUnavailable('이니시스 거래 조회를 확인하지 못했습니다. 주문번호 조회에는 중복방지 계약이 필요합니다.');
-        $status = match ($data['transactionStatus'] ?? '') { 'APPROVAL' => 'PAID', 'PART_CANCEL' => 'PARTIAL_CANCELLED', 'CANCEL' => 'CANCELLED', default => throw DomainError::serviceUnavailable('카드결제 상태가 확정되지 않았습니다.') };
+        $method = (string) ($order['method'] ?? 'card');
+        $transactionStatus = (string) ($data['transactionStatus'] ?? '');
+        $status = match ($transactionStatus) {
+            'APPROVAL', 'DEPOSIT_COMPLETED', 'WAITING_FOR_REFUND' => 'PAID',
+            'NON_DEPOSIT' => 'PENDING',
+            'PART_CANCEL' => 'PARTIAL_CANCELLED',
+            'CANCEL', 'REFUND_COMPLETED' => 'CANCELLED',
+            'DEPOSIT_CANCELED' => 'PENDING',
+            default => throw DomainError::serviceUnavailable('결제 상태가 확정되지 않았습니다.'),
+        };
         $total = (int) $order['total'];
-        $paidAt = self::date(($data['approvedDate'] ?? '') . ($data['approvedTime'] ?? ''));
+        $vacct = is_array($data['vacctInfo'] ?? null) ? $data['vacctInfo'] : [];
+        $paidAt = self::date(($method === 'virtual_account' ? ($vacct['depositDate'] ?? '') : ($data['approvedDate'] ?? ''))
+            . ($method === 'virtual_account' ? ($vacct['depositTime'] ?? '') : ($data['approvedTime'] ?? '')));
+        $expectedMethod = match ($method) { 'bank_transfer' => 'DirectBank', 'virtual_account' => 'VBank', 'mobile' => 'HPP', default => ['Card', 'VCard'] };
+        $methodValid = is_array($expectedMethod) ? in_array($data['paymethod'] ?? '', $expectedMethod, true) : ($data['paymethod'] ?? '') === $expectedMethod;
+        // 거래조회는 입금 전 가상계좌번호를 마스킹해 반환할 수 있다. 고객에게 전달할
+        // 발급 정보는 앞 단계에서 결제 승인 응답과 함께 원장에 검증·보관한 값을 쓴다.
+        $issuedAccount = is_array($state['approved']['virtual_account'] ?? null) ? $state['approved']['virtual_account'] : [];
+        $accountNumber = (string) ($issuedAccount['account'] ?? '');
+        $accountBank = (string) ($issuedAccount['bank'] ?? '');
+        $accountName = (string) ($issuedAccount['holder'] ?? '');
+        $validDate = (string) ($issuedAccount['due_date'] ?? '');
+        $validTime = (string) ($issuedAccount['due_time'] ?? '');
+        $virtualAccount = ['bank' => $accountBank, 'account' => $accountNumber, 'holder' => $accountName, 'due_date' => $validDate, 'due_time' => $validTime];
+        $accountValid = $method !== 'virtual_account' || (preg_match('/^[0-9]{1,16}$/D', $accountNumber)
+            && $accountBank !== '' && strlen($accountBank) <= 100 && $accountName !== '' && strlen($accountName) <= 40
+            && preg_match('/^[0-9]{8}$/D', $validDate) && preg_match('/^[0-9]{6}$/D', $validTime));
         $valid = ($data['mid'] ?? '') === $config['merchant_id'] && ($data['oid'] ?? '') === $order['id'] && self::amount($data['price'] ?? null) === $total
-            && ($tid === '' || ($data['tid'] ?? '') === $tid) && in_array($data['paymethod'] ?? '', ['Card', 'VCard'], true) && $paidAt > 0
-            && in_array($data['cardInfo']['currencyCode'] ?? '', ['WON', 'KRW', '410'], true);
+            && ($tid === '' || ($data['tid'] ?? '') === $tid) && $methodValid && $accountValid
+            && ($status === 'PENDING' ? $method === 'virtual_account' : ($paidAt > 0 || $status === 'CANCELLED'))
+            && ($method !== 'card' || in_array($data['cardInfo']['currencyCode'] ?? '', ['WON', 'KRW', '410'], true));
         $cancelled = $status === 'CANCELLED' ? $total : ($status === 'PARTIAL_CANCELLED' ? $total - self::amount($data['availablePartCancelPrice'] ?? null) : 0);
         $rows = $data['partCancelTransInfo'] ?? []; $cancellations = [];
         if (!is_array($rows) || (!array_is_list($rows) && $rows !== [])) $valid = false;
@@ -169,12 +224,28 @@ final class InicisGateway extends DirectGateway
             foreach ($state['refunds'] ?? [] as $refund) if ($refund['status'] === 'succeeded') $cancellations[] = $refund['result'];
             $remaining = $total - array_sum(array_column($cancellations, 'amount'));
             if ($remaining > 0) {
-                $at = self::date(($data['cancelDate'] ?? '') . ($data['cancelTime'] ?? ''));
+                $cancelDate = $method === 'virtual_account' && $transactionStatus === 'REFUND_COMPLETED'
+                    ? ($data['refundDate'] ?? '') : ($data['cancelDate'] ?? '');
+                $cancelTime = $method === 'virtual_account' && $transactionStatus === 'REFUND_COMPLETED'
+                    ? ($data['refundTime'] ?? '') : ($data['cancelTime'] ?? '');
+                $at = self::date($cancelDate . $cancelTime);
                 if ($at < 1) $valid = false;
                 $cancellations[] = ['id' => $data['tid'] . '-full', 'amount' => $remaining, 'at' => $at, 'reason' => ''];
             }
         }
-        return ['status' => $status, 'valid' => $valid && $cancelled >= 0 && $cancelled <= $total, 'transaction_id' => self::value($data, 'tid', 40), 'paid_at' => $paidAt, 'cancelled' => $cancelled, 'cancellations' => $cancellations];
+        $card = is_array($data['cardInfo'] ?? null) ? $data['cardInfo'] : [];
+        $cardNumber = is_string($card['cardNumber'] ?? null) ? $card['cardNumber'] : '';
+        $lastFour = preg_match('/([0-9]{4})\D*$/', $cardNumber, $match) ? $match[1] : '';
+        $quota = is_string($card['cardQuota'] ?? null) || is_int($card['cardQuota'] ?? null) ? (string) $card['cardQuota'] : '';
+        $quota = preg_match('/^[0-9]{2}$/D', $quota) ? (int) $quota : null;
+        $cardName = is_string($card['cardName'] ?? null) && strlen($card['cardName']) <= 32
+            && !preg_match('/[\x00-\x1f\x7f]/', $card['cardName']) ? $card['cardName'] : '';
+        $approvalNumber = is_string($card['approvedNumber'] ?? null) && strlen($card['approvedNumber']) <= 8
+            && preg_match('/^[A-Za-z0-9]+$/D', $card['approvedNumber']) ? $card['approvedNumber'] : '';
+        $detail = $method === 'virtual_account' ? ['virtual_account' => $virtualAccount] : [];
+        $result = ['status' => $status, 'valid' => $valid && $cancelled >= 0 && $cancelled <= $total, 'transaction_id' => self::value($data, 'tid', 40), 'paid_at' => $paidAt, 'cancelled' => $cancelled, 'cancellations' => $cancellations, 'detail' => $detail];
+        if ($method === 'card') $result['card'] = ['name' => $cardName, 'last_four' => $lastFour, 'quota' => $quota, 'interest_free' => ($card['isInterestFree'] ?? null) === true, 'approval_number' => $approvalNumber];
+        return $result;
     }
 
     protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array

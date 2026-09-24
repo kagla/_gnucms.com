@@ -76,12 +76,20 @@ final class Cart
             }
             $add[$id] = $qty;
         }
+        $changedLines = []; $changedProducts = [];
         foreach ($add as $id => $qty) {
             $key = $productId . ':' . $id;
             $cart[$key] = ['product_id' => $productId, 'option_id' => $id, 'quantity' => ($cart[$key]['quantity'] ?? 0) + $qty];
+            $changedLines[$key] = true;
+            $changedProducts[$productId] = true;
         }
         $quote = $this->quote($cart);
-        if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
+        $errors = array_intersect_key($quote['errors'], $changedLines);
+        foreach (array_keys($changedProducts) as $changedProductId) {
+            $quantityError = 'quantity_' . $changedProductId;
+            if (isset($quote['errors'][$quantityError])) $errors[$quantityError] = $quote['errors'][$quantityError];
+        }
+        if ($errors !== []) throw DomainError::validation($errors);
         return $cart;
     }
 
@@ -185,8 +193,14 @@ final class Cart
         $quote = ['items' => $items, 'errors' => $errors, 'subtotal' => $subtotal, 'shipping_fee' => $delivery['prepaid'],
             'cod_fee' => $delivery['cod'], 'shipping' => $delivery['lines'], 'total' => $subtotal + $delivery['prepaid'],
             'quantity' => array_sum(array_column(array_filter($items, static fn ($item) => $item['kind'] !== 'extra'), 'quantity'))];
-        // 가격뿐 아니라 배송 방식·옵션·수량·구매 안내가 바뀌어도 다시 검토하게 한다.
-        $quote['fingerprint'] = hash('sha256', json_encode([$items, $delivery, $this->settings->all()['order_notice']], JSON_THROW_ON_ERROR));
+        // 재고 잔량과 이미지처럼 주문 금액에 영향이 없는 표시값은 주문서 지문에서 제외한다.
+        $fingerprintItems = array_map(static fn (array $item): array => [
+            'key' => $item['key'], 'product_id' => $item['product_id'], 'option_id' => $item['option_id'],
+            'quantity' => $item['quantity'], 'name' => $item['name'], 'code' => $item['code'],
+            'label' => $item['label'], 'kind' => $item['kind'], 'price' => $item['price'], 'total' => $item['total'],
+        ], $items);
+        // 가격·배송 방식·옵션·수량·구매 안내가 바뀌면 다시 확인하도록 한다.
+        $quote['fingerprint'] = hash('sha256', json_encode([$fingerprintItems, $delivery, $this->settings->all()['order_notice']], JSON_THROW_ON_ERROR));
         return $quote;
     }
 
