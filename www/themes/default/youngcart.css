@@ -210,6 +210,7 @@
 .yc-shop .yc-choice,.yc-shop .yc-consent{align-self:flex-start;width:fit-content;max-width:100%}
 .yc-shop .yc-choice{display:flex;align-items:center;gap:.7rem}.yc-shop .yc-choice>input{flex:none;margin:0}.yc-shop .yc-choice .yc-test-badge{margin-left:0}
 .yc-order-list-meta{display:flex;flex-direction:column;gap:.4rem;min-width:0}.yc-order-list-products{list-style:none;margin:0;padding:0;color:var(--yc-muted);font-size:.76rem;line-height:1.55}.yc-order-list-products li{overflow-wrap:anywhere}
+.yc-order-list-recipient{display:flex;align-items:baseline;gap:.45rem;margin:0;font-size:.8rem;font-weight:650;overflow-wrap:anywhere}.yc-order-list-recipient span{color:var(--yc-muted);font-size:.73rem;font-weight:500;flex:none}
 .yc-address-dialog{position:fixed;inset:0;margin:auto;width:min(560px,calc(100vw - 2rem));max-width:none;height:min(82vh,720px);max-height:min(82vh,720px);padding:0;border:1px solid var(--yc-line);border-radius:12px;background:var(--yc-paper);color:var(--yc-ink);box-shadow:0 18px 60px #0003}
 .yc-address-dialog::backdrop{background:#0008}
 .yc-address-dialog-panel{display:flex;height:100%;max-height:100%;box-sizing:border-box;flex-direction:column;padding:1.25rem}
