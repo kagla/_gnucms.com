@@ -96,11 +96,14 @@ final class PayController
         $intent = $order === null ? $this->intentFromQuery($request) : null;
         if ($order === null && $intent === null) throw DomainError::forbidden('주문서를 확인할 수 없습니다.');
         $body = $request->getParsedBody();
-        if ($intent !== null && is_array($body) && is_string($body['P_STATUS'] ?? null) && $body['P_STATUS'] !== '00') {
-            $code = $body['P_STATUS'];
+        $provider = (string) ($intent['payment']['provider'] ?? '');
+        $declineCode = !is_array($body) ? null : ($provider === 'kcp' ? ($body['res_cd'] ?? null) : ($body['P_STATUS'] ?? null));
+        $declineSuccess = $provider === 'kcp' ? '0000' : '00';
+        if ($intent !== null && is_string($declineCode) && $declineCode !== $declineSuccess) {
+            $code = $declineCode;
             if (preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code)) {
                 try {
-                    $message = $body['P_RMESG'] ?? $body['P_RMESG1'] ?? '';
+                    $message = $body['P_RMESG'] ?? $body['P_RMESG1'] ?? $body['res_msg'] ?? '';
                     $this->service->checkoutIntents->decline($intent, $code, is_string($message) ? $message : '');
                     error_log('GNUCMS payment authentication failed: ' . $intent['payment']['id'] . ' (status=' . $code . ')');
                     $destination = '/checkout?flow=' . rawurlencode($intent['flow']) . '&pay=declined&code=' . rawurlencode($code);

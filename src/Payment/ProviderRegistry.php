@@ -11,7 +11,11 @@ final class ProviderRegistry
     /** @var array<string,Provider> */
     private array $providers = [];
 
-    public function __construct() { $this->register(new InicisProvider()); }
+    public function __construct()
+    {
+        $this->register(new InicisProvider());
+        $this->register(new KcpProvider());
+    }
 
     public function register(Provider $provider): void
     {

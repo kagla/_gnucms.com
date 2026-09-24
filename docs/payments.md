@@ -3,8 +3,9 @@
 GNUCMS가 PG와 직접 연동한다. 포트원 계정이나 API를 거치지 않는다. 쇼핑몰은 공통
 `Gateway` 계약으로 결제창·승인·조회·전액/부분 환불·미확정 환불 대조를 호출하며,
 각 PG의 전문과 인증은 해당 어댑터가 처리한다. KG이니시스는 카드, 실시간 계좌이체,
-가상계좌, 휴대폰 결제를 제공한다. 상점 MID에 각 수단 계약이 완료된 뒤 **쇼핑몰 설정 → 결제**에서
-수단을 켠다. 가상계좌는 발급·입금을 분리하고 `/shop/pay/callback`의 입금 통보를 거래 조회로
+가상계좌, 휴대폰 결제를 제공하고 NHN KCP 표준결제는 카드, 실시간 계좌이체, 휴대폰 결제를 제공한다.
+상점 MID에 각 수단 계약이 완료된 뒤 **쇼핑몰 설정 → 결제**에서
+수단을 켠다. 이니시스 가상계좌는 발급·입금을 분리하고 `/shop/pay/callback`의 입금 통보를 거래 조회로
 검증해 결제 완료로 처리한다. 가상계좌·휴대폰 결제 환불은 이니시스 관리자에서 처리한 뒤 주문의
 **결제 조회**로 반영한다. 무통장입금은 쇼핑몰에서 별도로 관리한다. 다른 PG는 어댑터를
 구현하고 검증한 뒤 등록해야 한다.
@@ -88,21 +89,37 @@ PG 실계정 승인·조회·환불은 별도 검증이 필요하다. 자동 테
 | `src/Payment/DirectGateway.php` | 승인/환불 중복 전송 방지, 원장 상태, 환불 대조 공통 구현 |
 | `src/Payment/Settings.php`, `Journal.php` | PG별 암호화 설정 판·원장 |
 | `src/Payment/InicisProvider.php`, `ProviderConfig.php` | 이니시스 설정 항목·검증·키 교체 정책 |
-| `src/Payment/InicisGateway.php`, `StreamTransport.php` | 이니시스 전문·통신·허용 API 주소·응답 검증 |
+| `src/Payment/InicisGateway.php`, `KcpGateway.php`, `StreamTransport.php` | 이니시스·KCP 전문·통신·허용 API 주소·응답 검증 |
 | `templates/default/admin/payment_settings.php` | 모든 등록 PG가 사용하는 설정 화면 |
 | `src/Shop/Commerce/CheckoutIntents.php` | PG 승인 전 암호화 임시 주문서와 승인 후 주문 확정·접수 실패 시 취소 |
 | `templates/default/shop/checkout.php` | 새 PG 주문의 결제창을 주문서 안에 표시 |
 | `templates/default/shop/pay.php` | 이전 결제 대기 주문의 결제 재시도 화면 |
 | `templates/default/payment/inicis.php`, `inicis_scripts.php` | 이니시스 PC/모바일 결제창 조각과 실행 스크립트 |
+| `templates/default/payment/kcp.php`, `kcp_scripts.php`, `www/themes/default/kcp.js` | KCP PC/모바일 결제창 조각과 콜백 실행 스크립트 |
 
-결제창 조각도 기존 테마 경로 탐색을 사용한다. `templates/<테마>/payment/inicis.php`와
-`inicis_scripts.php`로 재정의할 수 있다. 쇼핑몰 전용 재정의는
+결제창 조각도 기존 테마 경로 탐색을 사용한다. `templates/<테마>/payment/inicis.php`,
+`inicis_scripts.php`, `kcp.php`, `kcp_scripts.php`로 재정의할 수 있다. 쇼핑몰 전용 재정의는
 `templates/<테마>/shop/payment/`에 둔다. 기존 `shop/pay.php` 전체 재정의도 유지된다.
 
 이니시스는 상점 MID 계약이 허용한 카드, 실시간 계좌이체, 가상계좌, 휴대폰 결제를 지원한다.
-쇼핑몰 설정에서 각 수단을 켜야 주문서에 표시된다. 가상계좌는 입금 기한과 입금 통보를 처리하고,
+KCP 표준결제는 상점 계약이 허용한 카드, 실시간 계좌이체, 휴대폰 결제를 지원한다. 쇼핑몰 설정에서
+각 수단을 켜야 주문서에 표시된다. KCP 가상계좌는 별도 발급 API와 입금 웹훅을 사용하므로 아직 주문서에
+노출하지 않는다. 이니시스 가상계좌는 입금 기한과 입금 통보를 처리하고,
 환불은 이니시스 관리자에서 실행한 뒤 쇼핑몰 주문의 결제 조회로 반영한다. 휴대폰 결제 환불도
 이니시스 관리자에서 실행하고 결제 조회로 반영한다.
+
+## NHN KCP 설정
+
+사이트 설정 → 결제의 NHN KCP 탭에서 테스트·운영 환경별로 자격정보를 저장한다. 테스트에는 사이트 코드
+`T0000`, 운영에는 KCP가 발급한 5자리 사이트 코드를 사용한다. 각 환경의 서비스 인증서 PEM, 개인키 PEM,
+개인키 비밀번호가 필요하다. 인증서와 개인키는 암호화해 보관한다.
+
+PC는 KCP 표준결제 허브를, 모바일은 [거래등록 API](https://developer.kcp.co.kr/reference/regist)가 반환한 PayUrl과 인증 키를 사용한다.
+인증 후에는 서버에서 [결제승인 API](https://developer.kcp.co.kr/reference/pay-approve)를 호출하고, 거래조회 결과로 주문번호·거래번호·수단·금액·잔액을 검증한다.
+[공식 거래조회 Guide](https://developer.kcp.co.kr/reference/search)는 조회 서명 문자열로 `site_cd^tno^pay_type`을 안내하지만 API Reference의 서명 파라미터 설명은
+`site_cd^tno^mod_type`을 적고 있다. 구현은 Guide에 요청 예시가 있는 `pay_type` 규칙을 사용한다. 실제 KCP 테스트 계정으로
+조회·취소를 검증해야 한다. 거래조회 응답에는 취소별 이력이 없어 원장에 저장한 GNUCMS 취소와 PG 잔액 합계가
+일치할 때만 조회 결과를 유효하게 처리한다. 전액·부분 취소는 [거래취소 API](https://developer.kcp.co.kr/reference/cancel)를 호출한다.
 
 ## 새 PG 추가
 
@@ -129,7 +146,7 @@ $app->paymentProviders()->register(new YourProvider());
 - `refund()`는 확정된 취소의 `id`, `amount`, `at`를 반환한다. 응답이 불확실하면 예외를
   내서 원장의 보류 상태를 유지한다. 승인·환불 타임아웃을 성공이나 미처리로 추측하지 않는다.
 
-현재 `StreamTransport`는 이니시스 주소만 허용한다. 새 PG는 `Transport` 구현을 주입해
+현재 `StreamTransport`는 등록된 이니시스·KCP 주소만 허용한다. 새 PG는 `Transport` 구현을 주입해
 그 PG의 공식 HTTPS 주소·응답 형식·인증을 검증한다. 임의 콜백 URL로 인증키를 보내거나,
 리다이렉트를 따라가거나, TLS 검증을 끄지 않는다. 필요하면 PG별 콜백/웹훅 인증과 경로도
 추가한다. 브라우저 인증 콜백과 비동기 입금 통보는 같은 계약이 아니다. 이니시스 가상계좌 통보는
