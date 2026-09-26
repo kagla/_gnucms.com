@@ -31,6 +31,7 @@ final class CheckoutIntents
         $snapshot = ['lines' => $lines, 'input' => $details, 'token' => $token, 'owner' => $owner,
             'user_id' => $userId, 'fingerprint' => $fingerprint, 'shipping' => $shipping,
             'flow' => $flow, 'total' => $quote['total'], 'order_name' => $orderName,
+            'escrow_products' => Payments::escrowProducts($quote['items'], (int) $quote['shipping_fee']),
             'payment_choice' => ['provider' => $payment['provider'], 'method' => $payment['method'],
                 'environment' => $payment['environment'], 'revision' => $payment['revision']]];
         $hash = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
@@ -96,7 +97,8 @@ final class CheckoutIntents
         return Payments::gatewayOrder(['payment_id' => $payment['id'], 'payment_provider' => $payment['provider'],
             'payment_environment' => $payment['environment'], 'payment_revision' => $payment['revision'],
             'payment_method' => $payment['method'], 'total' => $intent['total'], 'order_name' => $intent['order_name'],
-            'created_at' => $intent['created_at'], 'pay_by' => $payment['pay_by'], 'payment' => []]);
+            'created_at' => $intent['created_at'], 'pay_by' => $payment['pay_by'], 'payment' => [],
+            'escrow_products' => $intent['escrow_products'] ?? []]);
     }
 
     /** 결제창만 만든다. 임시 주문서에는 아직 yc_orders ID가 없다. */

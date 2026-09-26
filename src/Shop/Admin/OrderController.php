@@ -49,7 +49,8 @@ final class OrderController extends AdminBase
         $data['is_pg'] = $this->service->payments->isPgOrder($data['order']);
         $provider = $data['is_pg'] ? $this->service->app->paymentProviders()->get($data['order']['payment_provider']) : null;
         $data['payment_provider_label'] = $provider?->label() ?? '';
-        $data['partial_refund'] = $provider?->supportsPartialRefund() ?? true;
+        $data['escrow_payment'] = $data['is_pg'] && ($data['order']['payment']['escrow'] ?? false) === true;
+        $data['partial_refund'] = $this->service->payments->supportsPartialRefund($data['order']);
         $data['refund_key'] = bin2hex(random_bytes(16));
         $data['pending_refunds'] = $this->service->payments->pendingRefunds($data['order']);
         $data['notice'] = match ($data['input']['saved'] ?? '') {

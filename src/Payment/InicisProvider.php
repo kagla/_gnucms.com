@@ -16,7 +16,8 @@ final class InicisProvider implements Provider
     }
     public function credentials(array $revision, ?array $current): array
     {
-        if ($current !== null && $current['merchant_id'] === $revision['merchant_id']) {
+        if ($current !== null && ($current['mode'] ?? 'general') === ($revision['mode'] ?? 'general')
+            && $current['merchant_id'] === $revision['merchant_id']) {
             foreach ($this->fields() as $key => $field) {
                 if (($field['secret'] && ($current[$key] ?? '') !== '') || $key === 'client_ip') $revision[$key] = $current[$key];
             }

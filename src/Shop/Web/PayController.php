@@ -76,6 +76,18 @@ final class PayController
         return $intent !== null && CallbackToken::verify($this->service->app, CheckoutIntents::gatewayOrder($intent), $request->getQueryParams()['state'] ?? null);
     }
 
+    /** 토스 SDK는 GET 리다이렉트를 사용하므로 서명된 쿼리를 직접 검증한다. */
+    public function tossReturn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $order = $this->orderFromQuery($request);
+        $intent = $order === null ? $this->intentFromQuery($request) : null;
+        $provider = $order['payment_provider'] ?? $intent['payment']['provider'] ?? '';
+        if ($provider !== 'toss' || !$this->callbackAuthenticate($request)) {
+            throw DomainError::forbidden('토스 결제 결과의 서명을 확인할 수 없습니다.');
+        }
+        return $this->callback($request, $response);
+    }
+
     /** ExternalRequests 처리기: 승인·조회 뒤 주문 화면으로 보낸다. 실패는 pay=failed 로 알린다. */
     public function callback(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -96,14 +108,24 @@ final class PayController
         $intent = $order === null ? $this->intentFromQuery($request) : null;
         if ($order === null && $intent === null) throw DomainError::forbidden('주문서를 확인할 수 없습니다.');
         $body = $request->getParsedBody();
-        $provider = (string) ($intent['payment']['provider'] ?? '');
-        $declineCode = !is_array($body) ? null : ($provider === 'kcp' ? ($body['res_cd'] ?? null) : ($body['P_STATUS'] ?? null));
-        $declineSuccess = $provider === 'kcp' ? '0000' : '00';
+        $provider = (string) ($intent['payment']['provider'] ?? $order['payment_provider'] ?? '');
+        $query = $request->getQueryParams();
+        if ($provider === 'toss') {
+            // 성공/실패 리다이렉트의 PG 항목만 본문처럼 다룬다. 인증용 order/state는 그대로 둔다.
+            $body = array_intersect_key($query, array_flip(['paymentKey', 'orderId', 'amount', 'code', 'message', 'result']));
+        }
+        $declineCode = !is_array($body) ? null : match ($provider) {
+            'kcp' => $body['res_cd'] ?? null,
+            'nicepay' => $body['authResultCode'] ?? null,
+            'toss' => ($body['result'] ?? '') === 'fail' ? 'TOSS_FAILED' : null,
+            default => $body['P_STATUS'] ?? null,
+        };
+        $declineSuccess = in_array($provider, ['kcp', 'nicepay'], true) ? '0000' : '00';
         if ($intent !== null && is_string($declineCode) && $declineCode !== $declineSuccess) {
             $code = $declineCode;
             if (preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code)) {
                 try {
-                    $message = $body['P_RMESG'] ?? $body['P_RMESG1'] ?? $body['res_msg'] ?? '';
+                    $message = $body['P_RMESG'] ?? $body['P_RMESG1'] ?? $body['res_msg'] ?? $body['authResultMsg'] ?? $body['message'] ?? '';
                     $this->service->checkoutIntents->decline($intent, $code, is_string($message) ? $message : '');
                     error_log('GNUCMS payment authentication failed: ' . $intent['payment']['id'] . ' (status=' . $code . ')');
                     $destination = '/checkout?flow=' . rawurlencode($intent['flow']) . '&pay=declined&code=' . rawurlencode($code);

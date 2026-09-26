@@ -16,6 +16,10 @@ final class KcpGateway extends DirectGateway
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
         if ((int) $order['total'] > 999999999999) throw DomainError::validation(['amount' => 'KCP 결제 한도를 초과했습니다.']);
+        $credentials = $this->credentials($order);
+        if (($credentials['mode'] ?? 'general') === 'escrow' && $order['method'] === 'bank_transfer') {
+            throw DomainError::serviceUnavailable('KCP 에스크로 계좌이체 결제 실행은 아직 연결되지 않았습니다.');
+        }
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $method = self::METHOD[$order['method']] ?? throw DomainError::validation(['payment_method' => 'KCP 결제수단을 확인해 주세요.']);
         $mobile = $device === 'mobile';

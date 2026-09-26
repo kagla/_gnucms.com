@@ -11,6 +11,7 @@ final class KcpConfig
     public static function fields(): array
     {
         return [
+            'mode' => ['label' => '결제 방식', 'secret' => false, 'multiline' => false],
             'site_cd' => ['label' => '사이트 코드 (site_cd)', 'secret' => false, 'multiline' => false],
             'certificate' => ['label' => '서비스 인증서 PEM', 'secret' => true, 'multiline' => true],
             'private_key' => ['label' => '개인키 PEM', 'secret' => true, 'multiline' => true],
@@ -21,14 +22,19 @@ final class KcpConfig
     public static function validate(array $input, array $before, string $environment): array
     {
         Settings::environment($environment);
-        $data = [];
+        $data = ['mode' => PaymentMode::validate($input['mode'] ?? ($before['mode'] ?? 'general'))];
+        if ($environment === 'test') {
+            $input['site_cd'] = $data['mode'] === 'escrow' ? KcpLegacyConfig::TEST_ESCROW_SITE_CD : KcpLegacyConfig::TEST_SITE_CD;
+        }
         foreach (self::fields() as $key => $field) {
+            if ($key === 'mode') continue;
             $value = $input[$key] ?? '';
             if (!is_string($value) || strlen($value) > 32768 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value)) {
                 throw DomainError::validation([$key => 'KCP 연동 값을 확인해 주세요.']);
             }
             $value = trim(str_replace(["\r\n", "\r"], "\n", $value));
-            if ($value === '' && $field['secret'] && ($data['site_cd'] ?? '') === ($before['site_cd'] ?? null)) {
+            if ($value === '' && $field['secret'] && $data['mode'] === ($before['mode'] ?? 'general')
+                && ($data['site_cd'] ?? '') === ($before['site_cd'] ?? null)) {
                 $value = (string) ($before[$key] ?? '');
             }
             if ($value === '') throw DomainError::validation([$key => $field['label'] . '을 입력해 주세요.']);
@@ -38,8 +44,10 @@ final class KcpConfig
         if (!preg_match('/^[A-Z0-9]{5}$/D', $data['site_cd'])) {
             throw DomainError::validation(['site_cd' => 'KCP에서 발급한 5자리 사이트 코드를 확인해 주세요.']);
         }
-        if (($environment === 'test') !== ($data['site_cd'] === 'T0000')) {
-            throw DomainError::validation(['site_cd' => '테스트 환경에는 T0000, 운영 환경에는 운영 사이트 코드를 입력해 주세요.']);
+        $testCode = $data['mode'] === 'escrow' ? KcpLegacyConfig::TEST_ESCROW_SITE_CD : KcpLegacyConfig::TEST_SITE_CD;
+        if (($environment === 'test' && $data['site_cd'] !== $testCode)
+            || ($environment === 'live' && in_array($data['site_cd'], [KcpLegacyConfig::TEST_SITE_CD, KcpLegacyConfig::TEST_ESCROW_SITE_CD], true))) {
+            throw DomainError::validation(['site_cd' => '선택한 방식의 테스트 사이트 코드 또는 운영 사이트 코드를 확인해 주세요.']);
         }
         if (!str_contains($data['certificate'], '-----BEGIN CERTIFICATE-----') || !str_contains($data['certificate'], '-----END CERTIFICATE-----')) {
             throw DomainError::validation(['certificate' => 'KCP 서비스 인증서 PEM 형식을 확인해 주세요.']);

@@ -7,6 +7,10 @@ namespace GnuCms\Shop\Admin;
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Payment\Journal;
+use GnuCms\Payment\ProviderConfig;
+use GnuCms\Payment\KcpLegacyConfig;
+use GnuCms\Payment\PaymentMode;
+use GnuCms\Payment\Settings as PaymentSettings;
 use GnuCms\Shop\HomeBanner;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
@@ -71,6 +75,17 @@ final class AdminController extends AdminBase
         $inicisPayment = $this->service->app->paymentSettings('inicis');
         $data['inicis_environments'] = ['test' => $inicisPayment->summary('test'), 'live' => $inicisPayment->summary('live')];
         $data['inicis_fields'] = $inicisPayment->definition()->fields();
+        $kcpLegacyPayment = $this->service->app->paymentSettings('kcp_legacy');
+        $data['kcp_legacy_environments'] = ['test' => $kcpLegacyPayment->summary('test'), 'live' => $kcpLegacyPayment->summary('live')];
+        $data['kcp_legacy_fields'] = $kcpLegacyPayment->definition()->fields();
+        $kcpPayment = $this->service->app->paymentSettings('kcp');
+        $data['kcp_environments'] = ['test' => $kcpPayment->summary('test'), 'live' => $kcpPayment->summary('live')];
+        $data['kcp_fields'] = $kcpPayment->definition()->fields();
+        foreach (['toss', 'nicepay'] as $providerId) {
+            $providerSettings = $this->service->app->paymentSettings($providerId);
+            $data[$providerId . '_environments'] = ['test' => $providerSettings->summary('test'), 'live' => $providerSettings->summary('live')];
+            $data[$providerId . '_fields'] = $providerSettings->definition()->fields();
+        }
         $data['types'] = Settings::TYPE_LABELS;
         $data['categories'] = $this->service->categories->optionDetails();
         $current = $this->service->settings->all();
@@ -80,17 +95,58 @@ final class AdminController extends AdminBase
         if ($request->getMethod() === 'POST') {
             $upload = $request->getUploadedFiles()['banner_image'] ?? null;
             try {
-                $this->service->banner->saveSettings($data['input'], $upload);
+                $providerId = $data['input']['payment_provider'] ?? $current['payment']['provider'];
+                if (!is_string($providerId)) throw DomainError::validation(['payment_provider' => '결제사를 확인해 주세요.']);
+                $paymentSettings = $this->service->app->paymentSettings($providerId);
+                $credentialsToSave = null;
+                $environment = $data['input']['payment_environment'] ?? $current['payment']['environment'];
+                if (!is_string($environment)) throw DomainError::validation(['payment_environment' => '결제 환경을 확인해 주세요.']);
+                PaymentSettings::environment($environment);
+                if ($environment === 'test' && in_array($providerId, ['inicis', 'kcp_legacy'], true)) {
+                    $mode = PaymentMode::validate($data['input']['payment_credentials'][$providerId]['test']['mode'] ?? 'general');
+                    $testCredentials = $providerId === 'inicis'
+                        ? ProviderConfig::testCredentials($mode) : KcpLegacyConfig::testCredentials($mode);
+                    $savedCredentials = $paymentSettings->current('test') ?? [];
+                    if (array_diff_assoc($testCredentials, $savedCredentials) !== []) $credentialsToSave = $testCredentials;
+                } else {
+                    $credentialInputs = $data['input']['payment_credentials'] ?? [];
+                    if (!is_array($credentialInputs)) throw DomainError::validation(['payment_credentials' => '결제 연동 정보를 확인해 주세요.']);
+                    $providerInputs = $credentialInputs[$providerId] ?? ($providerId === 'inicis' ? $credentialInputs : []);
+                    if (!is_array($providerInputs)) throw DomainError::validation(['payment_credentials' => '결제 연동 정보를 확인해 주세요.']);
+                    $credentials = $providerInputs[$environment] ?? [];
+                    if (!is_array($credentials)) throw DomainError::validation(['payment_credentials' => '결제 연동 정보를 확인해 주세요.']);
+                    foreach ($credentials as $value) {
+                        if (!is_string($value) && !is_int($value)) throw DomainError::validation(['payment_credentials' => '결제 연동 정보를 확인해 주세요.']);
+                    }
+                    if (count(array_filter($credentials, static fn ($value): bool => trim((string) $value) !== '')) !== 0) {
+                        $paymentSettings->definition()->validate($credentials, $paymentSettings->current($environment) ?? [], $environment);
+                        $credentialsToSave = $credentials;
+                    }
+                }
+                $this->service->app->db()->transaction(function () use ($paymentSettings, $environment, $credentialsToSave, $data, $upload): void {
+                    if ($credentialsToSave !== null) $paymentSettings->save($environment, $credentialsToSave);
+                    $this->service->banner->saveSettings($data['input'], $upload);
+                });
                 return $this->redirect($response, $data['admin_url'] . '/settings?saved=1');
             } catch (DomainError $e) {
                 $response = $response->withStatus($e->status());
                 $data['errors'] = $e->details() ?: [$e->getMessage()];
                 $data['values'] = array_filter($data['input'], static fn ($value) => is_string($value) || is_int($value)) + $this->flatten($current);
+                foreach (['inicis', 'kcp_legacy', 'kcp', 'toss', 'nicepay'] as $providerId) {
+                    foreach (['live', 'test'] as $environment) {
+                        foreach ($this->service->app->paymentSettings($providerId)->definition()->fields() as $field => $definition) {
+                            if ($definition['secret']) continue;
+                            $value = $data['input']['payment_credentials'][$providerId][$environment][$field]
+                                ?? ($providerId === 'inicis' ? ($data['input']['payment_credentials'][$environment][$field] ?? null) : null);
+                            if (is_string($value) || is_int($value)) $data[$providerId . '_environments'][$environment][$field] = (string) $value;
+                        }
+                    }
+                }
                 if ($upload !== null && (!$upload instanceof UploadedFileInterface || $upload->getError() !== UPLOAD_ERR_NO_FILE)) $data['errors'][] = '저장되지 않았습니다. 업로드할 이미지를 다시 선택해 주세요.';
                 return $this->render($request, $response, 'settings', $data);
             }
         }
-        if (($data['input']['saved'] ?? '') === '1') $data['notice'] = '설정을 저장했습니다.';
+        if (($data['input']['saved'] ?? '') === '1') $data['notice'] = '쇼핑몰과 결제 연동 설정을 저장했습니다.';
         if (($data['input']['payment_saved'] ?? '') === '1') $data['notice'] = '이니시스 결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
         if (($data['input']['payment_disabled'] ?? '') === '1') $data['notice'] = '선택한 이니시스 환경의 결제 실행을 정지했습니다.';
         $data['values'] = $this->flatten($this->service->settings->all());

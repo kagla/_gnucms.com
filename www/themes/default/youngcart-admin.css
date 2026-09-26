@@ -150,6 +150,10 @@
 .yc-admin-page .yc-option-group{display:grid;grid-template-columns:4.5rem minmax(0,16rem) minmax(0,1fr);gap:.6rem;align-items:center}
 .yc-admin-page .yc-option-label{font-size:13px;font-weight:700}
 .yc-admin-page .yc-edit-form :is(.label,.yc-checks){font-size:13px;align-items:center}
+.yc-admin-page .yc-shop-settings-form label.label:has(>input:is([type="checkbox"],[type="radio"])){width:max-content;max-width:100%;justify-self:start}
+.yc-admin-page .yc-shop-settings-form .yc-fields>label.label:has(>input:is([type="checkbox"],[type="radio"])){align-self:start}
+.yc-admin-page .yc-payment-mode-options{display:flex;flex-wrap:wrap;gap:.4rem 1.25rem}
+.yc-admin-page .yc-payment-mode-options>.label{width:max-content;max-width:100%;cursor:pointer}
 /* Keep numeric inputs and copy buttons together; checkboxes retain their own size. */
 .yc-admin-page .yc-option-input-group{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.4rem;white-space:nowrap}
 .yc-admin-page .yc-option-input-group>.input{flex:0 0 6.5rem;width:6.5rem}
@@ -187,6 +191,7 @@
 .yc-admin-page .yc-settings-block>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}
 .yc-admin-page .yc-settings-block h3{font-size:15px;font-weight:750}
 .yc-admin-page .yc-settings-block .yc-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 1rem}
+.yc-admin-page .yc-settings-block .yc-kcp-fields textarea{width:100%;min-height:9rem}
 .yc-admin-page .yc-settings-block .fieldset{padding-bottom:.6rem}
 .yc-admin-page .yc-settings-subtitle{font-size:15px;font-weight:750;margin:1.1rem 0 .3rem}
 .yc-admin-page .yc-main-category-rows{display:grid;gap:.5rem;margin:0 0 .6rem}
@@ -233,6 +238,8 @@
   .yc-admin-page .yc-workflow a{padding:1rem}
 }
 @media(max-width:640px){
+  .yc-admin-page .yc-edit-form .yc-settings-block .yc-kcp-fields{grid-template-columns:minmax(0,1fr)}
+  .yc-admin-page .yc-edit-form .yc-kcp-fields>.yc-field-wide{grid-column:auto}
   .yc-admin-page .yc-option-group{grid-template-columns:1fr}
   .yc-admin-page .yc-option-label{margin-top:.25rem}
   .admin-content:has(.yc-admin-page) .admin-navbar-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

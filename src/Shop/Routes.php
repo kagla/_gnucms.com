@@ -60,6 +60,7 @@ final class Routes
             $map('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }
         $map('GET', '/pay', static fn ($request, $response) => $pay->show($request, $response));
+        $map('GET', '/pay/toss-return', static fn ($request, $response) => $pay->tossReturn($request, $response));
 
         $map('GET', '/', static fn ($request, $response) => $admin->handle('dashboard', $request, $response), true)->setName('admin.shop');
         // 모듈 시절에는 끝에 빗금이 붙은 주소도 같은 화면이었다. 남은 즐겨찾기를 한 주소로 모은다.
@@ -86,7 +87,7 @@ final class Routes
         $map('POST', '/products/copy', static fn ($request, $response) => $product->handle('products/copy', $request, $response), true);
         $map('GET', '/products/search', static fn ($request, $response) => $product->handle('products/search', $request, $response), true);
 
-        // 이니시스 인증 결과 콜백(폼). 세션 없이 쿼리의 HMAC 으로만 인증한다.
+        // POST 결제 인증 결과 콜백(폼). 세션 없이 쿼리의 HMAC 으로 인증한다.
         $slim->add(new ExternalRequests([
             Service::PUBLIC_PREFIX . '/pay/callback' => [[$pay, 'callbackAuthenticate'], [$pay, 'callback'], 65536, 'application/x-www-form-urlencoded'],
         ], $slim->getBasePath()));

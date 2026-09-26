@@ -59,7 +59,13 @@ final class StreamTransport implements Transport
 
     public static function allowed(string $url, string $method = 'POST'): bool
     {
+        if ($method === 'GET') {
+            return (bool) preg_match('~^https://api\.tosspayments\.com/v1/payments/(?:[A-Za-z0-9_-]{6,200}|orders/[a-f0-9]{32})$~D', $url)
+                || (bool) preg_match('~^https://(?:sandbox-api|api)\.nicepay\.co\.kr/v1/payments/[A-Za-z0-9]{1,30}$~D', $url);
+        }
         if ($method !== 'POST') return false;
+        if (preg_match('~^https://api\.tosspayments\.com/v1/payments/(?:confirm|[A-Za-z0-9_-]{6,200}/cancel)$~D', $url)) return true;
+        if (preg_match('~^https://(?:sandbox-api|api)\.nicepay\.co\.kr/v1/payments/[A-Za-z0-9]{1,30}(?:/cancel)?$~D', $url)) return true;
         return (bool) preg_match('~^https://(?:(?:stg)?iniapi\.inicis\.com/v2/pg/(?:inquiry|refund|partialRefund)|(?:fc|ks|stg)stdpay\.inicis\.com/api/[A-Za-z0-9]+|(?:fc|ks|stg)mobile\.inicis\.com/smart/(?:payReq|payNetCancel)\.ini|(?:fc|ks|stg)paypro\.inicis\.com/payment/v1/rest/(?:payAppl|payNetCancel)\.ini|(?:stg-)?spl\.kcp\.co\.kr/(?:gw/enc/v1/payment|std/inquery|gw/mod/v1/cancel)|(?:test)?smpay\.kcp\.co\.kr/trade/register\.do)$~D', $url);
     }
 }

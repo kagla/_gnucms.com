@@ -1782,6 +1782,8 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .settings-tabs { margin-bottom: 1rem; overflow-x: auto; flex-wrap: nowrap; }
 .settings-tabs .tab { white-space: nowrap; }
 .settings-card { min-width: 0; }
+.settings-card .yc-payment-mode-options { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; }
+.settings-card .yc-payment-mode-options > .label { width: max-content; max-width: 100%; cursor: pointer; }
 .oauth-provider + .oauth-provider { border-top: 1px solid color-mix(in oklch, currentColor 12%, transparent); padding-top: 1.25rem; }
 .oauth-provider-tools { display: flex; justify-content: flex-end; margin: .5rem 0; }
 .oauth-setup-guide { margin-top: .75rem; border: 1px solid var(--bc-10); border-radius: var(--radius-box); background: var(--color-base-200); }

@@ -7,7 +7,7 @@ namespace GnuCms\Payment;
 final class KcpProvider implements Provider
 {
     public function id(): string { return 'kcp'; }
-    public function label(): string { return 'NHN KCP'; }
+    public function label(): string { return 'NHN KCP REST API 방식'; }
     public function fields(): array { return KcpConfig::fields(); }
     public function manual(): string { return 'https://developer.kcp.co.kr/guide/payment'; }
 
@@ -18,7 +18,8 @@ final class KcpProvider implements Provider
 
     public function credentials(array $revision, ?array $current): array
     {
-        if ($current !== null && ($current['site_cd'] ?? '') === ($revision['site_cd'] ?? '')) {
+        if ($current !== null && ($current['mode'] ?? 'general') === ($revision['mode'] ?? 'general')
+            && ($current['site_cd'] ?? '') === ($revision['site_cd'] ?? '')) {
             foreach (['certificate', 'private_key', 'private_key_password'] as $key) {
                 if (($current[$key] ?? '') !== '') $revision[$key] = $current[$key];
             }

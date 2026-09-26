@@ -29,7 +29,10 @@ final class Payments
         $methods = [];
         $provider = $this->app->paymentProviders()->get($payment['provider']);
         if ($this->app->paymentSettings($provider->id())->available($payment['environment'])) {
+            $escrow = ($this->app->paymentSettings($provider->id())->summary($payment['environment'])['mode'] ?? 'general') === 'escrow';
             foreach (array_intersect($provider->methods(), array_keys(array_filter($payment['methods'] ?? ['card' => true]))) as $method) {
+                if ($escrow && in_array($provider->id(), ['inicis', 'kcp', 'kcp_legacy'], true)
+                    && in_array($method, ['bank_transfer', 'virtual_account'], true)) continue;
                 if (isset(self::METHODS[$method])) $methods[$method] = self::METHODS[$method];
             }
         }
@@ -67,6 +70,16 @@ final class Payments
         return in_array($order['payment_method'], Orders::PG_METHODS, true) && $order['payment_id'] !== '';
     }
 
+    /** 현금성 에스크로는 구매 확정 전 부분 취소가 제한된다. */
+    public function supportsPartialRefund(array $order): bool
+    {
+        if (!$this->isPgOrder($order)) return true;
+        if (!$this->app->paymentProviders()->get($order['payment_provider'])->supportsPartialRefund()) return false;
+        return !in_array($order['payment_provider'], ['toss', 'nicepay'], true)
+            || $order['payment_method'] !== 'bank_transfer'
+            || ($order['payment']['escrow'] ?? false) !== true;
+    }
+
     /** 게이트웨이 계약이 받는 주문 배열. id 는 결제 원장 키다. */
     public static function gatewayOrder(array $order): array
     {
@@ -75,7 +88,29 @@ final class Payments
         $name = (string) ($order['order_name'] ?? (count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first));
         return ['id' => (string) $order['payment_id'], 'provider' => (string) ($order['payment_provider'] ?? ''), 'environment' => (string) $order['payment_environment'],
             'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'method' => (string) $order['payment_method'], 'order_name' => $name,
-            'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at'], 'pay_by' => (int) ($order['pay_by'] ?? 0)];
+            'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at'],
+            'pay_by' => (int) ($order['pay_by'] ?? 0),
+            'escrow_products' => $order['escrow_products'] ?? self::escrowProducts($items, (int) ($order['shipping_fee'] ?? 0))];
+    }
+
+    /** 결제사 에스크로 상품 명세에 주문 상품·선불 배송비를 반영한다. */
+    public static function escrowProducts(array $items, int $shippingFee): array
+    {
+        $products = [];
+        foreach ($items as $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+            $optionId = (int) ($item['option_id'] ?? 0);
+            $name = (string) ($item['product_name'] ?? $item['name'] ?? '');
+            $label = (string) ($item['option_label'] ?? $item['label'] ?? '');
+            if ($label !== '') $name .= ' / ' . $label;
+            $code = (string) ($item['product_code'] ?? $item['code'] ?? '');
+            $products[] = ['id' => $productId . '-' . $optionId, 'name' => mb_substr($name, 0, 100, 'UTF-8'),
+                'code' => mb_substr($code !== '' ? $code : (string) $productId, 0, 100, 'UTF-8'),
+                'unitPrice' => (int) ($item['unit_price'] ?? $item['price'] ?? 0), 'quantity' => (int) ($item['quantity'] ?? 0)];
+        }
+        if ($shippingFee > 0) $products[] = ['id' => 'shipping', 'name' => '배송비', 'code' => 'shipping',
+            'unitPrice' => $shippingFee, 'quantity' => 1];
+        return $products;
     }
 
     /** PG가 인증 결과를 보낼 주소. 주문의 원장 키와 그 주문·결제사·설정 판의 HMAC 을 싣는다. */
@@ -172,11 +207,15 @@ final class Payments
         $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
         if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
         if ($this->isPgOrder($order)) {
-            if (in_array($order['payment_method'], ['virtual_account', 'mobile'], true)) {
+            if (in_array($order['payment_method'], ['virtual_account', 'mobile'], true)
+                && !in_array($order['payment_provider'], ['toss', 'nicepay'], true)) {
                 throw DomainError::validation(['refund' => '가상계좌·휴대폰 결제 환불은 이니시스 관리자에서 처리한 뒤 이 주문의 결제 조회를 눌러 환불 내역을 맞춰 주세요.']);
             }
-            if ($amount < $remaining && !$this->app->paymentProviders()->get($order['payment_provider'])->supportsPartialRefund()) {
-                throw DomainError::validation(['refund' => '이 결제사는 부분 환불을 지원하지 않습니다.']);
+            if ($amount < $remaining && !$this->supportsPartialRefund($order)) {
+                $message = ($order['payment']['escrow'] ?? false) === true
+                    ? '에스크로 결제는 부분 환불을 지원하지 않습니다. 전액 취소 또는 결제사 관리자 처리를 확인해 주세요.'
+                    : '이 결제사는 부분 환불을 지원하지 않습니다.';
+                throw DomainError::validation(['refund' => $message]);
             }
             $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
             $gw = self::gatewayOrder($order);

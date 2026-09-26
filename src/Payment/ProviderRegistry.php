@@ -14,7 +14,10 @@ final class ProviderRegistry
     public function __construct()
     {
         $this->register(new InicisProvider());
+        $this->register(new KcpLegacyProvider());
         $this->register(new KcpProvider());
+        $this->register(new TossProvider());
+        $this->register(new NicepayProvider());
     }
 
     public function register(Provider $provider): void

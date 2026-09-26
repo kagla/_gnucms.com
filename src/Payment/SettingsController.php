@@ -35,8 +35,15 @@ final class SettingsController
             if ($request->getMethod() === 'POST') {
                 $action = $input['action'] ?? '';
                 if ($action === 'save') {
-                    $settings->save($environment, $input);
-                    $notice = '결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
+                    $credentials = $input;
+                    if ($environment === 'test') {
+                        if ($provider->id() === 'inicis') $credentials = ProviderConfig::testCredentials(PaymentMode::validate($input['mode'] ?? 'general'));
+                        if ($provider->id() === 'kcp_legacy') $credentials = KcpLegacyConfig::testCredentials(PaymentMode::validate($input['mode'] ?? 'general'));
+                    }
+                    $settings->save($environment, $credentials);
+                    $notice = $provider->id() === 'kcp_legacy'
+                        ? 'KCP 기존 방식의 자격정보를 등록했습니다. 결제 실행은 아직 연결되지 않았습니다.'
+                        : '결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
                     $completedAction = 'payment_saved';
                 } else {
                     throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
@@ -54,12 +61,18 @@ final class SettingsController
             $url = RouteContext::fromRequest($request)->getBasePath() . '/admin/shop/settings?' . $completedAction . '=1#settings-payment';
             return $response->withStatus(303)->withHeader('Location', $url)->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
         }
+        $summary = $settings->summary($environment);
+        if ($errors !== []) {
+            foreach (['mode', 'site_cd', 'merchant_id', 'client_ip', 'client_key'] as $field) {
+                if (is_string($input[$field] ?? null)) $summary[$field] = $input[$field];
+            }
+        }
         return View::fromRequest($request)->render(
             $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer'),
             'admin/payment_settings',
             ['provider' => $provider->id(), 'providers' => $settings->app->paymentProviders()->labels(), 'fields' => $provider->fields(), 'manual' => $provider->manual(),
                 'label' => $provider->label(), 'environment' => $environment,
-                'settings' => $settings->summary($environment), 'notice' => $notice, 'errors' => $errors]
+                'settings' => $summary, 'notice' => $notice, 'errors' => $errors]
         );
     }
 

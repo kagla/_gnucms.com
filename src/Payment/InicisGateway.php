@@ -13,6 +13,10 @@ final class InicisGateway extends DirectGateway
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
         if ((int) $order['total'] > 999999999) throw DomainError::validation(['amount' => '결제 한도를 초과했습니다.']);
+        $credentials = $this->credentials($order);
+        if (($credentials['mode'] ?? 'general') === 'escrow' && in_array($order['method'], ['bank_transfer', 'virtual_account'], true)) {
+            throw DomainError::serviceUnavailable('에스크로 계좌이체·가상계좌 결제 실행은 아직 연결되지 않았습니다.');
+        }
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $timestamp = (string) (int) (microtime(true) * 1000);
         $method = match ($order['method']) { 'bank_transfer' => 'BANK', 'virtual_account' => 'VBANK', 'mobile' => 'HPP', default => 'CARD' };
