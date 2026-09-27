@@ -18,21 +18,20 @@ use GnuCms\Support\Clock;
  */
 final class Payments
 {
-    public const METHODS = ['card' => '카드 결제', 'easy_pay' => '간편결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'mobile' => '휴대폰 결제', 'manual_transfer' => '무통장입금'];
+    /** 표시 라벨에는 과거 주문 수단도 유지한다. 신규 수단 노출은 Provider::methods()가 제한한다. */
+    public const METHODS = ['card' => '신용카드', 'easy_pay' => '간편결제', 'bank_transfer' => '실시간 계좌이체',
+        'virtual_account' => '가상계좌', 'mobile' => '휴대폰 결제', 'manual_transfer' => '무통장입금'];
 
     public function __construct(private App $app, private Settings $settings, private Orders $orders) {}
 
-    /** 주문서에 보일 수단. PG 계약·설정에서 켠 수단과 무통장입금만 노출한다. */
+    /** 주문서에는 PG 신용카드와 별도 관리하는 상점 무통장입금만 보인다. */
     public function methods(): array
     {
         $payment = $this->settings->all()['payment'];
         $methods = [];
         $provider = $this->app->paymentProviders()->get($payment['provider']);
         if ($this->app->paymentSettings($provider->id())->available($payment['environment'])) {
-            $escrow = ($this->app->paymentSettings($provider->id())->summary($payment['environment'])['mode'] ?? 'general') === 'escrow';
             foreach (array_intersect($provider->methods(), array_keys(array_filter($payment['methods'] ?? ['card' => true]))) as $method) {
-                if ($escrow && in_array($provider->id(), ['inicis', 'kcp', 'kcp_legacy'], true)
-                    && in_array($method, ['bank_transfer', 'virtual_account'], true)) continue;
                 if (isset(self::METHODS[$method])) $methods[$method] = self::METHODS[$method];
             }
         }
@@ -59,10 +58,10 @@ final class Payments
         return $spec + ['provider' => $payment['provider'], 'id' => bin2hex(random_bytes(16)), 'environment' => $payment['environment'], 'revision' => $summary['revision']];
     }
 
-    /** 즉시 승인 수단은 카드 기한을, 가상계좌·무통장은 각자 설정한 기한을 쓴다. */
+    /** 온라인 카드와 상점 무통장의 주문 기한을 고른다. */
     private static function deadlineKey(string $method): string
     {
-        return in_array($method, ['virtual_account', 'manual_transfer'], true) ? $method : 'card';
+        return $method === 'manual_transfer' ? 'manual_transfer' : 'card';
     }
 
     public function isPgOrder(array $order): bool

@@ -13,6 +13,7 @@ final class TossGateway extends DirectGateway
 
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
+        if (($order['method'] ?? '') !== 'card') throw DomainError::validation(['payment_method' => '온라인 결제는 신용카드만 지원합니다.']);
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $method = self::METHODS[$order['method']] ?? throw DomainError::validation(['payment_method' => '토스 결제수단을 확인해 주세요.']);
         $fields = ['amount' => (int) $order['total'], 'orderId' => $order['id'],

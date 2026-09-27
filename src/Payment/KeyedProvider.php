@@ -21,7 +21,7 @@ abstract class KeyedProvider implements Provider
     public function validate(array $input, array $before, string $environment): array
     {
         Settings::environment($environment);
-        $mode = PaymentMode::validate($input['mode'] ?? $before['mode'] ?? 'general');
+        $mode = 'general';
         $clientInput = $input['client_key'] ?? $before['client_key'] ?? '';
         if (!is_string($clientInput)) throw DomainError::validation(['client_key' => '발급받은 클라이언트 키를 확인해 주세요.']);
         $client = trim($clientInput);
@@ -49,6 +49,6 @@ abstract class KeyedProvider implements Provider
         return $revision;
     }
 
-    public function methods(): array { return ['card', 'bank_transfer', 'mobile']; }
+    public function methods(): array { return ['card']; }
     public function supportsPartialRefund(): bool { return true; }
 }

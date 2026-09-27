@@ -12,9 +12,9 @@ final class ProviderConfig
     public const TEST_MID = 'INIpayTest';
 
     /** KG이니시스가 공개한 공용 테스트 상점 값. 운영 인증 정보로 사용하지 않는다. */
-    public static function testCredentials(string $mode = 'general'): array
+    public static function testCredentials(): array
     {
-        return ['mode' => PaymentMode::validate($mode), 'merchant_id' => self::TEST_MID,
+        return ['mode' => 'general', 'merchant_id' => self::TEST_MID,
             'sign_key' => 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS',
             'hash_key' => '3CB8183A4BE283555ACC8363C0360223',
             'api_key' => 'ItEQKi3rY7uvDS8l',
@@ -42,7 +42,7 @@ final class ProviderConfig
     public static function validate(string $provider, array $input, array $before, string $environment = 'test'): array
     {
         Settings::environment($environment);
-        $data = ['mode' => PaymentMode::validate($input['mode'] ?? ($before['mode'] ?? 'general'))];
+        $data = ['mode' => 'general'];
         foreach (self::fields($provider) as $key => $field) {
             if ($key === 'mode') continue;
             $value = $input[$key] ?? '';
@@ -50,8 +50,7 @@ final class ProviderConfig
                 throw DomainError::validation([$key => '결제 연동 값을 확인해 주세요.']);
             }
             $value = trim($value);
-            if ($value === '' && $field['secret'] && $data['mode'] === ($before['mode'] ?? 'general')
-                && ($data['merchant_id'] ?? '') === ($before['merchant_id'] ?? null)) $value = $before[$key] ?? '';
+            if ($value === '' && $field['secret'] && ($data['merchant_id'] ?? '') === ($before['merchant_id'] ?? null)) $value = $before[$key] ?? '';
             if ($value === '' && $key === 'sign_key') { $data[$key] = ''; continue; }
             if ($value === '') throw DomainError::validation([$key => $field['label'] . '을 입력해 주세요.']);
             if (preg_match('/[\r\n]/', $value)) throw DomainError::validation([$key => '한 줄로 입력해 주세요.']);

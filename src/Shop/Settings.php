@@ -40,9 +40,9 @@ final class Settings
             'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
             'payment' => ['provider' => 'inicis', 'environment' => 'live',
-                'methods' => ['card' => true, 'bank_transfer' => false, 'virtual_account' => false, 'mobile' => false],
+                'methods' => ['card' => true],
                 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
-                'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]],
+                'deadline_hours' => ['card' => 1, 'manual_transfer' => 72]],
         ];
     }
 
@@ -60,6 +60,13 @@ final class Settings
         $all['main'] = $main;
         $migrated = is_array($all['migrated_types'] ?? null) ? $all['migrated_types'] : [];
         $all['migrated_types'] = array_map('intval', array_filter($migrated, static fn ($id): bool => is_int($id) || (is_string($id) && ctype_digit($id))));
+        // PG 온라인 결제는 일반 신용카드만 새 주문에 허용한다. 과거 설정의
+        // 계좌이체·가상계좌·휴대폰 플래그와 기한은 읽기 모델에서도 제거한다.
+        $all['payment']['methods'] = ['card' => !empty($all['payment']['methods']['card'])];
+        $all['payment']['deadline_hours'] = [
+            'card' => (int) ($all['payment']['deadline_hours']['card'] ?? 1),
+            'manual_transfer' => (int) ($all['payment']['deadline_hours']['manual_transfer'] ?? 72),
+        ];
         return $all;
     }
 
@@ -161,10 +168,8 @@ final class Settings
         }
         $environment = $input['payment_environment'] ?? null;
         if (in_array($environment, ['test', 'live'], true)) $payment['environment'] = $environment;
-        $methodKeys = ['card', 'bank_transfer', 'virtual_account', 'mobile'];
-        if (array_intersect(array_map(static fn (string $key): string => 'payment_method_' . $key, $methodKeys), array_keys($input)) !== []) {
-            foreach ($methodKeys as $key) $payment['methods'][$key] = $bool('payment_method_' . $key);
-        }
+        $payment['methods'] = ['card' => array_key_exists('payment_method_card', $input)
+            ? $bool('payment_method_card') : !empty($payment['methods']['card'])];
         if (array_key_exists('payment_manual_enabled', $input) || array_key_exists('payment_manual_account', $input)) {
             $payment['manual'] = ['enabled' => $bool('payment_manual_enabled'),
                 'bank' => Input::text($input['payment_manual_bank'] ?? '', 'payment_manual_bank', 50),
@@ -172,9 +177,11 @@ final class Settings
                 'holder' => Input::text($input['payment_manual_holder'] ?? '', 'payment_manual_holder', 50)];
             if ($payment['manual']['enabled'] && $payment['manual']['account'] === '') $errors['payment_manual_account'] = '무통장입금을 켜려면 계좌번호를 입력해 주세요.';
         }
-        foreach (['card' => 72, 'virtual_account' => 720, 'manual_transfer' => 720] as $key => $max) {
+        foreach (['card' => 72, 'manual_transfer' => 720] as $key => $max) {
             if (array_key_exists('payment_deadline_' . $key, $input)) $payment['deadline_hours'][$key] = $int('payment_deadline_' . $key, 1, $max);
         }
+        $payment['deadline_hours'] = ['card' => (int) ($payment['deadline_hours']['card'] ?? 1),
+            'manual_transfer' => (int) ($payment['deadline_hours']['manual_transfer'] ?? 72)];
         $settings['payment'] = $payment;
         if ($errors !== []) throw DomainError::validation($errors);
         $payload = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);

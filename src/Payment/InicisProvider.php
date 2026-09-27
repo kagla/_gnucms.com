@@ -16,15 +16,14 @@ final class InicisProvider implements Provider
     }
     public function credentials(array $revision, ?array $current): array
     {
-        if ($current !== null && ($current['mode'] ?? 'general') === ($revision['mode'] ?? 'general')
-            && $current['merchant_id'] === $revision['merchant_id']) {
+        if ($current !== null && $current['merchant_id'] === $revision['merchant_id']) {
             foreach ($this->fields() as $key => $field) {
                 if (($field['secret'] && ($current[$key] ?? '') !== '') || $key === 'client_ip') $revision[$key] = $current[$key];
             }
         }
         return $revision;
     }
-    public function methods(): array { return ['card', 'bank_transfer', 'virtual_account', 'mobile']; }
+    public function methods(): array { return ['card']; }
     public function supportsPartialRefund(): bool { return true; }
     public function checkoutTemplate(): string { return 'payment/inicis'; }
     public function gateway(Settings $settings): Gateway { return new InicisGateway($settings); }

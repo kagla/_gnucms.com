@@ -37,13 +37,13 @@ final class SettingsController
                 if ($action === 'save') {
                     $credentials = $input;
                     if ($environment === 'test') {
-                        if ($provider->id() === 'inicis') $credentials = ProviderConfig::testCredentials(PaymentMode::validate($input['mode'] ?? 'general'));
-                        if ($provider->id() === 'kcp_legacy') $credentials = KcpLegacyConfig::testCredentials(PaymentMode::validate($input['mode'] ?? 'general'));
+                        if ($provider->id() === 'inicis') $credentials = ProviderConfig::testCredentials();
+                        if ($provider->id() === 'kcp_legacy') $credentials = KcpLegacyConfig::testCredentials();
                     }
                     $settings->save($environment, $credentials);
                     $notice = $provider->id() === 'kcp_legacy'
                         ? 'KCP 기존 방식의 자격정보를 등록했습니다. 결제 실행은 아직 연결되지 않았습니다.'
-                        : '결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
+                        : '결제 설정을 저장했습니다. 선택한 환경의 일반 신용카드 결제에 적용됩니다.';
                     $completedAction = 'payment_saved';
                 } else {
                     throw DomainError::validation(['action' => '작업을 확인해 주세요.']);

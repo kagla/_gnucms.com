@@ -48,20 +48,6 @@
     paymentEnvironments.forEach(function(input){input.addEventListener('change',syncPaymentPanel);});
     syncPaymentPanel();
   }
-  root.querySelectorAll('[data-yc-payment-mode]').forEach(function(group){
-    var panel=group.closest('[data-yc-payment-panel]');
-    var id=group.querySelector('[data-yc-payment-test-id]');
-    var siteCode=panel&&panel.dataset.provider==='kcp'&&panel.dataset.environment==='test'
-      ?panel.querySelector('input[name$="[site_cd]"]'):null;
-    function syncMode(){
-      var selected=group.querySelector('input[type="radio"]:checked');
-      var code=selected&&selected.value==='escrow'?'T0007':'T0000';
-      if(id){id.textContent=code;}
-      if(siteCode){siteCode.value=code;}
-    }
-    group.querySelectorAll('input[type="radio"]').forEach(function(input){input.addEventListener('change',syncMode);});
-    syncMode();
-  });
   var orderStatusForm=root.querySelector('[data-yc-order-status-form]');
   if(orderStatusForm){
     var statusSelect=orderStatusForm.querySelector('select[name="status"]');

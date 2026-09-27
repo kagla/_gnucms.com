@@ -9,7 +9,6 @@ use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Payment\Journal;
 use GnuCms\Payment\ProviderConfig;
 use GnuCms\Payment\KcpLegacyConfig;
-use GnuCms\Payment\PaymentMode;
 use GnuCms\Payment\Settings as PaymentSettings;
 use GnuCms\Shop\HomeBanner;
 use GnuCms\Shop\Input;
@@ -103,9 +102,8 @@ final class AdminController extends AdminBase
                 if (!is_string($environment)) throw DomainError::validation(['payment_environment' => '결제 환경을 확인해 주세요.']);
                 PaymentSettings::environment($environment);
                 if ($environment === 'test' && in_array($providerId, ['inicis', 'kcp_legacy'], true)) {
-                    $mode = PaymentMode::validate($data['input']['payment_credentials'][$providerId]['test']['mode'] ?? 'general');
                     $testCredentials = $providerId === 'inicis'
-                        ? ProviderConfig::testCredentials($mode) : KcpLegacyConfig::testCredentials($mode);
+                        ? ProviderConfig::testCredentials() : KcpLegacyConfig::testCredentials();
                     $savedCredentials = $paymentSettings->current('test') ?? [];
                     if (array_diff_assoc($testCredentials, $savedCredentials) !== []) $credentialsToSave = $testCredentials;
                 } else {
@@ -147,7 +145,7 @@ final class AdminController extends AdminBase
             }
         }
         if (($data['input']['saved'] ?? '') === '1') $data['notice'] = '쇼핑몰과 결제 연동 설정을 저장했습니다.';
-        if (($data['input']['payment_saved'] ?? '') === '1') $data['notice'] = '이니시스 결제 설정을 저장했습니다. 선택한 환경과 결제 수단에 적용됩니다.';
+        if (($data['input']['payment_saved'] ?? '') === '1') $data['notice'] = '이니시스 결제 설정을 저장했습니다. 선택한 환경의 일반 신용카드 결제에 적용됩니다.';
         if (($data['input']['payment_disabled'] ?? '') === '1') $data['notice'] = '선택한 이니시스 환경의 결제 실행을 정지했습니다.';
         $data['values'] = $this->flatten($this->service->settings->all());
         return $this->render($request, $response, 'settings', $data);
@@ -172,10 +170,10 @@ final class AdminController extends AdminBase
         $flat['exchange_content'] = $settings['exchange']['content'];
         $flat['payment_provider'] = $settings['payment']['provider'];
         $flat['payment_environment'] = $settings['payment']['environment'];
-        foreach (['card', 'bank_transfer', 'virtual_account', 'mobile'] as $method) $flat['payment_method_' . $method] = !empty($settings['payment']['methods'][$method]) ? '1' : '0';
+        $flat['payment_method_card'] = !empty($settings['payment']['methods']['card']) ? '1' : '0';
         $flat['payment_manual_enabled'] = $settings['payment']['manual']['enabled'] ? '1' : '0';
         foreach (['bank', 'account', 'holder'] as $key) $flat['payment_manual_' . $key] = $settings['payment']['manual'][$key];
-        foreach ($settings['payment']['deadline_hours'] as $key => $hours) $flat['payment_deadline_' . $key] = (string) $hours;
+        foreach (['card', 'manual_transfer'] as $key) $flat['payment_deadline_' . $key] = (string) ($settings['payment']['deadline_hours'][$key] ?? 1);
         return $flat;
     }
 }

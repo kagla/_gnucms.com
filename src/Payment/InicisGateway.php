@@ -12,6 +12,7 @@ final class InicisGateway extends DirectGateway
 {
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
+        if (($order['method'] ?? '') !== 'card') throw DomainError::validation(['payment_method' => '온라인 결제는 신용카드만 지원합니다.']);
         if ((int) $order['total'] > 999999999) throw DomainError::validation(['amount' => '결제 한도를 초과했습니다.']);
         $credentials = $this->credentials($order);
         if (($credentials['mode'] ?? 'general') === 'escrow' && in_array($order['method'], ['bank_transfer', 'virtual_account'], true)) {
@@ -19,12 +20,8 @@ final class InicisGateway extends DirectGateway
         }
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $timestamp = (string) (int) (microtime(true) * 1000);
-        $method = match ($order['method']) { 'bank_transfer' => 'BANK', 'virtual_account' => 'VBANK', 'mobile' => 'HPP', default => 'CARD' };
+        $method = 'CARD';
         $reserved = ['email' => $customer['email'], 'phonenum' => $customer['phone']];
-        if ($method === 'VBANK' && (int) ($order['pay_by'] ?? 0) > 0) {
-            $due = (new \DateTimeImmutable('@' . (int) $order['pay_by']))->setTimezone(new \DateTimeZone('Asia/Seoul'));
-            $reserved['vbank_dt'] = $due->format('Ymd'); $reserved['vbank_tm'] = $due->format('Hi');
-        }
         $fields = [
             'P_MID' => $config['merchant_id'], 'P_OID' => $order['id'], 'P_PAY_TYPE' => $method,
             'P_DEVICE_TYPE' => $device === 'mobile' ? 'MOBILE' : 'WEB', 'P_IDCCODE' => 'Y',
@@ -35,8 +32,6 @@ final class InicisGateway extends DirectGateway
             'P_CHARSET' => 'UTF-8', 'P_TIMESTAMP' => $timestamp,
             'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp),
         ];
-        if ($method === 'HPP') $fields['P_HPP_METHOD'] = '2';
-        if ($method === 'VBANK') $fields['P_NOTI_URL'] = $callbackUrl . '&event=notify';
         return ['kind' => 'inicis-pro', 'script' => 'https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', 'fields' => $fields];
     }
 

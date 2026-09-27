@@ -39,21 +39,18 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <div class="yc-fields"><?php $num('shipping_fee', '기본 배송비 (원)', 0, 9999999); $num('shipping_free_minimum', '무료배송 기준 금액 (원)', 0, 9999999); ?></div>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 카드 결제와 무통장입금은 아래 결제 항목에서 설정합니다.</span></label>
   </div></section>
-  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">결제사를 선택하고 해당 환경의 연동 정보를 저장하세요. 이니시스 테스트 환경은 공용 테스트 정보가 자동 적용됩니다. 이니시스·KCP 에스크로 계좌이체·가상계좌는 준비 중이어서 주문서에 표시되지 않습니다. 토스·나이스페이는 에스크로 계좌이체를 지원합니다. KCP 기존 방식은 자격정보 등록만 지원합니다. 무통장입금은 아래 계좌를 안내하고 관리자가 입금을 확인하며 PG 에스크로와 별개입니다.</p>
+  <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">온라인 PG 결제는 에스크로 배송 절차가 필요 없는 신용카드만 사용합니다. 계좌이체·가상계좌·휴대폰 결제는 제공하지 않습니다. 무통장입금은 PG를 거치지 않고 아래 계좌를 안내하며 관리자가 입금을 확인합니다.</p>
     <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider"><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">새 주문에 적용합니다. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
       <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $label): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_environment" value="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? ' checked' : '' ?>> <?= $label ?></label><?php endforeach ?>
-      <span class="muted">선택한 환경과 아래 결제 수단이 새 주문에 적용됩니다.</span></fieldset>
+      <span class="muted">선택한 환경과 신용카드 사용 여부가 새 주문에 적용됩니다.</span></fieldset>
     <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $envLabel): $environmentSettings = $inicis_environments[$env]; ?>
-    <div data-yc-payment-panel data-provider="inicis" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'inicis' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>이니시스 <?= $envLabel ?> 연동<?php if ($env === 'live'): ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : (($environmentSettings['mode'] ?? '') === 'escrow' ? '에스크로 설정' : '일반결제 설정') ?></span><?php endif ?></h3>
-      <fieldset class="fieldset"><legend class="fieldset-legend">결제 방식</legend><div class="yc-payment-mode-options">
-        <?php foreach (['general' => '일반결제', 'escrow' => '에스크로 결제'] as $mode => $modeLabel): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_credentials[inicis][<?= $env ?>][mode]" value="<?= $mode ?>"<?= ($environmentSettings['mode'] ?: 'general') === $mode ? ' checked' : '' ?>> <?= $modeLabel ?></label><?php endforeach ?>
-      </div></fieldset>
+    <div data-yc-payment-panel data-provider="inicis" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'inicis' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>이니시스 <?= $envLabel ?> 연동<?php if ($env === 'live'): ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : '일반 카드 설정' ?></span><?php endif ?></h3>
       <?php if ($env === 'test'): ?>
       <p>테스트 상점 아이디 (MID): <strong><?= $this->e(\GnuCms\Payment\ProviderConfig::TEST_MID) ?></strong></p>
       <p class="muted">하단의 설정 저장을 누르면 이니시스 공용 테스트 정보가 자동 적용됩니다.</p>
       <?php else: ?>
-      <p class="muted">운영 MID와 발급받은 인증키를 입력합니다. 하단의 설정 저장을 누르면 운영 연동 정보와 선택한 주문 환경이 함께 저장됩니다. 결제 방식과 MID가 같으면 키를 비워 두어도 저장된 값이 유지됩니다.</p>
+      <p class="muted">운영 MID와 발급받은 일반 카드 결제 인증키를 입력합니다. 하단의 설정 저장을 누르면 운영 연동 정보와 선택한 주문 환경이 함께 저장됩니다. MID가 같으면 키를 비워 두어도 저장된 값이 유지됩니다.</p>
       <div class="yc-fields">
         <?php foreach ($inicis_fields as $name => $field): if ($name === 'mode') continue; ?><fieldset class="fieldset"><legend class="fieldset-legend"><label for="yc-inicis-<?= $env ?>-<?= $this->e($name) ?>"><?= $this->e($field['label']) ?></label></legend>
           <?php if ($field['secret']): ?><label class="input input-bordered input-block">
@@ -72,17 +69,12 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </div></div>
     <?php endforeach ?>
     <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $envLabel): $environmentSettings = $kcp_legacy_environments[$env]; ?>
-    <div data-yc-payment-panel data-provider="kcp_legacy" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'kcp_legacy' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>NHN KCP 기존 방식 (TCP/IP) · <?= $envLabel ?><?php if ($env === 'live'): ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미등록' : (($environmentSettings['mode'] ?? '') === 'escrow' ? '에스크로 등록' : '일반결제 등록') ?></span><?php endif ?></h3>
-      <fieldset class="fieldset<?= ($values['payment_provider'] ?? '') === 'kcp_legacy' && ($values['payment_environment'] ?? '') === $env && isset($errors['mode']) ? ' is-invalid' : '' ?>" data-yc-payment-mode><legend class="fieldset-legend">결제 방식</legend><div class="yc-payment-mode-options">
-        <?php foreach (['general' => '일반결제', 'escrow' => '에스크로 결제'] as $mode => $modeLabel): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_credentials[kcp_legacy][<?= $env ?>][mode]" value="<?= $mode ?>"<?= ($environmentSettings['mode'] ?: 'general') === $mode ? ' checked' : '' ?>> <?= $modeLabel ?></label><?php endforeach ?>
-        </div>
-        <?php if ($env === 'test'): ?><p class="muted">테스트 상점 아이디: <strong data-yc-payment-test-id><?= ($environmentSettings['mode'] ?? '') === 'escrow' ? 'T0007' : 'T0000' ?></strong></p><?php endif ?>
-        <?php if (($values['payment_provider'] ?? '') === 'kcp_legacy' && ($values['payment_environment'] ?? '') === $env && isset($errors['mode'])): ?><p class="validator-hint"><?= $this->e($errors['mode']) ?></p><?php endif ?>
-      </fieldset>
+    <div data-yc-payment-panel data-provider="kcp_legacy" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'kcp_legacy' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>NHN KCP 기존 방식 (TCP/IP) · <?= $envLabel ?><?php if ($env === 'live'): ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미등록' : '카드 방식 등록' ?></span><?php endif ?></h3>
+      <p class="muted">일반 카드 결제용 설정을 등록합니다. KCP 기존 TCP/IP 승인 모듈은 아직 연결되지 않아 온라인 결제 수단은 주문서에 표시되지 않습니다.</p>
       <?php if ($env === 'test'): ?>
-      <p class="muted">하단의 설정 저장을 누르면 선택한 방식의 공용 테스트 사이트 키가 자동 적용됩니다. 에스크로는 계좌이체·가상계좌용입니다. TCP/IP 승인 모듈은 아직 연결되지 않아 온라인 결제 수단은 주문서에 표시되지 않습니다.</p>
+      <p class="muted">하단의 설정 저장을 누르면 일반결제용 공용 테스트 사이트 키가 자동 적용됩니다. TCP/IP 승인 모듈은 아직 연결되지 않아 온라인 결제 수단은 주문서에 표시되지 않습니다.</p>
       <?php else: ?>
-      <p class="muted">선택한 결제 방식에 맞는 운영 사이트 코드·사이트 키 한 쌍을 등록합니다. 에스크로는 계좌이체·가상계좌용입니다. 방식과 사이트 코드가 같으면 사이트 키를 비워 두어도 저장된 값이 유지됩니다. TCP/IP 승인 모듈은 아직 연결되지 않아 온라인 결제 수단은 주문서에 표시되지 않습니다.</p>
+      <p class="muted">일반 카드 결제용 운영 사이트 코드·사이트 키 한 쌍을 등록합니다. 사이트 코드가 같으면 사이트 키를 비워 두어도 저장된 값이 유지됩니다. TCP/IP 승인 모듈은 아직 연결되지 않아 온라인 결제 수단은 주문서에 표시되지 않습니다.</p>
       <div class="yc-fields">
         <?php foreach ($kcp_legacy_fields as $name => $field): if ($name === 'mode') continue; $fieldId = 'yc-kcp-legacy-' . $env . '-' . $name; $fieldName = 'payment_credentials[kcp_legacy][' . $env . '][' . $name . ']'; $fieldError = ($values['payment_provider'] ?? '') === 'kcp_legacy' && ($values['payment_environment'] ?? '') === $env && isset($errors[$name]); ?>
         <fieldset class="fieldset<?= $fieldError ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="<?= $this->e($fieldId) ?>"><?= $this->e($field['label']) ?></label></legend>
@@ -95,20 +87,15 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </div></div>
     <?php endforeach ?>
     <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $envLabel): $environmentSettings = $kcp_environments[$env]; ?>
-    <div data-yc-payment-panel data-provider="kcp" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'kcp' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>NHN KCP REST API 방식 · <?= $envLabel ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : (($environmentSettings['mode'] ?? '') === 'escrow' ? '에스크로 설정' : '일반결제 설정') ?></span></h3>
-      <fieldset class="fieldset" data-yc-payment-mode><legend class="fieldset-legend">결제 방식</legend><div class="yc-payment-mode-options">
-        <?php foreach (['general' => '일반결제', 'escrow' => '에스크로 결제'] as $mode => $modeLabel): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_credentials[kcp][<?= $env ?>][mode]" value="<?= $mode ?>"<?= ($environmentSettings['mode'] ?: 'general') === $mode ? ' checked' : '' ?>> <?= $modeLabel ?></label><?php endforeach ?>
-        </div>
-        <?php if ($env === 'test'): ?><p class="muted">테스트 상점 아이디: <strong data-yc-payment-test-id><?= ($environmentSettings['mode'] ?? '') === 'escrow' ? 'T0007' : 'T0000' ?></strong></p><?php endif ?>
-      </fieldset>
-      <p class="muted"><?= $envLabel ?> 사이트 코드와 KCP에서 발급받은 서비스 인증서·개인키·비밀번호를 입력합니다. 결제 방식과 사이트 코드가 같으면 인증 정보를 비워 두어도 저장된 값이 유지됩니다.</p>
+    <div data-yc-payment-panel data-provider="kcp" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === 'kcp' && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block"><h3>NHN KCP REST API 방식 · <?= $envLabel ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : '일반 카드 설정' ?></span></h3>
+      <p class="muted"><?= $envLabel ?> 일반 카드 결제용 사이트 코드와 KCP에서 발급받은 서비스 인증서·개인키·비밀번호를 입력합니다. 사이트 코드가 같으면 인증 정보를 비워 두어도 저장된 값이 유지됩니다. 테스트 사이트 코드는 T0000입니다.</p>
       <div class="yc-fields yc-kcp-fields">
         <?php foreach ($kcp_fields as $name => $field): if ($name === 'mode') continue; $fieldId = 'yc-kcp-' . $env . '-' . $name; $fieldName = 'payment_credentials[kcp][' . $env . '][' . $name . ']'; $fieldError = ($values['payment_provider'] ?? '') === 'kcp' && ($values['payment_environment'] ?? '') === $env && isset($errors[$name]); ?>
         <fieldset class="fieldset<?= $field['multiline'] ? ' yc-field-wide' : '' ?><?= $fieldError ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="<?= $this->e($fieldId) ?>"><?= $this->e($field['label']) ?></label></legend>
           <?php if ($field['multiline']): ?>
           <textarea class="textarea textarea-bordered input-block" id="<?= $this->e($fieldId) ?>" name="<?= $this->e($fieldName) ?>" rows="6" autocomplete="new-password" placeholder="<?= !empty($environmentSettings[$name . '_set']) ? '저장된 값 유지 · 변경할 때만 입력' : '' ?>"></textarea>
           <?php else: ?>
-          <input class="input input-bordered input-block" id="<?= $this->e($fieldId) ?>" type="<?= $field['secret'] ? 'password' : 'text' ?>" name="<?= $this->e($fieldName) ?>" value="<?= $field['secret'] ? '' : $this->e((string) ($environmentSettings[$name] ?: ($env === 'test' && $name === 'site_cd' ? (($environmentSettings['mode'] ?? '') === 'escrow' ? 'T0007' : 'T0000') : ''))) ?>" autocomplete="<?= $field['secret'] ? 'new-password' : 'off' ?>"<?= $env === 'test' && $name === 'site_cd' ? ' readonly' : '' ?> placeholder="<?= $field['secret'] && !empty($environmentSettings[$name . '_set']) ? '저장된 값 유지 · 변경할 때만 입력' : '' ?>">
+          <input class="input input-bordered input-block" id="<?= $this->e($fieldId) ?>" type="<?= $field['secret'] ? 'password' : 'text' ?>" name="<?= $this->e($fieldName) ?>" value="<?= $field['secret'] ? '' : $this->e((string) ($env === 'test' && $name === 'site_cd' ? 'T0000' : ($environmentSettings[$name] ?? ''))) ?>" autocomplete="<?= $field['secret'] ? 'new-password' : 'off' ?>"<?= $env === 'test' && $name === 'site_cd' ? ' readonly' : '' ?> placeholder="<?= $field['secret'] && !empty($environmentSettings[$name . '_set']) ? '저장된 값 유지 · 변경할 때만 입력' : '' ?>">
           <?php endif ?>
           <?php if ($fieldError): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?>
         </fieldset>
@@ -118,11 +105,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     <?php endforeach ?>
     <?php foreach (['toss' => '토스페이먼츠', 'nicepay' => '나이스페이먼츠'] as $providerId => $providerLabel): foreach (['live' => '운영', 'test' => '테스트'] as $env => $envLabel): $environmentSettings = $providerId === 'toss' ? $toss_environments[$env] : $nicepay_environments[$env]; $providerFields = $providerId === 'toss' ? $toss_fields : $nicepay_fields; ?>
     <div data-yc-payment-panel data-provider="<?= $providerId ?>" data-environment="<?= $env ?>"<?= ($values['payment_provider'] ?? 'inicis') === $providerId && ($values['payment_environment'] ?? 'live') === $env ? '' : ' hidden' ?>><div class="yc-settings-block">
-      <h3><?= $providerLabel ?> · <?= $envLabel ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : (($environmentSettings['mode'] ?? '') === 'escrow' ? '에스크로 설정' : '일반결제 설정') ?></span></h3>
-      <fieldset class="fieldset" data-yc-payment-mode><legend class="fieldset-legend">결제 방식</legend><div class="yc-payment-mode-options">
-        <?php foreach (['general' => '일반결제', 'escrow' => '에스크로 결제'] as $mode => $modeLabel): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_credentials[<?= $providerId ?>][<?= $env ?>][mode]" value="<?= $mode ?>"<?= ($environmentSettings['mode'] ?: 'general') === $mode ? ' checked' : '' ?>> <?= $modeLabel ?></label><?php endforeach ?>
-      </div></fieldset>
-      <p class="muted"><?= $envLabel ?> 클라이언트 키와 서버 시크릿 키를 입력합니다. <?= $providerId === 'nicepay' ? '나이스페이는 서버 승인 모델·Basic 인증 키가 필요합니다. ' : '토스는 API 개별 연동 키가 필요합니다. ' ?>에스크로 선택은 계좌이체에 적용됩니다. 해당 결제사에서 에스크로 서비스 계약이 필요합니다.</p>
+      <h3><?= $providerLabel ?> · <?= $envLabel ?> <span class="badge badge-soft<?= $environmentSettings['configured'] ? ' badge-success' : '' ?>"><?= !$environmentSettings['configured'] ? '미설정' : '일반 카드 설정' ?></span></h3>
+      <p class="muted"><?= $envLabel ?> 일반 카드 결제용 클라이언트 키와 서버 시크릿 키를 입력합니다. <?= $providerId === 'nicepay' ? '나이스페이는 서버 승인 모델·Basic 인증 키가 필요합니다.' : '토스는 API 개별 연동 키가 필요합니다.' ?></p>
       <div class="yc-fields">
         <?php foreach ($providerFields as $name => $field): if ($name === 'mode') continue; $fieldId = 'yc-' . $providerId . '-' . $env . '-' . $name; $fieldName = 'payment_credentials[' . $providerId . '][' . $env . '][' . $name . ']'; $fieldError = ($values['payment_provider'] ?? '') === $providerId && ($values['payment_environment'] ?? '') === $env && isset($errors[$name]); ?>
         <fieldset class="fieldset<?= $fieldError ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="<?= $this->e($fieldId) ?>"><?= $this->e($field['label']) ?></label></legend>
@@ -133,10 +117,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </div></div>
     <?php endforeach; endforeach ?>
     <h3 class="yc-settings-subtitle">온라인 결제 수단</h3><div class="yc-fields">
-      <?php foreach (['card' => '카드 결제', 'bank_transfer' => '실시간 계좌이체', 'virtual_account' => '가상계좌', 'mobile' => '휴대폰 결제'] as $method => $label): ?>
-      <label class="label"><input type="hidden" name="payment_method_<?= $method ?>" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="payment_method_<?= $method ?>" value="1"<?= ($values['payment_method_' . $method] ?? ($method === 'card' ? '1' : '0')) === '1' ? ' checked' : '' ?>> <?= $label ?></label>
-      <?php endforeach ?>
-    </div><p class="muted">이니시스 가상계좌는 입금 통보를 확인해 결제 완료로 바꿉니다. KCP·토스·나이스페이 가상계좌는 현재 지원하지 않습니다. 에스크로는 토스·나이스페이 계좌이체에 적용됩니다. 지원 여부는 결제사 계약과 환경에 따라 다릅니다.</p>
+      <label class="label"><input type="hidden" name="payment_method_card" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="payment_method_card" value="1"<?= ($values['payment_method_card'] ?? '1') === '1' ? ' checked' : '' ?>> 신용카드</label>
+    </div>
     <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="payment_manual_enabled" value="1"<?= ($values['payment_manual_enabled'] ?? '0') === '1' ? ' checked' : '' ?>> 무통장입금 사용</label>
     <div class="yc-fields">
       <?php foreach (['bank' => '은행', 'account' => '계좌번호', 'holder' => '예금주'] as $key => $label): $name = 'payment_manual_' . $key; ?>
@@ -145,8 +127,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
         <?php if (isset($errors[$name])): ?><p class="validator-hint"><?= $this->e($errors[$name]) ?></p><?php endif ?></fieldset>
       <?php endforeach ?>
     </div>
-    <div class="yc-fields"><?php $num('payment_deadline_card', '카드·계좌이체·휴대폰 결제 기한 (시간)', 1, 72); $num('payment_deadline_manual_transfer', '무통장 입금 기한 (시간)', 1, 720); $num('payment_deadline_virtual_account', '가상계좌 입금 기한 (시간)', 1, 720); ?></div>
-    <p class="muted">기한이 지난 미결제 주문은 자동으로 취소되고 재고가 돌아갑니다. 가상계좌 기한은 발급 계좌의 입금 마감에도 적용됩니다.</p>
+    <div class="yc-fields"><?php $num('payment_deadline_card', '신용카드 결제 기한 (시간)', 1, 72); $num('payment_deadline_manual_transfer', '무통장 입금 기한 (시간)', 1, 720); ?></div>
+    <p class="muted">기한이 지난 미결제 주문은 자동으로 취소되고 재고가 돌아갑니다.</p>
   </div></section>
   <section class="card" id="settings-notices"><div class="card-body"><h2 class="card-title">고객 안내문</h2><p class="muted">상품 상세의 배송정보·교환정보 탭에 표시됩니다.</p>
     <fieldset class="fieldset"><legend class="fieldset-legend">배송정보 탭</legend><textarea class="textarea textarea-bordered textarea-block" name="shipping_content" rows="6"><?= $this->e((string) ($values['shipping_content'] ?? '')) ?></textarea></fieldset>

@@ -18,8 +18,7 @@ final class KcpProvider implements Provider
 
     public function credentials(array $revision, ?array $current): array
     {
-        if ($current !== null && ($current['mode'] ?? 'general') === ($revision['mode'] ?? 'general')
-            && ($current['site_cd'] ?? '') === ($revision['site_cd'] ?? '')) {
+        if ($current !== null && ($current['site_cd'] ?? '') === ($revision['site_cd'] ?? '')) {
             foreach (['certificate', 'private_key', 'private_key_password'] as $key) {
                 if (($current[$key] ?? '') !== '') $revision[$key] = $current[$key];
             }
@@ -27,7 +26,7 @@ final class KcpProvider implements Provider
         return $revision;
     }
 
-    public function methods(): array { return ['card', 'bank_transfer', 'mobile']; }
+    public function methods(): array { return ['card']; }
     public function supportsPartialRefund(): bool { return true; }
     public function checkoutTemplate(): string { return 'payment/kcp'; }
     public function gateway(Settings $settings): Gateway { return new KcpGateway($settings); }
