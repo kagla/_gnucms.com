@@ -9,6 +9,7 @@ use GnuCms\Shop\Commerce\CancellationReason;
 use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Shop\Commerce\Payments;
 use GnuCms\Shop\Input;
+use GnuCms\Shop\Settings;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -31,21 +32,78 @@ final class OrderController extends AdminBase
         if ($request->getMethod() === 'POST') {
             try {
                 $order = $this->service->orders->get($id);
-                match ($action) {
+                $result = match ($action) {
                     'confirm-deposit' => $this->service->orders->confirmDeposit($id, $data['actor']),
                     'sync' => $this->service->payments->sync($order),
                     'refund' => $this->refund($order, $data),
                     'refund-confirm' => $this->service->payments->confirmRefund($order, self::refundKey($data),
                         Input::text($data['input']['reference'] ?? '', 'reference', 100, false), $data['actor']),
                     'refund-unprocessed' => $this->service->payments->dismissRefund($order, self::refundKey($data)),
+                    'add-note' => $this->service->orders->addNote($id, $data['input']['note'] ?? '', $data['actor'], $data['input']['after_history_id'] ?? null),
+                    'edit-note' => $this->service->orders->editNote($id, Input::id($data['input']['note_id'] ?? null, 'note_id'), $data['input']['note'] ?? ''),
+                    'delete-note' => $this->service->orders->deleteNote($id, Input::id($data['input']['note_id'] ?? null, 'note_id')),
+                    'undo-status' => $this->service->orders->undoStatus($id, Input::id($data['input']['history_id'] ?? null, 'history_id'), Input::text($data['input']['from'] ?? '', 'from', 20, false), $data['actor'], $data['input']['reason'] ?? ''),
                     default => $this->transition($id, $data),
                 };
-                return $this->redirect($response, $data['admin_url'] . '/orders/detail?id=' . $id . '&saved=' . ($action === '' ? '1' : $action));
+                $focus = match ($action) {
+                    'add-note' => 'yc-order-note-' . (int) $result,
+                    'edit-note' => 'yc-order-note-' . (int) $data['input']['note_id'],
+                    'delete-note' => (int) $result > 0 ? 'yc-order-history-' . (int) $result : 'yc-order-timeline',
+                    default => '',
+                };
+                if ($focus === '') {
+                    $beforeHistory = $order['history'];
+                    $afterHistory = $this->service->orders->get($id)['history'];
+                    $beforeId = $beforeHistory === [] ? 0 : (int) $beforeHistory[array_key_last($beforeHistory)]['id'];
+                    $afterId = $afterHistory === [] ? 0 : (int) $afterHistory[array_key_last($afterHistory)]['id'];
+                    if ($afterId > $beforeId) $focus = 'yc-order-history-' . $afterId;
+                }
+                return $this->redirect($response, $data['admin_url'] . '/orders/detail?id=' . $id . '&saved=' . ($action === '' ? '1' : $action)
+                    . ($focus === '' ? '' : '#' . $focus));
             } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
         }
         $data['order'] = $this->service->orders->get($id);
+        $data['previous'] = Orders::previousStatus($data['order']);
+        $undoHistoryId = $data['previous'] === null ? null : Orders::activeStatusHistoryId($data['order']);
+        $data['undo_history_id'] = $undoHistoryId;
+        $data['timeline'] = [];
+        $history = $data['order']['history'];
+        $historyIds = array_fill_keys(array_map(static fn (array $event): int => (int) $event['id'], $history), true);
+        $notesByAnchor = [];
+        foreach ($this->service->orders->notesFor($id) as $note) {
+            $anchor = (int) $note['after_history_id'];
+            if (!isset($historyIds[$anchor]) && $history !== []) {
+                // 이전 버전의 메모는 저장된 표시 시각으로 알맞은 상태 사이에 둔다.
+                $at = (int) ($note['occurred_at'] ?: $note['created_at']);
+                $anchor = (int) $history[0]['id'];
+                foreach ($history as $event) {
+                    if ((int) $event['created_at'] <= $at) $anchor = (int) $event['id'];
+                }
+            }
+            $notesByAnchor[$anchor][] = $note;
+        }
+        foreach ($history as $index => $event) {
+            $nextStatus = $history[$index + 1]['status'] ?? null;
+            $addNoteLabel = Orders::STATUSES[$event['status']] . ($nextStatus === null ? ' 뒤' : '와 ' . Orders::STATUSES[$nextStatus] . ' 사이') . '에 처리 메모 추가';
+            $data['timeline'][] = $event + ['type' => 'history', 'can_undo' => (int) $event['id'] === $undoHistoryId,
+                'add_note_label' => $addNoteLabel];
+            $notes = $notesByAnchor[(int) $event['id']] ?? [];
+            usort($notes, static fn (array $a, array $b): int =>
+                [(int) ($a['occurred_at'] ?: $a['created_at']), (int) $a['id']]
+                <=> [(int) ($b['occurred_at'] ?: $b['created_at']), (int) $b['id']]);
+            foreach ($notes as $note) $data['timeline'][] = $note + ['type' => 'note'];
+        }
         $data['cancel_reasons'] = CancellationReason::OPTIONS;
         $data['next'] = array_values(array_diff(Orders::NEXT[$data['order']['status']], ['paid']));
+        $data['carriers'] = Settings::carriers();
+        $savedCarrier = $this->service->settings->all()['shipping']['default_carrier'];
+        $carrierChoice = is_string($data['input']['carrier'] ?? null) ? $data['input']['carrier'] : $savedCarrier;
+        $data['carrier_other'] = is_string($data['input']['carrier_other'] ?? null) ? $data['input']['carrier_other'] : '';
+        if ($carrierChoice !== '' && $carrierChoice !== Settings::OTHER_CARRIER && !isset($data['carriers'][$carrierChoice])) {
+            $data['carrier_other'] = $carrierChoice;
+            $carrierChoice = Settings::OTHER_CARRIER;
+        }
+        $data['carrier_choice'] = $carrierChoice;
         $data['is_pg'] = $this->service->payments->isPgOrder($data['order']);
         $provider = $data['is_pg'] ? $this->service->app->paymentProviders()->get($data['order']['payment_provider']) : null;
         $data['payment_provider_label'] = $provider?->label() ?? '';
@@ -55,7 +113,9 @@ final class OrderController extends AdminBase
         $data['pending_refunds'] = $this->service->payments->pendingRefunds($data['order']);
         $data['notice'] = match ($data['input']['saved'] ?? '') {
             '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 조회했습니다.', 'refund' => '환불을 처리했습니다.',
-            'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.', default => '',
+            'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.',
+            'add-note' => '처리 메모를 추가했습니다.', 'edit-note' => '처리 메모를 수정했습니다.', 'delete-note' => '처리 메모를 삭제했습니다.',
+            'undo-status' => '주문 상태를 직전 단계로 되돌렸습니다.', default => '',
         };
         return $this->render($request, $response, 'order', $data);
     }

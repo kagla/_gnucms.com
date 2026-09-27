@@ -37,7 +37,7 @@ final class CommerceController
             'img' => static fn (int $id, ?string $file, string $size): ?string => $file === null || $file === '' ? null : Images::url($url, $id, $file, $size)];
         $data['settings'] = $this->service->settings->all();
         // 영수증(order)은 예외다. 공개를 끄기 전에 받은 주문과 진행 중인 결제가 돌아올 곳이다.
-        if (!$data['settings']['visible'] && $page !== 'order') return $view->render($response, 'closed', $data);
+        if (!$data['settings']['visible'] && !in_array($page, ['order', 'order/cancel'], true)) return $view->render($response, 'closed', $data);
         if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel'], true)) {
             $destination = $url . match ($page) {
                 'checkout', 'checkout/previous-addresses' => '/checkout' . (($input['flow'] ?? '') === 'buy' ? '?flow=buy' : ''),
@@ -165,7 +165,9 @@ final class CommerceController
         }
         if ($page === 'checkout') return $this->checkout($request, $response, $view, $data, $input, $userId);
         if ($page === 'orders') {
-            $data['list'] = $this->service->orders->listing($userId, '', $this->page($input['page'] ?? '1'));
+            $data['q'] = Input::text($input['q'] ?? '', 'q', 100);
+            $data['list'] = $this->service->orders->listing($userId, '', $this->page($input['page'] ?? '1'), false, $data['q']);
+            $data['method_labels'] = \GnuCms\Shop\Commerce\Payments::METHODS;
             return $view->render($response, 'orders', $data);
         }
         if ($page === 'order' || $page === 'order/cancel') {
@@ -209,22 +211,32 @@ final class CommerceController
             }
             if ($page === 'order/cancel') {
                 try {
-                    // 승인이 오가는 중인 주문은 돈이 움직였을 수 있다. 결과가 확정된 뒤에 취소한다.
-                    if ($this->service->payments->inProgress($order)) {
-                        throw DomainError::validation(['status' => '결제 결과를 확인하는 중입니다. 잠시 후 다시 시도하거나 상점에 문의해 주세요.']);
-                    }
-                    $this->service->orders->transition((int) $order['id'], $order['status'], 'cancelled', 'user:' . $userId,
-                        $input, true);
-                    return $this->redirect($response, $url . '/order?ref=' . rawurlencode(Orders::reference($order)));
+                    $this->service->orders->cancelForCustomer((int) $order['id'], $userId, $input, $this->service->payments);
+                    return $this->redirect($response, $url . '/order?ref=' . rawurlencode(Orders::reference($order)) . '&cancelled=1');
                 } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
                 $order = $this->service->orders->owned($number, $userId);
             }
             $data['order'] = $order;
+            $data['is_pg'] = $this->service->payments->isPgOrder($order);
+            if ($page === 'order' && ($input['cancelled'] ?? '') === '1' && $order['status'] === 'cancelled') {
+                $data['notice'] = '주문이 취소되었습니다.';
+            }
+            $currentStatusAt = (int) $order['created_at'];
+            $historyStatus = null;
+            foreach ($order['history'] as $event) {
+                if ($event['status'] === $historyStatus) continue;
+                $historyStatus = $event['status'];
+                if ($historyStatus === $order['status']) $currentStatusAt = (int) $event['created_at'];
+            }
+            $data['current_status_at'] = $currentStatusAt;
             $data['cancel_attempted'] = $page === 'order/cancel';
             if ($data['cancel_attempted']) $data['input'] = $this->safeValues($input);
             $data['cancel_reasons'] = \GnuCms\Shop\Commerce\CancellationReason::OPTIONS;
             $payState = $input['pay'] ?? '';
-            $data['pay_state'] = in_array($payState, ['closed', 'failed'], true) ? $payState : '';
+            $data['pay_state'] = $payState === 'success' && $this->service->payments->isPgOrder($order) && (int) ($order['paid_at'] ?? 0) > 0
+                ? 'success' : (in_array($payState, ['closed', 'failed'], true) ? $payState : '');
+            $data['order_placed'] = ($input['placed'] ?? '') === 'success'
+                && $order['payment_method'] === 'manual_transfer' && $order['status'] !== 'cancelled';
             $pgPending = $order['status'] === 'pending' && $this->service->payments->isPgOrder($order);
             $overdue = (int) $order['pay_by'] > 0 && (int) $order['pay_by'] <= \GnuCms\Support\Clock::timestamp();
             $data['pay_url'] = $pgPending && !$overdue && !$virtualAccountIssued ? $url . '/pay?ref=' . rawurlencode(Orders::reference($order)) : null;
@@ -257,7 +269,8 @@ final class CommerceController
             $issued = $_SESSION['yc_checkout'][$token] ?? null;
             if ($issued === null || $issued['flow'] !== $flow || $issued['user_id'] !== $userId) throw DomainError::forbidden('주문서를 다시 열어 주세요.');
             if ($existing = $this->service->orders->submitted($token, $_SESSION['yc_owner'], $userId)) {
-                return $this->redirect($response, $data['url'] . '/order?ref=' . rawurlencode(Orders::reference($existing)));
+                $placed = $existing['payment_method'] === 'manual_transfer' ? '&placed=success' : '';
+                return $this->redirect($response, $data['url'] . '/order?ref=' . rawurlencode(Orders::reference($existing)) . $placed);
             }
         }
         $cart = $_SESSION['yc_' . $flow] ?? [];
@@ -347,7 +360,7 @@ final class CommerceController
                     }
                     $_SESSION['yc_' . $flow] = [];
                     unset($_SESSION['yc_buy_source']);
-                    return $this->redirect($response, $data['url'] . '/order?ref=' . rawurlencode(Orders::reference($order)));
+                    return $this->redirect($response, $data['url'] . '/order?ref=' . rawurlencode(Orders::reference($order)) . '&placed=success');
                 }
             } catch (DomainError $e) {
                 if ($e->status() >= 500) throw $e;

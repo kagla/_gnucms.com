@@ -39,10 +39,12 @@ final class SettingsController
                     if ($environment === 'test') {
                         if ($provider->id() === 'inicis') $credentials = ProviderConfig::testCredentials();
                         if ($provider->id() === 'kcp_legacy') $credentials = KcpLegacyConfig::testCredentials();
+                        if ($provider->id() === 'kcp') $credentials = KcpConfig::testCredentials();
                     }
                     $settings->save($environment, $credentials);
                     $notice = $provider->id() === 'kcp_legacy'
-                        ? 'KCP 기존 방식의 자격정보를 등록했습니다. 결제 실행은 아직 연결되지 않았습니다.'
+                        ? 'KCP 기존 방식의 자격정보를 등록했습니다.' . (KcpLegacyGateway::moduleAvailable($settings->app->storageDir())
+                            ? ' TCP/IP 카드 결제를 사용할 수 있습니다.' : ' 서버에 TCP/IP 승인 모듈을 설치하면 주문서에 카드 결제가 표시됩니다.')
                         : '결제 설정을 저장했습니다. 선택한 환경의 일반 신용카드 결제에 적용됩니다.';
                     $completedAction = 'payment_saved';
                 } else {
@@ -72,7 +74,8 @@ final class SettingsController
             'admin/payment_settings',
             ['provider' => $provider->id(), 'providers' => $settings->app->paymentProviders()->labels(), 'fields' => $provider->fields(), 'manual' => $provider->manual(),
                 'label' => $provider->label(), 'environment' => $environment,
-                'settings' => $summary, 'notice' => $notice, 'errors' => $errors]
+                'settings' => $summary, 'notice' => $notice, 'errors' => $errors,
+                'kcp_legacy_module_available' => KcpLegacyGateway::moduleAvailable($settings->app->storageDir())]
         );
     }
 

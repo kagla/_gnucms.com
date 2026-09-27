@@ -9,6 +9,8 @@ GNUCMS가 PG와 직접 연동한다. 포트원 계정이나 API를 거치지 않
 운영을 단순하게 유지하기 위해 새 PG 주문에는 **일반 신용카드 결제만** 제공한다. KG이니시스,
 NHN KCP REST API, 토스페이먼츠, 나이스페이먼츠 모두 카드 결제만 주문서에 노출한다.
 실시간 계좌이체·가상계좌·휴대폰 결제와 에스크로 결제는 새 주문에서 사용할 수 없다.
+토스 카드 결제창에서 간편결제사를 선택해도 결제액 전부가 카드로 청구되고
+계좌·포인트 사용액이 0원인 경우에는 카드 결제로 확인한다.
 PG를 거치지 않는 상점 무통장입금은 별도 수단으로 계속 제공할 수 있고, 관리자가 입금 여부를 확인한다.
 
 이 제품 결정의 배경은 에스크로 거래에 필요한 배송등록·구매결정 절차와 택배사 연동을 운영하지
@@ -22,9 +24,15 @@ PG를 거치지 않는 상점 무통장입금은 별도 수단으로 계속 제�
 **쇼핑몰 → 설정 → 결제**(`/admin/shop/settings#settings-payment`)에서 새 주문에 사용할 PG와
 운영·테스트 환경을 선택한다. 결제수단은 신용카드만 켜거나 끌 수 있고, 무통장입금은 별도로
 켜고 계좌·예금주를 등록한다. 이니시스 테스트 환경은 공용 테스트 정보가 자동 적용된다.
-NHN KCP REST API 방식은 일반 카드용 사이트 코드와 인증서·개인키·비밀번호를 입력한다.
-토스·나이스페이는 환경별 클라이언트 키와 서버 시크릿 키를 입력한다. NHN KCP 기존 방식
-(TCP/IP)은 자격정보 등록만 제공하고 결제 실행은 연결되어 있지 않다.
+NHN KCP REST API 방식은 운영 환경에 일반 카드용 사이트 코드와 인증서·개인키·발급 시 설정한
+비밀번호를 입력한다. 테스트 환경은 저장소에 포함한 KCP 공개 테스트 인증 정보를 자동 적용한다.
+토스페이먼츠 테스트 환경은 [공식 SDK v1 PHP 샘플의 클라이언트 키](https://github.com/tosspayments/tosspayments-sample-v1/blob/main/payment/payment-window/php/index.html)와
+[서버 시크릿 키](https://github.com/tosspayments/tosspayments-sample-v1/blob/main/payment/payment-window/php/success.php)를 설정 저장 시 자동 적용한다.
+나이스페이먼츠 테스트 환경은 [공식 서버 승인·Basic 인증 샌드박스 샘플](https://github.com/nicepayments/nicepay-manual)의 공개 클라이언트 키와 서버 시크릿 키를 설정 저장 시 자동 적용한다.
+영카트5의 `nicepay00m` MID와 상점키는 구형 결제 방식의 값이어서 이 서버 승인 API에 사용할 수 없다.
+토스와 나이스페이먼츠 운영 환경에는 상점에 발급된 클라이언트 키와 서버 시크릿 키를 입력한다. NHN KCP 기존 방식
+(TCP/IP)은 KCP 브라우저 결제창과 서버 `pp_cli` 승인을 연결한다. KCP에서 발급받은
+실행 파일과 `pub.key`가 서버에 설치된 경우에만 주문서에 신용카드로 표시된다.
 
 설정 화면의 결제사 키는 암호화해 저장한다. 결제사 또는 환경을 바꿔도 기존 주문은 결제 당시의
 PG·환경·설정 판을 사용한다. 기존 주문의 콜백·조회·환불을 위해 과거 온라인 수단 처리 코드는
@@ -108,32 +116,57 @@ PG 실계정 승인·조회·환불은 별도 검증이 필요하다. 자동 테
 | `templates/default/shop/pay.php` | 이전 결제 대기 주문의 결제 재시도 화면 |
 | `templates/default/payment/inicis.php`, `inicis_scripts.php` | 이니시스 PC/모바일 결제창 조각과 실행 스크립트 |
 | `templates/default/payment/kcp.php`, `kcp_scripts.php`, `www/themes/default/kcp.js` | KCP PC/모바일 결제창 조각과 콜백 실행 스크립트 |
+| `src/Payment/KcpLegacyGateway.php`, `templates/default/payment/kcp_legacy.php`, `kcp_legacy_scripts.php` | KCP 기존 표준결제 인증·TCP/IP 승인·전체 취소 |
 
 결제창 조각도 기존 테마 경로 탐색을 사용한다. `templates/<테마>/payment/inicis.php`,
-`inicis_scripts.php`, `kcp.php`, `kcp_scripts.php`로 재정의할 수 있다. 쇼핑몰 전용 재정의는
+`inicis_scripts.php`, `kcp.php`, `kcp_scripts.php`, `kcp_legacy.php`, `kcp_legacy_scripts.php`로 재정의할 수 있다. 쇼핑몰 전용 재정의는
 `templates/<테마>/shop/payment/`에 둔다. 기존 `shop/pay.php` 전체 재정의도 유지된다.
 
 신규 주문에서 PG가 제공하는 수단은 신용카드뿐이다. 계좌이체·가상계좌·휴대폰 결제와 에스크로는
 상점 설정 화면에 나오지 않고, PG 어댑터의 새 결제창 요청도 거절한다. 기존 주문의 상태 조회,
 콜백·입금 통보와 환불 처리는 과거 거래를 보존하기 위해 남겨 둔다.
 
-## NHN KCP 기존 방식 (TCP/IP) 등록
+## NHN KCP 기존 방식 (TCP/IP)
 
 쇼핑몰 설정 → 결제에서 **NHN KCP 기존 방식 (TCP/IP)**을 선택한다. 운영 환경은 일반 카드 결제용으로
 KCP에서 받은 `site_cd`와 `site_key` 한 쌍을 입력한다. 테스트 환경은 사이트 코드 `T0000`과
-공용 테스트 사이트 키가 하단의 설정 저장 시 자동 적용된다.
-사이트 설정 → 결제에서도 같은 방식으로 자격정보를 등록할 수 있다. 값은 REST API 방식과 별도 암호화 설정으로 저장된다.
-사이트 코드가 같으면 사이트 키를 비워 두어도 저장된 키가 유지된다.
-KCP는 기존 pp_cli 방식에서 사이트 코드와 사이트 키를 사용한다고 [REST API 전환 가이드](https://developer.kcp.co.kr/guide/rest-api-guide)에 안내한다.
-TCP/IP 결제 승인·조회·취소 모듈은 아직 연결되지 않았으므로 이 방식을 선택하면 주문서에 온라인 결제 수단이 표시되지 않는다.
+공용 테스트 사이트 키가 하단의 설정 저장 시 자동 적용된다. 사이트 설정 → 결제에서도 자격정보를
+관리할 수 있으며, 설정은 REST API 방식과 분리해 암호화 저장한다.
+
+배포 ZIP에는 Linux x86-64용 `pp_cli_x64`, Windows용 `pp_cli_exe.exe`, 공통 `pub.key`를
+[그누보드 공식 KCP 플러그인의 공개 파일](https://github.com/gnuboard/g7-plugin-sirsoft-pay_nhnkcp/tree/0e02e7dae01523f227688ffefcdda04d9b1d6421/bin)에서 버전과 해시를 고정해 포함한다.
+소스만 내려받아 설치할 때는 같은 파일을 아래 경로에 직접 배치한다. Linux 32비트 PHP에서는
+별도의 `pp_cli`가 필요하다.
+
+```text
+storage/payment/kcp_legacy/bin/pp_cli_x64
+storage/payment/kcp_legacy/bin/pp_cli_exe.exe
+storage/payment/kcp_legacy/bin/pub.key
+```
+
+Linux에서는 PHP 프로세스가 `pp_cli_x64`를 실행할 수 있고 `exec()`가 활성화되어 있어야 한다.
+Windows에서는 PHP 프로세스가 `pp_cli_exe.exe`를 실행할 수 있고 `proc_open()`이 활성화되어 있어야 한다.
+KCP 표준결제 웹 스크립트가 브라우저 인증을 수행한 뒤 서명된 쇼핑몰 콜백을 보내며, 서버는
+`pp_cli`로 TCP/IP 승인 또는 전체 취소를 요청한다. 결제 완료 후 카드사명·마스킹 카드 끝번호·
+할부 개월·무이자 여부·승인번호를 저장한다. 카드 번호 원문은 저장하지 않는다. 부분 환불은
+지원하지 않는다.
+
+기존 TCP/IP 연동은 KCP pp_cli 원장 조회 API가 없어 GNUCMS가 직접 승인·취소한 거래의 암호화
+원장으로만 주문 결제 상태를 표시한다. KCP 상점관리자에서 수동 취소한 거래는 자동으로 동기화되지
+않으므로, 이 방식은 주문 관리 화면에서 환불을 실행해야 한다. KCP는 TCP/IP에서 HTTPS로의 전환과
+REST API 사용을 안내하고 있으므로 신규 연동에는 [KCP REST API 전환 가이드](https://developer.kcp.co.kr/guide/rest-api-guide)가
+권장 경로다.
 
 ## NHN KCP REST API 방식 설정
 
-쇼핑몰 설정 → 결제에서 **NHN KCP REST API 방식**을 선택하면 테스트·운영 환경별 입력란이 나타난다. 하단의 설정 저장으로
-쇼핑몰 설정과 선택한 환경의 KCP 자격정보를 함께 저장한다. 사이트 설정 → 결제의 REST API 방식 탭에서도
-KCP 자격정보를 관리할 수 있다. 테스트 사이트 코드는 일반 카드 결제용 `T0000`으로 적용하고,
-운영에는 KCP가 발급한 5자리 사이트 코드를 사용한다. 각 환경의 서비스 인증서 PEM, 개인키 PEM,
-개인키 비밀번호가 필요하다. 인증서와 개인키는 암호화해 보관한다.
+쇼핑몰 설정 → 결제에서 **NHN KCP REST API 방식**을 선택한다. 테스트 환경은 사이트 코드 `T0000`과
+KCP 개발자센터가 공개한 `config/payment/kcp/test/splCert.pem`·`splPrikeyPKCS8.pem`과
+`settings.php`의 공개 테스트용 개인키 비밀번호를 설정 저장 시 자동 적용한다. PEM을 관리 화면에 입력하지 않는다.
+운영 환경은 KCP가 발급한 5자리 사이트 코드와 서비스 인증서 PEM, 개인키 PEM, 발급 시 설정한
+개인키 비밀번호를 입력한다. 비밀번호는 REST 요청 본문에 보내는 값이 아니라 서버에서 암호화된
+개인키를 열어 서명할 때 사용한다. 사이트 설정 → 결제에서도 같은 설정을 관리할 수 있으며,
+저장된 인증서·개인키·비밀번호는 암호화한다. [KCP 인증서 발급 안내](https://developer.kcp.co.kr/reference/key),
+[KCP 테스트 파일·서명 안내](https://developer.kcp.co.kr/reference/signdata).
 
 PC는 KCP 표준결제 허브를, 모바일은 [거래등록 API](https://developer.kcp.co.kr/reference/regist)가 반환한 PayUrl과 인증 키를 사용한다.
 인증 후에는 서버에서 [결제승인 API](https://developer.kcp.co.kr/reference/pay-approve)를 호출하고, 거래조회 결과로 주문번호·거래번호·수단·금액·잔액을 검증한다.

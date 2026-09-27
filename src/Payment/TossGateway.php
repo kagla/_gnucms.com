@@ -10,6 +10,22 @@ use GnuCms\Error\DomainError;
 final class TossGateway extends DirectGateway
 {
     private const METHODS = ['card' => '카드', 'bank_transfer' => '계좌이체', 'mobile' => '휴대폰'];
+    /** https://docs.tosspayments.com/codes/org-codes 의 카드 발급사 응답 코드. */
+    private const CARD_ISSUERS = [
+        '3K' => '기업 BC카드', '46' => '광주은행', '71' => '롯데카드', '30' => '한국산업은행',
+        '31' => 'BC카드', '51' => '삼성카드', '38' => '새마을금고', '41' => '신한카드',
+        '62' => '신협', '36' => '씨티카드', '33' => '우리BC카드', 'W1' => '우리카드',
+        '37' => '우체국예금보험', '39' => '저축은행중앙회', '35' => '전북은행', '42' => '제주은행',
+        '15' => '카카오뱅크', '3A' => '케이뱅크', '24' => '토스뱅크', '21' => '하나카드',
+        '61' => '현대카드', '11' => 'KB국민카드', '91' => 'NH농협카드', '34' => 'Sh수협은행',
+        '6D' => '다이너스 클럽', '4M' => '마스터카드', '3C' => '유니온페이',
+        '7A' => '아메리칸 익스프레스', '4J' => 'JCB', '4V' => 'VISA',
+    ];
+
+    public static function cardIssuerName(string $code): string
+    {
+        return self::CARD_ISSUERS[$code] ?? ($code !== '' && preg_match('/^[A-Z0-9]{2}$/D', $code) ? '카드사 확인 필요' : $code);
+    }
 
     public function checkout(array $order, array $customer, string $returnUrl, string $callbackUrl, string $device = 'web'): array
     {
@@ -104,8 +120,17 @@ final class TossGateway extends DirectGateway
         $status = match ($data['status'] ?? '') { 'DONE', 'PARTIAL_CANCELED' => 'PAID',
             'CANCELED' => 'CANCELLED', 'WAITING_FOR_DEPOSIT' => 'PENDING', default => 'UNKNOWN' };
         $expected = self::METHODS[$order['method']] ?? '';
+        $card = is_array($data['card'] ?? null) ? $data['card'] : [];
+        $easyPay = is_array($data['easyPay'] ?? null) ? $data['easyPay'] : [];
+        // 카드 결제창에서 선택한 간편결제도 카드로 전액 결제한 경우에만 카드 주문으로 인정한다.
+        $cardMethod = in_array($data['method'] ?? '', ['카드', 'CARD'], true)
+            || (in_array($data['method'] ?? '', ['간편결제', 'EASY_PAY'], true)
+                && $easyPay !== [] && self::amount($card['amount'] ?? null) === $total
+                && self::amount($easyPay['amount'] ?? 0) === 0
+                && self::amount($easyPay['discountAmount'] ?? 0) === 0);
+        $methodValid = $order['method'] === 'card' ? $cardMethod : ($data['method'] ?? '') === $expected;
         $valid = ($data['orderId'] ?? '') === $order['id'] && ($key === '' || ($data['paymentKey'] ?? '') === $key)
-            && ($data['method'] ?? '') === $expected && ($data['currency'] ?? '') === 'KRW'
+            && $methodValid && ($data['currency'] ?? '') === 'KRW'
             && self::amount($data['totalAmount'] ?? null) === $total && $balance >= 0 && $balance <= $total
             && ($order['method'] !== 'bank_transfer' || (is_bool($data['useEscrow'] ?? null)
                 && (($config['mode'] ?? 'general') !== 'escrow' || $data['useEscrow'] === true)));
@@ -122,12 +147,11 @@ final class TossGateway extends DirectGateway
         }
         $paidAt = self::isoDate($data['approvedAt'] ?? null);
         if ($status === 'PAID' && $paidAt < 1) $valid = false;
-        $card = is_array($data['card'] ?? null) ? $data['card'] : [];
         $number = (string) ($card['number'] ?? '');
         $result = ['status' => $status, 'valid' => $valid, 'transaction_id' => (string) ($data['paymentKey'] ?? ''),
             'paid_at' => $paidAt, 'cancelled' => $total - $balance, 'cancellations' => $cancellations];
         if ($order['method'] === 'bank_transfer') $result['detail'] = ['escrow' => ($data['useEscrow'] ?? false) === true];
-        if ($order['method'] === 'card') $result['card'] = ['name' => (string) ($card['issuerCode'] ?? ''),
+        if ($order['method'] === 'card') $result['card'] = ['name' => self::cardIssuerName((string) ($card['issuerCode'] ?? '')),
             'last_four' => preg_match('/([0-9]{4})$/D', $number, $match) ? $match[1] : '',
             'quota' => (int) ($card['installmentPlanMonths'] ?? 0), 'interest_free' => ($card['isInterestFree'] ?? false) === true,
             'approval_number' => (string) ($card['approveNo'] ?? '')];

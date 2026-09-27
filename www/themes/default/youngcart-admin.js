@@ -52,18 +52,91 @@
   if(orderStatusForm){
     var statusSelect=orderStatusForm.querySelector('select[name="status"]');
     var cancelFields=orderStatusForm.querySelector('[data-yc-admin-cancel-fields]');
-    var statusNote=orderStatusForm.querySelector('[data-yc-status-note]');
-    if(statusSelect&&cancelFields){
-      var reasonSelect=cancelFields.querySelector('select[name="cancel_reason"]');
-      function syncCancelFields(){
-        var cancelling=statusSelect.value==='cancelled';
-        cancelFields.hidden=!cancelling;
-        if(reasonSelect){reasonSelect.required=cancelling;}
-        if(statusNote){statusNote.hidden=cancelling;}
-      }
-      statusSelect.addEventListener('change',syncCancelFields);
-      syncCancelFields();
+    var shippingFields=orderStatusForm.querySelector('[data-yc-shipping-fields]');
+    var carrierSelect=orderStatusForm.querySelector('[data-yc-carrier-select]');
+    var otherCarrierField=orderStatusForm.querySelector('[data-yc-carrier-other]');
+    var otherCarrierInput=otherCarrierField&&otherCarrierField.querySelector('input');
+    var trackingInput=orderStatusForm.querySelector('input[name="tracking_number"]');
+    var reasonSelect=cancelFields&&cancelFields.querySelector('select[name="cancel_reason"]');
+    function syncCarrierFields(){
+      if(!carrierSelect||!otherCarrierField){return;}
+      var other=carrierSelect.value===carrierSelect.getAttribute('data-yc-other-value');
+      otherCarrierField.hidden=!other;
+      if(otherCarrierInput){otherCarrierInput.required=other&&(!shippingFields||!shippingFields.hidden);}
     }
+    if(statusSelect){
+      function syncStatusFields(){
+        var cancelling=statusSelect.value==='cancelled',shipping=statusSelect.value==='shipped';
+        if(cancelFields){cancelFields.hidden=!cancelling;}
+        if(reasonSelect){reasonSelect.required=cancelling;}
+        if(shippingFields){shippingFields.hidden=!shipping;}
+        if(carrierSelect){carrierSelect.required=shipping;}
+        if(trackingInput){trackingInput.required=shipping;}
+        syncCarrierFields();
+      }
+      statusSelect.addEventListener('change',syncStatusFields);
+      if(carrierSelect){carrierSelect.addEventListener('change',syncCarrierFields);}
+      syncStatusFields();
+    }
+  }
+  var addNoteDialog=root.querySelector('[data-yc-add-order-note-dialog]');
+  if(addNoteDialog&&typeof addNoteDialog.showModal==='function'){
+    var addNoteAfter=addNoteDialog.querySelector('[data-yc-add-note-after]');
+    var addNoteText=addNoteDialog.querySelector('[data-yc-add-note-text]');
+    var addNotePosition=addNoteDialog.querySelector('[data-yc-add-note-position]');
+    root.querySelectorAll('[data-yc-add-order-note]').forEach(function(button){
+      button.addEventListener('click',function(){
+        if(!addNoteAfter||!addNoteText){return;}
+        addNoteAfter.value=button.getAttribute('data-yc-add-order-note');
+        addNoteText.value='';
+        if(addNotePosition){addNotePosition.textContent=button.getAttribute('data-yc-add-note-label');}
+        addNoteDialog.showModal();
+        addNoteText.focus();
+      });
+    });
+    var closeAddNoteDialog=addNoteDialog.querySelector('[data-yc-close-add-order-note]');
+    if(closeAddNoteDialog){closeAddNoteDialog.addEventListener('click',function(){addNoteDialog.close();});}
+    if(addNoteDialog.hasAttribute('data-yc-open-on-error')){addNoteDialog.showModal();addNoteText.focus();}
+  }
+  var noteDialog=root.querySelector('[data-yc-order-note-dialog]');
+  if(noteDialog&&typeof noteDialog.showModal==='function'){
+    var editNoteId=noteDialog.querySelector('[data-yc-edit-note-id]');
+    var editNoteText=noteDialog.querySelector('[data-yc-edit-note-text]');
+    root.querySelectorAll('[data-yc-edit-order-note]').forEach(function(button){
+      button.addEventListener('click',function(){
+        var row=button.closest('.yc-order-timeline-note');
+        var content=row&&row.querySelector('[data-yc-order-note-text]');
+        if(!content||!editNoteId||!editNoteText){return;}
+        editNoteId.value=button.getAttribute('data-yc-edit-order-note');
+        editNoteText.value=content.textContent;
+        noteDialog.showModal();
+        editNoteText.focus();
+      });
+    });
+    var closeNoteDialog=noteDialog.querySelector('[data-yc-close-order-note]');
+    if(closeNoteDialog){closeNoteDialog.addEventListener('click',function(){noteDialog.close();});}
+    if(noteDialog.hasAttribute('data-yc-open-on-error')){noteDialog.showModal();editNoteText.focus();}
+  }
+  var undoDialog=root.querySelector('[data-yc-undo-status-dialog]');
+  if(undoDialog&&typeof undoDialog.showModal==='function'){
+    var undoHistoryId=undoDialog.querySelector('[data-yc-undo-history-id]');
+    var undoFrom=undoDialog.querySelector('[data-yc-undo-from]');
+    var undoReason=undoDialog.querySelector('[data-yc-undo-reason]');
+    var undoLabel=undoDialog.querySelector('[data-yc-undo-status-label]');
+    root.querySelectorAll('[data-yc-undo-history]').forEach(function(button){
+      button.addEventListener('click',function(){
+        if(!undoHistoryId||!undoFrom||!undoReason){return;}
+        undoHistoryId.value=button.getAttribute('data-yc-undo-history');
+        undoFrom.value=button.getAttribute('data-yc-undo-from');
+        undoReason.value='';
+        if(undoLabel){undoLabel.textContent=button.getAttribute('data-yc-undo-label');}
+        undoDialog.showModal();
+        undoReason.focus();
+      });
+    });
+    var closeUndoDialog=undoDialog.querySelector('[data-yc-close-undo-status]');
+    if(closeUndoDialog){closeUndoDialog.addEventListener('click',function(){undoDialog.close();});}
+    if(undoDialog.hasAttribute('data-yc-open-on-error')){undoDialog.showModal();undoReason.focus();}
   }
   var shell=root.closest('.admin-content'),siteLink=shell&&shell.querySelector('.navbar-end>a');
   if(siteLink){siteLink.title=siteLink.textContent.trim();}

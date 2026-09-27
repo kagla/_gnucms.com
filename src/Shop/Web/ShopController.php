@@ -14,6 +14,7 @@ use GnuCms\Shop\ProductInfo;
 use GnuCms\Shop\Service;
 use GnuCms\Shop\Settings;
 use GnuCms\View\View;
+use GnuCms\Web\LoginRedirect;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Routing\RouteContext;
@@ -29,6 +30,38 @@ final class ShopController
         $admin = $this->service->app->guestAcl()->identity()->isAdmin();
         $query = [];
         foreach ($request->getQueryParams() as $key => $value) if (is_string($value)) $query[$key] = $value;
+        if ($page === 'feedback') {
+            $input = $request->getParsedBody();
+            if (!is_array($input)) $input = [];
+            $code = Input::text($input['code'] ?? '', 'code', 20, false);
+            $product = $this->service->products->byCode($code);
+            if ($product === null || (int) $product['active'] !== 1 || (int) ($product['categories'][1]['active'] ?? 0) !== 1) {
+                throw DomainError::notFound('상품을 찾을 수 없습니다.');
+            }
+            if (!$this->service->settings->all()['visible']) throw DomainError::notFound('상품을 찾을 수 없습니다.');
+            $kind = $input['kind'] ?? '';
+            if (!in_array($kind, ['review', 'inquiry'], true)) throw DomainError::validation(['kind' => '작성 종류를 확인해 주세요.']);
+            $target = $url . '/item?id=' . rawurlencode($code) . '#' . ($kind === 'review' ? 'yc-reviews' : 'yc-inquiries');
+            $identity = $this->service->app->guestAcl()->identity();
+            if ($identity->isGuest()) {
+                return $response->withStatus(303)->withHeader('Location', LoginRedirect::loginUrl(RouteContext::fromRequest($request)->getRouteParser(), $target));
+            }
+            try {
+                $this->service->feedback->create((int) $product['id'], (int) $identity->sub(), (string) ($identity->displayName() ?? $identity->sub()), $kind, $input);
+                return $response->withStatus(303)->withHeader('Location', $url . '/item?id=' . rawurlencode($code) . '&saved=' . $kind . '#' . ($kind === 'review' ? 'yc-reviews' : 'yc-inquiries'));
+            } catch (DomainError $error) {
+                if ($error->status() === 404) throw $error;
+                $query = ['id' => $code];
+                $feedbackErrors = $error->details() ?: [$error->getMessage()];
+                $feedbackInput = [];
+                foreach (['title', 'content', 'rating', 'is_private'] as $field) {
+                    if (is_string($input[$field] ?? null)) $feedbackInput[$field] = $input[$field];
+                }
+                $feedbackKind = $kind;
+                $response = $response->withStatus($error->status());
+                $page = 'item';
+            }
+        }
         $view = View::forShop($request);
         $data = ['url' => $url, 'admin_url' => $base . ($this->adminRoutePrefix ?? '/admin/shop'), 'base' => $base, 'admin' => $admin, 'query' => $query, 'page' => $page,
             'img' => static fn (int $productId, ?string $file, string $size): ?string => $file === null ? null : Images::url($url, $productId, $file, $size),
@@ -114,6 +147,20 @@ final class ShopController
                 $data['point_label'] = Pricing::pointLabel($product);
                 $data['info_label'] = ProductInfo::labels()[$product['info_group']] ?? '';
                 $data['info_articles'] = ProductInfo::articles($product['info_group']);
+                $identity = $this->service->app->guestAcl()->identity();
+                $viewerId = $identity->isGuest() ? null : (int) $identity->sub();
+                $reviewPage = preg_match('/^[1-9][0-9]{0,5}$/D', $query['review_page'] ?? '') ? (int) $query['review_page'] : 1;
+                $inquiryPage = preg_match('/^[1-9][0-9]{0,5}$/D', $query['inquiry_page'] ?? '') ? (int) $query['inquiry_page'] : 1;
+                $data['reviews'] = $this->service->feedback->page((int) $product['id'], 'review', $reviewPage, $viewerId, $admin);
+                $data['inquiries'] = $this->service->feedback->page((int) $product['id'], 'inquiry', $inquiryPage, $viewerId, $admin);
+                $data['can_review'] = $viewerId !== null && $this->service->feedback->canReview((int) $product['id'], $viewerId);
+                $data['viewer_id'] = $viewerId;
+                $data['csrf_token'] = $_SESSION['csrf_token'] ?? '';
+                $data['feedback_errors'] = $feedbackErrors ?? [];
+                $data['feedback_input'] = $feedbackInput ?? [];
+                $data['feedback_kind'] = $feedbackKind ?? '';
+                $data['feedback_login_url'] = LoginRedirect::loginUrl(RouteContext::fromRequest($request)->getRouteParser(),
+                    $url . '/item?id=' . rawurlencode((string) $product['code']) . '#yc-inquiries');
                 return $view->render($response, 'item', $data);
             case 'image':
                 $productId = Input::id($query['p'] ?? '');

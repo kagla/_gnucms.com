@@ -30,7 +30,9 @@ final class Payments
         $payment = $this->settings->all()['payment'];
         $methods = [];
         $provider = $this->app->paymentProviders()->get($payment['provider']);
-        if ($this->app->paymentSettings($provider->id())->available($payment['environment'])) {
+        $providerReady = $provider->id() !== 'kcp_legacy'
+            || \GnuCms\Payment\KcpLegacyGateway::moduleAvailable($this->app->storageDir());
+        if ($providerReady && $this->app->paymentSettings($provider->id())->available($payment['environment'])) {
             foreach (array_intersect($provider->methods(), array_keys(array_filter($payment['methods'] ?? ['card' => true]))) as $method) {
                 if (isset(self::METHODS[$method])) $methods[$method] = self::METHODS[$method];
             }
@@ -202,7 +204,10 @@ final class Payments
     /** 환불. 결제사 주문은 PG 환불이 먼저 성공해야 기록하고, 무통장은 밖에서 돌려준 돈을 기록만 한다. */
     public function refund(array $order, int $amount, string $reason, string $key, string $actor): array
     {
-        if (!in_array($order['status'], ['paid', 'confirmed'], true)) throw DomainError::validation(['refund' => '결제 완료 상태의 주문만 환불할 수 있습니다.']);
+        if (!in_array($order['status'], ['paid', 'confirmed'], true)
+            && !($order['status'] === 'cancelled' && !$this->isPgOrder($order))) {
+            throw DomainError::validation(['refund' => '결제 완료 상태의 주문만 환불할 수 있습니다.']);
+        }
         $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
         if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
         if ($this->isPgOrder($order)) {

@@ -364,16 +364,24 @@
     var manualTransfer = checkoutForm.querySelector('[data-yc-manual-transfer]');
     if (manualTransfer) {
       var depositor = manualTransfer.querySelector('[name="depositor"]');
+      var buyerName = checkoutForm.querySelector('[name="buyer_name"]');
+      var manualPayment = checkoutForm.querySelector('[name="payment_method"][value="manual_transfer"]');
       function updateManualTransfer() {
         var selected = checkoutForm.querySelector('[name="payment_method"]:checked');
         var show = selected && selected.value === 'manual_transfer';
         manualTransfer.hidden = !show;
         if (depositor) depositor.disabled = !show;
       }
+      if (manualPayment) manualPayment.addEventListener('click', function () {
+        if (depositor && buyerName) depositor.value = buyerName.value;
+      });
       checkoutForm.addEventListener('change', function (event) {
-        if (event.target.matches('[name="payment_method"]')) updateManualTransfer();
+        if (!event.target.matches('[name="payment_method"]')) return;
+        updateManualTransfer();
+        if (event.target === manualPayment && depositor && buyerName) depositor.value = buyerName.value;
       });
       updateManualTransfer();
+      if (manualPayment && manualPayment.checked && depositor && buyerName && depositor.value === '') depositor.value = buyerName.value;
     }
   }
   var purchase = document.querySelector('[data-yc-purchase]');
@@ -751,6 +759,39 @@
         button.setAttribute('aria-current', 'true');
       });
     });
+  }
+  var itemTabs = document.querySelector('[data-yc-item-tabs]');
+  if (itemTabs) {
+    var itemLinks = Array.from(itemTabs.querySelectorAll('a[href^="#yc-"]'));
+    var itemSections = Array.from(document.querySelectorAll('[data-yc-item-panel]'));
+    function selectedSection() {
+      var hash = window.location.hash;
+      if (hash === '#yc-shipping' || hash === '#yc-exchange') return 'yc-delivery';
+      return itemLinks.some(function (link) { return link.getAttribute('href') === hash; }) ? hash.slice(1) : 'yc-description';
+    }
+    function markItemSection(active) {
+      itemLinks.forEach(function (link) {
+        var selected = link.getAttribute('href') === '#' + active;
+        link.classList.toggle('is-active', selected);
+        if (selected) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      });
+    }
+    itemLinks.forEach(function (link) { link.addEventListener('click', function () { markItemSection(link.getAttribute('href').slice(1)); }); });
+    window.addEventListener('hashchange', function () { markItemSection(selectedSection()); });
+    markItemSection(selectedSection());
+    var itemScrollQueued = false;
+    window.addEventListener('scroll', function () {
+      if (itemScrollQueued) return;
+      itemScrollQueued = true;
+      window.requestAnimationFrame(function () {
+        var current = itemSections[0];
+        var threshold = (parseFloat(window.getComputedStyle(itemTabs).top) || 0) + itemTabs.offsetHeight + 20;
+        itemSections.forEach(function (section) { if (section.getBoundingClientRect().top <= threshold) current = section; });
+        if (current) markItemSection(current.id);
+        itemScrollQueued = false;
+      });
+    }, { passive: true });
   }
   var errors = document.querySelector('[data-yc-errors]');
   if (errors) errors.focus();

@@ -18,6 +18,7 @@ final class Orders
 {
     public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
     public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
+    public const PREVIOUS = ['paid' => 'pending', 'confirmed' => 'paid', 'shipped' => 'confirmed', 'completed' => 'shipped'];
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
     public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
 
@@ -156,6 +157,56 @@ final class Orders
         return $order;
     }
 
+    /** 관리 화면 전용 메모. 주문 조회의 get() 결과에는 포함하지 않는다. */
+    public function notesFor(int $orderId): array
+    {
+        return $this->store->select('SELECT id, actor, note, created_at, occurred_at, after_history_id FROM ' . $this->store->table('yc_order_notes')
+            . ' WHERE order_id = ? ORDER BY id', [$orderId]);
+    }
+
+    public function addNote(int $orderId, mixed $value, string $actor, mixed $afterHistoryId = null): int
+    {
+        $note = self::noteText($value);
+        $order = $this->get($orderId);
+        $history = $order['history'];
+        if ($history === []) throw DomainError::validation(['after_history_id' => '메모를 넣을 처리 이력을 찾을 수 없습니다.']);
+        $anchor = $afterHistoryId === null || $afterHistoryId === ''
+            ? (int) $history[array_key_last($history)]['id'] : Input::filterId($afterHistoryId);
+        if ($anchor === null || !in_array($anchor, array_map(static fn (array $event): int => (int) $event['id'], $history), true)) {
+            throw DomainError::validation(['after_history_id' => '메모를 넣을 처리 이력을 다시 선택해 주세요.']);
+        }
+        return $this->store->insert('yc_order_notes', ['order_id' => $orderId, 'actor' => mb_substr($actor, 0, 100),
+            'note' => $note, 'created_at' => Clock::timestamp(), 'after_history_id' => $anchor]);
+    }
+
+    public function editNote(int $orderId, int $noteId, mixed $value): void
+    {
+        $note = self::noteText($value);
+        $changed = $this->store->execute('UPDATE ' . $this->store->table('yc_order_notes') . ' SET note = ? WHERE id = ? AND order_id = ?',
+            [$note, $noteId, $orderId]);
+        if ($changed === 0 && $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_order_notes')
+            . ' WHERE id = ? AND order_id = ?', [$noteId, $orderId]) === null) {
+            throw DomainError::notFound('처리 메모를 찾을 수 없습니다.');
+        }
+    }
+
+    public function deleteNote(int $orderId, int $noteId): int
+    {
+        $note = $this->store->selectOne('SELECT after_history_id FROM ' . $this->store->table('yc_order_notes')
+            . ' WHERE id = ? AND order_id = ?', [$noteId, $orderId]);
+        if ($note === null) throw DomainError::notFound('처리 메모를 찾을 수 없습니다.');
+        if ($this->store->execute('DELETE FROM ' . $this->store->table('yc_order_notes') . ' WHERE id = ? AND order_id = ?',
+            [$noteId, $orderId]) !== 1) throw DomainError::notFound('처리 메모를 찾을 수 없습니다.');
+        return (int) $note['after_history_id'];
+    }
+
+    private static function noteText(mixed $value): string
+    {
+        $note = Input::text($value, 'note', 500, false);
+        if (preg_match('/[\r\n]/', $note)) throw DomainError::validation(['note' => '처리 메모는 한 줄로 입력해 주세요.']);
+        return $note;
+    }
+
     public function owned(string $number, int $userId): array
     {
         $order = $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE number = ? AND user_id = ?', [$number, $userId]);
@@ -197,8 +248,20 @@ final class Orders
         if ($admin && $search !== '') {
             $where[] = '(number LIKE ? ESCAPE \'!\' OR buyer_name LIKE ? ESCAPE \'!\')';
             $like = '%' . \GnuCms\Shop\Catalog\Products::like($search) . '%'; array_push($params, $like, $like);
+        } elseif ($search !== '') {
+            $terms = ['number LIKE ? ESCAPE \'!\'', 'buyer_name LIKE ? ESCAPE \'!\'', 'phone LIKE ? ESCAPE \'!\'', 'recipient LIKE ? ESCAPE \'!\'',
+                'EXISTS (SELECT 1 FROM ' . $this->store->table('yc_order_items') . ' i WHERE i.order_id = o.id'
+                    . " AND i.kind <> 'extra' AND i.product_name LIKE ? ESCAPE '!')"];
+            $like = '%' . \GnuCms\Shop\Catalog\Products::like($search) . '%';
+            array_push($params, $like, $like, $like, $like, $like);
+            $phoneDigits = preg_replace('/\D/', '', $search) ?? '';
+            if (strlen($phoneDigits) >= 3) {
+                $terms[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', ''), ')', ''), '+', '') LIKE ? ESCAPE '!'";
+                $params[] = '%' . $phoneDigits . '%';
+            }
+            $where[] = '(' . implode(' OR ', $terms) . ')';
         }
-        $sql = ' FROM ' . $this->store->table('yc_orders') . ($where === [] ? '' : ' WHERE ' . implode(' AND ', $where));
+        $sql = ' FROM ' . $this->store->table('yc_orders') . ' o' . ($where === [] ? '' : ' WHERE ' . implode(' AND ', $where));
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c' . $sql, $params)['c'];
         $page = max(1, min(100000, $page));
         $items = $this->store->select('SELECT *' . $sql . ' ORDER BY id DESC LIMIT 20 OFFSET ' . (($page - 1) * 20), $params);
@@ -241,6 +304,7 @@ final class Orders
             }
         }
         $carrier = $to === 'shipped' ? Input::text($input['carrier'] ?? '', 'carrier', 100, false) : null;
+        if ($carrier === Settings::OTHER_CARRIER) $carrier = Input::text($input['carrier_other'] ?? '', 'carrier_other', 100, false);
         $tracking = $to === 'shipped' ? Input::text($input['tracking_number'] ?? '', 'tracking_number', 100, false) : null;
         $note = $to === 'cancelled' && $customer
             ? CancellationReason::note($input)
@@ -266,6 +330,110 @@ final class Orders
                 }
             }
             $this->history($id, $to, $actor, $note);
+        });
+        return $this->get($id);
+    }
+
+    /** 고객 취소는 결제 완료까지만 허용한다. 결제사 취소와 재고 복원을 같은 주문 잠금 아래에서 처리한다. */
+    public function cancelForCustomer(int $id, int $userId, array $input, Payments $payments): array
+    {
+        $note = CancellationReason::note($input);
+        return $this->store->transaction(function () use ($id, $userId, $input, $payments, $note): array {
+            $row = $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders')
+                . ' WHERE id = ? AND user_id = ? FOR UPDATE', [$id, $userId]);
+            if ($row === null) throw DomainError::notFound('주문을 찾을 수 없습니다.');
+            $order = $this->get($id);
+            if (!in_array($order['status'], ['pending', 'paid'], true)) {
+                throw DomainError::validation(['status' => '상품 준비가 시작된 주문은 직접 취소할 수 없습니다. 상점에 문의해 주세요.']);
+            }
+            if ($order['status'] === 'pending') {
+                // 승인 요청이 진행 중이면 취소 결과보다 결제 결과를 먼저 확인해야 한다.
+                if ($payments->inProgress($order)) {
+                    throw DomainError::validation(['status' => '결제 결과를 확인하는 중입니다. 잠시 후 다시 시도하거나 상점에 문의해 주세요.']);
+                }
+                return $this->transition($id, 'pending', 'cancelled', 'user:' . $userId, $input, true);
+            }
+            if ($payments->isPgOrder($order)) {
+                if ((int) $order['paid_amount'] < 1) throw DomainError::validation(['payment' => '결제 금액을 확인할 수 없습니다. 상점에 문의해 주세요.']);
+                $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
+                if ($remaining > 0) {
+                    $key = hash('sha256', 'customer-cancel:' . $order['checkout_key']);
+                    $order = $payments->refund($order, $remaining, '고객 요청 주문 취소', $key, 'user:' . $userId);
+                }
+                if ((int) $order['refunded_amount'] < (int) $order['paid_amount']) {
+                    throw DomainError::validation(['refund' => '결제 취소가 완료되지 않았습니다. 상점에 문의해 주세요.']);
+                }
+            }
+            // 무통장 입금은 주문만 먼저 취소한다. 실제 송금 반환과 환불 기록은 관리자가 처리한다.
+            return $this->transition($id, 'paid', 'cancelled', 'user:' . $userId, ['note' => $note]);
+        });
+    }
+
+    /** 잘못 기록한 상태만 한 단계 되돌린다. PG 승인과 주문 취소는 이 작업으로 되돌리지 않는다. */
+    public static function previousStatus(array $order): ?string
+    {
+        $status = (string) ($order['status'] ?? '');
+        if ($status === 'paid' && ((string) ($order['payment_id'] ?? '') !== ''
+            || in_array($order['payment_method'] ?? '', self::PG_METHODS, true)
+            || (int) ($order['refunded_amount'] ?? 0) > 0)) return null;
+        return self::PREVIOUS[$status] ?? null;
+    }
+
+    /** 처리 메모·환불 기록처럼 같은 상태로 남긴 이력은 건너뛰고 최신 상태 변경을 찾는다. */
+    public static function activeStatusHistoryId(array $order): ?int
+    {
+        $lastStatus = null;
+        $historyId = null;
+        foreach ($order['history'] as $event) {
+            if ($event['status'] === $lastStatus) continue;
+            $lastStatus = $event['status'];
+            $historyId = (int) $event['id'];
+        }
+        return $lastStatus === $order['status'] ? $historyId : null;
+    }
+
+    public function undoStatus(int $id, int $historyId, string $from, string $actor, mixed $reason): array
+    {
+        $note = Input::text($reason, 'reason', 400, false);
+        $this->store->transaction(function () use ($id, $historyId, $from, $actor, $note): void {
+            $order = $this->get($id);
+            if ($order['status'] !== $from) throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
+            if (self::activeStatusHistoryId($order) !== $historyId) {
+                throw DomainError::validation(['status' => '되돌릴 상태 이력이 변경되었습니다. 화면을 새로고침해 주세요.']);
+            }
+            $to = self::previousStatus($order);
+            if ($to === null) throw DomainError::validation(['status' => '이 상태는 직접 되돌릴 수 없습니다. 결제·취소 내역을 확인해 주세요.']);
+
+            $changes = ['status' => $to, 'updated_at' => Clock::timestamp()];
+            if ($from === 'shipped') $changes += ['carrier' => '', 'tracking_number' => ''];
+            if ($from === 'paid') {
+                $detail = $order['payment'];
+                unset($detail['confirmed_by']);
+                $changes += ['paid_at' => 0, 'paid_amount' => 0,
+                    'payment_detail' => $detail === [] ? '' : json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+                if ($order['payment_method'] === 'manual_transfer') {
+                    $hours = (int) $this->settings->all()['payment']['deadline_hours']['manual_transfer'];
+                    $changes['pay_by'] = Clock::timestamp() + max(1, $hours) * 3600;
+                }
+            }
+            $columns = implode(', ', array_map(static fn (string $column): string => $column . ' = ?', array_keys($changes)));
+            if ($this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET ' . $columns . ' WHERE id = ? AND status = ?',
+                [...array_values($changes), $id, $from]) !== 1) {
+                throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
+            }
+
+            if ($from === 'completed') {
+                $items = array_values(array_filter($order['items'], static fn (array $item): bool => $item['kind'] !== 'extra'));
+                usort($items, static fn (array $a, array $b): int => (int) $a['product_id'] <=> (int) $b['product_id']);
+                foreach ($items as $item) {
+                    if ($this->store->execute('UPDATE ' . $this->store->table('yc_products')
+                        . ' SET sold_qty = sold_qty - ?, version = version + 1 WHERE id = ? AND sold_qty >= ?',
+                        [(int) $item['quantity'], (int) $item['product_id'], (int) $item['quantity']]) !== 1) {
+                        throw DomainError::validation(['status' => '판매수량을 되돌릴 수 없습니다. 상품 상태를 확인해 주세요.']);
+                    }
+                }
+            }
+            $this->history($id, $to, $actor, '상태 되돌림: ' . self::STATUSES[$from] . ' → ' . self::STATUSES[$to] . ' · ' . $note);
         });
         return $this->get($id);
     }

@@ -66,7 +66,7 @@ final class KcpGateway extends DirectGateway
 
     protected function approve(array $config, array $order, array $callback): array
     {
-        $body = ['tran_cd' => '00100000', 'kcp_cert_info' => self::certificate($config),
+        $body = ['site_cd' => $config['site_cd'], 'tran_cd' => '00100000', 'kcp_cert_info' => self::certificate($config),
             'enc_data' => $callback['enc_data'], 'enc_info' => $callback['enc_info'],
             'ordr_mony' => (string) $order['total'], 'ordr_no' => $order['id'],
             'pay_type' => self::METHOD[$order['method']]['pay_type']];
@@ -152,7 +152,15 @@ final class KcpGateway extends DirectGateway
 
     private static function certificate(array $config): string
     {
-        return preg_replace('/\s+/', '', $config['certificate']) ?? '';
+        $certificate = trim($config['certificate']);
+        if (!preg_match('/\A-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+\/=\s]+?)\s*-----END CERTIFICATE-----\z/', $certificate, $matches)) {
+            throw DomainError::serviceUnavailable('KCP 서비스 인증서 형식을 확인해 주세요.');
+        }
+        $body = preg_replace('/\s+/', '', $matches[1]);
+        if ($body === null || $body === '' || base64_decode($body, true) === false) {
+            throw DomainError::serviceUnavailable('KCP 서비스 인증서 형식을 확인해 주세요.');
+        }
+        return '-----BEGIN CERTIFICATE-----' . $body . '-----END CERTIFICATE-----';
     }
 
     private static function sign(array $config, string $message): string

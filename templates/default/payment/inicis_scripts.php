@@ -40,7 +40,9 @@
             response.appendChild(field);
         });
         document.body.appendChild(response);
-        response.submit();
+        const progress = document.getElementById('yc-pay-progress');
+        if (progress) progress.hidden = false;
+        requestAnimationFrame(() => requestAnimationFrame(() => response.submit()));
     };
     const open = () => {
         if (opening) return;

@@ -17,7 +17,7 @@ use GnuCms\Error\DomainError;
 final class Schema
 {
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
-        'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history'];
+        'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history', 'yc_order_notes', 'yc_product_feedback'];
 
     public const ORDER_COLUMNS = ['default_address' => 'SMALLINT NOT NULL DEFAULT 0'];
 
@@ -59,6 +59,15 @@ final class Schema
                 unit_price BIGINT NOT NULL, quantity INTEGER NOT NULL, total BIGINT NOT NULL',
             'yc_order_history' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, status VARCHAR(20) NOT NULL,
                 actor VARCHAR(100) NOT NULL, note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL',
+            'yc_order_notes' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, actor VARCHAR(100) NOT NULL,
+                note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL, occurred_at BIGINT NOT NULL DEFAULT 0,
+                after_history_id BIGINT NOT NULL DEFAULT 0',
+            // 후기만 review_user_id 를 채운다. NULL 인 문의는 여러 건을 허용하고 UNIQUE 인덱스로 후기 중복을 막는다.
+            'yc_product_feedback' => 'id {AUTO_PK}, product_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
+                review_user_id BIGINT NULL, kind VARCHAR(10) NOT NULL, author VARCHAR(100) NOT NULL,
+                title VARCHAR(150) NOT NULL, content {TEXT} NOT NULL, rating SMALLINT NOT NULL DEFAULT 0,
+                is_private SMALLINT NOT NULL DEFAULT 0, reply {TEXT} NOT NULL, reply_actor VARCHAR(100) NOT NULL DEFAULT \'\',
+                replied_at BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
             'yc_settings' => 'id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL',
             'yc_categories' => self::categoriesDefinition($bin),
             'yc_products' => 'id {AUTO_PK}, code VARCHAR(20)' . $bin . ' NOT NULL UNIQUE, slug VARCHAR(200)' . $bin . ' NOT NULL UNIQUE, category_id BIGINT NOT NULL,
@@ -95,6 +104,8 @@ final class Schema
             $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
         }
         foreach (self::PAYMENT_COLUMNS + self::ORDER_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
+        self::addColumn($db, 'yc_order_notes', 'occurred_at', 'BIGINT NOT NULL DEFAULT 0');
+        self::addColumn($db, 'yc_order_notes', 'after_history_id', 'BIGINT NOT NULL DEFAULT 0');
         self::migrateMemberOrders($db);
         $db->execute("UPDATE " . $db->table('yc_orders') . " SET payment_provider = 'inicis' WHERE payment_provider = '' AND payment_id <> '' AND payment_method IN ('card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile')");
         // 28판 초안에서 잠깐 있었던 칸. 편집기 사진은 categories/<id> 폴더로 구분하므로 필요 없다.
@@ -115,13 +126,21 @@ final class Schema
             'yc_order_payment' => ['yc_orders', 'payment_id'],
             'yc_oi_order' => ['yc_order_items', 'order_id'],
             'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
-            'yc_history_order' => ['yc_order_history', 'order_id']];
+            'yc_history_order' => ['yc_order_history', 'order_id'],
+            'yc_notes_order' => ['yc_order_notes', 'order_id'],
+            'yc_feedback_product' => ['yc_product_feedback', 'product_id'],
+            'yc_feedback_user' => ['yc_product_feedback', 'user_id'],
+            'yc_feedback_created' => ['yc_product_feedback', 'created_at']];
         foreach ($indexes as $index => [$table, $column]) {
             if (!self::indexExists($db, $table, $index)) $db->execute('CREATE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
         }
-        $uniqueIndexes = ['yc_cat_slug' => ['yc_categories', 'slug'], 'yc_cat_legacy_code' => ['yc_categories', 'legacy_code']];
-        foreach ($uniqueIndexes as $index => [$table, $column]) {
-            if (!self::indexExists($db, $table, $index)) $db->execute('CREATE UNIQUE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
+        $uniqueIndexes = ['yc_cat_slug' => ['yc_categories', ['slug']], 'yc_cat_legacy_code' => ['yc_categories', ['legacy_code']],
+            'yc_feedback_review' => ['yc_product_feedback', ['product_id', 'review_user_id']]];
+        foreach ($uniqueIndexes as $index => [$table, $columns]) {
+            if (!self::indexExists($db, $table, $index)) {
+                $db->execute('CREATE UNIQUE INDEX ' . $db->index($index) . ' ON ' . $db->table($table)
+                    . ' (' . implode(', ', array_map($db->q(...), $columns)) . ')');
+            }
         }
     }
 

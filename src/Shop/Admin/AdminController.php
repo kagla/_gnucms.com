@@ -10,6 +10,8 @@ use GnuCms\Payment\Journal;
 use GnuCms\Payment\ProviderConfig;
 use GnuCms\Payment\KcpLegacyConfig;
 use GnuCms\Payment\Settings as PaymentSettings;
+use GnuCms\Payment\TossProvider;
+use GnuCms\Payment\NicepayProvider;
 use GnuCms\Shop\HomeBanner;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
@@ -25,7 +27,32 @@ final class AdminController extends AdminBase
         if ($page === 'dashboard') return $this->dashboard($request, $response, $data);
         if ($page === 'settings') return $this->settings($request, $response, $data);
         if ($page === 'payment-failures') return $this->paymentFailures($request, $response, $data);
+        if ($page === 'feedback') return $this->feedback($request, $response, $data);
         throw DomainError::notFound('페이지를 찾을 수 없습니다.');
+    }
+
+    private function feedback(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
+    {
+        $kind = is_string($data['input']['kind'] ?? null) && in_array($data['input']['kind'], ['review', 'inquiry'], true)
+            ? $data['input']['kind'] : '';
+        if ($request->getMethod() === 'POST') {
+            try {
+                $id = Input::id($data['input']['id'] ?? null);
+                $action = $data['input']['action'] ?? '';
+                if ($action === 'reply') $this->service->feedback->reply($id, $data['input']['reply'] ?? '', $data['actor']);
+                elseif ($action === 'delete') $this->service->feedback->delete($id);
+                else throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
+                return $this->redirect($response, $data['admin_url'] . '/feedback?' . http_build_query(['kind' => $kind, 'saved' => '1']));
+            } catch (DomainError $error) {
+                if ($error->status() === 404) throw $error;
+                $data['errors'] = $error->details() ?: [$error->getMessage()];
+                $response = $response->withStatus($error->status());
+            }
+        }
+        if (($data['input']['saved'] ?? '') === '1') $data['notice'] = '처리했습니다.';
+        $data['kind'] = $kind;
+        $data['list'] = $this->service->feedback->adminPage($kind, $this->page($data['input']['page'] ?? ''));
+        return $this->render($request, $response, 'feedback', $data);
     }
 
     private function paymentFailures(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
@@ -71,12 +98,17 @@ final class AdminController extends AdminBase
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
         $data['payment_providers'] = $this->service->app->paymentProviders()->labels();
+        $data['payment_manuals'] = [];
+        foreach (array_keys($data['payment_providers']) as $providerId) {
+            $data['payment_manuals'][$providerId] = $this->service->app->paymentProviders()->get($providerId)->manual();
+        }
         $inicisPayment = $this->service->app->paymentSettings('inicis');
         $data['inicis_environments'] = ['test' => $inicisPayment->summary('test'), 'live' => $inicisPayment->summary('live')];
         $data['inicis_fields'] = $inicisPayment->definition()->fields();
         $kcpLegacyPayment = $this->service->app->paymentSettings('kcp_legacy');
         $data['kcp_legacy_environments'] = ['test' => $kcpLegacyPayment->summary('test'), 'live' => $kcpLegacyPayment->summary('live')];
         $data['kcp_legacy_fields'] = $kcpLegacyPayment->definition()->fields();
+        $data['kcp_legacy_module_available'] = \GnuCms\Payment\KcpLegacyGateway::moduleAvailable($this->service->app->storageDir());
         $kcpPayment = $this->service->app->paymentSettings('kcp');
         $data['kcp_environments'] = ['test' => $kcpPayment->summary('test'), 'live' => $kcpPayment->summary('live')];
         $data['kcp_fields'] = $kcpPayment->definition()->fields();
@@ -86,6 +118,7 @@ final class AdminController extends AdminBase
             $data[$providerId . '_fields'] = $providerSettings->definition()->fields();
         }
         $data['types'] = Settings::TYPE_LABELS;
+        $data['carriers'] = Settings::carriers();
         $data['categories'] = $this->service->categories->optionDetails();
         $current = $this->service->settings->all();
         $data['banner_modes'] = HomeBanner::MODES;
@@ -101,9 +134,14 @@ final class AdminController extends AdminBase
                 $environment = $data['input']['payment_environment'] ?? $current['payment']['environment'];
                 if (!is_string($environment)) throw DomainError::validation(['payment_environment' => '결제 환경을 확인해 주세요.']);
                 PaymentSettings::environment($environment);
-                if ($environment === 'test' && in_array($providerId, ['inicis', 'kcp_legacy'], true)) {
-                    $testCredentials = $providerId === 'inicis'
-                        ? ProviderConfig::testCredentials() : KcpLegacyConfig::testCredentials();
+                if ($environment === 'test' && in_array($providerId, ['inicis', 'kcp_legacy', 'kcp', 'toss', 'nicepay'], true)) {
+                    $testCredentials = match ($providerId) {
+                        'inicis' => ProviderConfig::testCredentials(),
+                        'kcp_legacy' => KcpLegacyConfig::testCredentials(),
+                        'kcp' => \GnuCms\Payment\KcpConfig::testCredentials(),
+                        'toss' => TossProvider::testCredentials(),
+                        'nicepay' => NicepayProvider::testCredentials(),
+                    };
                     $savedCredentials = $paymentSettings->current('test') ?? [];
                     if (array_diff_assoc($testCredentials, $savedCredentials) !== []) $credentialsToSave = $testCredentials;
                 } else {
@@ -166,6 +204,7 @@ final class AdminController extends AdminBase
         $flat['shipping_content'] = $settings['shipping']['content'];
         $flat['shipping_fee'] = (string) $settings['shipping']['fee'];
         $flat['shipping_free_minimum'] = (string) $settings['shipping']['free_minimum'];
+        $flat['shipping_default_carrier'] = (string) $settings['shipping']['default_carrier'];
         $flat['order_notice'] = $settings['order_notice'];
         $flat['exchange_content'] = $settings['exchange']['content'];
         $flat['payment_provider'] = $settings['payment']['provider'];

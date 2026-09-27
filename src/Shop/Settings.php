@@ -14,8 +14,53 @@ final class Settings
     /** 묶음을 채우는 기준: 규칙(auto) 또는 관리자가 고른 분류(category). */
     public const SOURCES = ['auto', 'category'];
     public const MAX_MAIN_CATEGORIES = 10;
+    public const OTHER_CARRIER = '__other__';
 
     public function __construct(private Store $store, private HtmlSanitizer $sanitizer, private \GnuCms\Payment\ProviderRegistry $providers = new \GnuCms\Payment\ProviderRegistry()) {}
+
+    /** 배포 기본 목록을 쓰되, 상점별 목록이 있으면 그 JSON 파일을 읽는다. */
+    public static function carriers(): array
+    {
+        $directory = dirname(__DIR__, 2) . '/config/';
+        $custom = $directory . 'shop_carriers.json';
+        $path = is_file($custom) ? $custom : $directory . 'shop_carriers.sample.json';
+        $contents = @file_get_contents($path);
+        if ($contents === false) throw DomainError::serviceUnavailable('택배사 목록 파일을 읽을 수 없습니다.');
+        try {
+            $names = json_decode($contents, true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw DomainError::serviceUnavailable('택배사 목록 JSON 형식을 확인해 주세요.');
+        }
+        if (!is_array($names) || !array_is_list($names) || $names === []) {
+            throw DomainError::serviceUnavailable('택배사 목록은 이름이 하나 이상 들어 있는 JSON 배열이어야 합니다.');
+        }
+        $carriers = [];
+        foreach ($names as $name) {
+            if (!is_string($name) || $name === '' || trim($name) !== $name || mb_strlen($name) > 100
+                || $name === self::OTHER_CARRIER || preg_match('/[\x00-\x1f\x7f]/u', $name) || isset($carriers[$name])) {
+                throw DomainError::serviceUnavailable('택배사 목록의 이름을 확인해 주세요.');
+            }
+            $carriers[$name] = $name;
+        }
+        return $carriers;
+    }
+
+    /** 운송장 번호가 있는 기본 택배사는 공식 배송조회 화면으로 연결한다. */
+    public static function trackingUrl(string $carrier, string $trackingNumber): ?string
+    {
+        $number = preg_replace('/[\s-]+/u', '', trim($trackingNumber));
+        if ($number === null || $number === '') return null;
+        $templates = [
+            'CJ대한통운' => 'https://www.cjlogistics.com/ko/tool/parcel/newTracking?gnbInvcNo={number}',
+            '한진택배' => 'https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnum={number}',
+            '롯데택배' => 'https://www.lotteglogis.com/home/reservation/tracking/index',
+            '우체국택배' => 'https://trace.epost.go.kr/xtts/tt/epost/mobile/Trace.jsp',
+            '로젠택배' => 'https://www.ilogen.com/web/personal/trace/{number}',
+            '경동택배' => 'https://kdexp.com/service/delivery/etc/delivery.do?barcode={number}',
+        ];
+        $template = $templates[$carrier] ?? null;
+        return $template === null ? null : str_replace('{number}', rawurlencode($number), $template);
+    }
 
     public static function defaults(): array
     {
@@ -36,7 +81,7 @@ final class Settings
             'related' => ['use' => true, 'columns' => 4, 'image_width' => 100, 'image_height' => 0],
             'detail' => ['image_width' => 400, 'image_height' => 0],
             'show_tax' => false,
-            'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0],
+            'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0, 'default_carrier' => ''],
             'order_notice' => '주문 접수 후 판매자가 결제 및 배송을 안내합니다. 이 화면에서는 결제되지 않습니다.',
             'exchange' => ['content' => ''],
             'payment' => ['provider' => 'inicis', 'environment' => 'live',
@@ -67,6 +112,7 @@ final class Settings
             'card' => (int) ($all['payment']['deadline_hours']['card'] ?? 1),
             'manual_transfer' => (int) ($all['payment']['deadline_hours']['manual_transfer'] ?? 72),
         ];
+        if (!is_string($all['shipping']['default_carrier'] ?? null)) $all['shipping']['default_carrier'] = '';
         return $all;
     }
 
@@ -157,6 +203,14 @@ final class Settings
         foreach (['fee', 'free_minimum'] as $key) {
             $settings['shipping'][$key] = array_key_exists('shipping_' . $key, $input) ? $int('shipping_' . $key, 0, 9999999) : $previous['shipping'][$key];
         }
+        $defaultCarrier = array_key_exists('shipping_default_carrier', $input)
+            ? Input::text($input['shipping_default_carrier'], 'shipping_default_carrier', 100)
+            : $previous['shipping']['default_carrier'];
+        if ($defaultCarrier !== '' && !isset(self::carriers()[$defaultCarrier])) {
+            $errors['shipping_default_carrier'] = '기본 택배사를 목록에서 선택해 주세요.';
+            $defaultCarrier = '';
+        }
+        $settings['shipping']['default_carrier'] = $defaultCarrier;
         $settings['order_notice'] = Input::text($input['order_notice'] ?? $previous['order_notice'], 'order_notice', 2000, false);
         $settings['visible'] = array_key_exists('visible_form', $input) ? $bool('visible') : $previous['visible'];
         // 결제: 폼에 없는 값은 이전 값을 지킨다(다른 테마의 옛 폼과 같은 규칙).

@@ -23,7 +23,7 @@ final class NicepayGateway extends DirectGateway
             'buyerEmail' => mb_strcut($customer['email'], 0, 60, 'UTF-8'),
             'useEscrow' => $order['method'] === 'bank_transfer' && ($config['mode'] ?? 'general') === 'escrow'];
         if ($order['method'] === 'mobile') $fields['isDigital'] = false;
-        return ['kind' => 'nicepay', 'script' => 'https://' . ($config['environment'] === 'test' ? 'sandbox-pay' : 'pay') . '.nicepay.co.kr/v1/js/',
+        return ['kind' => 'nicepay', 'script' => 'https://pay.nicepay.co.kr/v1/js/',
             'fields' => $fields];
     }
 

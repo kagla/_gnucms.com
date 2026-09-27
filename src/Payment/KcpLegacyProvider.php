@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Payment;
 
-use GnuCms\Error\DomainError;
-
-/** 기존 KCP pp_cli 방식의 자격정보만 등록한다. 결제 실행은 별도 연동 단계다. */
+/** NHN KCP 구형 표준결제 브라우저 인증과 pp_cli TCP/IP 서버 승인을 연결한다. */
 final class KcpLegacyProvider implements Provider
 {
     public function id(): string { return 'kcp_legacy'; }
@@ -28,14 +26,8 @@ final class KcpLegacyProvider implements Provider
         return $revision;
     }
 
-    public function methods(): array { return []; }
+    public function methods(): array { return ['card']; }
     public function supportsPartialRefund(): bool { return false; }
-    public function checkoutTemplate(): string
-    {
-        throw DomainError::serviceUnavailable('KCP 기존 방식의 결제창은 아직 연결되지 않았습니다.');
-    }
-    public function gateway(Settings $settings): Gateway
-    {
-        throw DomainError::serviceUnavailable('KCP 기존 방식의 결제 실행은 아직 연결되지 않았습니다.');
-    }
+    public function checkoutTemplate(): string { return 'payment/kcp_legacy'; }
+    public function gateway(Settings $settings): Gateway { return new KcpLegacyGateway($settings); }
 }

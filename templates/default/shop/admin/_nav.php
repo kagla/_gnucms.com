@@ -1,5 +1,5 @@
 <?php
-$tabs = ['dashboard' => ['', '운영 현황', 'dashboard'], 'orders' => ['/orders', '주문', 'document'], 'products' => ['/products', '상품', 'tag'], 'categories' => ['/categories', '분류', 'grid'], 'settings' => ['/settings', '설정', 'cog']];
+$tabs = ['dashboard' => ['', '운영 현황', 'dashboard'], 'orders' => ['/orders', '주문', 'document'], 'products' => ['/products', '상품', 'tag'], 'feedback' => ['/feedback', '후기·문의', 'comment'], 'categories' => ['/categories', '분류', 'grid'], 'settings' => ['/settings', '설정', 'cog']];
 $current = str_starts_with($page, 'orders') || $page === 'payment-failures' ? 'orders' : (str_starts_with($page, 'categories') ? 'categories' : (str_starts_with($page, 'products') ? 'products' : $page));
 ?>
 <div class="extension-toolbar yc-admin-toolbar">

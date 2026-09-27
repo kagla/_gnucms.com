@@ -198,11 +198,20 @@ final class CheckoutIntents
             $this->cancelUnplaced($journal, $gateway, $gw, $intent, '이미 다른 결제로 접수된 주문서');
             throw DomainError::validation(['payment' => '이미 접수된 주문서입니다. 중복 결제는 취소했습니다.']);
         }
-        if ($waitingForDeposit) return $order;
-        return $this->orders->markPaid((int) $order['id'], 'pg:' . $payment['provider'], (int) $intent['total'],
-            ['tid' => (string) $verified['transaction_id'], 'label' => Payments::METHODS[$payment['method']]]
-                + (isset($verified['card']) ? ['card' => $verified['card']] : []) + ($verified['detail'] ?? []),
-            (int) $verified['paid_at'], '결제가 승인되었습니다.');
+        if (!$waitingForDeposit) {
+            $order = $this->orders->markPaid((int) $order['id'], 'pg:' . $payment['provider'], (int) $intent['total'],
+                ['tid' => (string) $verified['transaction_id'], 'label' => Payments::METHODS[$payment['method']]]
+                    + (isset($verified['card']) ? ['card' => $verified['card']] : []) + ($verified['detail'] ?? []),
+                (int) $verified['paid_at'], '결제가 승인되었습니다.');
+        }
+        $journal->change($payment['id'], static function (array $state): array {
+            if (in_array($state['intent']['status'] ?? '', ['ready', 'approval_review'], true)) {
+                $state['intent']['status'] = 'submitted';
+                unset($state['intent']['failure_code'], $state['intent']['failure_message'], $state['intent']['failure_at']);
+            }
+            return $state;
+        });
+        return $order;
     }
 
     /** 승인됐지만 확인을 마치지 못한 결제를 새 결제 없이 조회하고 주문으로 접수한다. */

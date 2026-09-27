@@ -49,6 +49,7 @@ final class Routes
         foreach (['list', 'type', 'search', 'item', 'image', 'banner-image'] as $page) {
             $map('GET', '/' . $page, static fn ($request, $response) => $shop->handle($page, $request, $response));
         }
+        $map('POST', '/item/feedback', static fn ($request, $response) => $shop->handle('feedback', $request, $response));
         $map('GET', '/c/{slug}', static fn ($request, $response, array $args) => $shop->handle('category', $request, $response, $args))->setName('shop.category');
         foreach (['cart', 'checkout'] as $page) foreach (['GET', 'POST'] as $method) {
             $map($method, '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
@@ -81,6 +82,9 @@ final class Routes
             }
         }
         $map('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        foreach (['GET', 'POST'] as $method) {
+            $map($method, '/feedback', static fn ($request, $response) => $admin->handle('feedback', $request, $response), true);
+        }
         $map('GET', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true)
             ->setName('admin.shop.payment-failures');
         $map('POST', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true);

@@ -88,6 +88,16 @@ jobs:
           mkdir -p "build/${package}"
           git archive HEAD | tar -x -C "build/${package}"
           cp -a vendor "build/${package}/vendor"
+          kcp_bin="build/${package}/storage/payment/kcp_legacy/bin"
+          kcp_source="https://raw.githubusercontent.com/gnuboard/g7-plugin-sirsoft-pay_nhnkcp/0e02e7dae01523f227688ffefcdda04d9b1d6421/bin"
+          mkdir -p "${kcp_bin}"
+          curl -fsSL --retry 3 -o "${kcp_bin}/pp_cli_x64" "${kcp_source}/pp_cli_x64"
+          curl -fsSL --retry 3 -o "${kcp_bin}/pp_cli_exe.exe" "${kcp_source}/pp_cli_exe.exe"
+          curl -fsSL --retry 3 -o "${kcp_bin}/pub.key" "${kcp_source}/pub.key"
+          test "$(git hash-object "${kcp_bin}/pp_cli_x64")" = 4707f2c1a7d346331c4d135974671d35173557bf
+          test "$(git hash-object "${kcp_bin}/pp_cli_exe.exe")" = cb05cd57a5143d7abe6ac0edcb07ed4f707243bd
+          test "$(git hash-object "${kcp_bin}/pub.key")" = 8b0c51e4ee90e4d84396cebc8720e1b143273605
+          chmod 755 "${kcp_bin}/pp_cli_x64"
           rm -rf "build/${package}/.github" "build/${package}/tests"
           test -f "build/${package}/vendor/autoload.php"
           (cd build && zip -qr "${package}.zip" "${package}")

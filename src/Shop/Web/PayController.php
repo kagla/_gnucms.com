@@ -114,13 +114,17 @@ final class PayController
             // 성공/실패 리다이렉트의 PG 항목만 본문처럼 다룬다. 인증용 order/state는 그대로 둔다.
             $body = array_intersect_key($query, array_flip(['paymentKey', 'orderId', 'amount', 'code', 'message', 'result']));
         }
+        if ($provider === 'kcp_legacy' && is_array($body)) {
+            // pp_cli가 요구하는 결제자 IP는 HTTP 입력을 믿지 않고 연결 주소만 전달한다.
+            $body['_remote_addr'] = $request->getServerParams()['REMOTE_ADDR'] ?? '';
+        }
         $declineCode = !is_array($body) ? null : match ($provider) {
-            'kcp' => $body['res_cd'] ?? null,
+            'kcp', 'kcp_legacy' => $body['res_cd'] ?? null,
             'nicepay' => $body['authResultCode'] ?? null,
             'toss' => ($body['result'] ?? '') === 'fail' ? 'TOSS_FAILED' : null,
             default => $body['P_STATUS'] ?? null,
         };
-        $declineSuccess = in_array($provider, ['kcp', 'nicepay'], true) ? '0000' : '00';
+        $declineSuccess = in_array($provider, ['kcp', 'kcp_legacy', 'nicepay'], true) ? '0000' : '00';
         if ($intent !== null && is_string($declineCode) && $declineCode !== $declineSuccess) {
             $code = $declineCode;
             if (preg_match('/^[A-Za-z0-9_-]{1,16}$/D', $code)) {
@@ -164,6 +168,9 @@ final class PayController
             : '/checkout?flow=' . rawurlencode($intent['flow']) . '&pay=' . $payState
                 . (in_array($payState, ['failed', 'review', 'declined'], true) ? '&reference=' . rawurlencode($intent['payment']['id']) : '')
                 . (in_array($payState, ['failed', 'declined'], true) && $failureCode !== '' ? '&code=' . rawurlencode($failureCode) : '');
+        if ($order !== null && $this->service->payments->isPgOrder($order) && (int) ($order['paid_at'] ?? 0) > 0) {
+            $destination .= '&pay=success';
+        }
         return $response->withStatus(303)->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer')
             ->withHeader('Location', $this->siteUrl() . $this->routePrefix . $destination);
     }

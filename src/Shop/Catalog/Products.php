@@ -301,6 +301,7 @@ final class Products
                 throw DomainError::validation(['product' => '주문 내역이 있는 상품은 삭제할 수 없습니다. 판매 여부를 꺼 주세요.']);
             }
             foreach (['yc_option_groups', 'yc_options', 'yc_product_categories', 'yc_product_images', 'yc_stock_log'] as $table) $this->store->delete($table, 'product_id = ?', [$id]);
+            $this->store->delete('yc_product_feedback', 'product_id = ?', [$id]);
             $this->store->delete('yc_product_relations', 'product_id = ? OR related_id = ?', [$id, $id]);
             $this->store->delete('yc_products', 'id = ?', [$id]);
         });
