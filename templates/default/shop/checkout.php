@@ -41,7 +41,7 @@
 <?php if ($payment_methods !== []): ?>
 <section class="yc-panel" id="yc-payment"><h2>결제 수단</h2><div class="yc-form-stack">
 <?php $picked = $input['payment_method'] ?? array_key_first($payment_methods); foreach ($payment_methods as $key => $label): ?>
-<label class="yc-choice"><input class="radio radio-sm" type="radio" name="payment_method" value="<?= $this->e($key) ?>" required<?= $picked === $key ? ' checked' : '' ?>><span><?= $this->e($label) ?></span><?php if ($key === 'card' && $payment['environment'] === 'test'): ?><span class="yc-test-badge">테스트 결제</span><?php endif ?></label>
+<label class="yc-choice"><input class="radio radio-sm" type="radio" name="payment_method" value="<?= $this->e($key) ?>" required<?= $picked === $key ? ' checked' : '' ?>><span><?= $this->e($key === 'card' ? $label . ' · ' . $payment_provider_label : $label) ?></span><?php if ($key === 'card' && $payment['environment'] === 'test'): ?><span class="yc-test-badge">테스트 결제</span><?php endif ?></label>
 <?php endforeach ?>
 <?php if (isset($payment_methods['manual_transfer'])): ?><div class="yc-manual-transfer" data-yc-manual-transfer<?= $picked === 'manual_transfer' ? '' : ' hidden' ?>><p class="yc-help">무통장입금 계좌: <?= $this->e($payment['manual']['bank'] . ' ' . $payment['manual']['account']) ?> (예금주 <?= $this->e($payment['manual']['holder']) ?>). 접수 후 <?= (int) $payment['deadline_hours']['manual_transfer'] ?>시간 안에 입금해 주세요.</p>
 <label class="yc-field" for="yc-depositor"><span>입금자명 <small class="muted">선택</small></span><input class="input input-bordered" id="yc-depositor" name="depositor" maxlength="100" value="<?= $this->e($input['depositor'] ?? '') ?>"<?= $picked === 'manual_transfer' ? '' : ' disabled' ?>></label></div><?php endif ?>

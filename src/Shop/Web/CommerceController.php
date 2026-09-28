@@ -372,6 +372,7 @@ final class CommerceController
             + ($issued ?? []);
         $_SESSION['yc_checkout'] = array_slice($_SESSION['yc_checkout'], -12, null, true);
         $data += ['flow' => $flow, 'checkout_token' => $token, 'quote' => $quote, 'payment_methods' => $methods, 'payment' => $this->service->settings->all()['payment']];
+        $data['payment_provider_label'] = $this->service->app->paymentProviders()->get($data['payment']['provider'])->label();
         $data['errors'] += $quote['errors'];
         $data['input'] = $this->safeValues($input);
         $data['profile_buyer_name'] = (string) $member['display_name'];

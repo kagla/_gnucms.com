@@ -422,6 +422,7 @@ final class ShopCommerceTest extends WebTestCase
         $this->add();
         $html = $this->body($this->get($this->app, '/shop/checkout'));
         self::assertStringContainsString('name="payment_method" value="card"', $html);
+        self::assertStringContainsString('신용카드 · KG이니시스', $html);
         self::assertStringContainsString('테스트 결제', $html);
         self::assertStringContainsString('name="payment_method" value="manual_transfer"', $html);
         self::assertStringContainsString('국민은행 123-45', $html);
