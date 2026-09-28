@@ -23,6 +23,7 @@ const route = scenario => scenario === 'core-modules' ? '/admin/modules'
         const url = new URL(request.url());
         if (url.pathname.endsWith('/daisyui.css')) return request.respond({status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(root, 'www/vendor/daisyui/daisyui.css'), 'utf8')});
         if (url.pathname.endsWith('/theme.css')) return request.respond({status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(root, 'www/themes/default/theme.css'), 'utf8')});
+        if (url.pathname.endsWith('/phone-format.js')) return request.respond({status: 200, contentType: 'text/javascript', body: fs.readFileSync(path.join(root, 'www/themes/default/phone-format.js'), 'utf8')});
         if (request.method() === 'POST') { posts.push({url: request.url(), data: new URLSearchParams(request.postData())}); return request.respond({status: 200, body: 'submitted'}); }
         return request.respond({status: 200, contentType: 'text/html', body: html});
       });

@@ -14,9 +14,11 @@ abstract class ShopTestCase extends DatabaseTestCase
     protected App $app;
     protected Service $shop;
     protected string $root;
+    private ?int $testMemberId = null;
 
     protected function setupShop(array $config): void
     {
+        $this->testMemberId = null;
         $this->root = sys_get_temp_dir() . '/gnucms-yc-' . bin2hex(random_bytes(8));
         mkdir($this->root, 0700, true);
         $config['prefix'] = 'yc' . bin2hex(random_bytes(3)) . '_';
@@ -24,6 +26,13 @@ abstract class ShopTestCase extends DatabaseTestCase
             'auth' => ['secret' => bin2hex(random_bytes(32))]]);
         (new CoreSchema($this->app->db()))->create();
         $this->shop = new Service($this->app);
+    }
+
+    protected function memberId(): int
+    {
+        return $this->testMemberId ??= $this->app->users()->create(
+            'shop-test-' . bin2hex(random_bytes(8)) . '@example.test', '', '테스트 회원'
+        );
     }
 
     protected function tearDown(): void

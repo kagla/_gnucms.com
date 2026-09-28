@@ -7,7 +7,6 @@ namespace GnuCms\Tests\Payment;
 use GnuCms\App;
 use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
-use GnuCms\Extension\RuntimePermit;
 use GnuCms\Payment\{InicisGateway, Journal, Settings, StreamTransport};
 use GnuCms\Tests\Support\DatabaseTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,9 +30,9 @@ final class GatewayTest extends DatabaseTestCase
         $this->app = new App($appConfig);
         (new Schema($this->app->db()))->create();
         $this->settings = new Settings($this->app, 'inicis');
-        $this->config = Fixtures::config('inicis'); $this->settings->save('test', $this->config); $this->settings->enable('test', true);
+        $this->config = Fixtures::config('inicis'); $this->settings->save('test', $this->config);
         $this->http = new FakeTransport(); $this->gateway = new InicisGateway($this->settings, $this->http);
-        $this->order = ['id' => bin2hex(random_bytes(16)), 'provider' => 'inicis', 'environment' => 'test', 'config_revision' => $this->settings->summary('test')['revision'],
+        $this->order = ['id' => bin2hex(random_bytes(16)), 'provider' => 'inicis', 'method' => 'card', 'environment' => 'test', 'config_revision' => $this->settings->summary('test')['revision'],
             'total' => 13000, 'order_name' => '상품', 'created_at' => time()];
     }
 
@@ -87,13 +86,12 @@ final class GatewayTest extends DatabaseTestCase
         self::assertStringNotContainsString($this->config['api_key'], $raw);
         self::assertArrayNotHasKey('api_key', $this->settings->summary('test'));
         $next = array_replace($this->config, ['api_key' => bin2hex(random_bytes(16)), 'client_ip' => '192.0.2.20']);
-        $this->settings->save('test', $next); self::assertFalse($this->settings->available('test'));
+        $this->settings->save('test', $next); self::assertTrue($this->settings->available('test'));
         self::assertSame($next['api_key'], $this->settings->credentials($revision)['api_key']);
         self::assertSame($next['client_ip'], $this->settings->credentials($revision)['client_ip']);
         self::assertSame($this->config['api_key'], $this->settings->revision($revision)['api_key']);
         $this->rejected(fn () => $this->settings->save('test', ['merchant_id' => 'other00000']));
-        $this->settings->enable('test', true); (new RuntimePermit($this->root))->revokeAll();
-        self::assertFalse($this->settings->available('test'));
+        self::assertTrue($this->settings->available('test'));
         self::assertSame([], $this->http->calls);
     }
 
@@ -106,7 +104,7 @@ final class GatewayTest extends DatabaseTestCase
         self::assertSame('https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', $options['script']);
         self::assertSame('13000', $fields['P_AMT']); self::assertSame('WEB', $fields['P_DEVICE_TYPE']);
         self::assertArrayNotHasKey('P_CLOSE_URL', $fields);
-        self::assertSame(['email' => 'buyer@example.test'], json_decode($fields['P_RESERVED'], true, 4, JSON_THROW_ON_ERROR));
+        self::assertSame(['email' => 'buyer@example.test', 'phonenum' => '01000000000'], json_decode($fields['P_RESERVED'], true, 4, JSON_THROW_ON_ERROR));
         self::assertSame(base64_encode(hash('sha512', '13000' . $this->order['id'] . $fields['P_TIMESTAMP'] . $this->config['hash_key'], true)), $fields['P_CHKFAKE']);
         foreach (['sign_key', 'hash_key', 'api_key'] as $key) self::assertStringNotContainsString($this->config[$key], json_encode($options));
         $mobile = $this->checkout('mobile'); $m = $mobile['fields'];
@@ -269,8 +267,10 @@ final class GatewayTest extends DatabaseTestCase
         self::assertTrue(StreamTransport::allowed('https://fcpaypro.inicis.com/payment/v1/rest/payNetCancel.ini'));
         self::assertFalse(StreamTransport::allowed('http://iniapi.inicis.com/v2/pg/inquiry'));
         self::assertFalse(StreamTransport::allowed('https://iniapi.inicis.com/v2/pg/inquiry', 'GET'));
-        self::assertFalse(StreamTransport::allowed('https://spl.kcp.co.kr/gw/mod/v1/cancel'));
-        self::assertFalse(StreamTransport::allowed('https://api.tosspayments.com/v1/payments/confirm'));
+        self::assertTrue(StreamTransport::allowed('https://spl.kcp.co.kr/gw/mod/v1/cancel'));
+        self::assertTrue(StreamTransport::allowed('https://api.tosspayments.com/v1/payments/confirm'));
+        self::assertFalse(StreamTransport::allowed('https://spl.kcp.co.kr.evil.example/gw/mod/v1/cancel'));
+        self::assertFalse(StreamTransport::allowed('https://api.tosspayments.com.evil.example/v1/payments/confirm'));
         self::assertFalse(StreamTransport::allowed('https://evil.example/iniapi.inicis.com/v2/pg/inquiry'));
     }
 }

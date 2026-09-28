@@ -25,7 +25,7 @@ final class CommerceTest extends ShopTestCase
 
     private function place(array $cart, array $extra = [], ?int $user = null): array
     {
-        return $this->shop->orders->place($cart, $this->buyer($extra), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $user, $this->shop->cart->quote($cart, [], true)['fingerprint']);
+        return $this->shop->orders->place($cart, $this->buyer($extra), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $user ?? $this->memberId(), $this->shop->cart->quote($cart, [], true)['fingerprint']);
     }
 
     private function reject(callable $fn, string $message = ''): void
@@ -64,7 +64,7 @@ final class CommerceTest extends ShopTestCase
     public function testExtraPriceRemainsVisibleWhenRequestedQuantityExceedsStock(array $config): void
     {
         $this->setupShop($config);
-        $product = $this->product(['extras' => [['value1' => '선물 포장', 'price' => '2000', 'stock' => '5']]]);
+        $product = $this->product(['extras' => [['value2' => '선물 포장', 'price' => '2000', 'stock' => '5']]]);
         $extra = (int) $product['options']['extra'][0]['id'];
         $cart = $this->cart($product, 1, ['extras' => [$extra => 5]]);
         $key = $product['id'] . ':' . $extra;
@@ -124,7 +124,7 @@ final class CommerceTest extends ShopTestCase
         self::assertSame(1, (int) $this->shop->store->get('yc_options', $s)['stock']);
         self::assertSame(3, (int) $this->shop->store->get('yc_options', $m)['stock']);
         self::assertSame(3, (int) $this->shop->store->get('yc_options', $extra)['stock']);
-        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true);
         self::assertSame(3, (int) $this->shop->store->get('yc_options', $s)['stock']);
         self::assertSame(4, (int) $this->shop->store->get('yc_options', $m)['stock']);
     }
@@ -136,23 +136,22 @@ final class CommerceTest extends ShopTestCase
         $product = $this->product(); $cart = $this->cart($product, 2);
         $key = bin2hex(random_bytes(32)); $owner = bin2hex(random_bytes(32)); $buyer = $this->buyer();
         $fingerprint = $this->shop->cart->quote($cart, [], true)['fingerprint'];
-        $first = $this->shop->orders->place($cart, $buyer, $key, $owner, null, $fingerprint);
-        $again = $this->shop->orders->place([], [], $key, $owner, null, $fingerprint);
+        $member = $this->memberId();
+        $first = $this->shop->orders->place($cart, $buyer, $key, $owner, $member, $fingerprint);
+        $again = $this->shop->orders->place([], [], $key, $owner, $member, $fingerprint);
         self::assertSame($first['id'], $again['id']);
         self::assertSame(3, (int) $this->shop->products->get((int) $product['id'])['stock']);
-        self::assertNotSame($buyer['password'], $first['guest_password']);
-        self::assertTrue(password_verify($buyer['password'], $first['guest_password']));
+        self::assertSame($member, (int) $first['user_id']);
         $this->shop->store->update('yc_products', (int) $product['id'], ['name' => '변경된 상품명', 'price' => 20000]);
         self::assertSame('기본 상품', $this->shop->orders->get((int) $first['id'])['items'][0]['product_name']);
         self::assertSame(20000, (int) $first['total']);
-        $this->reject(fn () => $this->shop->orders->owned($first['number'], null, []));
-        $this->reject(fn () => $this->shop->orders->owned($first['number'], 100, []));
-        self::assertSame($first['id'], $this->shop->orders->owned($first['number'], null, [(int) $first['id']])['id']);
+        $this->reject(fn () => $this->shop->orders->owned($first['number'], $member + 1));
+        self::assertSame($first['id'], $this->shop->orders->owned($first['number'], $member)['id']);
         $this->reject(fn () => $this->shop->products->delete((int) $product['id']), '주문 내역');
-        $cancelled = $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'guest', [], true);
+        $cancelled = $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true);
         self::assertSame('cancelled', $cancelled['status']);
         self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
-        $this->reject(fn () => $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'guest', [], true), '변경');
+        $this->reject(fn () => $this->shop->orders->transition((int) $first['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true), '변경');
         self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
         self::assertSame(2, count($cancelled['history']));
     }
@@ -167,7 +166,7 @@ final class CommerceTest extends ShopTestCase
         $this->reject(fn () => $this->cart($product, 4), '최대');
         $cart = $this->cart($product, 2); $quote = $this->shop->cart->quote($cart, [], true);
         $this->shop->store->update('yc_products', (int) $product['id'], ['price' => 11000]);
-        $this->reject(fn () => $this->shop->orders->place($cart, $this->buyer(), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null, $quote['fingerprint']), '변경');
+        $this->reject(fn () => $this->shop->orders->place($cart, $this->buyer(), bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $this->memberId(), $quote['fingerprint']), '변경');
         self::assertSame(5, (int) $this->shop->products->get((int) $product['id'])['stock']);
         $this->shop->store->update('yc_products', (int) $product['id'], ['stock' => 1]);
         $this->reject(fn () => $this->place($cart), '재고');
@@ -203,10 +202,11 @@ final class CommerceTest extends ShopTestCase
     public function testLifecycleAndMemberOrderIsolation(array $config): void
     {
         $this->setupShop($config);
-        $p = $this->product(); $order = $this->place($this->cart($p), [], 42); $id = (int) $order['id'];
-        self::assertSame('', $order['guest_password']);
-        self::assertSame(1, $this->shop->orders->listing(42)['total']); self::assertSame(0, $this->shop->orders->listing(43)['total']);
-        $this->reject(fn () => $this->shop->orders->owned($order['number'], 43, [$id]));
+        $member = $this->memberId();
+        $p = $this->product(); $order = $this->place($this->cart($p), [], $member); $id = (int) $order['id'];
+        self::assertSame($member, (int) $order['user_id']);
+        self::assertSame(1, $this->shop->orders->listing($member)['total']); self::assertSame(0, $this->shop->orders->listing($member + 1)['total']);
+        $this->reject(fn () => $this->shop->orders->owned($order['number'], $member + 1));
         $this->reject(fn () => $this->shop->orders->transition($id, 'pending', 'completed', 'admin'));
         $this->shop->orders->confirmDeposit($id, 'admin');
         $this->shop->orders->transition($id, 'paid', 'confirmed', 'admin');
@@ -220,18 +220,15 @@ final class CommerceTest extends ShopTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testGuestLookupThrottleAndInvalidBuyerDoNotCreateOrders(array $config): void
+    public function testInvalidBuyerDoesNotCreateAnOrder(array $config): void
     {
         $this->setupShop($config);
         $cart = $this->cart($this->product());
         $this->reject(fn () => $this->place($cart, ['email' => 'invalid', 'agree' => '0', 'password' => []]));
         self::assertSame(0, $this->shop->orders->listing(null, '', 1, true)['total']);
-        $password = bin2hex(random_bytes(12));
-        $order = $this->place($cart, ['password' => $password]);
-        $lookup = ['number' => $order['number'], 'email' => $order['email'], 'password' => $password];
-        self::assertSame($order['id'], $this->shop->orders->lookup($lookup, '192.0.2.11')['id']);
-        for ($i = 0; $i < 5; $i++) $this->reject(fn () => $this->shop->orders->lookup(['password' => bin2hex(random_bytes(8))] + $lookup, '192.0.2.12'));
-        $this->reject(fn () => $this->shop->orders->lookup($lookup, '192.0.2.12'), '분 뒤');
+        $order = $this->place($cart);
+        self::assertSame($order['id'], $this->shop->orders->owned($order['number'], $this->memberId())['id']);
+        $this->reject(fn () => $this->shop->orders->owned($order['number'], $this->memberId() + 1));
     }
 
     #[DataProvider('connectionProvider')]

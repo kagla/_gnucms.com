@@ -63,7 +63,7 @@ final class SettingsTest extends ShopTestCase
         $defaults = $this->shop->settings->all()['payment'];
         self::assertSame('live', $defaults['environment']);
         self::assertFalse($defaults['manual']['enabled']);
-        self::assertSame(['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72], $defaults['deadline_hours']);
+        self::assertSame(['card' => 1, 'manual_transfer' => 72], $defaults['deadline_hours']);
 
         $this->shop->settings->save($this->settingsInput() + ['payment_environment' => 'test', 'payment_manual_enabled' => '1',
             'payment_manual_bank' => '국민은행', 'payment_manual_account' => '123456-01-234567', 'payment_manual_holder' => '홍길동',
@@ -71,7 +71,7 @@ final class SettingsTest extends ShopTestCase
         $saved = $this->shop->settings->all()['payment'];
         self::assertSame('test', $saved['environment']);
         self::assertSame(['enabled' => true, 'bank' => '국민은행', 'account' => '123456-01-234567', 'holder' => '홍길동'], $saved['manual']);
-        self::assertSame(['card' => 2, 'virtual_account' => 72, 'manual_transfer' => 48], $saved['deadline_hours']);
+        self::assertSame(['card' => 2, 'manual_transfer' => 48], $saved['deadline_hours']);
 
         $this->shop->settings->save($this->settingsInput());
         self::assertSame($saved, $this->shop->settings->all()['payment']);

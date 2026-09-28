@@ -24,7 +24,6 @@ final class PaymentsTest extends ShopTestCase
         $this->setupShop($config);
         $this->config = Fixtures::config();
         $this->app->paymentSettings()->save('test', $this->config);
-        $this->app->paymentSettings()->enable('test', true);
         $this->http = new FakeTransport();
         $this->app->setInicisGateway(new InicisGateway($this->app->paymentSettings(), $this->http));
         $this->savePayment(['environment' => 'test', 'manual' => ['enabled' => $manual, 'bank' => '국민은행', 'account' => '123-45', 'holder' => '상점'],
@@ -55,7 +54,7 @@ final class PaymentsTest extends ShopTestCase
     {
         $cart = $this->shop->cart->add([], ['product_id' => $this->product(['price' => '12000'])['id'], 'quantity' => 1]);
         $input = $this->buyer($extra + ['payment_method' => $method]);
-        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $this->memberId(),
             $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
     }
 
@@ -123,10 +122,12 @@ final class PaymentsTest extends ShopTestCase
     public function testMethodsFollowThePaymentSettingsAndTheManualAccount(array $config): void
     {
         $this->setupPayments($config);
-        self::assertSame(['card' => '카드 결제', 'manual_transfer' => '무통장입금'], $this->shop->payments->methods());
-        $this->app->paymentSettings()->enable('test', false);
+        self::assertSame(['card' => '신용카드', 'manual_transfer' => '무통장입금'], $this->shop->payments->methods());
+        $this->savePayment(['provider' => 'inicis', 'environment' => 'test', 'methods' => ['card' => false],
+            'manual' => ['enabled' => true, 'bank' => '국민은행', 'account' => '123-45', 'holder' => '상점'],
+            'deadline_hours' => ['card' => 1, 'manual_transfer' => 72]]);
         self::assertSame(['manual_transfer' => '무통장입금'], $this->shop->payments->methods());
-        $this->savePayment(['environment' => 'test', 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
+        $this->savePayment(['provider' => 'inicis', 'environment' => 'test', 'methods' => ['card' => false], 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
             'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]]);
         self::assertSame([], $this->shop->payments->methods());
         self::assertSame([], $this->shop->payments->forPlacing(['payment_method' => 'card']), '수단이 하나도 없으면 접수 전용이다');
@@ -175,11 +176,11 @@ final class PaymentsTest extends ShopTestCase
         $this->setupPayments($config);
         $order = $this->place('card');
         $window = $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order?number=' . $order['number'], 'https://shop.example.test/shop/pay/callback');
-        self::assertSame('inicis', $window['kind']);
-        self::assertSame((string) $order['total'], $window['fields']['price']);
-        self::assertSame($order['payment_id'], $window['fields']['oid']);
-        self::assertStringStartsWith('https://shop.example.test/shop/pay/callback?order=' . $order['payment_id'] . '&state=', $window['fields']['returnUrl']);
-        self::assertSame('테스트 구매자', $window['fields']['buyername']);
+        self::assertSame('inicis-pro', $window['kind']);
+        self::assertSame((string) $order['total'], $window['fields']['P_AMT']);
+        self::assertSame($order['payment_id'], $window['fields']['P_OID']);
+        self::assertStringStartsWith('https://shop.example.test/shop/pay/callback?order=' . $order['payment_id'] . '&state=', $window['fields']['P_NEXT_URL']);
+        self::assertSame('테스트 구매자', $window['fields']['P_UNAME']);
         self::assertSame([], $this->http->calls);
     }
 
@@ -195,7 +196,7 @@ final class PaymentsTest extends ShopTestCase
         self::assertSame('paid', $paid['status']);
         self::assertSame((int) $order['total'], (int) $paid['paid_amount']);
         self::assertSame($tid, $paid['payment']['tid']);
-        self::assertSame('카드 결제', $paid['payment']['label']);
+        self::assertSame('신용카드', $paid['payment']['label']);
         self::assertGreaterThan(0, (int) $paid['paid_at']);
         self::assertSame('paid', end($paid['history'])['status']);
         // 콜백이 다시 와도(재전송) 두 번 승인하지 않고 두 번 기록하지 않는다. 조회만 한 번 더 한다.
@@ -215,7 +216,7 @@ final class PaymentsTest extends ShopTestCase
         $this->setupPayments($config);
         $order = $this->place('card');
         $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
-        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true);
         $tid = bin2hex(random_bytes(20));
         $this->queueApproval($order, $tid);
         try { $this->shop->payments->complete($order, $this->authCallback($order)); self::fail('결제 대기가 아닌 주문은 결제 완료가 되지 않는다'); }
@@ -245,7 +246,7 @@ final class PaymentsTest extends ShopTestCase
         try { $this->shop->payments->sync($order); self::fail('결제 기록이 없으면 성공 안내가 아니다'); }
         catch (DomainError $e) { self::assertStringContainsString('결제 기록이 없습니다', implode(' ', $e->details())); }
         $this->shop->payments->checkout($order, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
-        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true);
         // 승인 요청이 통신 실패로 끝나 원장은 pending 으로 남는다. 결제사에는 승인이 남아 있을 수 있다.
         $this->http->responses[] = new \RuntimeException('timeout');
         $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00']];
@@ -295,13 +296,12 @@ final class PaymentsTest extends ShopTestCase
         try { $this->shop->orders->confirmDeposit((int) $manual['id'], 'admin'); self::fail('두 번 확인할 수 없다'); }
         catch (DomainError $e) { self::assertSame(422, $e->status()); }
         // 결제 수단을 모두 끄면 접수 전용 주문이 된다. 무통장과 같은 "입금 확인"으로 진행한다(재정 3).
-        $this->app->paymentSettings()->enable('test', false);
-        $this->savePayment(['environment' => 'test', 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
+        $this->savePayment(['provider' => 'inicis', 'environment' => 'test', 'methods' => ['card' => false], 'manual' => ['enabled' => false, 'bank' => '', 'account' => '', 'holder' => ''],
             'deadline_hours' => ['card' => 1, 'virtual_account' => 72, 'manual_transfer' => 72]]);
         $cart = $this->shop->cart->add([], ['product_id' => $this->product(['price' => '12000'])['id'], 'quantity' => 1]);
         $input = $this->buyer(['payment_method' => '']);
         self::assertSame([], $this->shop->payments->forPlacing($input), '접수 전용 확인');
-        $receiptOnly = $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+        $receiptOnly = $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $this->memberId(),
             $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
         self::assertSame('', $receiptOnly['payment_method']);
         $confirmed = $this->shop->orders->confirmDeposit((int) $receiptOnly['id'], 'admin');

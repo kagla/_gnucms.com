@@ -18,12 +18,11 @@ final class ProvidersTest extends ShopTestCase
         $this->app->paymentProviders()->register(new TestProvider($id, $methods, $partial));
         $settings = $this->app->paymentSettings($id);
         $settings->save('test', ['account' => 'account-' . $id, 'token' => bin2hex(random_bytes(16))]);
-        $settings->enable('test', true);
     }
 
-    private function selectProvider(string $id): void
+    private function selectProvider(string $id, bool $card = true): void
     {
-        $input = ['payment_provider' => $id, 'payment_environment' => 'test'];
+        $input = ['payment_provider' => $id, 'payment_environment' => 'test', 'payment_method_card' => $card ? '1' : '0'];
         $settings = $this->shop->settings->all();
         foreach (\GnuCms\Shop\Settings::TYPES as $type) {
             foreach (['columns', 'rows', 'image_width', 'image_height'] as $key) $input['main_' . $type . '_' . $key] = (string) $settings['main'][$type][$key];
@@ -40,7 +39,7 @@ final class ProvidersTest extends ShopTestCase
         $input = ['buyer_name' => '구매자', 'email' => 'buyer@example.test', 'phone' => '01000000000',
             'recipient' => '수령인', 'recipient_phone' => '01000000000', 'postcode' => '04524', 'address' => '테스트 주소',
             'password' => bin2hex(random_bytes(12)), 'agree' => '1', 'payment_method' => 'card'];
-        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $this->memberId(),
             $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
     }
 
@@ -71,8 +70,8 @@ final class ProvidersTest extends ShopTestCase
         self::assertSame([], $this->app->paymentGateway('nextpg')->calls);
         self::assertSame([], (new Journal($this->app->paymentSettings('nextpg')))->read($order['payment_id']));
         self::assertSame('confirmed', (new Journal($this->app->paymentSettings('firstpg')))->read($order['payment_id'])['approval']);
-        // 새 PG를 정지해도 과거 PG의 주문 조회는 원래 설정을 사용한다.
-        $this->app->paymentSettings('nextpg')->enable('test', false);
+        // 새 PG의 카드 노출을 꺼도 과거 PG의 주문 조회는 원래 설정을 사용한다.
+        $this->selectProvider('nextpg', false);
         self::assertSame([], $this->shop->payments->methods());
         self::assertSame('paid', $this->shop->payments->sync($refunded)['status']);
     }
@@ -97,7 +96,7 @@ final class ProvidersTest extends ShopTestCase
         $revision = $one->summary('test')['revision'];
         $one->save('test', ['account' => 'account-firstpg', 'token' => 'rotated-fixture-token']);
         self::assertSame('rotated-fixture-token', $one->credentials($revision)['token']);
-        self::assertFalse($one->available('test'));
+        self::assertTrue($one->available('test'));
         self::assertTrue($two->available('test'));
         try { $two->revision($revision); self::fail('다른 PG의 설정 판을 읽으면 안 됩니다.'); }
         catch (DomainError $e) { self::assertSame(503, $e->status()); }
@@ -138,7 +137,6 @@ final class ProvidersTest extends ShopTestCase
         $settings = $this->app->paymentSettings();
         $legacyConfig = Fixtures::config();
         $settings->save('test', $legacyConfig);
-        $settings->enable('test', true);
         $this->selectProvider('inicis');
         $order = $this->place();
         $token = CallbackToken::create($this->app, Payments::gatewayOrder($order));

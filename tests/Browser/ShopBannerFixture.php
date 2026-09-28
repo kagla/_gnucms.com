@@ -29,6 +29,8 @@ if (($argv[1] ?? 'admin') === 'home') {
     $values = HomeBannerTest::form();
     foreach (HomeBanner::defaults() as $key => $value) $values['banner_' . $key] = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
     $values += ['shipping_fee' => '0', 'shipping_free_minimum' => '0', 'order_notice' => $settings['order_notice'],
+        'payment_deadline_card' => '1', 'payment_deadline_manual_transfer' => '72',
+        'auto_new_days' => '30', 'auto_best_days' => '30',
         'main_best_source' => 'category', 'main_best_source_category_id' => '3',
         'main_categories' => [['id' => '3', 'columns' => '4', 'rows' => '1'], ['id' => '2', 'columns' => '3', 'rows' => '2']]];
     echo $view->fetch('admin/settings', ['page' => 'settings', 'values' => $values, 'errors' => [], 'notice' => '', 'banner_image_url' => '',

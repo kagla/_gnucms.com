@@ -53,7 +53,6 @@ final class ShopAdminTest extends WebTestCase
     {
         $this->payConfig = Fixtures::config();
         $this->app->paymentSettings()->save('test', $this->payConfig);
-        $this->app->paymentSettings()->enable('test', true);
         $this->http = new FakeTransport();
         $this->app->setInicisGateway(new InicisGateway($this->app->paymentSettings(), $this->http));
         $settings = $this->shop->settings->all();
@@ -77,7 +76,8 @@ final class ShopAdminTest extends WebTestCase
         $input = $extra + ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1',
             'payment_method' => $method];
-        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+        $member = $this->app->users()->create(bin2hex(random_bytes(8)) . '@example.test', '', '구매 회원');
+        return $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $member,
             $this->shop->cart->quote($cart, [], true)['fingerprint'], [], $this->shop->payments->forPlacing($input));
     }
 
@@ -202,7 +202,8 @@ final class ShopAdminTest extends WebTestCase
         $cart = $this->shop->cart->add([], ['product_id' => $productId, 'quantity' => 1]);
         $input = ['buyer_name' => '입금자', 'email' => 'buyer@example.test', 'phone' => '010-0000-0000', 'recipient' => '받는 분', 'recipient_phone' => '010-0000-0000',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'password' => bin2hex(random_bytes(12)), 'agree' => '1'];
-        $order = $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), null,
+        $member = $this->app->users()->create(bin2hex(random_bytes(8)) . '@example.test', '', '구매 회원');
+        $order = $this->shop->orders->place($cart, $input, bin2hex(random_bytes(32)), bin2hex(random_bytes(32)), $member,
             $this->shop->cart->quote($cart, [], true)['fingerprint'], []);
         self::assertSame('', $order['payment_method']);
         $this->shop->orders->confirmDeposit((int) $order['id'], 'admin');
@@ -217,7 +218,7 @@ final class ShopAdminTest extends WebTestCase
     {
         $this->setupShop($config); $this->enablePayments();
         $order = $this->placeManualOrder();
-        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'guest', [], true);
+        $this->shop->orders->transition((int) $order['id'], 'pending', 'cancelled', 'member', ['cancel_reason' => 'change_mind'], true);
         $this->shop->orders->recordOrphanApproval((int) $order['id'], 'pg:inicis', 'StdpayCARD0001', '카드 결제');
         $this->signIn(true);
         $page = $this->body($this->get($this->app, '/admin/shop/orders/detail', ['id' => $order['id']]));
@@ -273,15 +274,15 @@ final class ShopAdminTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testShopSettingsCanSaveAndEnableLiveInicisWithoutExposingKeys(array $config): void
+    public function testShopSettingsShowsSavedLiveInicisWithoutExposingKeys(array $config): void
     {
         $this->setupShop($config);
         $this->signIn(true);
         $page = $this->body($this->get($this->app, '/admin/shop/settings'));
-        self::assertStringContainsString('id="yc-inicis-live-form"', $page);
-        self::assertStringContainsString('id="yc-inicis-live-merchant_id" form="yc-inicis-live-form"', $page);
-        self::assertStringContainsString('id="yc-inicis-live-hash_key" form="yc-inicis-live-form" type="password"', $page);
-        self::assertStringContainsString('name="environment" value="live"', $page);
+        self::assertStringContainsString('id="yc-inicis-live-merchant_id"', $page);
+        self::assertStringContainsString('name="payment_credentials[inicis][live][merchant_id]"', $page);
+        self::assertStringContainsString('id="yc-inicis-live-hash_key" type="password"', $page);
+        self::assertStringContainsString('name="payment_environment" value="live"', $page);
 
         $credentials = Fixtures::config('inicis');
         unset($credentials['sign_key']); // 신규 PayPro 운영 상점에는 기존 웹표준 SignKey가 필요 없다.
@@ -289,16 +290,12 @@ final class ShopAdminTest extends WebTestCase
             ['provider' => 'inicis', 'environment' => 'live', 'return_to' => 'shop', 'action' => 'save']));
         self::assertSame(303, $saved->getStatusCode());
         self::assertSame('/admin/shop/settings?payment_saved=1#settings-payment', $saved->getHeaderLine('Location'));
-        self::assertFalse($this->app->paymentSettings()->available('live'));
+        self::assertTrue($this->app->paymentSettings()->available('live'));
         self::assertSame('', $this->app->paymentSettings()->current('live')['sign_key']);
         $page = $this->body($this->get($this->app, '/admin/shop/settings'));
         self::assertStringContainsString('value="' . $credentials['merchant_id'] . '"', $page);
         self::assertStringNotContainsString($credentials['hash_key'], $page);
 
-        $enabled = $this->post($this->app, '/admin/settings/payment', $this->csrf(
-            ['provider' => 'inicis', 'environment' => 'live', 'return_to' => 'shop', 'action' => 'enable']));
-        self::assertSame('/admin/shop/settings?payment_enabled=1#settings-payment', $enabled->getHeaderLine('Location'));
-        self::assertTrue($this->app->paymentSettings()->available('live'));
     }
 
     private function settingsForm(array $overrides): array

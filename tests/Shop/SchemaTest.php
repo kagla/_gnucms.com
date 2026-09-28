@@ -29,7 +29,7 @@ final class SchemaTest extends ShopTestCase
         Schema::migrate($db);
         Schema::migrate($db);
         foreach (Schema::TABLES as $table) self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table($table)), $table);
-        self::assertSame(12, count(Schema::TABLES));
+        self::assertSame(14, count(Schema::TABLES));
         self::assertSame(24, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['slug' => '의류', 'path' => '/1/', 'legacy_code' => null, 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
@@ -57,8 +57,8 @@ final class SchemaTest extends ShopTestCase
         $db->execute('ALTER TABLE ' . $db->table('yc_orders') . ' DROP COLUMN default_address');
         Schema::migrate($db);
         $this->assertIndexesExist();
-        $db->execute('INSERT INTO ' . $db->table('yc_orders') . ' (number, checkout_key, owner_key, user_id, guest_password, status, buyer_name, email, phone, recipient, recipient_phone, postcode, address, address_detail, delivery_note, subtotal, shipping_fee, cod_fee, total, shipping_detail, order_notice, carrier, tracking_number, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 1, ?, ?, ?, ?, 1, 1)',
-            ['N1', str_repeat('a', 64), str_repeat('b', 64), '', 'pending', '이름', 'a@b.c', '010', '받는분', '010', '04524', '주소', '', '', '[]', '', '', '']);
+        $db->execute('INSERT INTO ' . $db->table('yc_orders') . ' (number, checkout_key, owner_key, user_id, status, buyer_name, email, phone, recipient, recipient_phone, postcode, address, address_detail, delivery_note, subtotal, shipping_fee, cod_fee, total, shipping_detail, order_notice, carrier, tracking_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 1, ?, ?, ?, ?, 1, 1)',
+            ['N1', str_repeat('a', 64), str_repeat('b', 64), $this->memberId(), 'pending', '이름', 'a@b.c', '010', '받는분', '010', '04524', '주소', '', '', '[]', '', '', '']);
         $row = $db->selectOne('SELECT payment_method, payment_id, pay_by, paid_at, refunded_amount, payment_detail, default_address FROM ' . $db->table('yc_orders') . " WHERE number = 'N1'");
         self::assertSame(['', '', 0, 0, 0, '', 0], [$row['payment_method'], $row['payment_id'], (int) $row['pay_by'], (int) $row['paid_at'], (int) $row['refunded_amount'], $row['payment_detail'], (int) $row['default_address']]);
     }

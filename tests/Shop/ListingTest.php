@@ -76,7 +76,7 @@ final class ListingTest extends ShopTestCase
         $order = function (int $productId, int $qty, string $status, int $daysAgo = 0) use ($now): void {
             $at = $now - $daysAgo * 86400;
             $id = $this->shop->store->insert('yc_orders', ['number' => 'N' . $productId . $status . $daysAgo, 'checkout_key' => bin2hex(random_bytes(32)), 'owner_key' => bin2hex(random_bytes(32)),
-                'user_id' => null, 'status' => $status, 'created_at' => $at, 'updated_at' => $at] + $this->orderDefaults());
+                'user_id' => $this->memberId(), 'status' => $status, 'created_at' => $at, 'updated_at' => $at] + $this->orderDefaults());
             $this->shop->store->insert('yc_order_items', ['order_id' => $id, 'product_id' => $productId, 'option_id' => null, 'quantity' => $qty] + $this->orderItemDefaults());
         };
         $order((int) $fresh['id'], 2, 'paid'); $order((int) $old['id'], 5, 'pending'); $order((int) $sale['id'], 1, 'completed');
@@ -136,7 +136,7 @@ final class ListingTest extends ShopTestCase
     /** 주문 표의 NOT NULL 칸을 빈값으로 채운다 — 판매량 집계만 보는 테스트용. */
     private function orderDefaults(): array
     {
-        return ['guest_password' => '', 'buyer_name' => '이름', 'email' => 'a@b.c', 'phone' => '010', 'recipient' => '받는분', 'recipient_phone' => '010',
+        return ['buyer_name' => '이름', 'email' => 'a@b.c', 'phone' => '010', 'recipient' => '받는분', 'recipient_phone' => '010',
             'postcode' => '04524', 'address' => '주소', 'address_detail' => '', 'delivery_note' => '', 'subtotal' => 0, 'shipping_fee' => 0,
             'cod_fee' => 0, 'total' => 0, 'shipping_detail' => '[]', 'order_notice' => '', 'carrier' => '', 'tracking_number' => ''];
     }

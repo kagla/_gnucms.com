@@ -19,7 +19,7 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
-        self::assertCount(34, Schema::TABLES);
+        self::assertCount(36, Schema::TABLES);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
@@ -42,7 +42,7 @@ final class SchemaTest extends WebTestCase
         $schema->migrateAll();
         self::assertNull($db->selectOne('SELECT package_key FROM ' . $db->table('extension_schemas') . " WHERE package_key = 'modules/youngcart'"));
         $schema->migrateAll(); // 멱등
-        self::assertSame('33', explode('.', $schema->stamp())[0]);
+        self::assertSame(Schema::VERSION, explode('.', $schema->stamp())[0]);
     }
 
     /** 도장은 쇼핑몰 스키마 파일까지 덮는다. src/Shop/Schema.php 만 고쳐도 판 번호 없이 갱신이 돈다. */
@@ -50,8 +50,8 @@ final class SchemaTest extends WebTestCase
     public function testStampCoversTheShopSchemaFile(array $config): void
     {
         $stamp = (new Schema(Connection::create($config)))->stamp();
-        self::assertMatchesRegularExpression('/^33\.[0-9a-f]{12}$/D', $stamp);
-        $coreOnly = '33.' . substr((string) hash_file('xxh128', dirname(__DIR__, 2) . '/src/Db/Schema.php'), 0, 12);
+        self::assertMatchesRegularExpression('/^' . Schema::VERSION . '\.[0-9a-f]{12}$/D', $stamp);
+        $coreOnly = Schema::VERSION . '.' . substr((string) hash_file('xxh128', dirname(__DIR__, 2) . '/src/Db/Schema.php'), 0, 12);
         self::assertNotSame($coreOnly, $stamp, '쇼핑몰 스키마 파일이 도장에 섞여 있어야 한다');
     }
 

@@ -97,7 +97,7 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     assert.equal(await page.$$eval('[data-yc-selected-option]', rows => rows.length), 1);
     assert.match(await text('[data-yc-option-feedback]'), /이미 추가/);
     await setQty(101, '4');
-    assert.equal(await page.$eval(qty(101), el => el.validity.rangeOverflow), true);
+    assert.equal(await value(qty(101)), '3', 'quantity over stock is capped at available stock');
     await setQty(101, '2');
     await page.click('.yc-extras summary');
     assert.equal(await page.$eval(extraMinus, el => el.disabled), true);
@@ -111,10 +111,10 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     assert.equal(await text('[data-yc-total]'), '21,000원');
     for (let i = 0; i < 5; i++) await page.click(extraPlus);
     assert.equal(await value(extra), '4');
-    assert.equal(await page.$eval(extraPlus, el => el.disabled), true);
+    assert.equal(await page.$eval(extraPlus, el => el.getAttribute('aria-disabled')), 'true');
     assert.equal(await text('[data-yc-total]'), '29,000원');
     await page.$eval(extra, el => { el.value = '5'; el.dispatchEvent(new Event('input', {bubbles: true})); });
-    assert.equal(await page.$eval(extra, el => el.validity.rangeOverflow), true);
+    assert.equal(await value(extra), '4');
     await page.$eval(extra, el => { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); });
     assert.equal(await page.$eval(extraPlus, el => el.disabled), false);
     assert.equal(await page.$eval('[name="extras[202]"]', el => el.disabled), true);
@@ -231,7 +231,7 @@ const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFi
     assert.equal(await value(qty(101)), '1');
     assert.equal(await page.$eval(extra, el => el.max), '2');
     assert.equal(await page.$eval(extra, el => el.validity.rangeOverflow), true);
-    assert.equal(await page.$eval(extraPlus, el => el.disabled), true);
+    assert.equal(await page.$eval(extraPlus, el => el.getAttribute('aria-disabled')), 'true');
     assert.match(await text('.yc-extra-row:has(' + extra + ') [data-yc-stock-note]'), /현재 담을 수 있는 수량: 1개.*장바구니에 1개/);
     assert.match(await text(feedbackBox), /<script>bad\(\)<\/script>/);
     assert.equal(await page.$(feedbackBox + ' script'), null);

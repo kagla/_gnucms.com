@@ -217,8 +217,8 @@ final class AligoSchemaTest extends DatabaseTestCase
         self::assertTrue($this->hasIndex($db, $config, 'ix_message_jobs_scheduled', 'message_jobs'));
     }
 
-    public function testSchemaVersionIsThirtyThree(): void
+    public function testSchemaVersionIsThirtyNine(): void
     {
-        self::assertSame('33', Schema::VERSION);
+        self::assertSame('39', Schema::VERSION);
     }
 }

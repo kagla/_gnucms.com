@@ -51,7 +51,7 @@ const render = (...args) => execFileSync('php', [path.join(__dirname, 'ShopBanne
       await page.setViewport({width, height: 960});
       for (const theme of ['light', 'dark']) {
         await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `admin ${width} ${theme}`);
+        assert.equal(await page.evaluate(() => { window.scrollTo(10000, window.scrollY); return window.scrollX === 0; }), true, `admin ${width} ${theme}`);
       }
     }
     await page.$eval('html', el => { el.dataset.theme = 'light'; });
@@ -63,14 +63,14 @@ const render = (...args) => execFileSync('php', [path.join(__dirname, 'ShopBanne
     assert.equal(await visible(panel('upload')), true);
     await page.select('[name=banner_mode]', 'product');
     await page.select('[name=banner_product_id]', '1');
-    assert.equal(await page.$eval('.yc-edit-form', el => el.checkValidity()), true);
+    assert.deepEqual(await page.$eval('.yc-edit-form', el => [...el.elements].filter(field => !field.checkValidity()).map(field => field.name)), []);
     html = render('home');
     await page.goto('https://gnucms.test/cms/shop');
     for (const width of [360, 768, 1280]) {
       await page.setViewport({width, height: 960});
       for (const theme of ['light', 'dark']) {
         await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `home ${width} ${theme}`);
+        assert.equal(await page.evaluate(() => { window.scrollTo(10000, window.scrollY); return window.scrollX === 0; }), true, `home ${width} ${theme}`);
       }
     }
     await page.screenshot({path: '/tmp/gnucms-banner-home.png', fullPage: true});

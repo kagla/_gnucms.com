@@ -38,11 +38,12 @@ final class MessageHistoryTest extends WebTestCase
     private function seed(App $app): int
     {
         $db = $app->db();
+        $now = Clock::now();
         $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
             'body' => '안녕하세요', 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
-            'status' => 'sending', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+            'status' => 'sending', 'test_mode' => 0, 'created_at' => $now]);
         $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M1', 'phone' => '01012345678',
-            'body' => '안녕하세요', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
+            'body' => '안녕하세요', 'status' => 'accepted', 'requested_at' => $now]);
 
         return $jobId;
     }

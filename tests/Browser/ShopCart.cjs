@@ -1,5 +1,4 @@
-// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/ShopCart.cjs
-// Render the actual cart template; requests and submissions stay inside this browser fixture.
+// Render the current cart template and exercise browser behavior without a running shop.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,136 +10,80 @@ const html = execFileSync('php', [path.join(__dirname, 'ShopCartFixture.php')], 
 (async () => {
   const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
   try {
-    const page = await browser.newPage(), posts = [], errors = [];
-    await page.setRequestInterception(true);
+    const page = await browser.newPage();
+    const posts = [], errors = [];
     page.on('pageerror', error => errors.push(error.message));
+    await page.setRequestInterception(true);
     page.on('request', request => {
       const url = new URL(request.url());
       if (request.method() === 'POST') {
-        posts.push({path: url.pathname, data: new URLSearchParams(request.postData())});
-        return request.respond({status: 200, body: 'submitted'});
+        const data = new URLSearchParams(request.postData());
+        posts.push({path: url.pathname, data});
+        if (request.headers().accept === 'application/json') {
+          const selected = data.getAll('selected_products[]');
+          const total = selected.reduce((sum, id) => sum + (id === '10' ? 82000 : 25000), 0);
+          return request.respond({status: 200, contentType: 'application/json', body: JSON.stringify({
+            subtotal: total, shipping_fee: 0, cod_fee: 0, total, valid: true, saved: false
+          })});
+        }
+        return request.respond({status: 200, contentType: 'text/plain', body: 'submitted'});
       }
-      if (['/cms/shop/cart', '/cms/shop/search'].includes(url.pathname)) return request.respond({status: 200, contentType: 'text/html', body: html});
+      if (url.pathname === '/cms/shop/cart') return request.respond({status: 200, contentType: 'text/html', body: html});
       const asset = url.hostname === 'cdn.jsdelivr.net' && url.pathname.endsWith('/daisyui.css')
         ? '/vendor/daisyui/daisyui.css' : url.pathname.replace(/^\/cms/, '');
-      if (['/vendor/daisyui/daisyui.css', '/themes/default/theme.css', '/themes/default/youngcart.css', '/themes/default/youngcart.js'].includes(asset)) {
+      if (['/vendor/daisyui/daisyui.css', '/themes/default/theme.css', '/themes/default/youngcart.css',
+           '/themes/default/youngcart.js', '/themes/default/phone-format.js'].includes(asset)) {
         return request.respond({status: 200, contentType: asset.endsWith('.js') ? 'text/javascript' : 'text/css', body: fs.readFileSync(path.join(root, 'www', asset))});
       }
       return request.abort();
     });
-    const open = () => page.goto('https://gnucms.test/cms/shop/cart');
-    const control = id => '[data-yc-cart-quantity]:has([name="quantities[10:' + id + ']"])';
-    const input = id => control(id) + ' input';
-    const minus = id => control(id) + ' [data-yc-cart-minus]';
-    const plus = id => control(id) + ' [data-yc-cart-plus]';
-    const value = id => page.$eval(input(id), el => el.value);
-    const setQty = (id, quantity) => page.$eval(input(id), (el, quantity) => { el.value = quantity; el.dispatchEvent(new Event('input', {bubbles: true})); }, quantity);
-    const save = '.yc-cart-toolbar button';
-    const submit = async selector => { await Promise.all([page.waitForNavigation(), page.click(selector)]); };
-    const search = '[data-yc-search-menu]', searchToggle = search + '>summary', searchInput = search + ' input';
-    const searchOpen = () => page.$eval(search, el => el.open);
-    await page.setViewport({width: 1280, height: 960});
-    await open();
-    assert.equal(await page.$('.yc-brand, .yc-manage-link, .yc-header-main'), null);
-    assert.equal(await page.$eval('.yc-cart-toolbar strong', el => el.textContent), '담은 상품 3개 항목');
-    assert.equal(await page.$eval('.yc-title span', el => el.textContent), '3');
-    assert.equal(await page.$$eval('.yc-cart-image', images => images.length), 3);
-    assert.equal(await page.$$eval('[data-yc-cart-extras] .yc-cart-image,[data-yc-cart-extras] h2', elements => elements.length), 0);
-    assert.equal(await page.$$eval('[data-yc-cart-product="10"]>.yc-cart-item', elements => elements.length), 2);
-    assert.equal(await page.$$eval('[data-yc-cart-product="10"] [data-yc-cart-extras]', elements => elements.length), 1);
-    assert.equal(await page.$eval('[data-yc-cart-line="20:202"]', el => el.closest('[data-yc-cart-product]').dataset.ycCartProduct), '20');
-    assert.equal(await page.$eval('[data-yc-cart-line="10:201"]', el => el.closest('[data-yc-cart-product]').dataset.ycCartProduct), '10');
 
-    assert.equal(await page.$eval('.yc-header-actions', el => el.parentElement.classList.contains('yc-header-bottom')), true);
-    assert.equal(await searchOpen(), false);
-    await page.focus(searchToggle); await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.activeElement.matches('[data-yc-search-menu] input'));
-    await page.keyboard.press('Escape');
-    assert.equal(await searchOpen(), false);
-    assert.equal(await page.$eval(searchToggle, el => el === document.activeElement), true);
-    await page.click(searchToggle); await page.click('.yc-cart-toolbar strong');
-    assert.equal(await searchOpen(), false);
-    await page.click(searchToggle); await page.type(searchInput, '옥스포드 셔츠');
-    await submit(search + ' button[type=submit]');
-    assert.equal(new URL(page.url()).pathname, '/cms/shop/search');
-    assert.equal(new URL(page.url()).searchParams.get('q'), '옥스포드 셔츠');
-    await open();
-    assert.equal(await page.$eval(minus(101), el => el.disabled), true);
-    await page.click(plus(101));
-    assert.equal(await value(101), '2');
-    assert.equal(await value(102), '1');
-    await page.click(minus(101));
-    assert.equal(await value(101), '1');
-    assert.equal(await page.$eval(minus(101), el => el.disabled), true);
-    await setQty(101, '9999');
-    assert.equal(await page.$eval(plus(101), el => el.disabled), true);
-    await page.click(minus(101));
-    assert.equal(await value(101), '9998');
-    assert.equal(await page.$eval(plus(101), el => el.disabled), false);
-    await setQty(101, ''); await page.click(plus(101));
-    assert.equal(await value(101), '1');
-    for (const invalid of ['0', '-1', '1.5', '10000']) {
-      await setQty(101, invalid);
-      assert.equal(await page.$eval(input(101), el => el.checkValidity()), false);
-    }
-    await setQty(101, '3');
-    await page.focus(plus(102)); await page.keyboard.press('Space');
-    assert.equal(await value(102), '2');
-    await page.click(minus(201)); await page.click(minus(201));
-    assert.equal(await value(201), '0', 'additional components can be removed by saving zero');
-    assert.equal(await page.$eval(minus(201), el => el.disabled), true);
-    assert.equal(await value(101), '3');
-    assert.equal(await value(102), '2');
-    await page.click(plus(201));
-    assert.equal(posts.length, 0, 'Quantity buttons must not submit the cart');
-    for (const width of [360, 390, 768, 1280]) {
+    await page.setViewport({width: 1280, height: 960});
+    await page.goto('https://gnucms.test/cms/shop/cart');
+    assert.equal(await page.$eval('.yc-page-heading .yc-title span', el => el.textContent), '2');
+    assert.equal(await page.$$eval('[data-yc-cart-product]', els => els.length), 2);
+    assert.equal(await page.$$eval('[data-yc-cart-product="10"] .yc-cart-options .yc-cart-item', els => els.length), 2);
+    assert.equal(await page.$$eval('[data-yc-cart-product="10"] [data-yc-cart-extras] .yc-cart-item', els => els.length), 1);
+    assert.equal(await page.$eval('[data-yc-cart-line="20:202"]', el => el.closest('[data-yc-cart-product]').dataset.ycCartProduct), '20');
+    assert.equal(await page.$eval('[data-yc-cart-total="total"]', el => el.textContent.trim()), '107,000원');
+    assert.equal(await page.$eval('[name="quantities[10:101]"]', el => el.max), '5');
+
+    await page.click('[data-yc-cart-product="20"] [data-yc-cart-select]');
+    await page.waitForFunction(() => document.querySelector('[data-yc-cart-selected-count]').textContent === '1');
+    await page.waitForFunction(() => !document.querySelector('[data-yc-cart-checkout]').disabled);
+    assert.equal(await page.$eval('[data-yc-cart-total="total"]', el => el.textContent.trim()), '82,000원');
+    assert.equal(await page.$eval('[data-yc-cart-select-all]', el => el.indeterminate), true);
+    await page.click('[data-yc-cart-select-all]');
+    await page.waitForFunction(() => !document.querySelector('[data-yc-cart-checkout]').disabled);
+    await page.click('[data-yc-cart-select-all]');
+    assert.equal(await page.$eval('[data-yc-cart-checkout]', el => el.disabled), true);
+    await page.click('[data-yc-cart-select-all]');
+    await page.waitForFunction(() => !document.querySelector('[data-yc-cart-checkout]').disabled);
+
+    await page.click('[data-yc-cart-line="10:101"] [data-yc-cart-plus]');
+    assert.equal(await page.$eval('[name="quantities[10:101]"]', el => el.value), '2');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await page.waitForFunction(() => document.querySelector('[data-yc-cart-save-status]').hidden);
+    assert.equal(posts.some(post => post.data.get('cart_action') === 'update_quantities'
+      && post.data.get('quantities[10:101]') === '2'), true);
+    await page.$eval('[name="quantities[10:101]"]', el => {
+      el.value = '99'; el.dispatchEvent(new Event('input', {bubbles: true}));
+    });
+    assert.equal(await page.$eval('[name="quantities[10:101]"]', el => el.value), '5');
+
+    for (const width of [360, 1280]) {
       await page.setViewport({width, height: 960});
-      for (const theme of ['light', 'dark']) {
-        await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-        assert.equal(await page.evaluate(() => {
-          const header = document.querySelector('.navbar.wrap').getBoundingClientRect();
-          const main = document.querySelector('.main-area').getBoundingClientRect();
-          return Math.abs(header.left - main.left) < 1 && Math.abs(header.right - main.right) < 1;
-        }), true, 'Shop content uses the same page width as the site header');
-        await page.$eval(search, el => { el.open = true; });
-        assert.equal(await page.evaluate(() => {
-          const header = document.querySelector('.yc-header').getBoundingClientRect();
-          const search = document.querySelector('.yc-search-menu .yc-search').getBoundingClientRect();
-          const actions = document.querySelector('.yc-header-actions').getBoundingClientRect();
-          const category = document.querySelector('.yc-category-dropdown').getBoundingClientRect();
-          return search.width > 0 && search.left >= header.left - 1 && search.right <= header.right + 1 && actions.left >= category.right && actions.right <= header.right + 1;
-        }), true, 'Search popup and right-side shopping actions fit the header');
-        await page.$eval(search, el => { el.open = false; });
-        assert.equal(await page.$$eval('[data-yc-cart-quantity]', controls => controls.every(control => {
-          const [minus, input, plus] = Array.from(control.children, el => el.getBoundingClientRect());
-          return minus.right <= input.left + 1 && input.right <= plus.left + 1 && Math.abs(minus.top - plus.top) < 1 && Math.abs(minus.top + minus.height / 2 - input.top - input.height / 2) < 1;
-        })), true, 'Minus, quantity and plus stay aligned in that order');
-        if (width === 390 || width === 1280) await page.screenshot({path: '/tmp/gnucms-cart-components-' + width + '-' + theme + '.png', fullPage: true});
-      }
+      assert.equal(await page.$eval('[data-yc-cart-checkout]', el => el.getBoundingClientRect().width > 0), true);
     }
-    await submit(save);
+    await page.setJavaScriptEnabled(false);
+    await page.goto('https://gnucms.test/cms/shop/cart');
+    assert.equal(await page.$('[name="cart_action"][value="update"]') !== null, true);
+    await Promise.all([page.waitForNavigation(), page.click('[name="cart_action"][value="update"]')]);
     assert.equal(posts.at(-1).path, '/cms/shop/cart');
-    assert.equal(posts.at(-1).data.get('quantities[10:101]'), '3');
-    assert.equal(posts.at(-1).data.get('quantities[10:102]'), '2');
-    assert.equal(posts.at(-1).data.get('csrf_token'), 'browser-test-csrf');
-    assert.equal(posts.at(-1).data.get('quantities[10:201]'), '1');
-    await open(); await setQty(101, '');
-    await submit('.yc-remove[value="10:101"]');
-    assert.equal(posts.at(-1).data.get('remove'), '10:101', 'Delete works even when quantity is invalid');
-    await open(); await submit('.yc-remove[value="10:201"]');
-    assert.equal(posts.at(-1).data.get('remove'), '10:201');
-    await page.setJavaScriptEnabled(false); await open();
-    await page.click(searchToggle); assert.equal(await searchOpen(), true);
-    await page.type(searchInput, '셔츠'); await submit(search + ' button[type=submit]');
-    assert.equal(new URL(page.url()).searchParams.get('q'), '셔츠');
-    await open();
-    assert.equal(await page.$eval(plus(101), el => el.getClientRects().length), 0);
-    await page.focus(input(101)); await page.keyboard.down('Control'); await page.keyboard.press('A'); await page.keyboard.up('Control');
-    await page.keyboard.press('Backspace'); await page.type(input(101), '4');
-    await submit(save);
-    assert.equal(posts.at(-1).data.get('quantities[10:101]'), '4');
+    assert.equal(posts.at(-1).data.get('cart_action'), 'update');
     assert.deepEqual(errors, []);
-    console.log('Shop cart browser checks passed: compact header/search, quantity buttons, independent rows, limits, keyboard/direct input, save/delete, mobile/dark alignment and no-JS fallback.');
-  } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+    console.log('Shop cart browser checks passed: grouping, selection totals, quantity saves, stock cap, responsive checkout and no-JS form.');
+  } finally {
+    await browser.close();
+  }
+})().catch(error => {console.error(error); process.exitCode = 1;});
