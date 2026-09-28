@@ -59,7 +59,9 @@
 <?php else: ?><dl class="yc-detail-list">
 <?php if ($is_pg): ?><div><dt>결제사</dt><dd><?= $this->e($payment_provider_label) ?></dd></div><?php endif ?>
 <div><dt>수단</dt><dd><?= $this->e($payment_methods[$order['payment_method']] ?? $order['payment_method']) ?></dd></div>
-<div><dt>상태</dt><dd><?= (int) $order['paid_at'] > 0 ? '결제 완료 · ' . $this->e($weekdayDate((int) $order['paid_at'])) . ' · ' . number_format((int) $order['paid_amount']) . '원' : '결제 대기' ?></dd></div>
+<?php $paidAmount = (int) $order['paid_amount']; $refundedAmount = (int) $order['refunded_amount']; $paymentStatus = (int) $order['paid_at'] === 0 ? '결제 대기' : ($paidAmount > 0 && $refundedAmount >= $paidAmount ? '결제 취소' : ($refundedAmount > 0 ? '부분 환불' : '결제 완료')); ?>
+<div><dt>상태</dt><dd><?= $paymentStatus ?></dd></div>
+<?php if ((int) $order['paid_at'] > 0): ?><div><dt>결제 일시</dt><dd><?= $this->e($weekdayDate((int) $order['paid_at'])) ?></dd></div><div><dt>결제 금액</dt><dd><?= number_format($paidAmount) ?>원</dd></div><?php endif ?>
 <?php if ((int) $order['paid_at'] === 0 && (int) $order['pay_by'] > 0): ?><div><dt>결제 기한</dt><dd><?= $this->e($weekdayDate((int) $order['pay_by'])) ?></dd></div><?php endif ?>
 <?php if (is_array($order['payment']['virtual_account'] ?? null)): $account = $order['payment']['virtual_account']; ?><div><dt>가상계좌</dt><dd><?= $this->e(($account['bank'] ?? '') . ' ' . ($account['account'] ?? '')) ?> · 예금주 <?= $this->e($account['holder'] ?? '') ?></dd></div><?php endif ?>
 <?php if ((int) $order['refunded_amount'] > 0): ?><div><dt>환불</dt><dd><?= number_format((int) $order['refunded_amount']) ?>원</dd></div><?php endif ?>
