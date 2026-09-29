@@ -21,7 +21,8 @@ final class NicepayGateway extends DirectGateway
             'returnUrl' => $callbackUrl, 'buyerName' => mb_strcut($customer['name'], 0, 30, 'UTF-8'),
             'buyerTel' => preg_replace('/\D/', '', $customer['phone']),
             'buyerEmail' => mb_strcut($customer['email'], 0, 60, 'UTF-8'),
-            'useEscrow' => $order['method'] === 'bank_transfer' && ($config['mode'] ?? 'general') === 'escrow'];
+            'useEscrow' => $order['method'] === 'bank_transfer' && ($config['mode'] ?? 'general') === 'escrow']
+            + TaxAdapter::checkoutFields($this->id(), $order);
         if ($order['method'] === 'mobile') $fields['isDigital'] = false;
         return ['kind' => 'nicepay', 'script' => 'https://pay.nicepay.co.kr/v1/js/',
             'fields' => $fields];
@@ -64,13 +65,13 @@ final class NicepayGateway extends DirectGateway
         return $this->normalize($this->api($config, 'GET', '/v1/payments/' . $tid), $config, $order, $tid);
     }
 
-    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
     {
         $tid = (string) ($state['approved']['tid'] ?? $order['transaction_id'] ?? '');
         if ($tid === '') throw DomainError::validation(['refund' => '나이스페이 거래번호가 없습니다.']);
         $body = ['reason' => mb_strcut($reason, 0, 100, 'UTF-8'),
             'orderId' => $amount === $remaining ? $order['id'] : 'c_' . substr(hash('sha256', $order['id'] . $key), 0, 40)];
-        if ($amount < $remaining) $body['cancelAmt'] = $amount;
+        if ($amount < $remaining) $body += ['cancelAmt' => $amount] + TaxAdapter::refundFields($this->id(), $tax, $order);
         $response = $this->api($config, 'POST', '/v1/payments/' . $tid . '/cancel', $body);
         if (($response['resultCode'] ?? '') !== '0000' || ($response['tid'] ?? '') !== $tid
             || ($response['orderId'] ?? '') !== $body['orderId']

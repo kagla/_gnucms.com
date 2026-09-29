@@ -111,15 +111,6 @@ final class Listing
         return $blocks;
     }
 
-    public function related(int $productId): array
-    {
-        $rows = $this->store->select('SELECT p.*, r.sort_order AS relation_order FROM ' . $this->store->table('yc_product_relations') . ' r JOIN ' . $this->store->table('yc_products')
-            . ' p ON (r.product_id = ? AND p.id = r.related_id) OR (r.related_id = ? AND p.id = r.product_id) WHERE ' . $this->visible() . ' ORDER BY r.sort_order, p.id', [$productId, $productId]);
-        $unique = [];
-        foreach ($rows as $row) $unique[(int) $row['id']] ??= $row;
-        return $this->decorate(array_values($unique));
-    }
-
     public function adjacent(array $product): array
     {
         $base = 'SELECT p.id, p.code, p.slug, p.name FROM ' . $this->store->table('yc_products') . ' p WHERE p.active = 1 AND p.category_id = ? AND ';

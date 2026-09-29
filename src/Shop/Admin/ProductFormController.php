@@ -16,7 +16,7 @@ use Psr\Http\Message\UploadedFileInterface;
 
 final class ProductFormController extends AdminBase
 {
-    private const COOKIES = ['category_id' => 'yc_last_category', 'maker' => 'yc_last_maker', 'origin' => 'yc_last_origin'];
+    private const COOKIES = ['category_id' => 'yc_last_category'];
 
     public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -24,8 +24,18 @@ final class ProductFormController extends AdminBase
         $input = $data['input'];
         $id = $page === 'products/edit' ? Input::id($input['id'] ?? '') : null;
         $product = $id === null ? null : $this->service->products->get($id);
+        $copyRaw = $id === null ? ($input[$request->getMethod() === 'POST' ? 'copy_source_id' : 'copy'] ?? '') : '';
+        $copySourceId = $copyRaw === '' ? null : Input::id($copyRaw, 'copy_source_id');
+        $copySource = $copySourceId === null ? null : $this->service->products->get($copySourceId);
         if ($request->getMethod() !== 'POST') {
             if (($input['saved'] ?? '') === '1') $data['notice'] = '상품을 저장했습니다.';
+            if ($copySource !== null) {
+                $values = $this->values($copySource);
+                $values['code'] = is_string($input['code'] ?? null) ? mb_substr($input['code'], 0, 20, 'UTF-8') : (string) time();
+                $values['copy_source_id'] = (string) $copySourceId;
+                $values['version'] = '0';
+                return $this->form($request, $response, $data, $values, null, $copySource);
+            }
             return $this->form($request, $response, $data, $product === null ? $this->defaults($request) : $this->values($product), $product);
         }
         $action = $input['action'] ?? '';
@@ -44,7 +54,7 @@ final class ProductFormController extends AdminBase
                 $values = $input;
                 for ($i = 1; $i <= Options::MAX_GROUPS; $i++) $values['option_group'][$i] = $draft['groups'][$i - 1] ?? '';
                 $values['options'] = $draft['rows'];
-                return $this->form($request, $response, $data, $values, $product);
+                return $this->form($request, $response, $data, $values, $product, $copySource);
             }
             if ($action !== 'save') throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
             $files = $request->getUploadedFiles()['images'] ?? [];
@@ -59,19 +69,19 @@ final class ProductFormController extends AdminBase
         } catch (DomainError $e) {
             if ($ajaxCombine || $e->status() === 404) throw $e;
             $data['errors'] = $e->details() ?: [$e->getMessage()];
-            return $this->form($request, $response->withStatus($e->status()), $data, $input, $product);
+            return $this->form($request, $response->withStatus($e->status()), $data, $input, $product, $copySource);
         }
     }
 
     private function defaults(ServerRequestInterface $request): array
     {
         $cookies = $request->getCookieParams();
-        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'extra_category_ids' => [], 'maker' => '', 'origin' => '', 'brand' => '', 'model' => '',
-            'summary' => '', 'description' => '', 'list_price' => '0', 'price' => '', 'point_type' => '0', 'point' => '0', 'supply_point' => '0', 'tax_free' => '0', 'seller_email' => '',
-            'active' => '1', 'no_coupon' => '0', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'restock_notify' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
-            'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0', 'head_html' => '', 'tail_html' => '',
+        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'extra_category_ids' => [],
+            'summary' => '', 'description' => '', 'list_price' => '0', 'price' => '', 'tax_free' => '0',
+            'active' => '1', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
+            'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0',
             'info_group' => '', 'info' => [], 'memo' => '', 'sort_order' => '0', 'option_group' => [1 => '', 2 => '', 3 => ''], 'option_values' => [1 => '', 2 => '', 3 => ''],
-            'options' => [], 'extras' => [], 'relations' => '', 'extra_label' => [], 'extra_value' => [], 'version' => '0'];
+            'options' => [], 'extras' => [], 'extra_label' => [], 'extra_value' => [], 'version' => '0'];
         foreach (self::COOKIES as $field => $cookie) if (is_string($cookies[$cookie] ?? null)) $values[$field] = mb_substr($cookies[$cookie], 0, 100, 'UTF-8');
         // 분류 화면의 "이 분류에 상품 등록"이 ?category=<id> 로 온다. 있는 분류일 때만 대표 분류로 미리 고른다.
         $category = Input::filterId($request->getQueryParams()['category'] ?? '');
@@ -96,25 +106,23 @@ final class ProductFormController extends AdminBase
         }
         $values['options'] = $product['options']['select'];
         $values['extras'] = $product['options']['extra'];
-        $values['relations'] = implode(',', array_column($product['relations'], 'id'));
         foreach ($product['extra'] as $index => $field) { $values['extra_label'][$index + 1] = $field['label']; $values['extra_value'][$index + 1] = $field['value']; }
         return $values;
     }
 
-    private function form(ServerRequestInterface $request, ResponseInterface $response, array $data, array $values, ?array $product): ResponseInterface
+    private function form(ServerRequestInterface $request, ResponseInterface $response, array $data, array $values, ?array $product, ?array $copySource = null): ResponseInterface
     {
         $data['id'] = $product === null ? null : (int) $product['id'];
         $data['product'] = $product;
+        $data['copy_source'] = $copySource;
         $data['values'] = $values;
         $data['options_rows'] = Options::rows($values['options'] ?? []);
         $data['extras_rows'] = Options::rows($values['extras'] ?? []);
-        $data['images'] = $product['images'] ?? [];
+        $data['images'] = $product['images'] ?? $copySource['images'] ?? [];
+        $data['image_owner_id'] = (int) ($product['id'] ?? $copySource['id'] ?? 0);
         $data['categories'] = $this->service->categories->optionDetails();
         $data['info_groups'] = ProductInfo::GROUPS;
-        $data['apply_fields'] = ['active' => '판매가능', 'no_coupon' => '쿠폰제외', 'point' => '포인트', 'tax_free' => '과세', 'shipping' => '배송비', 'buy' => '구매수량', 'html' => '상세 위·아래 HTML', 'seller_email' => '판매자 메일', 'phone_inquiry' => '전화문의'];
-        $relationIds = array_filter(array_map('intval', explode(',', (string) ($values['relations'] ?? ''))));
-        $data['relations'] = [];
-        foreach ($relationIds as $relatedId) { $row = $this->service->products->find($relatedId); if ($row !== null) $data['relations'][] = ['id' => (int) $row['id'], 'code' => $row['code'], 'name' => $row['name']]; }
+        $data['shop_shipping'] = $this->service->settings->all()['shipping'];
         // 편집기 사진 폴더 키. 저장된 상품은 제 폴더(products/<id>), 새 상품은 저장 때 옮길 임시 폴더다(입력 오류로 다시 그릴 때는 폼이 보낸 것을 지킨다).
         // 저장된 상품의 공개 주소 — 도구 막대의 "쇼핑몰 보기"가 여기로 간다.
         $data['public_view_url'] = $product === null ? '' : $data['public_url'] . '/item?id=' . rawurlencode((string) $product['code']);

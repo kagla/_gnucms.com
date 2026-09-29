@@ -15,7 +15,7 @@
 - 이후 단계(장바구니·주문·적립금·쿠폰·결제수단·후기·통계)가 이 데이터 모델 위에 붙는다.
 
 전체 순서: ① 기반과 카탈로그 ② 장바구니와 주문 ③ 적립금과 회원등급 ④ 쿠폰·이벤트·배너
-⑤ 결제수단 확장 ⑥ 고객 참여(문의·후기·위시리스트·재입고 알림) ⑦ 개인결제와 운영 도구
+⑤ 결제수단 확장 ⑥ 고객 참여(문의·후기·위시리스트) ⑦ 개인결제와 운영 도구
 ⑧ 통계와 마이페이지.
 
 ## 2. 제약과 방침
@@ -162,7 +162,6 @@ modules/youngcart/
 | slug | VARCHAR(200) NOT NULL UNIQUE | 주소용 이름. 이름에서 생성, 중복 시 `-2` 접미 |
 | category_id | BIGINT NOT NULL | 대표 분류 |
 | name | VARCHAR(250) NOT NULL | HTML 제거 |
-| maker / origin / brand / model | VARCHAR(100) NOT NULL DEFAULT '' | |
 | summary | {TEXT} NOT NULL | 요약 설명. 정화한 HTML |
 | description | {TEXT} NOT NULL | 상세 설명. 정화한 HTML, 에디터 이미지는 코어 콘텐츠 이미지 |
 | description_text | {TEXT} NOT NULL | 검색용 평문. 저장 시 태그 제거·공백 정리 |
@@ -178,7 +177,6 @@ modules/youngcart/
 | sold_out | SMALLINT NOT NULL DEFAULT 0 | 수동 품절 |
 | stock | INTEGER NOT NULL DEFAULT 0 | 선택옵션이 없는 상품의 재고 |
 | stock_alert | INTEGER NOT NULL DEFAULT 0 | 재고 통보 기준 |
-| restock_notify | SMALLINT NOT NULL DEFAULT 0 | 재입고 알림 신청 허용(6단계) |
 | buy_min / buy_max | INTEGER NOT NULL DEFAULT 0 | 1회 최소·최대 구매수량. 0은 제한 없음(2단계 검증) |
 | phone_inquiry | SMALLINT NOT NULL DEFAULT 0 | 전화문의. 가격 대신 문구, 구매 불가 |
 | shipping_type | SMALLINT NOT NULL DEFAULT 0 | 0 상점 기본, 1 무료, 2 조건부 무료, 3 유료, 4 수량별 |
@@ -307,7 +305,7 @@ reference VARCHAR(100), actor VARCHAR(100), created_at BIGINT` — 인덱스 `yc
 - **분류 적용·전체 적용.** 폼의 각 필드군 옆 체크로 저장 값을 같은 대표 분류의 모든 상품 또는 전체 상품에
   일괄 반영한다. 대상 필드: 유형 플래그, active, no_coupon, point_type/point/supply_point, tax_free,
   배송비 5개, buy_min/buy_max, head_html/tail_html, seller_email, phone_inquiry.
-- **최근 입력 기억.** 저장 시 대표 분류·제조사·원산지를 31일 쿠키에 담아 새 상품 폼에 미리 채운다.
+- **최근 입력 기억.** 저장 시 대표 분류를 31일 쿠키에 담아 새 상품 폼에 미리 채운다.
 
 ### 7.1 저장 트랜잭션
 
@@ -368,7 +366,7 @@ reference VARCHAR(100), actor VARCHAR(100), created_at BIGINT` — 인덱스 `yc
   대상은 `name, code, summary, description_text`의 LIKE. `ca`는 코드 접두사, `min/max`는 가격 범위.
   결과 위에 분류별 건수를 보여 준다. 빈 `q`는 검색하지 않고 폼만 보여 준다. 대소문자 구분은
   DB 기본 collation을 따르며 테스트는 정확 일치로만 검증한다.
-- **상세** 이미지 갤러리(대표 + 썸네일), 이름·요약·제조사·원산지·브랜드·모델(비면 생략), 가격 또는 전화문의,
+- **상세** 이미지 갤러리(대표 + 썸네일), 이름·요약, 가격 또는 전화문의,
   포인트 안내(`point_type 2`는 "구매금액의 N%"), 부가세 표시, 배송비 요약(유형별 문구, 계산은 2단계),
   옵션 UI(7.2), 탭 "상품정보·배송정보·교환정보"(뒤 둘은 설정 본문이 있을 때), 상품정보고시 표,
   관련상품 블록, 이전·다음 상품(같은 대표 분류에서 기본 정렬 기준의 앞·뒤), head/tail HTML.
@@ -387,20 +385,20 @@ reference VARCHAR(100), actor VARCHAR(100), created_at BIGINT` — 인덱스 `yc
 | `POST /admin/shop/categories` | `action=bulk` 일괄 저장, `action=delete` 삭제 |
 | `GET/POST /admin/shop/categories/new?parent=코드` | 새 분류 |
 | `GET/POST /admin/shop/categories/edit?id=` | 수정(하위 적용 포함) |
-| `GET /admin/shop/products` | 검색(필드 화이트리스트 name, code, maker, brand, model, origin, seller_email), 분류 접두사 필터, 정렬(code, name, sort_order, active, sold_out, hit, price, list_price, point, stock; 기본 id desc), 페이지 20건, 인라인 일괄 편집 |
+| `GET /admin/shop/products` | 검색(필드 화이트리스트 name, code), 분류 접두사 필터, 정렬(code, name, sort_order, active, sold_out, hit, price, list_price, point, stock; 기본 id desc), 페이지 20건, 인라인 일괄 편집 |
 | `POST /admin/shop/products` | `action=bulk`(category_id, name, list_price, price, stock, active, sold_out, sort_order), `action=delete` |
 | `GET/POST /admin/shop/products/new` | 새 상품. POST `action=save` 저장, `action=combine` 조합 생성(저장 안 함, 폼 값 유지) |
 | `GET/POST /admin/shop/products/edit?id=` | 수정. POST 동작은 새 상품과 같다 |
 | `POST /admin/shop/products/copy` | `id`, `code`로 복사. 통계값 초기화 |
 | `GET/POST /admin/shop/products/types` | 유형 플래그 격자 일괄 편집 |
-| `GET/POST /admin/shop/products/stock` | 상품 재고 목록·일괄 편집(stock, stock_alert, active, sold_out, restock_notify) |
+| `GET/POST /admin/shop/products/stock` | 상품 재고 목록·일괄 편집(stock, stock_alert, active, sold_out) |
 | `GET/POST /admin/shop/products/option-stock` | 옵션 재고 목록·일괄 편집(stock, stock_alert, active) |
 | `GET /admin/shop/products/search?q=&ca=&exclude=` | 관련상품 검색 JSON `{items:[{id, code, name, price, category}]}` 최대 30건 |
 
 - 관리자 라우트는 런타임의 전역 관리자 검사·CSRF 검사를 쓴다. 비로그인은 로그인 화면으로 이동, 일반 회원은 403.
-- 상품 폼 절: 분류(대표 + 추가 2개), 기본정보(코드·이름·정렬·유형·제조사·원산지·브랜드·모델·전화문의·판매가능·
+- 상품 폼 절: 분류(대표 + 추가 2개), 기본정보(코드·이름·정렬·유형·전화문의·판매가능·
   쿠폰제외·판매자메일·메모), 요약·상세 설명(코어 에디터), 상품정보고시(군 선택 → 항목 입력, 전체 군 JSON을 페이지에 넣어
-  JS로 전환, JS 없으면 군 선택 후 다시 열기), 가격·포인트·과세, 재고·품절·재입고알림·구매수량 제한,
+  JS로 전환, JS 없으면 군 선택 후 다시 열기), 가격·포인트·과세, 재고·품절·구매수량 제한,
   선택옵션·추가옵션, 배송비, 이미지(10칸, 미리보기, 삭제 체크, 순서), 관련상품, 상세 위·아래 HTML, 여분필드.
 - 폼은 JS 없이 제출·검증·오류 표시가 동작해야 한다. JS는 조합 표 편집·이미지 순서·관련상품 검색만 돕는다.
 - 삭제는 이미지 파일·캐시·옵션·그룹·분류 연결·관련상품(양방향)·재고 원장을 함께 지운다. 2단계부터 주문이 있는 상품은
@@ -442,7 +440,7 @@ connectionProvider로 SQLite와 MySQL 양쪽에서 실행한다.
 ## 13. 이번 범위 밖
 
 - 장바구니·주문·결제·배송비 계산·구매수량 검증(2단계). 적립금·회원등급 할인(3단계). 쿠폰·이벤트·배너와
-  `no_coupon`의 실제 효과(4단계). 가상계좌·간편결제 등 결제수단(5단계). 후기·문의·위시리스트·재입고 알림·SNS 공유(6단계).
+  `no_coupon`의 실제 효과(4단계). 가상계좌·간편결제 등 결제수단(5단계). 후기·문의·위시리스트·SNS 공유(6단계).
   엑셀 등록·개인결제(7단계). 통계·마이페이지(8단계).
 - 분류별 부관리자, 본인확인·성인인증 분류 제한: 코어에 해당 권한·인증 모델이 없어 코어가 갖춘 뒤 붙인다.
 - 영카트5 데이터 가져오기 도구. 대응표만 유지한다.

@@ -61,7 +61,7 @@ final class TestProvider implements Provider
                 return ['status' => 'PAID', 'valid' => true, 'cancelled' => $cancelled,
                     'transaction_id' => 'tx-' . $order['id'], 'paid_at' => time()];
             }
-            protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+            protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
             {
                 $this->calls[] = ['refund', $order['id']];
                 return ['id' => 'refund-' . $key, 'amount' => $amount, 'at' => time()];

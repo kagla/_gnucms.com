@@ -37,7 +37,8 @@ final class TossGateway extends DirectGateway
             'successUrl' => str_replace('/pay/callback?', '/pay/toss-return?', $callbackUrl),
             'failUrl' => str_replace('/pay/callback?', '/pay/toss-return?', $callbackUrl) . '&result=fail',
             'customerName' => mb_substr($customer['name'], 0, 100, 'UTF-8'),
-            'customerEmail' => mb_substr($customer['email'], 0, 100, 'UTF-8')];
+            'customerEmail' => mb_substr($customer['email'], 0, 100, 'UTF-8')]
+            + TaxAdapter::checkoutFields($this->id(), $order);
         if ($order['method'] === 'bank_transfer') {
             $fields['useEscrow'] = ($config['mode'] ?? 'general') === 'escrow';
             if ($fields['useEscrow']) {
@@ -81,12 +82,12 @@ final class TossGateway extends DirectGateway
         return $this->normalize($this->api($config, 'GET', $path), $config, $order, $key);
     }
 
-    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
     {
         $paymentKey = (string) ($state['approved']['tid'] ?? $order['transaction_id'] ?? '');
         if ($paymentKey === '') throw DomainError::validation(['refund' => '토스 결제 키가 없습니다.']);
         $body = ['cancelReason' => mb_substr($reason, 0, 200, 'UTF-8')];
-        if ($amount < $remaining) $body['cancelAmount'] = $amount;
+        if ($amount < $remaining) $body += ['cancelAmount' => $amount] + TaxAdapter::refundFields($this->id(), $tax, $order);
         $result = $this->api($config, 'POST', '/v1/payments/' . rawurlencode($paymentKey) . '/cancel', $body,
             ['Idempotency-Key' => $key]);
         $payment = $this->normalize($result, $config, $order, $paymentKey);

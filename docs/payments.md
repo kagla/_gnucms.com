@@ -4,6 +4,12 @@ GNUCMS가 PG와 직접 연동한다. 포트원 계정이나 API를 거치지 않
 `Gateway` 계약으로 결제창·승인·조회·전액/부분 환불·미확정 환불 대조를 호출하며,
 각 PG의 전문과 인증은 해당 어댑터가 처리한다.
 
+상품별 면세 여부는 주문 시점에 주문 상품으로 복사하고, 결제 총액을 과세금액·공급가액·부가세·
+면세금액으로 나눠 함께 저장한다. 선불 배송비는 과세금액에 포함한다. 쇼핑몰과 결제 계층은
+`TaxAmounts`의 표준 명세만 사용하며 이니시스·KCP·토스·나이스의 서로 다른 요청 필드명은
+`TaxAdapter` 한 곳에서 변환한다. 면세금액이 있는 결제는 PG 계약도 면세 또는 복합과세 상점으로
+설정되어 있어야 한다.
+
 ### 결제수단 정책
 
 운영을 단순하게 유지하기 위해 새 PG 주문에는 **일반 신용카드 결제만** 제공한다. KG이니시스,
@@ -107,6 +113,7 @@ PG 실계정 승인·조회·환불은 별도 검증이 필요하다. 자동 테
 | `src/Payment/Provider.php`, `ProviderRegistry.php` | PG 등록, 설정 항목·검증, 지원 수단·부분 환불 여부, 결제창 템플릿, 게이트웨이 생성 |
 | `src/Payment/Gateway.php` | 승인·조회·환불·미확정 처리의 서버 계약 |
 | `src/Payment/DirectGateway.php` | 승인/환불 중복 전송 방지, 원장 상태, 환불 대조 공통 구현 |
+| `src/Payment/TaxAmounts.php`, `TaxAdapter.php` | 과세·면세 금액 계산·검증과 PG별 결제·부분취소 필드 변환 |
 | `src/Payment/Settings.php`, `Journal.php` | PG별 암호화 설정 판·원장 |
 | `src/Payment/InicisProvider.php`, `ProviderConfig.php` | 이니시스 설정 항목·검증·키 교체 정책 |
 | `src/Payment/InicisGateway.php`, `KcpGateway.php`, `StreamTransport.php` | 이니시스·KCP 전문·통신·허용 API 주소·응답 검증 |
@@ -189,6 +196,8 @@ $app->paymentProviders()->register(new YourProvider());
 결제창 조각 이름을 선언하고 `gateway(Settings $settings)`에서 PG 게이트웨이를 반환한다.
 중복 ID 등록은 거절한다. 쇼핑몰의 새 온라인 주문은 신용카드만 지원하며, 제공자 수단 목록과 카드 사용 설정이
 모두 허용될 때 주문서에 표시한다. 새 PG도 다른 온라인 결제수단을 주문서에 추가할 수 없다.
+새 PG의 복합과세 요청 필드는 `TaxAdapter`에 추가하며 쇼핑몰의 세금 계산을 게이트웨이에 다시
+구현하지 않는다.
 
 게이트웨이는 `DirectGateway`를 상속하고 다음 PG별 부분을 구현한다.
 
@@ -213,7 +222,9 @@ PG별 프로토콜은 각각 구현해야 한다. 이 구조는 서로 다른 PG
 
 ## 데이터와 업그레이드
 
-코어 DB 스키마 32판은 다음을 추가한다. MySQL의 기존 데이터는 보존한다. SQLite는 지원하지 않는다.
+코어 DB 스키마 45판은 주문별 과세금액·공급가액·부가세·면세금액과 주문 상품별 면세 여부를
+추가한다. 이전 주문은 당시 면세 스냅샷이 없으므로 전체 결제금액을 과세로 이전한다. MySQL의
+기존 데이터는 보존한다. SQLite는 지원하지 않는다.
 
 - `pay_settings`: `(provider, id)` 기본키, 암호화 `payload`. ID는 환경 또는 설정 판이다.
 - `pay_transactions`: `(provider, id)` 기본키, 암호화 `payload`. ID는 결제 원장 키다.

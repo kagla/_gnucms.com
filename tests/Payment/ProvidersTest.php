@@ -27,7 +27,7 @@ final class ProvidersTest extends ShopTestCase
         foreach (\GnuCms\Shop\Settings::TYPES as $type) {
             foreach (['columns', 'rows', 'image_width', 'image_height'] as $key) $input['main_' . $type . '_' . $key] = (string) $settings['main'][$type][$key];
         }
-        foreach (['category', 'type', 'search', 'related', 'detail'] as $section) {
+        foreach (['category', 'type', 'search', 'detail'] as $section) {
             foreach ($settings[$section] as $key => $value) $input[$section . '_' . $key] = (string) $value;
         }
         $this->shop->settings->save($input);

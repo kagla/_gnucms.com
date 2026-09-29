@@ -34,9 +34,8 @@
     </div>
     <div class="yc-checks">
     <label class="label cursor-pointer"><input type="hidden" name="active" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="active" value="1"<?= $v('active') === '1' ? ' checked' : '' ?>> 판매가능</label>
-    <label class="label cursor-pointer"><input type="hidden" name="no_coupon" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="no_coupon" value="1"<?= $v('no_coupon') === '1' ? ' checked' : '' ?>> 쿠폰 대상에서 제외</label>
     <label class="label cursor-pointer"><input type="hidden" name="menu_hidden" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="menu_hidden" value="1"<?= $v('menu_hidden') === '1' ? ' checked' : '' ?>> 메뉴에서 숨김 <span class="legend-hint">상단 메뉴·바로가기·하위 분류 칩에 안 보이고 주소·링크·배너로만 들어갑니다</span></label>
-    <?php if ($id !== null): ?><label class="label cursor-pointer"><input class="checkbox checkbox-sm" type="checkbox" name="apply_children" value="1"> 판매·쿠폰·목록·이미지 설정을 하위 분류에도 적용</label><?php endif ?>
+    <?php if ($id !== null): ?><label class="label cursor-pointer"><input class="checkbox checkbox-sm" type="checkbox" name="apply_children" value="1"> 판매·목록·이미지 설정을 하위 분류에도 적용</label><?php endif ?>
     </div>
   </div></section>
   <details class="yc-advanced" id="category-html"<?= $errors !== [] ? ' open' : '' ?>><summary>목록 위·아래 HTML<small>분류 목록 상단·하단에 표시할 내용</small></summary><div class="card-body">

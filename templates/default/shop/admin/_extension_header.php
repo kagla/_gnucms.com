@@ -4,5 +4,5 @@
 </ul></div>
 <div class="page-head yc-admin-heading">
   <div><h1><?= $this->e($heading) ?></h1><?php if (($description ?? '') !== ''): ?><p class="muted"><?= $this->e($description) ?></p><?php endif ?></div>
-  <?php if (($actions ?? []) !== []): ?><div class="row-actions"><?php foreach ($actions as $action): ?><a class="btn btn-sm<?= str_contains($action['url'], '/new') ? ' btn-primary' : '' ?>" href="<?= $this->e($action['url']) ?>"><?php if (str_contains($action['url'], '/new')): ?><?= $this->icon('plus', 16) ?><?php endif ?><?= $this->e($action['label']) ?></a><?php endforeach ?></div><?php endif ?>
+  <?php if (($actions ?? []) !== []): ?><div class="row-actions"><?php foreach ($actions as $action): ?><?php $isPrimary = str_contains($action['url'], '/new'); ?><a class="btn btn-sm<?= $isPrimary ? ' btn-primary' : ' btn-outline' ?>" href="<?= $this->e($action['url']) ?>"><?php if ($isPrimary): ?><?= $this->icon('plus', 16) ?><?php endif ?><?= $this->e($action['label']) ?></a><?php endforeach ?></div><?php endif ?>
 </div>

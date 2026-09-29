@@ -199,7 +199,7 @@ final class AdminController extends AdminBase
         // 분류 블록은 줄 목록 그대로 편다(폼이 main_categories[i][…] 로 되돌려 보낸다).
         $flat['main_categories'] = array_map(static fn (array $row): array => ['id' => (string) $row['id'], 'columns' => (string) $row['columns'], 'rows' => (string) $row['rows']], $settings['main']['categories']);
         foreach ($settings['auto'] as $key => $days) $flat['auto_' . $key] = (string) $days;
-        foreach (['category', 'type', 'search', 'related', 'detail'] as $section) foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
+        foreach (['category', 'type', 'search', 'detail'] as $section) foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';
         $flat['shipping_content'] = $settings['shipping']['content'];
         $flat['shipping_fee'] = (string) $settings['shipping']['fee'];

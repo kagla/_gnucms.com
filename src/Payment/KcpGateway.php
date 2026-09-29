@@ -24,11 +24,12 @@ final class KcpGateway extends DirectGateway
         $config = $this->prepare($order, $returnUrl, $callbackUrl);
         $method = self::METHOD[$order['method']] ?? throw DomainError::validation(['payment_method' => 'KCP 결제수단을 확인해 주세요.']);
         $mobile = $device === 'mobile';
+        $taxFields = TaxAdapter::checkoutFields($this->id(), $order);
         $fields = ['site_cd' => $config['site_cd'], 'pay_method' => $mobile ? $method['mobile'] : $method['pc'],
             'ordr_idxx' => $order['id'], 'good_name' => mb_strcut($order['order_name'], 0, 100, 'UTF-8'),
             'good_mny' => (string) $order['total'], 'currency' => $mobile ? '410' : 'WON',
             'buyr_name' => mb_strcut($customer['name'], 0, 40, 'UTF-8'), 'buyr_mail' => mb_strcut($customer['email'], 0, 100, 'UTF-8'),
-            'buyr_tel2' => mb_strcut($customer['phone'], 0, 20, 'UTF-8'), 'Ret_URL' => $callbackUrl];
+            'buyr_tel2' => mb_strcut($customer['phone'], 0, 20, 'UTF-8'), 'Ret_URL' => $callbackUrl] + $taxFields;
         if (!$mobile) {
             $fields['site_name'] = 'GNUCMS';
             $fields['quotaopt'] = '12';
@@ -39,7 +40,7 @@ final class KcpGateway extends DirectGateway
             'site_cd' => $config['site_cd'], 'ordr_idxx' => $order['id'], 'good_mny' => (string) $order['total'],
             'good_name' => $fields['good_name'], 'pay_method' => $method['mobile'], 'Ret_URL' => $callbackUrl,
             'escw_used' => 'N',
-        ]);
+        ] + $taxFields);
         if (($registration['Code'] ?? '') !== '0000') $this->declined($registration);
         $payUrl = self::value($registration, 'PayUrl', 2048);
         $host = $config['environment'] === 'test' ? 'testsmpay.kcp.co.kr' : 'smpay.kcp.co.kr';
@@ -116,7 +117,7 @@ final class KcpGateway extends DirectGateway
         return $result;
     }
 
-    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
     {
         $tid = (string) ($order['transaction_id'] ?? $state['approved']['tid'] ?? '');
         if ($tid === '') throw DomainError::validation(['refund' => 'KCP 승인 거래번호가 필요합니다.']);
@@ -125,7 +126,8 @@ final class KcpGateway extends DirectGateway
         $body = ['site_cd' => $config['site_cd'], 'kcp_cert_info' => self::certificate($config), 'tno' => $tid,
             'mod_type' => $type, 'mod_desc' => mb_strcut($reason, 0, 100, 'UTF-8'),
             'kcp_sign_data' => self::sign($config, $config['site_cd'] . '^' . $tid . '^' . $type)];
-        if (!$full) $body += ['mod_mny' => (string) $amount, 'rem_mny' => (string) $remaining];
+        if (!$full) $body += ['mod_mny' => (string) $amount, 'rem_mny' => (string) $remaining]
+            + TaxAdapter::refundFields($this->id(), $tax, $order);
         $response = $this->api($this->url($config, '/gw/mod/v1/cancel'), $body);
         if (($response['res_cd'] ?? '') !== '0000' || ($response['tno'] ?? '') !== $tid) {
             throw DomainError::serviceUnavailable('KCP 취소가 확정되지 않았습니다. 결제 내역에서 처리 여부를 확인해 주세요.');

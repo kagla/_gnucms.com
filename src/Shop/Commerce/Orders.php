@@ -7,6 +7,7 @@ namespace GnuCms\Shop\Commerce;
 use DateTimeImmutable;
 use DateTimeZone;
 use GnuCms\Error\DomainError;
+use GnuCms\Payment\TaxAmounts;
 use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
@@ -98,6 +99,8 @@ final class Orders
                 $orderData = $buyer + ['checkout_key' => $key, 'owner_key' => $owner,
                     'user_id' => $userId, 'default_address' => $saveDefault ? 1 : 0, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
                     'cod_fee' => $quote['cod_fee'], 'total' => $quote['total'], 'shipping_detail' => json_encode($quote['shipping'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'taxable_amount' => $quote['tax']['taxable_amount'], 'supply_amount' => $quote['tax']['supply_amount'],
+                    'vat_amount' => $quote['tax']['vat_amount'], 'tax_free_amount' => $quote['tax']['tax_free_amount'],
                     'order_notice' => $this->settings->all()['order_notice'], 'carrier' => '', 'tracking_number' => '',
                     'payment_method' => (string) ($payment['method'] ?? ''), 'payment_id' => (string) ($payment['id'] ?? ''),
                     'payment_provider' => (string) ($payment['provider'] ?? (!empty($payment['id']) ? 'inicis' : '')),
@@ -125,7 +128,8 @@ final class Orders
                     }
                     $this->store->insert('yc_order_items', ['order_id' => $id, 'product_id' => $item['product_id'], 'option_id' => $optionId,
                         'kind' => $item['kind'], 'product_code' => $item['code'], 'product_name' => $item['name'], 'option_label' => $item['label'],
-                        'image' => $item['image'] ?? '', 'unit_price' => $item['price'], 'quantity' => $item['quantity'], 'total' => $item['total']]);
+                        'image' => $item['image'] ?? '', 'unit_price' => $item['price'], 'quantity' => $item['quantity'], 'total' => $item['total'],
+                        'tax_free' => $item['tax_free']]);
                     $this->store->logStock($item['product_id'], $optionId, -$item['quantity'], 'order', $number, 'user:' . $userId);
                 }
                 $this->history($id, 'pending', 'user:' . $userId, '주문을 접수했습니다.');
@@ -152,6 +156,7 @@ final class Orders
         $order['items'] = $this->store->select('SELECT * FROM ' . $this->store->table('yc_order_items') . ' WHERE order_id = ? ORDER BY id', [$id]);
         $order['history'] = $this->store->select('SELECT * FROM ' . $this->store->table('yc_order_history') . ' WHERE order_id = ? ORDER BY id', [$id]);
         $order['shipping'] = json_decode($order['shipping_detail'], true, 8, JSON_THROW_ON_ERROR);
+        $order['tax'] = TaxAmounts::fromOrder($order);
         $decoded = ($order['payment_detail'] ?? '') === '' ? [] : json_decode((string) $order['payment_detail'], true, 8);
         $order['payment'] = is_array($decoded) ? $decoded : [];
         return $order;

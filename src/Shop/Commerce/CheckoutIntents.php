@@ -30,7 +30,7 @@ final class CheckoutIntents
         $orderName = count($quote['items']) > 1 ? $first . ' 외 ' . (count($quote['items']) - 1) . '건' : $first;
         $snapshot = ['lines' => $lines, 'input' => $details, 'token' => $token, 'owner' => $owner,
             'user_id' => $userId, 'fingerprint' => $fingerprint, 'shipping' => $shipping,
-            'flow' => $flow, 'total' => $quote['total'], 'order_name' => $orderName,
+            'flow' => $flow, 'total' => $quote['total'], 'tax' => $quote['tax'], 'order_name' => $orderName,
             'escrow_products' => Payments::escrowProducts($quote['items'], (int) $quote['shipping_fee']),
             'payment_choice' => ['provider' => $payment['provider'], 'method' => $payment['method'],
                 'environment' => $payment['environment'], 'revision' => $payment['revision']]];
@@ -98,6 +98,7 @@ final class CheckoutIntents
             'payment_environment' => $payment['environment'], 'payment_revision' => $payment['revision'],
             'payment_method' => $payment['method'], 'total' => $intent['total'], 'order_name' => $intent['order_name'],
             'created_at' => $intent['created_at'], 'pay_by' => $payment['pay_by'], 'payment' => [],
+            'tax' => $intent['tax'] ?? \GnuCms\Payment\TaxAmounts::split((int) $intent['total'], 0),
             'escrow_products' => $intent['escrow_products'] ?? []]);
     }
 
@@ -110,7 +111,8 @@ final class CheckoutIntents
             'payment_id' => $payment['id'], 'payment_provider' => $payment['provider'],
             'payment_environment' => $payment['environment'], 'payment_revision' => $payment['revision'],
             'payment_method' => $payment['method'], 'total' => $intent['total'], 'order_name' => $intent['order_name'],
-            'created_at' => $intent['created_at'], 'payment' => []];
+            'created_at' => $intent['created_at'], 'payment' => [],
+            'tax' => $intent['tax'] ?? \GnuCms\Payment\TaxAmounts::split((int) $intent['total'], 0)];
         if ((int) $payment['pay_by'] - Clock::timestamp() < 900) {
             throw DomainError::validation(['payment' => '결제 기한이 가까워졌습니다. 주문서를 다시 열어 주세요.']);
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Shop\Commerce;
 
 use GnuCms\Error\DomainError;
+use GnuCms\Payment\TaxAmounts;
 use GnuCms\Shop\Catalog\Products;
 use GnuCms\Shop\Catalog\Stock;
 use GnuCms\Shop\Input;
@@ -145,7 +146,7 @@ final class Cart
         foreach ($cart as $key => $line) {
             $item = ['key' => $key, 'product_id' => (int) $line['product_id'], 'option_id' => (int) $line['option_id'],
                 'quantity' => (int) $line['quantity'], 'name' => '판매가 종료된 상품', 'code' => '', 'image' => null,
-                'label' => '', 'kind' => 'base', 'price' => 0, 'total' => 0, 'available' => 0, 'error' => ''];
+                'label' => '', 'kind' => 'base', 'price' => 0, 'total' => 0, 'tax_free' => 0, 'available' => 0, 'error' => ''];
             try {
                 $product = $products[$item['product_id']] ??= $this->products->get($item['product_id']);
                 $item['name'] = $product['name']; $item['code'] = $product['code'];
@@ -169,6 +170,7 @@ final class Cart
                 $item['price'] = $item['kind'] === 'extra' ? (int) $option['price'] : (int) $product['price'] + (int) ($option['price'] ?? 0);
                 if ($item['price'] < 0) throw DomainError::validation(['price' => '상품 가격을 확인할 수 없습니다.']);
                 $item['total'] = $item['price'] * $item['quantity'];
+                $item['tax_free'] = (int) $product['tax_free'];
                 $groups[$item['product_id']] ??= ['product' => $product, 'quantity' => 0, 'subtotal' => 0];
                 $groups[$item['product_id']]['quantity'] += $item['kind'] === 'extra' ? 0 : $item['quantity'];
                 $groups[$item['product_id']]['subtotal'] += $item['total'];
@@ -190,17 +192,18 @@ final class Cart
         }
         $delivery = $this->shipping($groups, $shipping);
         $subtotal = array_sum(array_column($items, 'total'));
+        $tax = TaxAmounts::calculate($items, $delivery['prepaid']);
         $quote = ['items' => $items, 'errors' => $errors, 'subtotal' => $subtotal, 'shipping_fee' => $delivery['prepaid'],
             'cod_fee' => $delivery['cod'], 'shipping' => $delivery['lines'], 'total' => $subtotal + $delivery['prepaid'],
-            'quantity' => array_sum(array_column(array_filter($items, static fn ($item) => $item['kind'] !== 'extra'), 'quantity'))];
+            'quantity' => array_sum(array_column(array_filter($items, static fn ($item) => $item['kind'] !== 'extra'), 'quantity')), 'tax' => $tax];
         // 재고 잔량과 이미지처럼 주문 금액에 영향이 없는 표시값은 주문서 지문에서 제외한다.
         $fingerprintItems = array_map(static fn (array $item): array => [
             'key' => $item['key'], 'product_id' => $item['product_id'], 'option_id' => $item['option_id'],
             'quantity' => $item['quantity'], 'name' => $item['name'], 'code' => $item['code'],
-            'label' => $item['label'], 'kind' => $item['kind'], 'price' => $item['price'], 'total' => $item['total'],
+            'label' => $item['label'], 'kind' => $item['kind'], 'price' => $item['price'], 'total' => $item['total'], 'tax_free' => $item['tax_free'],
         ], $items);
         // 가격·배송 방식·옵션·수량·구매 안내가 바뀌면 다시 확인하도록 한다.
-        $quote['fingerprint'] = hash('sha256', json_encode([$fingerprintItems, $delivery, $this->settings->all()['order_notice']], JSON_THROW_ON_ERROR));
+        $quote['fingerprint'] = hash('sha256', json_encode([$fingerprintItems, $delivery, $tax, $this->settings->all()['order_notice']], JSON_THROW_ON_ERROR));
         return $quote;
     }
 
@@ -215,20 +218,35 @@ final class Cart
             if (!in_array($choice, ['prepaid', 'cod'], true)) throw DomainError::validation(['shipping' => '배송비 결제 방식을 확인해 주세요.']);
             $mode = $method === 1 || ($method === 2 && $choice === 'cod') ? 'cod' : 'prepaid';
             $type = (int) $p['shipping_type'];
+            $freeMinimum = $type === 0 ? (int) $settings['free_minimum'] : ($type === 2 ? (int) $p['shipping_free_minimum'] : 0);
+            $unitFee = $type === 0 ? (int) $settings['fee'] : ($type === 1 ? 0 : (int) $p['shipping_fee']);
+            $perQuantity = $type === 4 ? max(1, (int) $p['shipping_per_qty']) : 0;
+            $chargeCount = $type === 4 ? (int) ceil($group['quantity'] / $perQuantity) : 0;
             $fee = match ($type) {
                 0 => 0,
                 1 => 0,
                 2 => $group['subtotal'] >= (int) $p['shipping_free_minimum'] ? 0 : (int) $p['shipping_fee'],
                 3 => (int) $p['shipping_fee'],
-                4 => (int) ceil($group['quantity'] / max(1, (int) $p['shipping_per_qty'])) * (int) $p['shipping_fee'],
+                4 => $chargeCount * (int) $p['shipping_fee'],
             };
             $lines[$id] = ['product_id' => $id, 'name' => $p['name'], 'mode' => $mode, 'selectable' => $method === 2,
-                'fee' => $fee, 'shared' => $type === 0];
+                'fee' => $fee, 'shared' => $type === 0, 'type' => $type, 'subtotal' => $group['subtotal'],
+                'quantity' => $group['quantity'], 'unit_fee' => $unitFee, 'free_minimum' => $freeMinimum,
+                'per_quantity' => $perQuantity, 'charge_count' => $chargeCount, 'bundle_subtotal' => 0,
+                'bundle_count' => 0, 'bundle_fee' => 0, 'bundle_lead' => false];
             if ($type === 0) $default[$mode][$id] = $group['subtotal'];
         }
         foreach ($default as $mode => $amounts) {
-            $fee = (int) $settings['free_minimum'] > 0 && array_sum($amounts) >= (int) $settings['free_minimum'] ? 0 : (int) $settings['fee'];
-            $lines[array_key_first($amounts)]['fee'] = $fee;
+            $bundleSubtotal = array_sum($amounts);
+            $fee = (int) $settings['free_minimum'] > 0 && $bundleSubtotal >= (int) $settings['free_minimum'] ? 0 : (int) $settings['fee'];
+            $lead = array_key_first($amounts);
+            foreach (array_keys($amounts) as $id) {
+                $lines[$id]['bundle_subtotal'] = $bundleSubtotal;
+                $lines[$id]['bundle_count'] = count($amounts);
+                $lines[$id]['bundle_fee'] = $fee;
+                $lines[$id]['bundle_lead'] = $id === $lead;
+            }
+            $lines[$lead]['fee'] = $fee;
         }
         $sums = ['prepaid' => 0, 'cod' => 0, 'lines' => array_values($lines)];
         foreach ($lines as $line) $sums[$line['mode']] += $line['fee'];

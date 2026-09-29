@@ -31,8 +31,6 @@ echo $view->fetch('admin/product_form', [
     'page' => $editing ? 'products/edit' : 'products/new', 'admin_url' => $base . '/admin/shop', 'public_url' => $base . '/shop',
     'public_view_url' => $editing ? $base . '/shop/item?id=BROWSER1' : '',
     'values' => ['code' => 'BROWSER1', 'name' => '', 'price' => '', 'stock' => '4', 'stock_alert' => '2', 'version' => '0', 'image_key' => 'tmp/' . str_repeat('a', 32)],
-    'categories' => [1 => ['text' => '의류', 'title' => '의류']], 'images' => [], 'options_rows' => [], 'extras_rows' => [], 'relations' => [],
+    'categories' => [1 => ['text' => '의류', 'title' => '의류']], 'images' => [], 'options_rows' => [], 'extras_rows' => [],
     'errors' => [], 'notice' => '', 'info_groups' => ProductInfo::GROUPS,
-    'apply_fields' => ['active' => '판매가능', 'no_coupon' => '쿠폰제외', 'point' => '포인트', 'tax_free' => '과세', 'shipping' => '배송비',
-        'buy' => '구매수량', 'html' => '상세 위·아래 HTML', 'seller_email' => '판매자 메일', 'phone_inquiry' => '전화문의'],
 ]);

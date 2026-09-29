@@ -19,7 +19,7 @@ final class HomeBannerTest extends ShopTestCase
     {
         $flat = [];
         foreach (Settings::defaults()['main'] as $type => $block) foreach ($block as $key => $value) $flat['main_' . $type . '_' . $key] = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
-        foreach (['category', 'type', 'search', 'related', 'detail'] as $section) foreach (Settings::defaults()[$section] as $key => $value) $flat[$section . '_' . $key] = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+        foreach (['category', 'type', 'search', 'detail'] as $section) foreach (Settings::defaults()[$section] as $key => $value) $flat[$section . '_' . $key] = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
         return $overrides + $flat;
     }
 

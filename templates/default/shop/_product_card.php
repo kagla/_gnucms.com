@@ -5,7 +5,6 @@
     <?php if ($item['sold_out']): ?><span class="yc-soldout">SOLD OUT</span><?php endif ?>
   </a>
   <div class="yc-card-body">
-    <?php if ($item['brand'] !== ''): ?><span class="yc-card-brand"><?= $this->e($item['brand']) ?></span><?php endif ?>
     <a class="yc-card-name" href="<?= $this->e($url) ?>/item?id=<?= $this->e(rawurlencode($item['code'])) ?>"><?= $this->e($item['name']) ?></a>
     <?php if ($item['summary'] !== ''): ?><div class="yc-card-summary"><?= $this->html($item['summary']) ?></div><?php endif ?>
     <div class="yc-card-price">

@@ -140,11 +140,9 @@ final class ShopController
                 $data['preview'] = !$visible;
                 $data['path'] = isset($product['categories'][1]) ? $this->service->categories->ancestors($product['categories'][1]) : [];
                 $data['adjacent'] = $this->service->listing->adjacent($product);
-                $data['related'] = $data['settings']['related']['use'] ? $this->service->listing->related((int) $product['id']) : [];
                 $data['options_json'] = Options::pageJson($product, $product['options']);
                 $data['sold_out'] = $product['sold_out_computed'];
                 $data['display_price'] = Pricing::display($product);
-                $data['point_label'] = Pricing::pointLabel($product);
                 $data['info_label'] = ProductInfo::labels()[$product['info_group']] ?? '';
                 $data['info_articles'] = ProductInfo::articles($product['info_group']);
                 $identity = $this->service->app->guestAcl()->identity();

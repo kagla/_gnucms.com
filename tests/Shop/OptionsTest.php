@@ -107,6 +107,6 @@ final class OptionsTest extends ShopTestCase
     private function minimalProductRow(string $code): array
     {
         return ['code' => $code, 'slug' => $code, 'category_id' => 1, 'name' => $code, 'summary' => '', 'description' => '', 'description_text' => '', 'price' => 10000,
-            'head_html' => '', 'tail_html' => '', 'info_values' => '', 'memo' => '', 'extra' => '[]', 'created_at' => 1, 'updated_at' => 1];
+            'info_values' => '', 'memo' => '', 'extra' => '[]', 'created_at' => 1, 'updated_at' => 1];
     }
 }

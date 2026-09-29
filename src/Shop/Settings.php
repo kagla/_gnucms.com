@@ -78,7 +78,6 @@ final class Settings
             'category' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'type' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
             'search' => ['columns' => 4, 'rows' => 5, 'image_width' => 200, 'image_height' => 0],
-            'related' => ['use' => true, 'columns' => 4, 'image_width' => 100, 'image_height' => 0],
             'detail' => ['image_width' => 400, 'image_height' => 0],
             'show_tax' => false,
             'shipping' => ['content' => '', 'fee' => 0, 'free_minimum' => 0, 'default_carrier' => ''],
@@ -98,6 +97,7 @@ final class Settings
         $row = $this->store->selectOne('SELECT payload FROM ' . $this->store->table('yc_settings') . " WHERE id = 'settings'");
         $saved = $row === null ? [] : json_decode((string) $row['payload'], true, 8, JSON_THROW_ON_ERROR);
         $all = array_replace_recursive(self::defaults(), is_array($saved) ? $saved : []);
+        unset($all['related']);
         // 옛 저장값의 묶음 키(hit·recommend)는 버리고 순서는 TYPES 를 따른다. 분류 블록은 목록 그대로.
         $main = [];
         foreach (self::TYPES as $type) $main[$type] = $all['main'][$type];
@@ -182,8 +182,6 @@ final class Settings
             $settings[$section] = ['columns' => $int($section . '_columns', 1, 12), 'rows' => $int($section . '_rows', 1, 50),
                 'image_width' => $int($section . '_image_width', 0, 2000), 'image_height' => $int($section . '_image_height', 0, 2000)];
         }
-        $settings['related'] = ['use' => $bool('related_use'), 'columns' => $int('related_columns', 1, 12),
-            'image_width' => $int('related_image_width', 0, 2000), 'image_height' => $int('related_image_height', 0, 2000)];
         $settings['detail'] = ['image_width' => $int('detail_image_width', 0, 2000), 'image_height' => $int('detail_image_height', 0, 2000)];
         $settings['show_tax'] = $bool('show_tax');
         foreach (['shipping', 'exchange'] as $key) {

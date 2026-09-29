@@ -50,7 +50,6 @@ final class SettingsTest extends ShopTestCase
             'main_popular_image_width' => '300', 'main_popular_image_height' => '300', 'category_columns' => '4', 'category_rows' => '6',
             'category_image_width' => '250', 'category_image_height' => '0', 'type_columns' => '4', 'type_rows' => '5', 'type_image_width' => '200', 'type_image_height' => '0',
             'search_columns' => '4', 'search_rows' => '5', 'search_image_width' => '200', 'search_image_height' => '0',
-            'related_use' => '1', 'related_columns' => '5', 'related_image_width' => '120', 'related_image_height' => '0',
             'detail_image_width' => '500', 'detail_image_height' => '0', 'show_tax' => '1',
             'shipping_content' => '<p>배송 안내</p><script>x</script>', 'exchange_content' => ''] + $this->flat($this->shop->settings->all());
     }
@@ -155,7 +154,7 @@ final class SettingsTest extends ShopTestCase
                 $flat['main_' . $type . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
             }
         }
-        foreach (['category', 'type', 'search', 'related', 'detail'] as $section) {
+        foreach (['category', 'type', 'search', 'detail'] as $section) {
             foreach ($settings[$section] as $key => $value) $flat[$section . '_' . $key] = $key === 'use' ? ($value ? '1' : '0') : (string) $value;
         }
         $flat['show_tax'] = $settings['show_tax'] ? '1' : '0';

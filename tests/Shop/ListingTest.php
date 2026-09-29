@@ -36,12 +36,12 @@ final class ListingTest extends ShopTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testSearchFacetsRelatedAndAdjacent(array $config): void
+    public function testSearchFacetsAndAdjacent(array $config): void
     {
         $this->setupShop($config);
         $top = $this->category('의류'); $other = $this->category('잡화');
         $a = $this->product(['category_id' => (string) $top['id'], 'code' => 'A', 'name' => '파란 셔츠', 'summary' => '여름 상품', 'price' => '300', 'sort_order' => '1']);
-        $b = $this->product(['category_id' => (string) $top['id'], 'code' => 'B', 'name' => '빨간 셔츠', 'description' => '<p>겨울 상품</p>', 'price' => '100', 'sort_order' => '2', 'relations' => (string) $a['id']]);
+        $b = $this->product(['category_id' => (string) $top['id'], 'code' => 'B', 'name' => '빨간 셔츠', 'description' => '<p>겨울 상품</p>', 'price' => '100', 'sort_order' => '2']);
         $c = $this->product(['category_id' => (string) $other['id'], 'code' => 'C', 'name' => '가방', 'price' => '200', 'sort_order' => '3']);
         $search = $this->shop->listing->search('셔츠 상품', null, 0, 0, '', '', 1);
         self::assertSame(['A', 'B'], array_column($search['items'], 'code'));
@@ -51,8 +51,6 @@ final class ListingTest extends ShopTestCase
         self::assertSame(['C'], array_column($this->shop->listing->search('가방', $other, 0, 0, '', '', 1)['items'], 'code'));
         self::assertSame([], $this->shop->listing->search('100%', null, 0, 0, '', '', 1)['items']);
         self::assertSame(['B', 'A'], array_column($this->shop->listing->search('셔츠', null, 0, 0, 'price', 'asc', 1)['items'], 'code'));
-        self::assertSame(['A'], array_column($this->shop->listing->related((int) $b['id']), 'code'));
-        self::assertSame(['B'], array_column($this->shop->listing->related((int) $a['id']), 'code'));
         $adjacent = $this->shop->listing->adjacent($this->shop->products->get((int) $b['id']));
         self::assertSame('A', $adjacent['prev']['code']); self::assertNull($adjacent['next']);
         $adjacent = $this->shop->listing->adjacent($this->shop->products->get((int) $a['id']));

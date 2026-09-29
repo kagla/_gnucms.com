@@ -16,7 +16,7 @@ final class SchemaTest extends ShopTestCase
         'yc_prod_order' => 'yc_products', 'yc_prod_updated' => 'yc_products',
         'yc_prod_price' => 'yc_products', 'yc_pc_category' => 'yc_product_categories',
         'yc_img_product' => 'yc_product_images', 'yc_opt_product' => 'yc_options',
-        'yc_rel_related' => 'yc_product_relations', 'yc_stock_product' => 'yc_stock_log',
+        'yc_stock_product' => 'yc_stock_log',
         'yc_order_user' => 'yc_orders', 'yc_order_status' => 'yc_orders', 'yc_order_created' => 'yc_orders',
         'yc_order_pay_by' => 'yc_orders', 'yc_order_payment' => 'yc_orders',
         'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items', 'yc_history_order' => 'yc_order_history'];
@@ -29,16 +29,106 @@ final class SchemaTest extends ShopTestCase
         Schema::migrate($db);
         Schema::migrate($db);
         foreach (Schema::TABLES as $table) self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table($table)), $table);
-        self::assertSame(14, count(Schema::TABLES));
-        self::assertSame(24, count(self::INDEXES));
+        self::assertSame(13, count(Schema::TABLES));
+        self::assertSame(23, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['slug' => '의류', 'path' => '/1/', 'legacy_code' => null, 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
-            'active' => 1, 'no_coupon' => 0, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
+            'active' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,
             'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => 1, 'updated_at' => 1]);
         self::assertSame('의류', $this->shop->store->get('yc_categories', $id)['name']);
         self::assertNull($this->shop->store->find('yc_categories', $id + 1));
         $this->shop->store->logStock(1, null, -2, 'admin', 'test', 'tester');
         self::assertSame(-2, (int) $this->shop->store->selectOne('SELECT delta FROM ' . $this->shop->store->table('yc_stock_log'))['delta']);
+    }
+
+    /** 40판: 기존 관련상품 관계와 설정을 삭제하고 다른 설정은 유지한다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateRemovesSavedRelatedProducts(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $db->execute('CREATE TABLE ' . $db->table('yc_product_relations') . ' (product_id BIGINT NOT NULL, related_id BIGINT NOT NULL, sort_order SMALLINT NOT NULL DEFAULT 0, PRIMARY KEY (product_id, related_id))');
+        $db->execute('INSERT INTO ' . $db->table('yc_product_relations') . ' (product_id, related_id) VALUES (1, 2)');
+        $db->insert('yc_settings', ['id' => 'settings', 'payload' => '{"related":{"use":true,"columns":4},"show_tax":true}']);
+
+        Schema::migrate($db);
+        Schema::migrate($db);
+
+        self::assertNull($db->selectOne('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$db->tableName('yc_product_relations')]));
+        $row = $db->selectOne('SELECT payload FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'");
+        self::assertSame(['show_tax' => true], json_decode((string) $row['payload'], true, 512, JSON_THROW_ON_ERROR));
+    }
+
+    /** 41판: 상품별 판매자 메일과 상세 위·아래 HTML 칸을 삭제한다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateRemovesPerProductSellerAndExtraHtml(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $db->execute('ALTER TABLE ' . $db->table('yc_products') . " ADD COLUMN seller_email VARCHAR(191) NOT NULL DEFAULT '', ADD COLUMN head_html TEXT NOT NULL, ADD COLUMN tail_html TEXT NOT NULL");
+
+        Schema::migrate($db);
+        Schema::migrate($db);
+
+        foreach (['seller_email', 'head_html', 'tail_html'] as $column) {
+            self::assertNull($db->selectOne('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$db->tableName('yc_products'), $column]));
+        }
+    }
+
+    /** 42판: 실제 적립 기능 없이 남아 있던 상품 포인트 칸을 삭제한다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateRemovesUnusedProductPointColumns(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $db->execute('ALTER TABLE ' . $db->table('yc_products') . ' ADD COLUMN point_type SMALLINT NOT NULL DEFAULT 0, ADD COLUMN point INTEGER NOT NULL DEFAULT 0, ADD COLUMN supply_point INTEGER NOT NULL DEFAULT 0');
+
+        Schema::migrate($db);
+        Schema::migrate($db);
+
+        foreach (['point_type', 'point', 'supply_point'] as $column) {
+            self::assertNull($db->selectOne('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$db->tableName('yc_products'), $column]));
+        }
+    }
+
+    /** 44판: 실제 기능 없이 남은 coupon 과 옛 no_coupon 칸을 상품·분류에서 제거한다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateRemovesCouponColumns(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $category = $this->category('기존 분류');
+        $this->product(['code' => 'OLD-COUPON', 'category_id' => (string) $category['id']]);
+        foreach (['yc_products', 'yc_categories'] as $table) {
+            $db->execute('ALTER TABLE ' . $db->table($table) . ' ADD COLUMN coupon SMALLINT NOT NULL DEFAULT 1, ADD COLUMN no_coupon SMALLINT NOT NULL DEFAULT 0');
+        }
+
+        Schema::migrate($db);
+        Schema::migrate($db);
+
+        foreach (['yc_products', 'yc_categories'] as $table) {
+            foreach (['coupon', 'no_coupon'] as $column) {
+                self::assertNull($db->selectOne('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$db->tableName($table), $column]));
+            }
+        }
+    }
+
+    /** 47판: 상품정보고시와 중복되던 상품 기본 정보 칸을 삭제한다. */
+    #[DataProvider('connectionProvider')]
+    public function testMigrateRemovesDuplicateProductInfoColumns(array $config): void
+    {
+        $this->setupShop($config);
+        $db = $this->app->db();
+        $db->execute('ALTER TABLE ' . $db->table('yc_products')
+            . " ADD COLUMN maker VARCHAR(100) NOT NULL DEFAULT '', ADD COLUMN origin VARCHAR(100) NOT NULL DEFAULT '',"
+            . " ADD COLUMN brand VARCHAR(100) NOT NULL DEFAULT '', ADD COLUMN model VARCHAR(100) NOT NULL DEFAULT ''");
+
+        Schema::migrate($db);
+        Schema::migrate($db);
+
+        foreach (['maker', 'origin', 'brand', 'model'] as $column) {
+            self::assertNull($db->selectOne('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$db->tableName('yc_products'), $column]));
+        }
     }
 
     /** 결제 이전에 만든 주문 표에도 결제 칸이 생긴다. */
@@ -102,6 +192,8 @@ final class SchemaTest extends ShopTestCase
         $rows = [];
         foreach ($db->select('SELECT * FROM ' . $db->table('yc_categories') . ' ORDER BY id') as $row) $rows[(int) $row['id']] = $row;
         self::assertArrayNotHasKey('code', $rows[(int) $top]);
+        self::assertArrayNotHasKey('no_coupon', $rows[(int) $top]);
+        self::assertArrayNotHasKey('coupon', $rows[(int) $top]);
         self::assertSame(['의류', '/' . $top . '/', 1, '10'], [$rows[(int) $top]['slug'], $rows[(int) $top]['path'], (int) $rows[(int) $top]['depth'], $rows[(int) $top]['legacy_code']]);
         self::assertSame(['셔츠', '/' . $top . '/' . $child . '/', 2, '1010'], [$rows[(int) $child]['slug'], $rows[(int) $child]['path'], (int) $rows[(int) $child]['depth'], $rows[(int) $child]['legacy_code']]);
         self::assertSame(['반팔-셔츠', '/' . $top . '/' . $child . '/' . $grand . '/', 3], [$rows[(int) $grand]['slug'], $rows[(int) $grand]['path'], (int) $rows[(int) $grand]['depth']]);

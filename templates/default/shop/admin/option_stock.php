@@ -13,9 +13,9 @@
     <?php foreach ($list['items'] as $row): $n = 'rows[' . (int) $row['id'] . ']'; ?>
       <tr><td><a href="<?= $this->e($admin_url) ?>/products/edit?id=<?= (int) $row['product_id'] ?>"><?= $this->e($row['product_name']) ?></a> <code><?= $this->e($row['product_code']) ?></code></td>
         <td><?= $row['kind'] === 'select' ? '선택' : '추가' ?></td><td><?= $this->e(implode(' / ', array_filter([$row['value1'], $row['value2'], $row['value3']]))) ?></td><td><?= number_format((int) $row['price']) ?></td>
-        <td><input type="hidden" name="<?= $n ?>[original_stock]" value="<?= (int) $row['stock'] ?>"><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0" required></td>
-        <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock_alert]" value="<?= (int) $row['stock_alert'] ?>" min="0"></td>
-        <td><input type="hidden" name="<?= $n ?>[active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[active]" value="1"<?= (int) $row['active'] === 1 ? ' checked' : '' ?>></td></tr>
+        <td><div class="yc-option-input-group"><input type="hidden" name="<?= $n ?>[original_stock]" value="<?= (int) $row['stock'] ?>"><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0" required><button class="btn btn-xs" type="button" data-yc-copy-down="stock" title="이 재고를 아래 모든 옵션에 복사" aria-label="이 재고를 아래 모든 옵션에 복사">↓</button></div></td>
+        <td><div class="yc-option-input-group"><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock_alert]" value="<?= (int) $row['stock_alert'] ?>" min="0"><button class="btn btn-xs" type="button" data-yc-copy-down="stock_alert" title="이 통보 기준을 아래 모든 옵션에 복사" aria-label="이 통보 기준을 아래 모든 옵션에 복사">↓</button></div></td>
+        <td><div class="yc-option-input-group"><input type="hidden" name="<?= $n ?>[active]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[active]" value="1"<?= (int) $row['active'] === 1 ? ' checked' : '' ?>><button class="btn btn-xs" type="button" data-yc-copy-down="active" title="이 사용 여부를 아래 모든 옵션에 복사" aria-label="이 사용 여부를 아래 모든 옵션에 복사">↓</button></div></td></tr>
     <?php endforeach ?>
   <?php if ($list['items'] === []): ?><tr><td colspan="7"><div class="yc-admin-empty">표시할 항목이 없습니다. 검색 조건을 확인해 주세요.</div></td></tr><?php endif ?>
   </tbody></table></div>

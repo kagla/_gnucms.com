@@ -37,8 +37,7 @@ final class ShopPublicTest extends WebTestCase
         foreach ([['A', '파란 셔츠', '300', '1'], ['B', '빨간 셔츠', '100', '1'], ['C', '숨은 셔츠', '200', '0']] as [$code, $name, $price, $active]) {
             $ids[$code] = $this->shop->products->save(['code' => $code, 'name' => $name, 'category_id' => (string) $child['id'], 'price' => $price, 'list_price' => '500', 'stock' => $code === 'B' ? '0' : '3',
                 'active' => $active, 'summary' => '요약 ' . $code, 'description' => '<p>설명 ' . $code . '</p>', 'info_group' => 'wear', 'sort_order' => $code === 'A' ? '1' : '2',
-                'option_group' => $code === 'A' ? [1 => '색상'] : [], 'options' => $code === 'A' ? [['value1' => '빨강', 'price' => '100', 'stock' => '2']] : [],
-                'relations' => $code === 'B' ? (string) $ids['A'] : ''], $code === 'A' ? [ImagesTest::png(300, 300)] : []);
+                'option_group' => $code === 'A' ? [1 => '색상'] : [], 'options' => $code === 'A' ? [['value1' => '빨강', 'price' => '100', 'stock' => '2']] : []], $code === 'A' ? [ImagesTest::png(300, 300)] : []);
         }
         $this->app->db()->update('yc_categories', ['legacy_code' => '10'], 'id = :id', ['id' => (int) $top['id']]);
         return ['top' => $top, 'child' => $child, 'ids' => $ids];
@@ -277,7 +276,7 @@ final class ShopPublicTest extends WebTestCase
         self::assertStringContainsString('파란 셔츠', $this->body($this->get($this->app, '/shop/item', ['slug' => '파란-셔츠'])));
         $b = $this->body($this->get($this->app, '/shop/item', ['id' => 'B']));
         self::assertStringContainsString('품절', $b);
-        self::assertStringContainsString('관련상품', $b);
+        self::assertStringNotContainsString('관련상품', $b);
         self::assertSame(404, $this->get($this->app, '/shop/item', ['id' => 'C'])->getStatusCode());
         self::assertSame(404, $this->get($this->app, '/shop/item', ['id' => 'ZZ'])->getStatusCode());
         $file = $this->shop->products->get($seed['ids']['A'])['images'][0]['filename'];

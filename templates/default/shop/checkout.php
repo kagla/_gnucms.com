@@ -12,6 +12,32 @@
 <?php $value = (string) ($input[$name] ?? ''); if ($type === 'tel') $value = \GnuCms\Aligo\PhoneNumber::format($value); ?>
 <label class="yc-field" for="yc-<?= $name ?>"><span><?= $label ?><?= $required ? ' <small aria-hidden="true">*</small>' : ' <small class="muted">선택</small>' ?></span><input class="input input-bordered" id="yc-<?= $name ?>" name="<?= $name ?>" type="<?= $type ?>" value="<?= $this->e($value) ?>" maxlength="<?= $max ?>"<?= $type === 'tel' ? ' placeholder="010-1234-5678"' : '' ?><?= $required ? ' required' : '' ?><?= $autocomplete !== '' ? ' autocomplete="' . $autocomplete . '"' : '' ?><?= isset($errors[$name]) ? ' aria-invalid="true" aria-describedby="yc-error-' . $name . '"' : '' ?>><?php if (isset($errors[$name])): ?><small class="yc-inline-error" id="yc-error-<?= $name ?>"><?= $this->e($errors[$name]) ?></small><?php endif ?></label>
 <?php }; ?>
+<?php $shippingDetail = static function (array $delivery): string {
+    $type = (int) ($delivery['type'] ?? -1);
+    if ($type === 0) {
+        $detail = '상점 기본배송 · ' . number_format((int) $delivery['bundle_count']) . '개 상품 '
+            . number_format((int) $delivery['bundle_subtotal']) . '원 묶음';
+        $minimum = (int) $delivery['free_minimum'];
+        if ($minimum > 0) {
+            $remaining = max(0, $minimum - (int) $delivery['bundle_subtotal']);
+            return $detail . ' · 무료 기준 ' . number_format($minimum) . '원 '
+                . ($remaining === 0 ? '충족' : '미달 (' . number_format($remaining) . '원 남음)');
+        }
+        return $detail . ' · 기본 배송비 ' . number_format((int) $delivery['unit_fee']) . '원';
+    }
+    if ($type === 1) return '상품별 무료배송';
+    if ($type === 2) {
+        $minimum = (int) $delivery['free_minimum'];
+        $remaining = max(0, $minimum - (int) $delivery['subtotal']);
+        return '상품 금액 ' . number_format((int) $delivery['subtotal']) . '원 · ' . number_format($minimum) . '원 이상 무료 · '
+            . ($remaining === 0 ? '기준 충족' : number_format($remaining) . '원 더 담으면 무료');
+    }
+    if ($type === 3) return '상품별 고정 배송비 ' . number_format((int) $delivery['unit_fee']) . '원';
+    if ($type === 4) return '기본 상품 ' . number_format((int) $delivery['quantity']) . '개 · '
+        . number_format((int) $delivery['per_quantity']) . '개 단위 ' . number_format((int) $delivery['charge_count']) . '회 × '
+        . number_format((int) $delivery['unit_fee']) . '원';
+    return '배송비 계산 기준을 확인해 주세요.';
+}; ?>
 <form method="post" action="<?= $this->e($url) ?>/checkout" class="yc-commerce-grid" data-yc-checkout>
 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="flow" value="<?= $this->e($flow) ?>"><input type="hidden" name="checkout_token" value="<?= $this->e($checkout_token) ?>">
 <div class="yc-checkout-sections">
@@ -36,8 +62,9 @@
 <div class="yc-form-stack"><?php $this->insert('_postcode'); $field('address', '주소', 'text', true, 'shipping address-line1', 250); $field('address_detail', '상세주소', 'text', false, 'shipping address-line2', 250); $field('delivery_note', '배송 요청사항', 'text', false, '', 500); ?></div>
 <label class="yc-consent yc-save-address"><input class="checkbox checkbox-sm" type="checkbox" name="save_default_address" value="1"<?= ($input['save_default_address'] ?? '') === '1' ? ' checked' : '' ?>><span>이 주문자 정보와 배송지·배송 요청사항을 다음 주문 기본값으로 저장</span></label></section>
 <?php $this->insert('_order_products', ['items' => $quote['items']]) ?>
-<section class="yc-panel"><h2>배송비</h2><?php $selectable = false; foreach ($quote['shipping'] as $delivery): ?><div class="yc-shipping-line"><div><strong><?= $this->e($delivery['name']) ?></strong><p class="muted"><?= $delivery['shared'] ? '상점 기본배송 · 같은 결제 방식끼리 묶음' : '상품별 배송' ?></p></div><div><?php if ($delivery['selectable']): $selectable = true; ?><select class="select select-bordered" name="shipping[<?= (int) $delivery['product_id'] ?>]" aria-label="<?= $this->e($delivery['name']) ?> 배송비 결제 방식"><option value="prepaid"<?= $delivery['mode'] === 'prepaid' ? ' selected' : '' ?>>선불</option><option value="cod"<?= $delivery['mode'] === 'cod' ? ' selected' : '' ?>>착불</option></select><?php else: ?><span><?= $delivery['mode'] === 'cod' ? '착불' : '선불' ?></span><?php endif ?> <strong><?= number_format($delivery['fee']) ?>원</strong></div></div><?php endforeach ?>
-<?php if ($selectable): ?><button class="yc-button yc-button-small" type="submit" name="action" value="refresh" formnovalidate>배송비 반영하기</button><p class="yc-help">배송 방식을 변경하면 배송비를 반영한 뒤 주문해 주세요.</p><?php endif ?></section>
+<section class="yc-panel"><h2>배송비 계산</h2><p class="yc-help">상점 기본배송은 선불과 착불을 구분해 각각 한 번만 계산합니다.</p><?php $selectable = false; foreach ($quote['shipping'] as $delivery): ?><div class="yc-shipping-line"><div class="yc-shipping-line-info"><strong><?= $this->e($delivery['name']) ?></strong><p><?= $this->e($shippingDetail($delivery)) ?></p></div><div class="yc-shipping-charge"><?php if ($delivery['selectable']): $selectable = true; ?><select class="select select-bordered" name="shipping[<?= (int) $delivery['product_id'] ?>]" aria-label="<?= $this->e($delivery['name']) ?> 배송비 결제 방식"><option value="prepaid"<?= $delivery['mode'] === 'prepaid' ? ' selected' : '' ?>>선불</option><option value="cod"<?= $delivery['mode'] === 'cod' ? ' selected' : '' ?>>착불</option></select><?php else: ?><span><?= $delivery['mode'] === 'cod' ? '착불' : '선불' ?></span><?php endif ?><?php if ($delivery['shared'] && !$delivery['bundle_lead']): ?><strong class="yc-shipping-included">묶음 포함</strong><?php else: ?><strong><?= (int) $delivery['fee'] === 0 ? '무료' : number_format((int) $delivery['fee']) . '원' ?></strong><?php endif ?></div></div><?php endforeach ?>
+<div class="yc-shipping-totals"><div><span>선불 배송비 합계<small>주문 금액에 포함</small></span><strong><?= (int) $quote['shipping_fee'] === 0 ? '무료' : number_format((int) $quote['shipping_fee']) . '원' ?></strong></div><div><span>착불 배송비 합계<small>상품 수령 시 별도 결제</small></span><strong><?= number_format((int) $quote['cod_fee']) ?>원</strong></div></div>
+<?php if ($selectable): ?><button class="yc-button yc-button-small" type="submit" name="action" value="refresh" formnovalidate>배송비 반영하기</button><p class="yc-help">선불·착불을 변경한 뒤 배송비 반영하기를 눌러 합계 금액을 확인해 주세요.</p><?php endif ?></section>
 <?php if ($payment_methods !== []): ?>
 <section class="yc-panel" id="yc-payment"><h2>결제 수단</h2><div class="yc-form-stack">
 <?php $picked = $input['payment_method'] ?? array_key_first($payment_methods); foreach ($payment_methods as $key => $label): ?>

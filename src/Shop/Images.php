@@ -13,7 +13,7 @@ use Psr\Http\Message\UploadedFileInterface;
 final class Images
 {
     public const MAX = 10;
-    public const SIZES = ['main', 'list', 'type', 'search', 'related', 'detail', 'thumb', 'original'];
+    public const SIZES = ['main', 'list', 'type', 'search', 'detail', 'thumb', 'original'];
     private const TYPES = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp', IMAGETYPE_GIF => 'gif'];
     private const MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
 
@@ -89,7 +89,6 @@ final class Images
             'list' => $category === null ? (int) $all['category']['image_width'] : (int) $category['image_width'],
             'type' => (int) $all['type']['image_width'],
             'search' => (int) $all['search']['image_width'],
-            'related' => (int) $all['related']['image_width'],
             'detail' => (int) $all['detail']['image_width'],
             'thumb' => 70,
             'original' => 0,

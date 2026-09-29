@@ -17,9 +17,17 @@ use GnuCms\Error\DomainError;
 final class Schema
 {
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
-        'yc_option_groups', 'yc_options', 'yc_product_relations', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history', 'yc_order_notes', 'yc_product_feedback'];
+        'yc_option_groups', 'yc_options', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history', 'yc_order_notes', 'yc_product_feedback'];
 
-    public const ORDER_COLUMNS = ['default_address' => 'SMALLINT NOT NULL DEFAULT 0'];
+    public const ORDER_COLUMNS = [
+        'default_address' => 'SMALLINT NOT NULL DEFAULT 0',
+        'taxable_amount' => 'BIGINT NOT NULL DEFAULT 0',
+        'supply_amount' => 'BIGINT NOT NULL DEFAULT 0',
+        'vat_amount' => 'BIGINT NOT NULL DEFAULT 0',
+        'tax_free_amount' => 'BIGINT NOT NULL DEFAULT 0',
+    ];
+
+    public const ORDER_ITEM_COLUMNS = ['tax_free' => 'SMALLINT NOT NULL DEFAULT 0'];
 
     /** 결제 칸. 새 설치는 CREATE 문에, 결제 이전에 만든 yc_orders 에는 addColumn() 이 넣는다. */
     public const PAYMENT_COLUMNS = [
@@ -50,13 +58,16 @@ final class Schema
                 recipient VARCHAR(100) NOT NULL, recipient_phone VARCHAR(30) NOT NULL, postcode VARCHAR(10) NOT NULL,
                 address VARCHAR(250) NOT NULL, address_detail VARCHAR(250) NOT NULL, delivery_note VARCHAR(500) NOT NULL,
                 subtotal BIGINT NOT NULL, shipping_fee BIGINT NOT NULL, cod_fee BIGINT NOT NULL, total BIGINT NOT NULL,
+                taxable_amount BIGINT NOT NULL DEFAULT 0, supply_amount BIGINT NOT NULL DEFAULT 0,
+                vat_amount BIGINT NOT NULL DEFAULT 0, tax_free_amount BIGINT NOT NULL DEFAULT 0,
                 shipping_detail {TEXT} NOT NULL, order_notice {TEXT} NOT NULL,
                 carrier VARCHAR(100) NOT NULL, tracking_number VARCHAR(100) NOT NULL,
                 created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, ' . self::paymentColumnSql(),
             'yc_order_items' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, product_id BIGINT NOT NULL, option_id BIGINT NULL,
                 kind VARCHAR(8) NOT NULL, product_code VARCHAR(20) NOT NULL, product_name VARCHAR(250) NOT NULL,
                 option_label VARCHAR(350) NOT NULL, image VARCHAR(100) NOT NULL,
-                unit_price BIGINT NOT NULL, quantity INTEGER NOT NULL, total BIGINT NOT NULL',
+                unit_price BIGINT NOT NULL, quantity INTEGER NOT NULL, total BIGINT NOT NULL,
+                tax_free SMALLINT NOT NULL DEFAULT 0',
             'yc_order_history' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, status VARCHAR(20) NOT NULL,
                 actor VARCHAR(100) NOT NULL, note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL',
             'yc_order_notes' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, actor VARCHAR(100) NOT NULL,
@@ -71,16 +82,14 @@ final class Schema
             'yc_settings' => 'id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL',
             'yc_categories' => self::categoriesDefinition($bin),
             'yc_products' => 'id {AUTO_PK}, code VARCHAR(20)' . $bin . ' NOT NULL UNIQUE, slug VARCHAR(200)' . $bin . ' NOT NULL UNIQUE, category_id BIGINT NOT NULL,
-                name VARCHAR(250) NOT NULL, maker VARCHAR(100) NOT NULL DEFAULT \'\', origin VARCHAR(100) NOT NULL DEFAULT \'\',
-                brand VARCHAR(100) NOT NULL DEFAULT \'\', model VARCHAR(100) NOT NULL DEFAULT \'\', summary {TEXT} NOT NULL,
+                name VARCHAR(250) NOT NULL, summary {TEXT} NOT NULL,
                 description {TEXT} NOT NULL, description_text {TEXT} NOT NULL, list_price BIGINT NOT NULL DEFAULT 0, price BIGINT NOT NULL,
-                point_type SMALLINT NOT NULL DEFAULT 0, point INTEGER NOT NULL DEFAULT 0, supply_point INTEGER NOT NULL DEFAULT 0,
-                tax_free SMALLINT NOT NULL DEFAULT 0, seller_email VARCHAR(191) NOT NULL DEFAULT \'\', active SMALLINT NOT NULL DEFAULT 1,
-                no_coupon SMALLINT NOT NULL DEFAULT 0, sold_out SMALLINT NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0,
-                stock_alert INTEGER NOT NULL DEFAULT 0, restock_notify SMALLINT NOT NULL DEFAULT 0, buy_min INTEGER NOT NULL DEFAULT 0,
+                tax_free SMALLINT NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1,
+                sold_out SMALLINT NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0,
+                stock_alert INTEGER NOT NULL DEFAULT 0, buy_min INTEGER NOT NULL DEFAULT 0,
                 buy_max INTEGER NOT NULL DEFAULT 0, phone_inquiry SMALLINT NOT NULL DEFAULT 0, shipping_type SMALLINT NOT NULL DEFAULT 0,
                 shipping_method SMALLINT NOT NULL DEFAULT 0, shipping_fee BIGINT NOT NULL DEFAULT 0, shipping_free_minimum BIGINT NOT NULL DEFAULT 0,
-                shipping_per_qty INTEGER NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL,
+                shipping_per_qty INTEGER NOT NULL DEFAULT 0,
                 info_group VARCHAR(50) NOT NULL DEFAULT \'\', info_values {TEXT} NOT NULL, memo {TEXT} NOT NULL, hit INTEGER NOT NULL DEFAULT 0,
                 sold_qty INTEGER NOT NULL DEFAULT 0, review_count INTEGER NOT NULL DEFAULT 0, review_avg DECIMAL(2,1) NOT NULL DEFAULT 0,
                 sort_order INTEGER NOT NULL DEFAULT 0,
@@ -95,15 +104,25 @@ final class Schema
                 value3 VARCHAR(100)' . $bin . ' NOT NULL DEFAULT \'\', price BIGINT NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0,
                 stock_alert INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (product_id, kind, value1, value2, value3)',
-            'yc_product_relations' => 'product_id BIGINT NOT NULL, related_id BIGINT NOT NULL, sort_order SMALLINT NOT NULL DEFAULT 0,
-                PRIMARY KEY (product_id, related_id)',
             'yc_stock_log' => 'id {AUTO_PK}, product_id BIGINT NOT NULL, option_id BIGINT NULL, delta INTEGER NOT NULL, kind VARCHAR(20) NOT NULL,
                 reference VARCHAR(100) NOT NULL, actor VARCHAR(100) NOT NULL, created_at BIGINT NOT NULL',
         ];
         foreach ($definitions as $table => $definition) {
             $db->execute('CREATE TABLE IF NOT EXISTS ' . $db->table($table) . ' (' . strtr($definition, $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
         }
+        // 40판: 관련상품 기능과 기존 관계 데이터를 함께 제거한다. 재실행해도 안전하다.
+        $db->execute('DROP TABLE IF EXISTS ' . $db->table('yc_product_relations'));
+        self::removeRelatedSettings($db);
+        // 41판: 단일 판매자 운영에 맞춰 상품별 판매자 메일과 상세 위·아래 HTML을 제거한다.
+        foreach (['seller_email', 'head_html', 'tail_html'] as $column) self::dropColumn($db, 'yc_products', $column);
+        // 42판: 실제 적립·사용 기능이 없는 상품 포인트 설정과 저장 데이터를 제거한다.
+        foreach (['point_type', 'point', 'supply_point'] as $column) self::dropColumn($db, 'yc_products', $column);
         foreach (self::PAYMENT_COLUMNS + self::ORDER_COLUMNS as $column => $definition) self::addColumn($db, 'yc_orders', $column, $definition);
+        foreach (self::ORDER_ITEM_COLUMNS as $column => $definition) self::addColumn($db, 'yc_order_items', $column, $definition);
+        // 45판 이전 주문에는 면세 스냅샷이 없으므로 기존 결제 총액을 과세 금액으로 보존한다.
+        $orders = $db->table('yc_orders');
+        $db->execute('UPDATE ' . $orders . ' SET taxable_amount = total, supply_amount = FLOOR(total * 10 / 11), '
+            . 'vat_amount = total - FLOOR(total * 10 / 11) WHERE total > 0 AND taxable_amount = 0 AND supply_amount = 0 AND vat_amount = 0 AND tax_free_amount = 0');
         self::addColumn($db, 'yc_order_notes', 'occurred_at', 'BIGINT NOT NULL DEFAULT 0');
         self::addColumn($db, 'yc_order_notes', 'after_history_id', 'BIGINT NOT NULL DEFAULT 0');
         self::migrateMemberOrders($db);
@@ -113,6 +132,15 @@ final class Schema
         self::migrateCategoryTree($db, $bin);
         // 트리 갱신이 표를 다시 만든 뒤에 둔다 — 그렇게 만들어진 표에도 이 칸이 있어야 한다.
         foreach (self::CATEGORY_COLUMNS as $column => $definition) self::addColumn($db, 'yc_categories', $column, $definition);
+        // 44판: 실제 할인 기능 없이 남아 있던 상품·분류 쿠폰 허용 칸과 이전 이름을 제거한다.
+        foreach (['yc_products', 'yc_categories'] as $table) {
+            self::dropColumn($db, $table, 'coupon');
+            self::dropColumn($db, $table, 'no_coupon');
+        }
+        // 46판: 신청·발송 기능 없이 남아 있던 재입고 알림 허용 값을 제거한다.
+        self::dropColumn($db, 'yc_products', 'restock_notify');
+        // 47판: 상품정보고시와 중복되고 표시·검색에만 쓰이던 기본 정보 칸을 제거한다.
+        foreach (['maker', 'origin', 'brand', 'model'] as $column) self::dropColumn($db, 'yc_products', $column);
         self::migrateDisplayFlags($db);
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
             'yc_cat_path' => ['yc_categories', 'path'],
@@ -120,7 +148,7 @@ final class Schema
             'yc_prod_order' => ['yc_products', 'sort_order'], 'yc_prod_updated' => ['yc_products', 'updated_at'],
             'yc_prod_price' => ['yc_products', 'price'], 'yc_pc_category' => ['yc_product_categories', 'category_id'],
             'yc_img_product' => ['yc_product_images', 'product_id'], 'yc_opt_product' => ['yc_options', 'product_id'],
-            'yc_rel_related' => ['yc_product_relations', 'related_id'], 'yc_stock_product' => ['yc_stock_log', 'product_id'],
+            'yc_stock_product' => ['yc_stock_log', 'product_id'],
             'yc_order_user' => ['yc_orders', 'user_id'], 'yc_order_status' => ['yc_orders', 'status'],
             'yc_order_created' => ['yc_orders', 'created_at'], 'yc_order_pay_by' => ['yc_orders', 'pay_by'],
             'yc_order_payment' => ['yc_orders', 'payment_id'],
@@ -142,6 +170,17 @@ final class Schema
                     . ' (' . implode(', ', array_map($db->q(...), $columns)) . ')');
             }
         }
+    }
+
+    /** 40판: 기존 쇼핑몰 설정 JSON에서 관련상품 표시 옵션을 지운다. */
+    private static function removeRelatedSettings(Connection $db): void
+    {
+        $row = $db->selectOne('SELECT payload FROM ' . $db->table('yc_settings') . " WHERE id = 'settings'");
+        if ($row === null) return;
+        $payload = json_decode((string) $row['payload'], true);
+        if (!is_array($payload) || !array_key_exists('related', $payload)) return;
+        unset($payload['related']);
+        $db->update('yc_settings', ['payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)], 'id = :id', ['id' => 'settings']);
     }
 
     /**
@@ -167,7 +206,7 @@ final class Schema
                         $slug = $name;
                         for ($n = 2; $db->selectOne('SELECT id FROM ' . $categories . ' WHERE slug = ?', [$slug]) !== null; $n++) $slug = $name . '-' . $n;
                         $categoryId = (int) $db->insert('yc_categories', ['parent_id' => null, 'depth' => 1, 'name' => $name, 'slug' => $slug, 'path' => '', 'legacy_code' => null,
-                            'sort_order' => 0, 'active' => 1, 'no_coupon' => 0, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
+                            'sort_order' => 0, 'active' => 1, 'menu_hidden' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 4, 'list_rows' => 5,
                             'image_width' => 200, 'image_height' => 0, 'extra' => '[]', 'created_at' => $now, 'updated_at' => $now]);
                         $db->update('yc_categories', ['path' => '/' . $categoryId . '/'], 'id = :id', ['id' => $categoryId]);
                     }
@@ -227,7 +266,7 @@ final class Schema
     {
         return 'id {AUTO_PK}, parent_id BIGINT NULL, depth SMALLINT NOT NULL, name VARCHAR(100) NOT NULL,
             slug VARCHAR(200)' . $bin . " NOT NULL DEFAULT '', path VARCHAR(255) NOT NULL DEFAULT '', legacy_code VARCHAR(10)" . $bin . ' NULL,
-            sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1,
             menu_hidden SMALLINT NOT NULL DEFAULT 0,
             head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL,
             image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL';

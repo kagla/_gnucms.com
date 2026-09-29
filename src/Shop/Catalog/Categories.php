@@ -48,7 +48,6 @@ final class Categories
             'depth' => $depth,
             'sort_order' => Input::int($input['sort_order'] ?? '', 'sort_order', -999999, 999999, 0),
             'active' => Input::bool($input['active'] ?? '0'),
-            'no_coupon' => Input::bool($input['no_coupon'] ?? '0'),
             'menu_hidden' => Input::bool($input['menu_hidden'] ?? '0'),
             'head_html' => Input::html($input['head_html'] ?? '', 'head_html', $this->sanitizer),
             'tail_html' => Input::html($input['tail_html'] ?? '', 'tail_html', $this->sanitizer),
@@ -76,7 +75,7 @@ final class Categories
                     }
                 }
                 if (($input['apply_children'] ?? '') === '1') {
-                    $this->store->db->update('yc_categories', array_intersect_key($row, array_flip(['active', 'no_coupon', 'list_columns', 'list_rows', 'image_width', 'image_height', 'updated_at'])),
+                    $this->store->db->update('yc_categories', array_intersect_key($row, array_flip(['active', 'list_columns', 'list_rows', 'image_width', 'image_height', 'updated_at'])),
                         'path LIKE :prefix AND id <> :id', ['prefix' => $newPath . '%', 'id' => $id]);
                 }
                 return $id;
@@ -164,7 +163,7 @@ final class Categories
     }
 
     /**
-     * 선택 상자용 `id => ['label', 'text', 'title']`. text 는 경로 이름에 슬러그가 이름과 다를 때만 `[슬러그]` 를 덧붙인 것,
+     * 선택 상자용 `id => ['label', 'text', 'title', 'slug']`. text 는 경로 이름에 슬러그가 이름과 다를 때만 `[슬러그]` 를 덧붙인 것,
      * title 은 마우스를 올리면 보이는 슬러그·옛 코드·번호다. 코드가 없어진 뒤에도 같은 이름의 분류를 가려낼 수 있게 한다.
      */
     public function optionDetails(): array
@@ -181,7 +180,8 @@ final class Categories
     private static function detail(array $row): array
     {
         $title = '슬러그 ' . $row['slug'] . (($row['legacy_code'] ?? null) !== null && $row['legacy_code'] !== '' ? ' · 옛 코드 ' . $row['legacy_code'] : '') . ' · 번호 ' . (int) $row['id'];
-        return ['label' => $row['label'], 'text' => $row['label'] . ($row['slug'] === $row['name'] ? '' : ' [' . $row['slug'] . ']'), 'title' => $title];
+        return ['label' => $row['label'], 'text' => $row['label'] . ($row['slug'] === $row['name'] ? '' : ' [' . $row['slug'] . ']'),
+            'title' => $title, 'slug' => $row['slug']];
     }
 
     /**

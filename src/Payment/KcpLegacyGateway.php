@@ -37,7 +37,7 @@ final class KcpLegacyGateway extends DirectGateway
             'quotaopt' => '12', 'module_type' => '01', 'res_cd' => '', 'res_msg' => '', 'tno' => '',
             'trace_no' => '', 'enc_info' => '', 'enc_data' => '', 'ret_pay_method' => '',
             'tran_cd' => '00100000', 'use_pay_method' => self::PC_CARD, 'good_expr' => '0',
-        ];
+        ] + TaxAdapter::checkoutFields($this->id(), $order);
         return ['kind' => 'kcp-legacy',
             'script' => 'https://' . ($config['environment'] === 'test' ? 'testpay' : 'pay') . '.kcp.co.kr/plugin/payplus_web.jsp',
             'action' => $callbackUrl, 'fields' => $fields];
@@ -104,7 +104,7 @@ final class KcpLegacyGateway extends DirectGateway
             'card' => is_array($approved['card'] ?? null) ? $approved['card'] : []];
     }
 
-    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
     {
         if ($amount !== (int) $order['total'] || $remaining !== (int) $order['total']) {
             throw DomainError::validation(['refund' => 'KCP 기존 TCP/IP 연동은 부분 취소를 지원하지 않습니다.']);

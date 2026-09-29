@@ -32,6 +32,7 @@ final class InicisGateway extends DirectGateway
             'P_CHARSET' => 'UTF-8', 'P_TIMESTAMP' => $timestamp,
             'P_CHKFAKE' => self::mobileHash($config, $order, $timestamp),
         ];
+        $fields += TaxAdapter::checkoutFields($this->id(), $order);
         return ['kind' => 'inicis-pro', 'script' => 'https://paypro.inicis.com/std/payment/js/INIPayPro_v2.js', 'fields' => $fields];
     }
 
@@ -247,13 +248,14 @@ final class InicisGateway extends DirectGateway
         return $result;
     }
 
-    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array
+    protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array
     {
         $tid = $order['transaction_id'] ?? $state['approved']['tid'] ?? '';
         if ($tid === '') throw DomainError::validation(['refund' => '승인 거래번호가 필요합니다.']);
         $full = $amount === (int) $order['total'];
         $data = ['tid' => $tid, 'msg' => mb_strcut($reason, 0, 80, 'UTF-8')];
-        if (!$full) $data += ['price' => (string) $amount, 'confirmPrice' => (string) ($remaining - $amount), 'currency' => 'WON', 'taxFree' => '0'];
+        if (!$full) $data += ['price' => (string) $amount, 'confirmPrice' => (string) ($remaining - $amount), 'currency' => 'WON']
+            + TaxAdapter::refundFields($this->id(), $tax, $order);
         $result = $this->api($config, $full ? 'refund' : 'partialRefund', $data);
         if (($result['resultCode'] ?? '') !== '00') throw DomainError::serviceUnavailable('이니시스 환불이 확정되지 않았습니다. PG 내역을 확인해 주세요.');
         $at = self::date(($result[$full ? 'cancelDate' : 'prtcDate'] ?? '') . ($result[$full ? 'cancelTime' : 'prtcTime'] ?? ''));

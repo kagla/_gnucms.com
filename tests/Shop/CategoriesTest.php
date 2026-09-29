@@ -126,7 +126,7 @@ final class CategoriesTest extends ShopTestCase
     {
         $this->setupShop($config);
         $top = $this->category('의류'); $child = $this->category('셔츠', (int) $top['id']); $grand = $this->category('반팔', (int) $child['id']);
-        $this->shop->categories->save(['parent_id' => '', 'name' => '의류(수정)', 'active' => '0', 'no_coupon' => '1', 'list_columns' => '4', 'list_rows' => '2',
+        $this->shop->categories->save(['parent_id' => '', 'name' => '의류(수정)', 'active' => '0', 'list_columns' => '4', 'list_rows' => '2',
             'image_width' => '150', 'image_height' => '150', 'head_html' => '<p>위</p><script>1</script>', 'sort_order' => '5', 'apply_children' => '1',
             'extra_label' => [1 => '라벨'], 'extra_value' => [1 => '값']], (int) $top['id']);
         $top = $this->shop->categories->get((int) $top['id']);

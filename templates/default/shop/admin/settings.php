@@ -189,9 +189,8 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </div></section>
   <?php endforeach ?>
   </div>
-  <section class="card" id="settings-detail"><div class="card-body"><h2 class="card-title">관련상품과 상세</h2>
-    <label class="label cursor-pointer"><input type="hidden" name="related_use" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="related_use" value="1"<?= ($values['related_use'] ?? '') === '1' ? ' checked' : '' ?>> 상세에 관련상품 표시</label>
-    <div class="yc-fields"><?php $num('related_columns', '관련상품 한 행 수', 1, 12); $num('related_image_width', '관련상품 이미지 너비', 0, 2000); $num('related_image_height', '관련상품 이미지 높이', 0, 2000); $num('detail_image_width', '상세 대표 이미지 너비', 0, 2000); $num('detail_image_height', '상세 대표 이미지 높이', 0, 2000); ?></div>
+  <section class="card" id="settings-detail"><div class="card-body"><h2 class="card-title">상품 상세</h2>
+    <div class="yc-fields"><?php $num('detail_image_width', '상세 대표 이미지 너비', 0, 2000); $num('detail_image_height', '상세 대표 이미지 높이', 0, 2000); ?></div>
     <label class="label cursor-pointer"><input type="hidden" name="show_tax" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="show_tax" value="1"<?= ($values['show_tax'] ?? '') === '1' ? ' checked' : '' ?>> 가격 옆에 부가세 포함 표시</label>
   </div></section>
   <?php $this->insert('admin/_save_bar', ['save_label' => '설정 저장']) ?>

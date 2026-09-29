@@ -54,16 +54,9 @@ final class HelpersTest extends TestCase
         self::assertArrayNotHasKey(99, $decoded);
         self::assertSame('', ProductInfo::normalize('', []));
         try { ProductInfo::normalize('nope', []); self::fail(); } catch (DomainError $e) { self::assertArrayHasKey('info_group', $e->details()); }
-        $product = ['price' => 12000, 'phone_inquiry' => 0, 'point_type' => 1, 'point' => 5];
+        $product = ['price' => 12000, 'phone_inquiry' => 0];
         self::assertSame(12000, Pricing::display($product));
         self::assertNull(Pricing::display(['price' => 12000, 'phone_inquiry' => 1]));
-        self::assertSame(600, Pricing::point($product));
-        self::assertSame(600, Pricing::point(['price' => 12000, 'point_type' => 2, 'point' => 5], 0));
-        self::assertSame(700, Pricing::point(['price' => 12000, 'point_type' => 2, 'point' => 5], 2000));
-        self::assertSame(300, Pricing::point(['price' => 12000, 'point_type' => 0, 'point' => 300]));
-        self::assertSame(0, Pricing::point(['price' => 12000, 'point_type' => 0, 'point' => -5]));
         self::assertSame('12,000원', Pricing::format(12000));
-        self::assertSame('구매금액(추가옵션 제외)의 5%', Pricing::pointLabel(['price' => 12000, 'point_type' => 2, 'point' => 5]));
-        self::assertSame('600점', Pricing::pointLabel($product));
     }
 }

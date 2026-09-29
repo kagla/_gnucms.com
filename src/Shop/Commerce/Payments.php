@@ -8,6 +8,7 @@ use GnuCms\App;
 use GnuCms\Error\DomainError;
 use GnuCms\Payment\CallbackToken;
 use GnuCms\Payment\ExecutionLock;
+use GnuCms\Payment\TaxAmounts;
 use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 use GnuCms\Support\Clock;
@@ -87,10 +88,11 @@ final class Payments
         $items = $order['items'] ?? [];
         $first = (string) ($items[0]['product_name'] ?? $items[0]['name'] ?? '주문');
         $name = (string) ($order['order_name'] ?? (count($items) > 1 ? $first . ' 외 ' . (count($items) - 1) . '건' : $first));
+        $tax = TaxAmounts::fromOrder($order);
         return ['id' => (string) $order['payment_id'], 'provider' => (string) ($order['payment_provider'] ?? ''), 'environment' => (string) $order['payment_environment'],
             'config_revision' => (string) $order['payment_revision'], 'total' => (int) $order['total'], 'method' => (string) $order['payment_method'], 'order_name' => $name,
             'transaction_id' => (string) ($order['payment']['tid'] ?? ''), 'created_at' => (int) $order['created_at'],
-            'pay_by' => (int) ($order['pay_by'] ?? 0),
+            'pay_by' => (int) ($order['pay_by'] ?? 0), 'refunded_amount' => (int) ($order['refunded_amount'] ?? 0), 'tax' => $tax,
             'escrow_products' => $order['escrow_products'] ?? self::escrowProducts($items, (int) ($order['shipping_fee'] ?? 0))];
     }
 

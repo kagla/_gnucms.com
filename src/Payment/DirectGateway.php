@@ -41,7 +41,7 @@ abstract class DirectGateway implements Gateway
     abstract protected function validateCallback(array $config, array $order, array $callback): void;
     abstract protected function approve(array $config, array $order, array $callback): array;
     abstract protected function query(array $config, array $order, array $state): array;
-    abstract protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key): array;
+    abstract protected function refund(array $config, array $order, array $state, int $amount, int $remaining, string $reason, string $key, array $tax): array;
 
     public function complete(array $order, array $callback): void
     {
@@ -88,6 +88,7 @@ abstract class DirectGateway implements Gateway
         } else {
             foreach ($payment['cancellations'] as &$cancel) {
                 $cancel['reason'] = $known[$cancel['id']]['reason'] ?? '';
+                if (isset($known[$cancel['id']]['tax'])) $cancel['tax'] = $known[$cancel['id']]['tax'];
             }
             unset($cancel);
         }
@@ -108,14 +109,17 @@ abstract class DirectGateway implements Gateway
         $config = $this->credentials($order);
         if ($amount < 1 || $amount > $remaining || $remaining > (int) $order['total'] || !preg_match('/^[A-Za-z0-9_-]{16,100}$/D', $key)) throw DomainError::validation(['refund' => '환불 금액과 요청 키를 확인해 주세요.']);
         $send = false;
-        $state = $this->journal->change($order['id'], static function (array $state) use ($key, $amount, $remaining, $reason, &$send): array {
+        $refundTax = [];
+        $state = $this->journal->change($order['id'], static function (array $state) use ($order, $key, $amount, $remaining, $reason, &$send, &$refundTax): array {
             if (isset($state['refunds'][$key])) {
                 $old = $state['refunds'][$key];
                 if ($old['amount'] !== $amount || $old['remaining'] !== $remaining || $old['reason'] !== $reason) throw DomainError::validation(['refund' => '같은 요청 키의 환불 내용이 다릅니다.']);
                 return $state;
             }
             foreach ($state['refunds'] ?? [] as $refund) if ($refund['status'] === 'pending') throw DomainError::validation(['refund' => '기존 환불을 PG에서 확인해 주세요.']);
-            $state['refunds'][$key] = ['status' => 'pending', 'amount' => $amount, 'remaining' => $remaining, 'reason' => $reason, 'at' => Clock::timestamp()];
+            $refundTax = TaxAmounts::refund($order, $state, $amount, $remaining);
+            $state['refunds'][$key] = ['status' => 'pending', 'amount' => $amount, 'remaining' => $remaining,
+                'reason' => $reason, 'tax' => $refundTax, 'at' => Clock::timestamp()];
             $send = true;
             return $state;
         });
@@ -123,8 +127,8 @@ abstract class DirectGateway implements Gateway
             if ($state['refunds'][$key]['status'] === 'succeeded') return $state['refunds'][$key]['result'];
             throw DomainError::serviceUnavailable('환불 결과가 불확실해 자동 재전송을 중지했습니다. PG에서 처리 여부를 확인해 주세요.');
         }
-        $result = $this->refund($config, $order, $state, $amount, $remaining, $reason, $key);
-        $result['reason'] = $reason;
+        $result = $this->refund($config, $order, $state, $amount, $remaining, $reason, $key, $refundTax);
+        $result['reason'] = $reason; $result['tax'] = $refundTax;
         $this->journal->change($order['id'], static function (array $state) use ($key, $result): array {
             $state['refunds'][$key]['status'] = 'succeeded'; $state['refunds'][$key]['result'] = $result;
             return $state;
@@ -174,7 +178,7 @@ abstract class DirectGateway implements Gateway
             foreach ($state['refunds'] as $otherKey => $refund) if ($otherKey !== $key && ($refund['result']['id'] ?? '') === $matched['id']) throw DomainError::validation(['refund' => '이미 다른 환불에 연결된 취소입니다.']);
             $state['refunds'][$key]['status'] = 'succeeded';
             // 쇼핑몰 관리자 작업이 해당 신청을 명시적으로 연결한다.
-            $state['refunds'][$key]['result'] = array_replace($matched, ['reason' => '']);
+            $state['refunds'][$key]['result'] = array_replace($matched, ['reason' => '', 'tax' => $state['refunds'][$key]['tax'] ?? []]);
             return $state;
         });
     }

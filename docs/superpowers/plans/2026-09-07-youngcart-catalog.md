@@ -656,13 +656,12 @@ final class Schema
                     list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL, image_width INTEGER NOT NULL, image_height INTEGER NOT NULL,
                     extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL',
                 'yc_products' => 'id {AUTO_PK}, code VARCHAR(20) NOT NULL UNIQUE, slug VARCHAR(200) NOT NULL UNIQUE, category_id BIGINT NOT NULL,
-                    name VARCHAR(250) NOT NULL, maker VARCHAR(100) NOT NULL DEFAULT \'\', origin VARCHAR(100) NOT NULL DEFAULT \'\',
-                    brand VARCHAR(100) NOT NULL DEFAULT \'\', model VARCHAR(100) NOT NULL DEFAULT \'\', summary {TEXT} NOT NULL,
+                    name VARCHAR(250) NOT NULL, summary {TEXT} NOT NULL,
                     description {TEXT} NOT NULL, description_text {TEXT} NOT NULL, list_price BIGINT NOT NULL DEFAULT 0, price BIGINT NOT NULL,
                     point_type SMALLINT NOT NULL DEFAULT 0, point INTEGER NOT NULL DEFAULT 0, supply_point INTEGER NOT NULL DEFAULT 0,
                     tax_free SMALLINT NOT NULL DEFAULT 0, seller_email VARCHAR(191) NOT NULL DEFAULT \'\', active SMALLINT NOT NULL DEFAULT 1,
                     no_coupon SMALLINT NOT NULL DEFAULT 0, sold_out SMALLINT NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0,
-                    stock_alert INTEGER NOT NULL DEFAULT 0, restock_notify SMALLINT NOT NULL DEFAULT 0, buy_min INTEGER NOT NULL DEFAULT 0,
+                    stock_alert INTEGER NOT NULL DEFAULT 0, buy_min INTEGER NOT NULL DEFAULT 0,
                     buy_max INTEGER NOT NULL DEFAULT 0, phone_inquiry SMALLINT NOT NULL DEFAULT 0, shipping_type SMALLINT NOT NULL DEFAULT 0,
                     shipping_method SMALLINT NOT NULL DEFAULT 0, shipping_fee BIGINT NOT NULL DEFAULT 0, shipping_free_minimum BIGINT NOT NULL DEFAULT 0,
                     shipping_per_qty INTEGER NOT NULL DEFAULT 0, head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL,
@@ -2237,14 +2236,14 @@ git commit -m "feat: add youngcart product image storage with sized responses"
 - `Products::__construct(Store $store, HtmlSanitizer $sanitizer, ContentImageService $contentImages, Images $images, Options $options, Categories $categories)`
 - `Products::CODE_PATTERN`, `Products::TYPES = ['is_hit','is_recommended','is_new','is_popular','is_discount']`, `Products::APPLY_FIELDS`(적용 그룹 → 컬럼 목록), `Products::SEARCH_FIELDS`, `Products::SORTS`
 - `save(array $input, array $files, ?int $id = null, string $actor = 'admin'): int`
-  - 입력 키: `code`(생성), `version`(수정), `name`, `category_id`, `category2_id`, `category3_id`, `maker`, `origin`, `brand`, `model`, `summary`, `description`, `image_key`, `list_price`, `price`, `point_type`, `point`, `supply_point`, `tax_free`, `seller_email`, `active`, `no_coupon`, `sold_out`, `stock`, `stock_alert`, `restock_notify`, `buy_min`, `buy_max`, `phone_inquiry`, `shipping_type`, `shipping_method`, `shipping_fee`, `shipping_free_minimum`, `shipping_per_qty`, `head_html`, `tail_html`, `info_group`, `info[]`, `memo`, `is_hit`…`is_discount`, `sort_order`, `extra_label[]`, `extra_value[]`, `option_group[1..3]`, `options[i][…]`, `extras[i][…]`, `relations`(쉼표 id), `image_delete[]`, `image_order`(쉼표 id), `apply_scope`(`category|all`), `apply_fields[]`
+  - 입력 키: `code`(생성), `version`(수정), `name`, `category_id`, `category2_id`, `category3_id`, `summary`, `description`, `image_key`, `list_price`, `price`, `point_type`, `point`, `supply_point`, `tax_free`, `seller_email`, `active`, `no_coupon`, `sold_out`, `stock`, `stock_alert`, `buy_min`, `buy_max`, `phone_inquiry`, `shipping_type`, `shipping_method`, `shipping_fee`, `shipping_free_minimum`, `shipping_per_qty`, `head_html`, `tail_html`, `info_group`, `info[]`, `memo`, `is_hit`…`is_discount`, `sort_order`, `extra_label[]`, `extra_value[]`, `option_group[1..3]`, `options[i][…]`, `extras[i][…]`, `relations`(쉼표 id), `image_delete[]`, `image_order`(쉼표 id), `apply_scope`(`category|all`), `apply_fields[]`
   - `$files`는 `UploadedFileInterface` 목록(`images[]`)
 - `get(int $id): array` — 행 + `categories`(slot => 분류 행), `images`, `options`(`Options::load` 구조), `relations`(`[id, code, name]`), `info`(디코드), `extra`(디코드), `sold_out_computed`
 - `find(int $id): ?array`(행만), `byCode(string $code): ?array`, `bySlug(string $slug): ?array`(둘 다 `get` 구조)
 - `copy(int $id, string $newCode, string $actor): int`, `delete(int $id): void`
 - `list(array $filters, int $page, int $perPage = 20): array` — `q`, `field`, `ca`, `sort`, `dir`; 반환 `items`(분류 이름 `category_name` 포함), `total`, `page`, `total_pages`
 - `bulk(array $rows, string $actor): void`(`rows[id] = [category_id, name, list_price, price, stock, active, sold_out, sort_order]`), `bulkDelete(array $ids): void`
-- `setTypes(array $rows): void`(`rows[id] = [is_hit, …]`), `stockList(string $q, int $page, int $perPage): array`, `updateStock(array $rows, string $actor): void`(`rows[id] = [stock, stock_alert, active, sold_out, restock_notify]`)
+- `setTypes(array $rows): void`(`rows[id] = [is_hit, …]`), `stockList(string $q, int $page, int $perPage): array`, `updateStock(array $rows, string $actor): void`(`rows[id] = [stock, stock_alert, active, sold_out]`)
 - `search(string $q, string $ca, ?int $exclude, int $limit = 30): array`(`[id, code, name, price, category_name]`), `stats(): array`(`products, active, sold_out, categories`), `lowStock(int $limit = 20): array`(`['products' => …, 'options' => …]`)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
@@ -2265,10 +2264,10 @@ final class ProductsTest extends YoungCartTestCase
 {
     private function fullInput(int $category, array $overrides = []): array
     {
-        return $overrides + ['code' => 'SHIRT-01', 'name' => '<b>여름 셔츠</b>', 'category_id' => (string) $category, 'maker' => '메이커', 'origin' => '한국', 'brand' => '브랜드', 'model' => 'M-1',
+        return $overrides + ['code' => 'SHIRT-01', 'name' => '<b>여름 셔츠</b>', 'category_id' => (string) $category,
             'summary' => '<p>요약</p><script>x</script>', 'description' => '<h2>설명</h2><p>본문 내용</p>', 'list_price' => '15000', 'price' => '10000',
             'point_type' => '1', 'point' => '5', 'supply_point' => '100', 'tax_free' => '0', 'seller_email' => 'seller@example.test', 'active' => '1', 'no_coupon' => '0',
-            'sold_out' => '0', 'stock' => '3', 'stock_alert' => '1', 'restock_notify' => '1', 'buy_min' => '1', 'buy_max' => '5', 'phone_inquiry' => '0',
+            'sold_out' => '0', 'stock' => '3', 'stock_alert' => '1', 'buy_min' => '1', 'buy_max' => '5', 'phone_inquiry' => '0',
             'shipping_type' => '2', 'shipping_method' => '0', 'shipping_fee' => '3000', 'shipping_free_minimum' => '50000', 'shipping_per_qty' => '0',
             'head_html' => '<p>위</p>', 'tail_html' => '<p>아래</p>', 'info_group' => 'wear', 'info' => [0 => '면 100%'], 'memo' => '메모', 'is_hit' => '1', 'is_new' => '1', 'sort_order' => '2',
             'extra_label' => [1 => '라벨'], 'extra_value' => [1 => '값'],
@@ -2371,7 +2370,7 @@ final class ProductsTest extends YoungCartTestCase
         $this->shop->products->setTypes([$copyId => ['is_hit' => '0', 'is_popular' => '1']]);
         $copy = $this->shop->products->get($copyId);
         self::assertSame(0, (int) $copy['is_hit']); self::assertSame(1, (int) $copy['is_popular']);
-        $this->shop->products->updateStock([$copyId => ['stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '0']], 'tester');
+        $this->shop->products->updateStock([$copyId => ['stock' => '0', 'stock_alert' => '2', 'active' => '1', 'sold_out' => '0']], 'tester');
         self::assertSame(0, (int) $this->shop->products->get($copyId)['stock']);
         $list = $this->shop->products->stockList('', 1, 20);
         self::assertSame($copyId, (int) $list['items'][0]['id']);
@@ -2399,14 +2398,14 @@ final class ProductsTest extends YoungCartTestCase
     {
         $this->setupShop($config);
         $top = $this->category('의류'); $child = $this->category('셔츠', '10'); $other = $this->category('잡화');
-        $a = $this->product(['category_id' => (string) $child['id'], 'code' => 'A1', 'name' => '파란 셔츠', 'price' => '300', 'maker' => '메이커A']);
+        $a = $this->product(['category_id' => (string) $child['id'], 'code' => 'A1', 'name' => '파란 셔츠', 'price' => '300']);
         $b = $this->product(['category_id' => (string) $other['id'], 'code' => 'B1', 'name' => '가방', 'price' => '100']);
         $c = $this->product(['category_id' => (string) $top['id'], 'code' => 'C1', 'name' => '빨간 셔츠', 'price' => '200']);
         $all = $this->shop->products->list([], 1);
         self::assertSame(['C1', 'B1', 'A1'], array_column($all['items'], 'code'));
         self::assertSame('셔츠', $all['items'][2]['category_name']);
         self::assertSame(['C1', 'A1'], array_column($this->shop->products->list(['q' => '셔츠'], 1)['items'], 'code'));
-        self::assertSame(['A1'], array_column($this->shop->products->list(['q' => '메이커A', 'field' => 'maker'], 1)['items'], 'code'));
+        self::assertSame(['A1'], array_column($this->shop->products->list(['q' => 'A1', 'field' => 'code'], 1)['items'], 'code'));
         self::assertSame(['C1', 'A1'], array_column($this->shop->products->list(['ca' => '10'], 1)['items'], 'code'));
         self::assertSame(['B1', 'C1', 'A1'], array_column($this->shop->products->list(['sort' => 'price', 'dir' => 'asc'], 1)['items'], 'code'));
         self::assertSame(['C1', 'B1', 'A1'], array_column($this->shop->products->list(['sort' => 'nope', 'dir' => 'sideways'], 1)['items'], 'code'));
@@ -2452,7 +2451,7 @@ final class Products
         'tax_free' => ['tax_free'], 'shipping' => ['shipping_type', 'shipping_method', 'shipping_fee', 'shipping_free_minimum', 'shipping_per_qty'],
         'buy' => ['buy_min', 'buy_max'], 'html' => ['head_html', 'tail_html'], 'seller_email' => ['seller_email'], 'phone_inquiry' => ['phone_inquiry'],
     ];
-    public const SEARCH_FIELDS = ['name', 'code', 'maker', 'brand', 'model', 'origin', 'seller_email'];
+    public const SEARCH_FIELDS = ['name', 'code'];
     public const SORTS = ['code', 'name', 'sort_order', 'active', 'sold_out', 'hit', 'price', 'list_price', 'point', 'stock'];
     private const MAX_RELATIONS = 50;
 
@@ -2540,7 +2539,6 @@ final class Products
             }
         }
         $row['slug'] = $this->uniqueSlug(Input::slug($row['name'], $row['code'] ?? $existing['code']), $existing === null ? null : (int) $existing['id']);
-        foreach (['maker', 'origin', 'brand', 'model'] as $field) $row[$field] = Input::text($input[$field] ?? '', $field, 100);
         $row['summary'] = Input::html($input['summary'] ?? '', 'summary', $this->sanitizer, 20000);
         $row['description'] = Input::html($input['description'] ?? '', 'description', $this->sanitizer, 500000);
         $row['description_text'] = Input::plain($row['description']);
@@ -2549,7 +2547,7 @@ final class Products
         $row['point_type'] = Input::int($input['point_type'] ?? '', 'point_type', 0, 2, 0);
         $row['point'] = Input::int($input['point'] ?? '', 'point', 0, $row['point_type'] === 0 ? 10000000 : 99, 0);
         $row['supply_point'] = Input::int($input['supply_point'] ?? '', 'supply_point', 0, 10000000, 0);
-        foreach (['tax_free', 'active', 'no_coupon', 'sold_out', 'restock_notify', 'phone_inquiry', ...self::TYPES] as $field) $row[$field] = Input::bool($input[$field] ?? '0');
+        foreach (['tax_free', 'active', 'no_coupon', 'sold_out', 'phone_inquiry', ...self::TYPES] as $field) $row[$field] = Input::bool($input[$field] ?? '0');
         $row['seller_email'] = Input::text($input['seller_email'] ?? '', 'seller_email', 191);
         if ($row['seller_email'] !== '' && filter_var($row['seller_email'], FILTER_VALIDATE_EMAIL) === false) throw DomainError::validation(['seller_email' => '판매자 이메일을 확인해 주세요.']);
         $row['stock'] = Input::int($input['stock'] ?? '', 'stock', 0, 1000000, 0);
@@ -2787,7 +2785,7 @@ final class Products
         $where = ''; $params = [];
         if ($q !== '') { $where = ' WHERE (p.name LIKE ? OR p.code LIKE ?)'; $params = ['%' . $q . '%', '%' . $q . '%']; }
         $total = (int) $this->store->selectOne('SELECT COUNT(*) AS c FROM ' . $this->store->table('yc_products') . ' p' . $where, $params)['c'];
-        $items = $this->store->select('SELECT p.id, p.code, p.name, p.stock, p.stock_alert, p.active, p.sold_out, p.restock_notify FROM ' . $this->store->table('yc_products') . ' p' . $where
+        $items = $this->store->select('SELECT p.id, p.code, p.name, p.stock, p.stock_alert, p.active, p.sold_out FROM ' . $this->store->table('yc_products') . ' p' . $where
             . ' ORDER BY p.stock ASC, p.id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
         return ['items' => $items, 'total' => $total, 'page' => $page, 'total_pages' => max(1, (int) ceil($total / $perPage))];
     }
@@ -2800,7 +2798,7 @@ final class Products
                 $old = $this->store->get('yc_products', $id);
                 $stock = Input::int($input['stock'] ?? '', 'stock', 0, 1000000);
                 $this->store->update('yc_products', $id, ['stock' => $stock, 'stock_alert' => Input::int($input['stock_alert'] ?? '', 'stock_alert', 0, 1000000, 0),
-                    'active' => Input::bool($input['active'] ?? '0'), 'sold_out' => Input::bool($input['sold_out'] ?? '0'), 'restock_notify' => Input::bool($input['restock_notify'] ?? '0'), 'updated_at' => Clock::timestamp()]);
+                    'active' => Input::bool($input['active'] ?? '0'), 'sold_out' => Input::bool($input['sold_out'] ?? '0'), 'updated_at' => Clock::timestamp()]);
                 if ($stock !== (int) $old['stock']) $this->store->logStock($id, null, $stock - (int) $old['stock'], 'admin', 'stock', $actor);
             }
         });
@@ -3694,14 +3692,13 @@ $end = min($list['total_pages'], $list['page'] + $window);
       <h1 class="yc-item-name"><?= $this->e($product['name']) ?></h1>
       <?php if ($product['summary'] !== ''): ?><div class="yc-item-summary"><?= $this->html($product['summary']) ?></div><?php endif ?>
       <table class="table table-sm yc-item-table"><tbody>
-        <?php foreach (['maker' => '제조사', 'origin' => '원산지', 'brand' => '브랜드', 'model' => '모델'] as $field => $label): if ($product[$field] !== ''): ?><tr><th scope="row"><?= $label ?></th><td><?= $this->e($product[$field]) ?></td></tr><?php endif; endforeach ?>
         <?php if ((int) $product['list_price'] > 0 && $display_price !== null): ?><tr><th scope="row">시중가격</th><td><del><?= number_format((int) $product['list_price']) ?>원</del></td></tr><?php endif ?>
         <tr><th scope="row">판매가격</th><td class="yc-item-price"><?php if (!(int) $product['active']): ?>판매중지<?php elseif ($display_price === null): ?>전화문의<?php else: ?><strong><?= number_format($display_price) ?>원</strong><?php if ($settings['show_tax']): ?> <small class="muted"><?= (int) $product['tax_free'] === 1 ? '비과세' : '부가세 포함' ?></small><?php endif ?><?php endif ?></td></tr>
         <?php if ($display_price !== null && (int) $product['point'] > 0): ?><tr><th scope="row">포인트</th><td><?= $this->e($point_label) ?></td></tr><?php endif ?>
         <tr><th scope="row">배송비</th><td><?= [0 => '상점 기본 배송비', 1 => '무료배송', 2 => number_format((int) $product['shipping_free_minimum']) . '원 이상 무료, 미만 ' . number_format((int) $product['shipping_fee']) . '원', 3 => number_format((int) $product['shipping_fee']) . '원', 4 => (int) $product['shipping_per_qty'] . '개마다 ' . number_format((int) $product['shipping_fee']) . '원'][(int) $product['shipping_type']] ?><?= (int) $product['shipping_method'] === 1 ? ' (착불)' : ((int) $product['shipping_method'] === 2 ? ' (선불·착불 선택)' : '') ?></td></tr>
         <?php if ((int) $product['buy_min'] > 0 || (int) $product['buy_max'] > 0): ?><tr><th scope="row">구매수량</th><td><?= (int) $product['buy_min'] > 0 ? '최소 ' . (int) $product['buy_min'] . '개' : '' ?> <?= (int) $product['buy_max'] > 0 ? '최대 ' . (int) $product['buy_max'] . '개' : '' ?></td></tr><?php endif ?>
       </tbody></table>
-      <?php if ($sold_out): ?><p class="yc-soldout-notice"><strong>품절</strong>된 상품입니다.<?php if ((int) $product['restock_notify'] === 1): ?> 재입고 알림은 준비 중입니다.<?php endif ?></p>
+      <?php if ($sold_out): ?><p class="yc-soldout-notice"><strong>품절</strong>된 상품입니다.</p>
       <?php elseif ($display_price !== null && (int) $product['active'] === 1): ?><?php $this->insert('_options') ?><?php endif ?>
       <div class="yc-item-actions muted">장바구니와 주문은 다음 단계에서 제공됩니다.</div>
     </div>
@@ -4639,7 +4636,7 @@ git commit -m "feat: add youngcart category admin screens"
         self::assertSame(1, (int) $this->shop->products->find($seed['a'])['is_new']);
         $stock = $this->body($this->get($this->app, '/admin/shop/products/stock'));
         self::assertStringContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
-        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0', 'restock_notify' => '1']]]));
+        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['a'] => ['stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0']]]));
         self::assertSame(9, (int) $this->shop->products->find($seed['a'])['stock']);
         $optionId = (int) $this->shop->products->get($seed['a'])['options']['select'][0]['id'];
         $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock'));
@@ -4786,7 +4783,7 @@ final class ProductController extends AdminBase
 
 ```php
 <form class="yc-filter" method="get" action="<?= $this->e($action) ?>">
-  <select class="select select-bordered select-sm" name="field" aria-label="검색 필드"><?php foreach ($fields as $field): ?><option value="<?= $field ?>"<?= $filters['field'] === $field ? ' selected' : '' ?>><?= ['name' => '상품명', 'code' => '코드', 'maker' => '제조사', 'brand' => '브랜드', 'model' => '모델', 'origin' => '원산지', 'seller_email' => '판매자 메일'][$field] ?></option><?php endforeach ?></select>
+  <select class="select select-bordered select-sm" name="field" aria-label="검색 필드"><?php foreach ($fields as $field): ?><option value="<?= $field ?>"<?= $filters['field'] === $field ? ' selected' : '' ?>><?= ['name' => '상품명', 'code' => '코드'][$field] ?></option><?php endforeach ?></select>
   <input class="input input-bordered input-sm" type="search" name="q" value="<?= $this->e($filters['q']) ?>" maxlength="100" placeholder="검색어" aria-label="검색어">
   <select class="select select-bordered select-sm" name="ca" aria-label="분류"><option value="">전체 분류</option><?php foreach ($category_codes as $code => $name): ?><option value="<?= $this->e($code) ?>"<?= $filters['ca'] === $code ? ' selected' : '' ?>><?= $this->e(str_repeat('· ', intdiv(strlen($code), 2) - 1) . $name) ?></option><?php endforeach ?></select>
   <button class="btn btn-sm" type="submit">검색</button>
@@ -4883,12 +4880,12 @@ final class ProductController extends AdminBase
 <form class="yc-filter" method="get" action="<?= $this->e($admin_url) ?>/products/stock"><input class="input input-bordered input-sm" type="search" name="q" value="<?= $this->e($q) ?>" placeholder="상품명·코드" aria-label="검색어"><button class="btn btn-sm" type="submit">검색</button></form>
 <form method="post" action="<?= $this->e($admin_url) ?>/products/stock">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-  <div class="overflow-x-auto"><table class="table table-sm"><thead><tr><th>코드</th><th>상품명</th><th>재고</th><th>통보 기준</th><th>판매</th><th>품절</th><th>재입고 알림</th></tr></thead><tbody>
+  <div class="overflow-x-auto"><table class="table table-sm"><thead><tr><th>코드</th><th>상품명</th><th>재고</th><th>통보 기준</th><th>판매</th><th>품절</th></tr></thead><tbody>
     <?php foreach ($list['items'] as $row): $n = 'rows[' . (int) $row['id'] . ']'; ?>
       <tr><td><code><?= $this->e($row['code']) ?></code></td><td><a href="<?= $this->e($admin_url) ?>/products/edit?id=<?= (int) $row['id'] ?>"><?= $this->e($row['name']) ?></a></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock]" value="<?= (int) $row['stock'] ?>" min="0" required></td>
         <td><input class="input input-bordered input-xs yc-table-input" type="number" name="<?= $n ?>[stock_alert]" value="<?= (int) $row['stock_alert'] ?>" min="0"></td>
-        <?php foreach (['active', 'sold_out', 'restock_notify'] as $flag): ?><td><input type="hidden" name="<?= $n ?>[<?= $flag ?>]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[<?= $flag ?>]" value="1"<?= (int) $row[$flag] === 1 ? ' checked' : '' ?>></td><?php endforeach ?></tr>
+        <?php foreach (['active', 'sold_out'] as $flag): ?><td><input type="hidden" name="<?= $n ?>[<?= $flag ?>]" value="0"><input class="checkbox checkbox-xs" type="checkbox" name="<?= $n ?>[<?= $flag ?>]" value="1"<?= (int) $row[$flag] === 1 ? ' checked' : '' ?>></td><?php endforeach ?></tr>
     <?php endforeach ?>
   </tbody></table></div>
   <div class="form-actions"><button class="btn btn-sm btn-primary" type="submit">저장</button></div>
@@ -4960,7 +4957,7 @@ git commit -m "feat: add youngcart product list, copy, type and stock admin scre
 **Interfaces:**
 - `ProductFormController::handle(string $page, …)` — `products/new`, `products/edit`(GET `?id=`); POST `action=save|combine`
 - 폼 값 배열 `$values`는 `Products::save()`의 입력 키와 같은 이름을 쓴다. 옵션 조합 표는 `$options_rows`(`value1,value2,value3,price,stock,stock_alert,active`), 추가옵션 표는 `$extras_rows`, 그룹 이름은 `$option_groups[1..3]`, 이미지 목록은 `$images`, 관련상품은 `$relations`(`[id, code, name]`), 상품정보고시 전체 군은 `$info_groups`(JSON으로 페이지에 삽입).
-- 저장 성공 시 쿠키 `yc_last_category`, `yc_last_maker`, `yc_last_origin`(31일)을 놓고, 새 상품 폼이 이를 기본값으로 쓴다.
+- 저장 성공 시 쿠키 `yc_last_category`(31일)를 놓고, 새 상품 폼이 이를 기본값으로 쓴다.
 
 - [ ] **Step 1: 실패하는 웹 테스트 추가**
 
@@ -4971,7 +4968,7 @@ git commit -m "feat: add youngcart product list, copy, type and stock admin scre
     {
         return $overrides + ['action' => 'save', 'code' => 'F1', 'name' => '폼 상품', 'category_id' => (string) $category, 'price' => '12000', 'list_price' => '0', 'point_type' => '0', 'point' => '0', 'supply_point' => '0',
             'stock' => '4', 'stock_alert' => '0', 'buy_min' => '0', 'buy_max' => '0', 'active' => '1', 'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0',
-            'summary' => '요약', 'description' => '<p>본문</p>', 'info_group' => '', 'memo' => '', 'sort_order' => '0', 'maker' => '메이커', 'origin' => '한국',
+            'summary' => '요약', 'description' => '<p>본문</p>', 'info_group' => '', 'memo' => '', 'sort_order' => '0',
             'option_group' => [1 => '색상', 2 => '', 3 => ''], 'option_values' => [1 => '', 2 => '', 3 => ''],
             'options' => [['value1' => '빨강', 'value2' => '', 'value3' => '', 'price' => '0', 'stock' => '2', 'stock_alert' => '1', 'active' => '1']], 'extras' => [], 'relations' => ''];
     }
@@ -4995,7 +4992,7 @@ git commit -m "feat: add youngcart product list, copy, type and stock admin scre
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
         $product = $this->shop->products->byCode('F1');
         self::assertSame('/admin/shop/products/edit?id=' . $product['id'] . '&saved=1', $response->getHeaderLine('Location'));
-        self::assertStringContainsString('yc_last_maker=', implode(';', $response->getHeader('Set-Cookie')));
+        self::assertStringContainsString('yc_last_category=', implode(';', $response->getHeader('Set-Cookie')));
         self::assertCount(1, $product['images']); self::assertSame(['색상'], $product['options']['select_groups']);
         $response = $this->post($this->app, '/admin/shop/products/new', $this->csrf($this->productForm((int) $seed['top']['id'], ['code' => 'F1'])));
         self::assertSame(422, $response->getStatusCode());
@@ -5044,7 +5041,7 @@ use Psr\Http\Message\UploadedFileInterface;
 
 final class ProductFormController extends AdminBase
 {
-    private const COOKIES = ['category_id' => 'yc_last_category', 'maker' => 'yc_last_maker', 'origin' => 'yc_last_origin'];
+    private const COOKIES = ['category_id' => 'yc_last_category'];
 
     public function handle(string $page, ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -5087,9 +5084,9 @@ final class ProductFormController extends AdminBase
     private function defaults(ServerRequestInterface $request): array
     {
         $cookies = $request->getCookieParams();
-        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'category2_id' => '', 'category3_id' => '', 'maker' => '', 'origin' => '', 'brand' => '', 'model' => '',
+        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'category2_id' => '', 'category3_id' => '',
             'summary' => '', 'description' => '', 'list_price' => '0', 'price' => '', 'point_type' => '0', 'point' => '0', 'supply_point' => '0', 'tax_free' => '0', 'seller_email' => '',
-            'active' => '1', 'no_coupon' => '0', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'restock_notify' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
+            'active' => '1', 'no_coupon' => '0', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
             'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0', 'head_html' => '', 'tail_html' => '',
             'info_group' => '', 'info' => [], 'memo' => '', 'sort_order' => '0', 'option_group' => [1 => '', 2 => '', 3 => ''], 'option_values' => [1 => '', 2 => '', 3 => ''],
             'options' => [], 'extras' => [], 'relations' => '', 'extra_label' => [], 'extra_value' => [], 'version' => '0'];
@@ -5194,7 +5191,7 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
     <?php if ($id === null): ?><?php $field('code', '상품 코드 (영문·숫자·-·_ 1~20자)', 'text', ['maxlength' => 20, 'pattern' => '[A-Za-z0-9_-]{1,20}', 'required' => 'required']) ?>
     <?php else: ?><fieldset class="fieldset"><legend class="fieldset-legend">상품 코드</legend><input class="input input-bordered input-sm" type="text" value="<?= $this->e($v('code')) ?>" readonly></fieldset><?php endif ?>
     <?php $field('name', '상품명', 'text', ['maxlength' => 250, 'required' => 'required']) ?>
-    <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('maker', '제조사', 'text', ['maxlength' => 100]); $field('origin', '원산지', 'text', ['maxlength' => 100]); $field('brand', '브랜드', 'text', ['maxlength' => 100]); $field('model', '모델', 'text', ['maxlength' => 100]); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
+    <div class="yc-fields"><?php $field('sort_order', '순서', 'number'); $field('seller_email', '판매자 메일', 'email', ['maxlength' => 191]); ?></div>
     <div class="yc-checks"><?php foreach ($types as $type => $label) $check($type, $label); ?><?php $apply('types') ?></div>
     <div class="yc-checks"><?php $check('active', '판매가능'); $apply('active'); $check('no_coupon', '쿠폰 대상 제외'); $apply('no_coupon'); $check('phone_inquiry', '전화문의(가격 숨김)'); $apply('phone_inquiry'); ?></div>
     <fieldset class="fieldset"><legend class="fieldset-legend">요약 설명</legend><textarea class="textarea textarea-bordered textarea-block" name="summary" rows="3" maxlength="20000"><?= $this->e($v('summary')) ?></textarea></fieldset>
@@ -5214,7 +5211,7 @@ $catSelect = function (string $name, bool $required) use ($v, $categories, $erro
       <?php $field('point', '포인트 (정액 또는 0~99%)', 'number', ['min' => 0]); $field('supply_point', '추가옵션 포인트', 'number', ['min' => 0]); ?></div>
     <div class="yc-checks"><?php $check('tax_free', '비과세'); $apply('tax_free'); $apply('point'); ?></div>
     <div class="yc-fields"><?php $field('stock', '재고 (선택옵션 없을 때)', 'number', ['min' => 0]); $field('stock_alert', '재고 통보 기준', 'number', ['min' => 0]); $field('buy_min', '최소 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); $field('buy_max', '최대 구매수량 (0 = 제한 없음)', 'number', ['min' => 0, 'max' => 9999]); ?></div>
-    <div class="yc-checks"><?php $check('sold_out', '품절 표시'); $check('restock_notify', '재입고 알림 신청 허용'); $apply('buy'); ?></div>
+    <div class="yc-checks"><?php $check('sold_out', '품절 표시'); $apply('buy'); ?></div>
   </div></section>
   <section class="card" id="section-options"><div class="card-body"><h2 class="card-title">선택옵션</h2>
     <p class="muted">그룹 이름과 쉼표로 구분한 값을 입력하고 <strong>조합 생성</strong>을 누르면 조합 표가 만들어집니다. 가격은 판매가에 더하는 차액입니다.</p>
@@ -5522,7 +5519,7 @@ git commit -m "feat: add youngcart product registration and edit form"
 ## 이번 범위 밖
 
 장바구니·주문·결제·배송비 계산(2단계), 적립금·회원등급(3단계), 쿠폰·이벤트·배너(4단계), 결제수단 확장(5단계),
-후기·문의·위시리스트·재입고 알림(6단계), 엑셀 등록·개인결제(7단계), 통계·마이페이지(8단계),
+후기·문의·위시리스트(6단계), 엑셀 등록·개인결제(7단계), 통계·마이페이지(8단계),
 분류별 부관리자와 본인확인·성인인증 제한, 영카트5 가져오기 도구.
 ```
 

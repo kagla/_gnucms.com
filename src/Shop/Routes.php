@@ -74,7 +74,7 @@ final class Routes
             foreach (['categories', 'categories/new', 'categories/edit'] as $page) {
                 $map($method, '/' . $page, static fn ($request, $response) => $category->handle($page, $request, $response), true);
             }
-            foreach (['products', 'products/stock', 'products/option-stock'] as $page) {
+            foreach (['products', 'products/stock', 'products/option-stock', 'products/settings-copy'] as $page) {
                 $map($method, '/' . $page, static fn ($request, $response) => $product->handle($page, $request, $response), true);
             }
             foreach (['products/new', 'products/edit'] as $page) {
@@ -88,9 +88,6 @@ final class Routes
         $map('GET', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true)
             ->setName('admin.shop.payment-failures');
         $map('POST', '/payment-failures', static fn ($request, $response) => $admin->handle('payment-failures', $request, $response), true);
-        $map('POST', '/products/copy', static fn ($request, $response) => $product->handle('products/copy', $request, $response), true);
-        $map('GET', '/products/search', static fn ($request, $response) => $product->handle('products/search', $request, $response), true);
-
         // POST 결제 인증 결과 콜백(폼). 세션 없이 쿼리의 HMAC 으로 인증한다.
         $slim->add(new ExternalRequests([
             Service::PUBLIC_PREFIX . '/pay/callback' => [[$pay, 'callbackAuthenticate'], [$pay, 'callback'], 65536, 'application/x-www-form-urlencoded'],
