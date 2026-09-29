@@ -28,8 +28,7 @@ final class AdminController
         $data = $this->app->adminService()->dashboard($this->app->guestAcl());
         $data['page_count'] = $this->app->cmsService()->countPages();
         $data['query'] = $request->getQueryParams();
-        // SMTP 가 없으면 가입 인증·비밀번호 변경 알림이 서버 기본 메일로만 나가 안 닿기 쉽다. 늘 보여 준다.
-        $data['mail_configured'] = $this->app->mailSettingsService()->runtime() !== null;
+        $data['mail_mode'] = $this->app->mailSettingsService()->mode();
         return View::fromRequest($request)->render($response, 'admin/index', $data);
     }
 

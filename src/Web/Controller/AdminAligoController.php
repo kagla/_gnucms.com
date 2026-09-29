@@ -285,6 +285,7 @@ final class AdminAligoController
             'error' => $error,
             'notice' => $this->notifySavedNotice($request->getQueryParams()),
             'status' => $this->app->aligo()->status(),
+            'mail_enabled' => $this->app->mailSettingsService()->enabled(),
         ]);
     }
 

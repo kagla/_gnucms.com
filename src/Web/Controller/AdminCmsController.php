@@ -238,6 +238,7 @@ final class AdminCmsController
         $this->assertCsrf($input);
         try {
             $this->app->mailSettingsService()->save($this->app->guestAcl(), $input);
+            $this->app->refreshMailSettings();
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
                 throw $e;
@@ -245,6 +246,8 @@ final class AdminCmsController
             $current = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
             $input['password'] = '';
             $input['password_set'] = $current['password_set'];
+            $input['mode'] = is_scalar($input['mode'] ?? null)
+                ? (string) $input['mode'] : $current['mode'];
             return $this->renderMailSettings($request, $response->withStatus(422), [
                 'values' => $input, 'errors' => $e->details(),
             ]);

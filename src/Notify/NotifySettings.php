@@ -10,7 +10,7 @@ use GnuCms\Aligo\Variables;
 use GnuCms\Error\DomainError;
 
 /**
- * 모든 이벤트의 메일을 켜고, 이벤트마다 알림톡·문자·인앱 사용 여부와 알림톡 승인
+ * 메일 전역 설정을 적용하고, 이벤트마다 알림톡·문자·인앱 사용 여부와 알림톡 승인
  * 템플릿의 변수 연결을 저장·검증한다. 발송 자체는 하지 않는다.
  *
  * **알 수 없는 이벤트 키.** 관리자가 저장한 값은 업그레이드로 카탈로그(Events::ALL)에서
@@ -62,11 +62,16 @@ final class NotifySettings
 
     private SettingsRepository $repository;
     private Templates $templates;
+    private \Closure $mailEnabled;
 
-    public function __construct(SettingsRepository $repository, Templates $templates)
+    public function __construct(SettingsRepository $repository, Templates $templates,
+        ?callable $mailEnabled = null)
     {
         $this->repository = $repository;
         $this->templates = $templates;
+        $this->mailEnabled = $mailEnabled === null
+            ? static fn (): bool => true
+            : \Closure::fromCallable($mailEnabled);
     }
 
     /**
@@ -145,13 +150,23 @@ final class NotifySettings
             $on = array_diff($on, ['alimtalk']);
         }
 
-        // 이전 설치에서 메일을 꺼 둔 값이 남아 있어도 코어 알림은 항상 메일을 시도한다.
-        return array_values(array_intersect(self::CHANNELS, array_merge(['mail'], $on)));
+        // 이벤트별 메일 값은 계속 고정으로 보관하되, 전역 메일 설정이 미사용이면 실제
+        // 발송 목록에서는 뺀다. 다시 메일을 켰을 때 모든 이벤트가 즉시 원래대로 돌아온다.
+        $on = ($this->mailEnabled)()
+            ? array_merge(['mail'], $on)
+            : array_diff($on, ['mail']);
+
+        return array_values(array_intersect(self::CHANNELS, $on));
     }
 
     public function isOn(string $event, string $channel): bool
     {
         return in_array($channel, $this->channelsFor($event), true);
+    }
+
+    public function mailEnabled(): bool
+    {
+        return ($this->mailEnabled)();
     }
 
     /**

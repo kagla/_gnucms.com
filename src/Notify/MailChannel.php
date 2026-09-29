@@ -14,10 +14,14 @@ use GnuCms\Mail\MailerInterface;
 final class MailChannel implements ChannelInterface
 {
     private MailerInterface $mailer;
+    private \Closure $enabled;
 
-    public function __construct(MailerInterface $mailer)
+    public function __construct(MailerInterface $mailer, ?callable $enabled = null)
     {
         $this->mailer = $mailer;
+        $this->enabled = $enabled === null
+            ? static fn (): bool => true
+            : \Closure::fromCallable($enabled);
     }
 
     public function key(): string
@@ -27,7 +31,7 @@ final class MailChannel implements ChannelInterface
 
     public function available(string $event, Recipient $to): bool
     {
-        return $to->email !== null && MailBodies::has($event);
+        return ($this->enabled)() && $to->email !== null && MailBodies::has($event);
     }
 
     public function send(string $event, Recipient $to, array $vars): void

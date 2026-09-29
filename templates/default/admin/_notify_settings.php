@@ -6,13 +6,15 @@
 // 라벨을 찾아 문장을 만든다).
 $channelLabels = ['mail' => '메일', 'alimtalk' => '알림톡', 'sms' => '문자', 'inbox' => '알림함'];
 // 전화 채널을 지원하지 않는 알림은 비활성 카드 둘을 반복하지 않고 한 줄로 설명한다.
-$phoneReason = '전화 채널을 지원하지 않아 메일만 보냅니다.';
+$phoneReason = $mail_enabled
+  ? '전화 채널을 지원하지 않아 메일만 보냅니다.'
+  : '전화 채널을 지원하지 않고 이메일도 미사용 상태라 이 알림은 보내지 않습니다.';
 $noTemplates = $templates === [];
 ?>
 <section class="card settings-card">
   <div class="card-body">
     <h2 class="card-title"><?= $this->icon('bell', 19) ?> 알림별 발송 규칙</h2>
-    <p class="card-sub">모든 코어 알림은 메일로 보냅니다. 알림톡을 켜면 먼저 보내고, 실패하거나 사용할 수 없을 때 문자가 켜져 있으면 문자로 보냅니다. 알림함도 별도로 설정할 수 있습니다. 알림을 선택해 설정하고 각각 저장할 수 있습니다.</p>
+    <p class="card-sub"><?= $mail_enabled ? '이메일은 모든 코어 알림에 사용합니다.' : '현재 메일 설정에서 이메일을 사용하지 않습니다.' ?> 알림톡을 켜면 먼저 보내고, 실패하거나 사용할 수 없을 때 문자가 켜져 있으면 문자로 보냅니다. 알림함도 별도로 설정할 수 있습니다. 알림을 선택해 설정하고 각각 저장할 수 있습니다.</p>
 
     <?php if ($notice !== null): ?>
       <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div>
@@ -28,7 +30,7 @@ $noTemplates = $templates === [];
     <?php if (!$status['configured']): ?>
       <div class="alert alert-warning">
         <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
-        <span>알리고 계정이 연결되어 있지 않습니다. 아래에서 알림톡·문자를 켜 두어도 실제로는 나가지 않습니다 — <a href="<?= $this->url('admin.aligo') ?>#aligo">문자·알림톡 설정</a>에서 계정을 먼저 연결해 주세요. 메일과 알림함은 이 설정과 무관하게 그대로 나갑니다.</span>
+        <span>알리고 계정이 연결되어 있지 않습니다. 아래에서 알림톡·문자를 켜 두어도 실제로는 나가지 않습니다 — <a href="<?= $this->url('admin.aligo') ?>#aligo">문자·알림톡 설정</a>에서 계정을 먼저 연결해 주세요. <?= $mail_enabled ? '이메일과 알림함은' : '알림함은' ?> 이 설정과 무관하게 그대로 나갑니다.</span>
       </div>
     <?php else: ?>
       <div class="alert alert-warning" data-notify-channel-warning<?= ($status['alimtalk_enabled'] && $status['sms_enabled']) ? ' hidden' : '' ?>>
@@ -96,7 +98,11 @@ $noTemplates = $templates === [];
 
           <div class="form-section">
             <h2 class="form-section-title">보낼 채널</h2>
-            <p class="notify-fixed-channel"><span class="badge badge-sm badge-success badge-soft">메일</span> 항상 발송합니다.</p>
+            <?php if ($mail_enabled): ?>
+              <p class="notify-fixed-channel"><span class="badge badge-sm badge-success badge-soft">메일</span> 항상 발송합니다.</p>
+            <?php else: ?>
+              <p class="notify-fixed-channel"><span class="badge badge-sm badge-ghost badge-soft">메일</span> <a href="<?= $this->url('admin.mail') ?>#mail">메일 설정</a>에서 이메일을 사용하지 않도록 설정했습니다.</p>
+            <?php endif ?>
             <div class="toggle-list notify-channel-options">
               <?php if (array_key_exists('mail', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['mail']) ?></p><?php endif ?>
 

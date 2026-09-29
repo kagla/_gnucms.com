@@ -19,6 +19,30 @@
 </script>
 <script>
 (function(){
+  var modes=Array.from(document.querySelectorAll('[data-mail-modes] input[name="mode"]'));
+  var box=document.querySelector('[data-mail-smtp-settings]');if(!modes.length||!box){return}
+  var requiredNames=['host','port','username','from_email','from_name'];
+  function syncMode(){
+    var selected=modes.find(function(input){return input.checked});
+    var smtp=selected&&selected.value==='smtp';
+    box.hidden=!smtp;
+    Array.from(box.querySelectorAll('input,select,button')).forEach(function(control){
+      control.disabled=!smtp;
+      if(requiredNames.indexOf(control.name)!==-1){control.required=!!smtp}
+    });
+    if(smtp){
+      var provider=box.querySelector('[data-mail-provider]');
+      var custom=provider&&provider.value==='custom';
+      var host=box.querySelector('[data-mail-host]'),port=box.querySelector('[data-mail-port]'),enc=box.querySelector('[data-mail-encryption]');
+      if(host){host.readOnly=!custom}if(port){port.readOnly=!custom}if(enc){enc.disabled=!custom}
+    }
+  }
+  modes.forEach(function(input){input.addEventListener('change',syncMode)});
+  syncMode();
+})();
+</script>
+<script>
+(function(){
   var btn=document.querySelector('[data-mail-password-toggle]');if(!btn){return}
   var box=btn.closest('label'),field=box?box.querySelector('input'):null;if(!field){return}
   var revealedStored=false,loading=false;

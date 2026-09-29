@@ -41,6 +41,7 @@ final class AccountService
     private string $appUrl;
     private CmsService $cms;
     private ConsentRepository $consents;
+    private bool $emailVerificationRequired;
 
     private ?PasswordThrottle $throttle = null;
     private ?Notifier $notifier = null;
@@ -134,7 +135,7 @@ final class AccountService
     }
 
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
-        CmsService $cms, ConsentRepository $consents)
+        CmsService $cms, ConsentRepository $consents, bool $emailVerificationRequired = true)
     {
         $this->users = $users;
         $this->tokens = $tokens;
@@ -142,6 +143,7 @@ final class AccountService
         $this->appUrl = rtrim($appUrl, '/');
         $this->cms = $cms;
         $this->consents = $consents;
+        $this->emailVerificationRequired = $emailVerificationRequired;
     }
 
     public function register(array $input, ?ConsentTrace $trace = null): array
@@ -194,7 +196,8 @@ final class AccountService
         //
         // 첫 사람은 빼놓는다. 그 사람은 인증 없이 만들어지므로(createRegistered) 링크를
         // 기다리지 않고, 여기서 막으면 알림 설정을 고칠 관리자 자체가 생기지 못한다.
-        if ($existingUsers > 0 && !$this->canSendVerificationLink($email, $phone)) {
+        if ($this->emailVerificationRequired && $existingUsers > 0
+            && !$this->canSendVerificationLink($email, $phone)) {
             throw DomainError::serviceUnavailable(
                 '지금은 회원가입을 받을 수 없습니다. 인증 링크를 보낼 수 없어 가입을 끝낼 수 없습니다.'
                 . ' 사이트 관리자에게 문의해 주세요.');
@@ -202,9 +205,9 @@ final class AccountService
 
         $existing = $this->users->findByEmail($email);
         if ($existing !== null) {
-            if (!(bool) $existing['email_verified']) {
+            if (!(bool) $existing['email_verified'] && $this->emailVerificationRequired) {
                 $this->sendVerification($existing);
-            } else {
+            } elseif ((bool) $existing['email_verified']) {
                 // 나갔는지는 화면에 옮기지 않는다 — 이 분기의 화면은 진짜 가입과 한
                 // 글자도 달라서는 안 된다(달라지면 "이 주소가 가입돼 있는가"를 묻는
                 // 도구가 된다). 이 알림이 못 나가도 그 사람은 이미 로그인할 수 있다.
@@ -230,6 +233,12 @@ final class AccountService
                 $agreed = (int) $doc['required'] === 1 || $v->bool('agree_' . $doc['id'], false);
                 $this->consents->record('user', $id, 'signup', $doc, $agreed, $trace);
             }
+        }
+        // 메일을 쓰지 않는 사이트는 일반 가입을 이메일 소유 확인 없이 완료한다.
+        // DB 값도 인증 완료로 맞춰 두어 나중에 메일을 다시 켜도 이 회원이 막히지 않는다.
+        if (!$this->emailVerificationRequired && !(bool) $user['email_verified']) {
+            $this->users->verifyEmail($id);
+            $user = $this->users->findById($id);
         }
         if (!(bool) $user['email_verified']) {
             $this->sendVerification($user);
@@ -274,6 +283,10 @@ final class AccountService
             // 비밀번호까지 맞은 사람이다(미인증 분기 포함). 이전 실패는 잊는다.
             $this->throttle->clear('login:' . $email);
         }
+        if (!(bool) $user['email_verified'] && !$this->emailVerificationRequired) {
+            $this->users->verifyEmail((int) $user['id']);
+            $user = $this->users->findById((int) $user['id']);
+        }
         if (!(bool) $user['email_verified']) {
             // 비밀번호까지 맞은 사람이다. 화면이 '다시 보내기' 를 내줄 수 있게 따로 표시한다.
             throw DomainError::validation([
@@ -315,6 +328,9 @@ final class AccountService
 
     public function resendVerification(string $email): void
     {
+        if (!$this->emailVerificationRequired) {
+            return;
+        }
         $user = $this->users->findByEmail(strtolower(trim($email)));
         if ($user !== null && !(bool) $user['email_verified']) {
             // 조용히. 이 화면은 없는 주소에도 같은 답을 내야 한다(notifyQuietly 주석).
@@ -341,7 +357,8 @@ final class AccountService
         $email = strtolower(trim($email));
         $this->countResetRequest($email);
         $user = $this->users->findByEmail($email);
-        if ($user === null || !(bool) $user['email_verified'] || $user['status'] !== 'active') {
+        if ($user === null || ($this->emailVerificationRequired && !(bool) $user['email_verified'])
+            || $user['status'] !== 'active') {
             return;
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
