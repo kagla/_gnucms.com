@@ -163,10 +163,11 @@
     {
       "code": "DEMO-007",
       "category": "stationery",
-      "name": "플라워 데스크 플래너",
+      "name": "꽃과 생활 정원 에세이",
       "price": 13500,
       "list_price": 16000,
       "stock": 25,
+      "tax_free": 1,
       "image": {
         "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/FCPVTTJJLS.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/8fadf7be-fbed-42a9-b70b-92720ad73c14/thumb/",
@@ -179,10 +180,11 @@
     {
       "code": "DEMO-008",
       "category": "stationery",
-      "name": "패턴 노트",
+      "name": "패턴 디자인 아트북",
       "price": 11900,
       "list_price": 14000,
       "stock": 25,
+      "tax_free": 1,
       "image": {
         "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/OSD32NBXHE.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/28f9d3c1-0434-422b-84da-d4bd99aec506/thumb/",
@@ -195,10 +197,11 @@
     {
       "code": "DEMO-009",
       "category": "stationery",
-      "name": "블랙 하드커버 노트",
+      "name": "미니멀 라이프 가이드북",
       "price": 16500,
       "list_price": 20000,
       "stock": 25,
+      "tax_free": 1,
       "image": {
         "source_url": "https://images.rawpixel.com/image_png_1300/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvam9iNjgzLTAwMTkucG5n.png",
         "thumbnail_url": "https://api.openverse.org/v1/images/8031f849-1dd0-419e-a062-d61cf14f55b9/thumb/",
@@ -477,10 +480,11 @@
     {
       "code": "DEMO-025",
       "category": "plants",
-      "name": "그린 다육식물",
+      "name": "국내산 그린 다육식물",
       "price": 12000,
       "list_price": 14000,
       "stock": 25,
+      "tax_free": 1,
       "image": {
         "source_url": "https://live.staticflickr.com/7063/7097578511_3ac3a4ee2e_b.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/0ee0d8f0-02be-46f3-affc-149462237aa2/thumb/",

@@ -118,10 +118,37 @@ foreach ($catalog['products'] as $index => $product) {
     $shop->products->save(['code' => $product['code'], 'name' => $product['name'],
         'category_id' => (string) $categoryIds[$product['category']], 'active' => '1',
         'price' => (string) $product['price'], 'list_price' => (string) $product['list_price'],
-        'stock' => (string) $product['stock'], 'sort_order' => (string) ($index + 1),
+        'stock' => (string) $product['stock'], 'tax_free' => (string) (int) ($product['tax_free'] ?? 0),
+        'sort_order' => (string) ($index + 1),
         'summary' => '<p>' . htmlspecialchars($catalog['notice'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>',
         'description' => '<p>' . htmlspecialchars($product['name'] . ' — ' . $catalog['notice'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'], [$file]);
     $created++;
+}
+
+$catalogUpdates = [];
+$descriptions = [];
+foreach ($catalog['products'] as $product) {
+    $stored = $shop->products->byCode($product['code']);
+    if ($stored === null) throw new RuntimeException($product['code'] . ' 정보를 적용할 상품을 찾지 못했습니다.');
+    $taxFree = (int) ($product['tax_free'] ?? 0);
+    $descriptionText = $product['name'] . ' — ' . $catalog['notice'];
+    if ($stored['name'] === $product['name'] && (int) $stored['tax_free'] === $taxFree
+        && $stored['description_text'] === $descriptionText) continue;
+    $catalogUpdates[(int) $stored['id']] = [
+        'category_id' => (string) $stored['category_id'], 'name' => $product['name'],
+        'list_price' => (string) $stored['list_price'], 'price' => (string) $stored['price'],
+        'tax_free' => (string) $taxFree, 'shipping_type' => (string) $stored['shipping_type'],
+        'phone_inquiry' => (string) $stored['phone_inquiry'], 'active' => (string) $stored['active'],
+        'sold_out' => (string) $stored['sold_out'], 'sort_order' => (string) $stored['sort_order'],
+    ];
+    $descriptions[(int) $stored['id']] = [
+        'description' => '<p>' . htmlspecialchars($descriptionText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>',
+        'description_text' => $descriptionText,
+    ];
+}
+if ($catalogUpdates !== []) {
+    $shop->products->bulk($catalogUpdates);
+    foreach ($descriptions as $id => $description) $shop->store->update('yc_products', $id, $description);
 }
 
 $optionProducts = 0;
@@ -150,6 +177,7 @@ $settings['visible'] = true;
 $settings['payment']['provider'] = 'inicis';
 $settings['payment']['environment'] = 'test';
 $settings['payment']['methods'] = ['card' => true];
+$settings['show_tax'] = true;
 $settings['main']['categories'] = array_map(static fn (array $category): array =>
     ['id' => $categoryIds[$category['slug']], 'columns' => 3, 'rows' => 1], $catalog['categories']);
 $settings['banner']['eyebrow'] = 'GNUCMS DEMO STORE';
@@ -173,5 +201,6 @@ if ($member === null) {
 }
 
 echo '분류 ' . count($categoryIds) . '개, 신규 상품 ' . $created . '개, 옵션 상품 ' . $optionProducts
-    . '개(갱신 ' . $optionUpdates . '개); 이니시스 테스트 카드 결제 설정 완료.' . PHP_EOL;
+    . '개(갱신 ' . $optionUpdates . '개), 상품 정보 갱신 ' . count($catalogUpdates)
+    . '개; 이니시스 테스트 카드 결제 설정 완료.' . PHP_EOL;
 echo '데모 회원 정보: ' . $credentialFile . PHP_EOL;
