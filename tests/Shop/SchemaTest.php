@@ -18,8 +18,15 @@ final class SchemaTest extends ShopTestCase
         'yc_img_product' => 'yc_product_images', 'yc_opt_product' => 'yc_options',
         'yc_stock_product' => 'yc_stock_log',
         'yc_order_user' => 'yc_orders', 'yc_order_status' => 'yc_orders', 'yc_order_created' => 'yc_orders',
-        'yc_order_pay_by' => 'yc_orders', 'yc_order_payment' => 'yc_orders',
-        'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items', 'yc_history_order' => 'yc_order_history'];
+        'yc_order_pay_by' => 'yc_orders', 'yc_order_paid' => 'yc_orders', 'yc_order_payment' => 'yc_orders',
+        'yc_oi_order' => 'yc_order_items', 'yc_oi_product' => 'yc_order_items', 'yc_oi_option' => 'yc_order_items',
+        'yc_history_order' => 'yc_order_history', 'yc_notes_order' => 'yc_order_notes',
+        'yc_refund_order' => 'yc_order_refunds', 'yc_refund_created' => 'yc_order_refunds',
+        'yc_refund_key' => 'yc_order_refunds', 'yc_settlement_provider' => 'yc_settlements',
+        'yc_settlement_order' => 'yc_settlements', 'yc_settlement_sold' => 'yc_settlements',
+        'yc_settlement_payout' => 'yc_settlements', 'yc_settlement_transaction' => 'yc_settlements',
+        'yc_feedback_product' => 'yc_product_feedback', 'yc_feedback_user' => 'yc_product_feedback',
+        'yc_feedback_created' => 'yc_product_feedback', 'yc_feedback_review' => 'yc_product_feedback'];
 
     #[DataProvider('connectionProvider')]
     public function testMigrateIsIdempotentAndCreatesEveryTableAndIndex(array $config): void
@@ -29,8 +36,8 @@ final class SchemaTest extends ShopTestCase
         Schema::migrate($db);
         Schema::migrate($db);
         foreach (Schema::TABLES as $table) self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table($table)), $table);
-        self::assertSame(13, count(Schema::TABLES));
-        self::assertSame(23, count(self::INDEXES));
+        self::assertSame(15, count(Schema::TABLES));
+        self::assertSame(37, count(self::INDEXES));
         $this->assertIndexesExist();
         $id = $this->shop->store->insert('yc_categories', ['slug' => '의류', 'path' => '/1/', 'legacy_code' => null, 'parent_id' => null, 'depth' => 1, 'name' => '의류', 'sort_order' => 0,
             'active' => 1, 'head_html' => '', 'tail_html' => '', 'list_columns' => 3, 'list_rows' => 5,

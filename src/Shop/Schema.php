@@ -17,7 +17,8 @@ use GnuCms\Error\DomainError;
 final class Schema
 {
     public const TABLES = ['yc_settings', 'yc_categories', 'yc_products', 'yc_product_categories', 'yc_product_images',
-        'yc_option_groups', 'yc_options', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history', 'yc_order_notes', 'yc_product_feedback'];
+        'yc_option_groups', 'yc_options', 'yc_stock_log', 'yc_orders', 'yc_order_items', 'yc_order_history', 'yc_order_notes',
+        'yc_order_refunds', 'yc_settlements', 'yc_product_feedback'];
 
     public const ORDER_COLUMNS = [
         'default_address' => 'SMALLINT NOT NULL DEFAULT 0',
@@ -73,6 +74,18 @@ final class Schema
             'yc_order_notes' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, actor VARCHAR(100) NOT NULL,
                 note VARCHAR(500) NOT NULL, created_at BIGINT NOT NULL, occurred_at BIGINT NOT NULL DEFAULT 0,
                 after_history_id BIGINT NOT NULL DEFAULT 0',
+            'yc_order_refunds' => 'id {AUTO_PK}, order_id BIGINT NOT NULL, payment_provider VARCHAR(32) NOT NULL DEFAULT \'\',
+                refund_key VARCHAR(100)' . $bin . ' NOT NULL, transaction_id VARCHAR(191) NOT NULL DEFAULT \'\',
+                amount BIGINT NOT NULL, taxable_amount BIGINT NOT NULL DEFAULT 0, supply_amount BIGINT NOT NULL DEFAULT 0,
+                vat_amount BIGINT NOT NULL DEFAULT 0, tax_free_amount BIGINT NOT NULL DEFAULT 0,
+                status VARCHAR(16) NOT NULL DEFAULT \'succeeded\', reason VARCHAR(500) NOT NULL, actor VARCHAR(100) NOT NULL,
+                created_at BIGINT NOT NULL',
+            'yc_settlements' => 'id {AUTO_PK}, provider VARCHAR(32) NOT NULL, environment VARCHAR(8) NOT NULL DEFAULT \'live\',
+                merchant_id VARCHAR(64) NOT NULL DEFAULT \'\', order_id BIGINT NULL, payment_id VARCHAR(191) NOT NULL,
+                transaction_key VARCHAR(191)' . $bin . ' NOT NULL, kind VARCHAR(16) NOT NULL,
+                amount BIGINT NOT NULL, fee_supply BIGINT NOT NULL DEFAULT 0, fee_vat BIGINT NOT NULL DEFAULT 0,
+                payout_amount BIGINT NOT NULL, sold_date DATE NOT NULL, payout_date DATE NULL,
+                source VARCHAR(20) NOT NULL DEFAULT \'csv\', raw_hash CHAR(64) NOT NULL, imported_at BIGINT NOT NULL',
             // 후기만 review_user_id 를 채운다. NULL 인 문의는 여러 건을 허용하고 UNIQUE 인덱스로 후기 중복을 막는다.
             'yc_product_feedback' => 'id {AUTO_PK}, product_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
                 review_user_id BIGINT NULL, kind VARCHAR(10) NOT NULL, author VARCHAR(100) NOT NULL,
@@ -141,6 +154,8 @@ final class Schema
         self::dropColumn($db, 'yc_products', 'restock_notify');
         // 47판: 상품정보고시와 중복되고 표시·검색에만 쓰이던 기본 정보 칸을 제거한다.
         foreach (['maker', 'origin', 'brand', 'model'] as $column) self::dropColumn($db, 'yc_products', $column);
+        // 48판: 환불을 건별 원장으로 보존하고 PG 정산 자료를 공통 형식으로 적재한다.
+        self::backfillRefundLedger($db);
         self::migrateDisplayFlags($db);
         $indexes = ['yc_cat_parent' => ['yc_categories', 'parent_id'], 'yc_cat_order' => ['yc_categories', 'sort_order'],
             'yc_cat_path' => ['yc_categories', 'path'],
@@ -151,11 +166,18 @@ final class Schema
             'yc_stock_product' => ['yc_stock_log', 'product_id'],
             'yc_order_user' => ['yc_orders', 'user_id'], 'yc_order_status' => ['yc_orders', 'status'],
             'yc_order_created' => ['yc_orders', 'created_at'], 'yc_order_pay_by' => ['yc_orders', 'pay_by'],
+            'yc_order_paid' => ['yc_orders', 'paid_at'],
             'yc_order_payment' => ['yc_orders', 'payment_id'],
             'yc_oi_order' => ['yc_order_items', 'order_id'],
             'yc_oi_product' => ['yc_order_items', 'product_id'], 'yc_oi_option' => ['yc_order_items', 'option_id'],
             'yc_history_order' => ['yc_order_history', 'order_id'],
             'yc_notes_order' => ['yc_order_notes', 'order_id'],
+            'yc_refund_order' => ['yc_order_refunds', 'order_id'],
+            'yc_refund_created' => ['yc_order_refunds', 'created_at'],
+            'yc_settlement_provider' => ['yc_settlements', 'provider'],
+            'yc_settlement_order' => ['yc_settlements', 'order_id'],
+            'yc_settlement_sold' => ['yc_settlements', 'sold_date'],
+            'yc_settlement_payout' => ['yc_settlements', 'payout_date'],
             'yc_feedback_product' => ['yc_product_feedback', 'product_id'],
             'yc_feedback_user' => ['yc_product_feedback', 'user_id'],
             'yc_feedback_created' => ['yc_product_feedback', 'created_at']];
@@ -163,13 +185,33 @@ final class Schema
             if (!self::indexExists($db, $table, $index)) $db->execute('CREATE INDEX ' . $db->index($index) . ' ON ' . $db->table($table) . ' (' . $db->q($column) . ')');
         }
         $uniqueIndexes = ['yc_cat_slug' => ['yc_categories', ['slug']], 'yc_cat_legacy_code' => ['yc_categories', ['legacy_code']],
-            'yc_feedback_review' => ['yc_product_feedback', ['product_id', 'review_user_id']]];
+            'yc_feedback_review' => ['yc_product_feedback', ['product_id', 'review_user_id']],
+            'yc_refund_key' => ['yc_order_refunds', ['order_id', 'refund_key']],
+            'yc_settlement_transaction' => ['yc_settlements', ['provider', 'environment', 'merchant_id', 'transaction_key']]];
         foreach ($uniqueIndexes as $index => [$table, $columns]) {
             if (!self::indexExists($db, $table, $index)) {
                 $db->execute('CREATE UNIQUE INDEX ' . $db->index($index) . ' ON ' . $db->table($table)
                     . ' (' . implode(', ', array_map($db->q(...), $columns)) . ')');
             }
         }
+    }
+
+    /** 이전 버전의 주문별 환불 누계를 한 건의 이전 원장으로 남긴다. */
+    private static function backfillRefundLedger(Connection $db): void
+    {
+        $orders = $db->table('yc_orders');
+        $refunds = $db->table('yc_order_refunds');
+        $db->execute('INSERT INTO ' . $refunds . ' (order_id, payment_provider, refund_key, transaction_id, amount, '
+            . 'taxable_amount, supply_amount, vat_amount, tax_free_amount, status, reason, actor, created_at) '
+            . 'SELECT o.id, o.payment_provider, CONCAT(\'legacy-\', o.id), \'\', o.refunded_amount, '
+            . '(o.refunded_amount - LEAST(o.refunded_amount, FLOOR(o.tax_free_amount * o.refunded_amount / GREATEST(o.total, 1)))), '
+            . 'CASE WHEN o.taxable_amount > 0 THEN FLOOR(o.supply_amount * '
+            . '(o.refunded_amount - LEAST(o.refunded_amount, FLOOR(o.tax_free_amount * o.refunded_amount / GREATEST(o.total, 1)))) / o.taxable_amount) ELSE 0 END, '
+            . 'CASE WHEN o.taxable_amount > 0 THEN (o.refunded_amount - LEAST(o.refunded_amount, FLOOR(o.tax_free_amount * o.refunded_amount / GREATEST(o.total, 1)))) '
+            . '- FLOOR(o.supply_amount * (o.refunded_amount - LEAST(o.refunded_amount, FLOOR(o.tax_free_amount * o.refunded_amount / GREATEST(o.total, 1)))) / o.taxable_amount) ELSE 0 END, '
+            . 'LEAST(o.refunded_amount, FLOOR(o.tax_free_amount * o.refunded_amount / GREATEST(o.total, 1))), '
+            . '\'legacy\', \'기존 누적 환불\', \'migration\', o.updated_at FROM ' . $orders . ' o '
+            . 'WHERE o.refunded_amount > 0 AND NOT EXISTS (SELECT 1 FROM ' . $refunds . ' r WHERE r.order_id = o.id)');
     }
 
     /** 40판: 기존 쇼핑몰 설정 JSON에서 관련상품 표시 옵션을 지운다. */
