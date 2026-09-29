@@ -96,6 +96,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
           <a href="<?= $this->url('boards.index') ?>#install">설치</a>
           <a href="<?= $this->url('boards.index') ?>#gallery">갤러리</a>
           <a href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> class="is-active" aria-current="page"<?php endif ?>>전체 글</a>
+          <?php if ($shop_visible ?? false): ?><a href="<?= $this->url('shop.index') ?>"<?php if (trim($this->block('nav_section')) === 'shop'): ?> class="is-active" aria-current="page"<?php endif ?>>쇼핑몰</a><?php endif ?>
           <?php foreach ($public_extensions ?? [] as $key => $extension): $selected = trim($this->block('nav_section')) === $key; ?>
             <a href="<?= $this->e($extension['url']) ?>"<?= $selected ? ' class="is-active" aria-current="page"' : '' ?>><?= $this->e($extension['name']) ?></a>
           <?php endforeach ?>
@@ -214,6 +215,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
             <strong>커뮤니티</strong>
             <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>">자유게시판</a>
             <a href="<?= $this->url('posts.all') ?>">전체 글</a>
+            <?php if ($shop_visible ?? false): ?><a href="<?= $this->url('shop.index') ?>">쇼핑몰</a><?php endif ?>
             <a href="<?= $this->url('seo.rss') ?>">RSS</a>
             <?php foreach ($legal_pages as $doc): ?>
               <a href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
@@ -235,6 +237,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
       <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"<?php if (isset($board['board_key']) && $board['board_key'] === 'free'): ?> class="dock-active" aria-current="page"<?php endif ?>>
         <?= $this->icon('board', 21) ?><span class="dock-label">게시판</span>
       </a>
+      <?php if ($shop_visible ?? false): ?><a href="<?= $this->url('shop.index') ?>"<?php if (trim($this->block('nav_section')) === 'shop'): ?> class="dock-active" aria-current="page"<?php endif ?>><?= $this->icon('gift', 21) ?><span class="dock-label">쇼핑몰</span></a><?php endif ?>
       <?php if ($current_user['is_guest']): ?>
         <a href="<?= $this->url('auth.login') ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
       <?php else: ?>
@@ -282,6 +285,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
         <li><a href="<?= $this->url('boards.index') ?>#install"><?= $this->icon('document', 18) ?> 설치</a></li>
         <li><a href="<?= $this->url('boards.index') ?>#gallery"><?= $this->icon('grid', 18) ?> 사이트 갤러리</a></li>
         <li><a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"><?= $this->icon('board', 18) ?> 자유게시판</a></li>
+        <?php if ($shop_visible ?? false): ?><li><a href="<?= $this->url('shop.index') ?>"><?= $this->icon('gift', 18) ?> 쇼핑몰</a></li><?php endif ?>
         <?php foreach ($public_extensions ?? [] as $extension): ?><li><a href="<?= $this->e($extension['url']) ?>"><?= $this->icon('gift', 18) ?> <?= $this->e($extension['name']) ?></a></li><?php endforeach ?>
         <li><a href="https://github.com/kagla/gnucms" target="_blank" rel="noopener"><?= $this->icon('star', 18) ?> GitHub</a></li>
         <?php if (!empty($site_menu)): ?><li class="menu-title">안내</li><?php endif ?>

@@ -18,14 +18,14 @@ final class ShopPublicTest extends WebTestCase
     private Service $shop;
     private string $root;
 
-    private function setupShop(array $config): void
+    private function setupShop(array $config, ?string $theme = null): void
     {
         session_name(GNUCMS_ID . '_session');
         session_start(); $_SESSION = []; session_write_close();
         $this->root = sys_get_temp_dir() . '/gnucms-yc-web-' . bin2hex(random_bytes(8));
         $config['prefix'] = 'yw' . bin2hex(random_bytes(4)) . '_';
         $this->app = $this->makeApp($config, ['storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'],
-            'app' => ['url' => 'https://shop.example.test']]);
+            'app' => ['url' => 'https://shop.example.test']], $theme);
         $this->shop = new Service($this->app);
     }
 
@@ -54,6 +54,16 @@ final class ShopPublicTest extends WebTestCase
         self::assertSame('/shop', $parser->urlFor('shop.index'));
         self::assertSame('/admin/shop', $parser->urlFor('admin.shop'));
         $this->assertLoginRedirect($this->get($this->app, '/admin/shop'), '/admin/shop');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testSiteThemeOpensShopAndLinksToIt(array $config): void
+    {
+        $this->setupShop($config, 'gnucmscom');
+        $shop = $this->get($this->app, '/shop');
+        self::assertSame(200, $shop->getStatusCode());
+        self::assertStringContainsString('href="/shop" class="is-active"', $this->body($shop));
+        self::assertStringContainsString('쇼핑몰', $this->body($this->get($this->app, '/')));
     }
 
     /** 공개를 끄면 상단 탭이 사라지고 /shop 은 준비 중 안내, 관리자와 결제 콜백 경로는 그대로다. */

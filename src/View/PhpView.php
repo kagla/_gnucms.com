@@ -95,7 +95,16 @@ final class PhpView implements ViewInterface
     public function forShop(): self
     {
         $view = clone $this;
-        $view->paths = [...array_map(static fn (string $path): string => $path . '/shop', $this->paths), ...$this->paths];
+        $roots = $this->paths;
+        foreach ($this->paths as $path) {
+            $default = dirname($path) . '/default';
+            if ($path !== $default && is_dir($default . '/shop') && !in_array($default, $roots, true)) {
+                $roots[] = $default;
+            }
+        }
+        // 기존 사이트 테마에 쇼핑몰 화면이 없어도 기본 쇼핑 화면을 쓰고,
+        // 레이아웃은 사이트 테마에서 먼저 찾는다.
+        $view->paths = [...array_map(static fn (string $path): string => $path . '/shop', $roots), ...$roots];
         $view->icons = null;
         return $view;
     }

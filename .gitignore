@@ -1,5 +1,6 @@
 # 실제 설정 (샘플만 커밋한다)
 /config/config.php
+/config/config.php.before-mysql-*
 /config/shop_carriers.json
 
 # 업로드된 첨부
@@ -21,6 +22,9 @@
 /storage/extensions/
 /storage/extensions-runtime/
 /storage/payment/
+/storage/demo-images/
+/storage/shop-demo-db.json
+/storage/shop-demo-member.json
 
 # 로그
 /storage/logs/*

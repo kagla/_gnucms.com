@@ -68,6 +68,32 @@ final class PhpViewTest extends TestCase
         );
     }
 
+    public function testShopUsesDefaultPagesWithTheSelectedThemeLayoutAndPartial(): void
+    {
+        mkdir($this->dir . '/default/shop', 0777, true);
+        mkdir($this->dir . '/custom/shop', 0777, true);
+        file_put_contents($this->dir . '/default/shop/index.php',
+            '<?php $this->layout("layout") ?><?php $this->start("body") ?><?php $this->insert("_header") ?> 상품<?php $this->stop() ?>');
+        file_put_contents($this->dir . '/default/shop/_header.php', '기본 헤더');
+        file_put_contents($this->dir . '/custom/shop/_header.php', '사용자 헤더');
+        file_put_contents($this->dir . '/custom/layout.php', '<main><?= $this->block("body") ?></main>');
+        try {
+            $routes = $this->createMock(RouteParserInterface::class);
+            $view = new PhpView([$this->dir . '/custom'], $routes, '', static fn (string $path): string => $path,
+                static fn (string $html): string => $html);
+            self::assertSame('<main>사용자 헤더 상품</main>', $view->forShop()->fetch('index'));
+        } finally {
+            unlink($this->dir . '/default/shop/index.php');
+            unlink($this->dir . '/default/shop/_header.php');
+            unlink($this->dir . '/custom/shop/_header.php');
+            unlink($this->dir . '/custom/layout.php');
+            rmdir($this->dir . '/default/shop');
+            rmdir($this->dir . '/default');
+            rmdir($this->dir . '/custom/shop');
+            rmdir($this->dir . '/custom');
+        }
+    }
+
     public function testChildBlockBeatsParentDefaultAndNestedLayoutsWork(): void
     {
         // 루트 레이아웃은 start/stop 으로 '기본값을 정의하면서 출력' 한다 (정의하면서 출력).

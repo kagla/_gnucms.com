@@ -1,0 +1,528 @@
+{
+  "notice": "쇼핑몰 기능 확인용 예시 상품입니다. 사진은 실제 판매 상품과 다를 수 있습니다.",
+  "image_source": "Openverse에서 검색한 CC0 이미지",
+  "categories": [
+    {
+      "name": "조명",
+      "slug": "lighting"
+    },
+    {
+      "name": "머그·컵",
+      "slug": "mugs"
+    },
+    {
+      "name": "문구",
+      "slug": "stationery"
+    },
+    {
+      "name": "체어",
+      "slug": "chairs"
+    },
+    {
+      "name": "가방",
+      "slug": "bags"
+    },
+    {
+      "name": "스니커즈",
+      "slug": "sneakers"
+    },
+    {
+      "name": "오디오",
+      "slug": "audio"
+    },
+    {
+      "name": "배스·비누",
+      "slug": "bath"
+    },
+    {
+      "name": "식물",
+      "slug": "plants"
+    },
+    {
+      "name": "키친·푸드",
+      "slug": "kitchen-food"
+    }
+  ],
+  "products": [
+    {
+      "code": "DEMO-001",
+      "category": "lighting",
+      "name": "미니멀 데스크 램프",
+      "price": 27900,
+      "list_price": 33000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/1747/42381074432_33733f4667_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/642c96b0-b59e-4d96-a9a8-43383f6b11ef/thumb/",
+        "landing_url": "https://www.flickr.com/photos/135396164@N05/42381074432",
+        "creator": "freestocks.org",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-002",
+      "category": "lighting",
+      "name": "클립 독서등",
+      "price": 18900,
+      "list_price": 23000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/65535/49061488801_ee91b99e25.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/34911ef2-bf29-4def-ac8f-fefccb467585/thumb/",
+        "landing_url": "https://www.flickr.com/photos/185514373@N06/49061488801",
+        "creator": "shop8447",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-003",
+      "category": "lighting",
+      "name": "레트로 테이블 램프",
+      "price": 34900,
+      "list_price": 42000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Retro_desk_lamp.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/260d17bf-c012-42cc-b66a-c86cbe732876/thumb/",
+        "landing_url": "https://commons.wikimedia.org/w/index.php?curid=148666492",
+        "creator": "WANGYIFAN2024",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en/"
+      }
+    },
+    {
+      "code": "DEMO-004",
+      "category": "mugs",
+      "name": "화이트 세라믹 머그 세트",
+      "price": 24000,
+      "list_price": 29000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvcHUyMzM0NzYzLWltYWdlLWt3eXJuampiLmpwZw.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/66296729-2105-4e37-99c0-426bf389d6a9/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/5965017/white-ceramic-mug",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-005",
+      "category": "mugs",
+      "name": "스틸 캠핑 머그",
+      "price": 15500,
+      "list_price": 19000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://pd.w.org/2026/03/54769c7e74fb7c7e2.04937297-1536x2048.jpeg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/a0a25d7d-22bd-4cc1-9d9e-5b671c02d116/thumb/",
+        "landing_url": "https://wordpress.org/photos/photo/54769c7e74/",
+        "creator": "Uttkrista Chhetri",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-006",
+      "category": "mugs",
+      "name": "그레이 데일리 머그",
+      "price": 19000,
+      "list_price": 23000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIyLTA1L3Vwd2s2MTc4Mjk3NS13aWtpbWVkaWEtaW1hZ2Uta293Ym40cnUuanBn.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/3b759cd0-2a2a-4281-b90d-09e35d7c1a0c/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/3283727/free-photo-image-coffee-table-wooden",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-007",
+      "category": "stationery",
+      "name": "플라워 데스크 플래너",
+      "price": 13500,
+      "list_price": 16000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/FCPVTTJJLS.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/8fadf7be-fbed-42a9-b70b-92720ad73c14/thumb/",
+        "landing_url": "https://stocksnap.io/photo/cup-flatlay-FCPVTTJJLS",
+        "creator": "Chimene Gaspar",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-008",
+      "category": "stationery",
+      "name": "패턴 노트",
+      "price": 11900,
+      "list_price": 14000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/OSD32NBXHE.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/28f9d3c1-0434-422b-84da-d4bd99aec506/thumb/",
+        "landing_url": "https://stocksnap.io/photo/cup-flatlay-OSD32NBXHE",
+        "creator": "Kristin Hardwick",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-009",
+      "category": "stationery",
+      "name": "블랙 하드커버 노트",
+      "price": 16500,
+      "list_price": 20000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/image_png_1300/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvam9iNjgzLTAwMTkucG5n.png",
+        "thumbnail_url": "https://api.openverse.org/v1/images/8031f849-1dd0-419e-a062-d61cf14f55b9/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/6436681/png-sticker-book",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-010",
+      "category": "chairs",
+      "name": "벨벳 클래식 체어",
+      "price": 149000,
+      "list_price": 179000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIyLTEyL2FpYzIzMDk1NS1pbWFnZS5qcGc.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/90b54d09-b019-491b-89e1-fd6ed4b56ec0/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/8932175/dining-chair-theophilus-edvard-von-hansen",
+        "creator": "artinstitutechicago",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-011",
+      "category": "chairs",
+      "name": "우드 앤틱 체어",
+      "price": 179000,
+      "list_price": 215000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIzLTA0L25nYTE2NDU2LWltYWdlLmpwZw.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/56116b5c-6d6b-495a-9625-27e620511880/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/10065472/dining-chair-c-1936-donald-donovan-and-mccarthy",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-012",
+      "category": "chairs",
+      "name": "쉐이커 원목 체어",
+      "price": 129000,
+      "list_price": 155000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIzLTA0L25nYTI1NjU5LWltYWdlLmpwZw.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/7562f765-c024-491b-aaa6-33c740c85664/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/10076971/shaker-dining-chair-c-1937-john-kelleher",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-013",
+      "category": "bags",
+      "name": "라탄 숄더백",
+      "price": 59000,
+      "list_price": 71000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/1823/28634261097_3e84d04f53_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/59bbf11b-7146-48e5-8b98-dee8f0b7e260/thumb/",
+        "landing_url": "https://www.flickr.com/photos/157635012@N07/28634261097",
+        "creator": "Artem Beliaikin",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-014",
+      "category": "bags",
+      "name": "라탄 크로스백",
+      "price": 49000,
+      "list_price": 59000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/1787/42448810905_c40d91751d_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/00764bd1-7dfa-48e4-9e93-7cfb816a2004/thumb/",
+        "landing_url": "https://www.flickr.com/photos/157635012@N07/42448810905",
+        "creator": "Artem Beliaikin",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-015",
+      "category": "bags",
+      "name": "라운드 라탄 핸드백",
+      "price": 55000,
+      "list_price": 66000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/1741/40776081110_e606152404_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/79da343d-bd70-4f39-b8f7-4a527d205dbf/thumb/",
+        "landing_url": "https://www.flickr.com/photos/157635012@N07/40776081110",
+        "creator": "Artem Beliaikin",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-016",
+      "category": "sneakers",
+      "name": "클래식 캔버스 스니커즈",
+      "price": 39000,
+      "list_price": 47000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/0XLU8VP4UC.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/d2acf599-b657-4b53-8db3-a2a9755e2019/thumb/",
+        "landing_url": "https://stocksnap.io/photo/sneakers-shoes-0XLU8VP4UC",
+        "creator": "Olu Eletu",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-017",
+      "category": "sneakers",
+      "name": "어반 러닝 스니커즈",
+      "price": 69000,
+      "list_price": 83000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/LQDXHY52PS.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/3610ad62-cb5e-46ca-a289-a3ef1cf444a6/thumb/",
+        "landing_url": "https://stocksnap.io/photo/sneakers-shoes-LQDXHY52PS",
+        "creator": "Kaique Rocha",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-018",
+      "category": "sneakers",
+      "name": "화이트 로우 스니커즈",
+      "price": 49000,
+      "list_price": 59000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/U20YIXFQBC.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/7b78ba66-6ee6-46cd-bbc7-d5610719ea04/thumb/",
+        "landing_url": "https://stocksnap.io/photo/sneakers-shoes-U20YIXFQBC",
+        "creator": "Kristin Hardwick",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-019",
+      "category": "audio",
+      "name": "레트로 오버이어 헤드폰",
+      "price": 79000,
+      "list_price": 95000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/3387/3605234342_1c6d0f4dd8_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/c598b509-9ac7-4096-b198-66c24c44ef5f/thumb/",
+        "landing_url": "https://www.flickr.com/photos/38451115@N04/3605234342",
+        "creator": "pasukaru76",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-020",
+      "category": "audio",
+      "name": "블루 스튜디오 헤드폰",
+      "price": 99000,
+      "list_price": 119000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/65535/52459692877_015fdf1c3a_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/15738182-16d4-4253-a94d-e8d8ecacd063/thumb/",
+        "landing_url": "https://www.flickr.com/photos/57866029@N00/52459692877",
+        "creator": "Abdulla Al Muhairi",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-021",
+      "category": "audio",
+      "name": "데일리 무선 헤드폰",
+      "price": 89000,
+      "list_price": 107000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/NOLZXJLYKF.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/7bc793ef-2a32-4872-b7d3-25c3a57fb38f/thumb/",
+        "landing_url": "https://stocksnap.io/photo/woman-headphones-NOLZXJLYKF",
+        "creator": "Burst",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-022",
+      "category": "bath",
+      "name": "핸드메이드 솝 셀렉션",
+      "price": 21000,
+      "list_price": 25000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvdXB3azYyMDUzNzg5LXdpa2ltZWRpYS1pbWFnZS1rb3dqaTNoZi5qcGc.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/dba95fd0-bad0-43ef-8b38-a3ae49e99dc4/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/3290012/free-photo-image-birthday-cake-brie",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-023",
+      "category": "bath",
+      "name": "컬러 솝 기프트 세트",
+      "price": 24000,
+      "list_price": 29000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvdXB3azYyMDU0MTgzLXdpa2ltZWRpYS1pbWFnZS1rb3dmN2pqcC5qcGc.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/03585302-0142-4d84-84f6-4acfb2b65dfd/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/3286046/free-photo-image-soaps-paper-craft-soap-bar",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-024",
+      "category": "bath",
+      "name": "시트러스 보태니컬 솝",
+      "price": 18000,
+      "list_price": 22000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://images.rawpixel.com/editor_1024/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvcHgxMzM1NTM3LWltYWdlLWt3eXFwbmFlLmpwZw.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/6c45c4d5-3a0e-450a-b109-675586c52df8/thumb/",
+        "landing_url": "https://www.rawpixel.com/image/5958811/free-public-domain-cc0-photo",
+        "creator": null,
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-025",
+      "category": "plants",
+      "name": "그린 다육식물",
+      "price": 12000,
+      "list_price": 14000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/7063/7097578511_3ac3a4ee2e_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/0ee0d8f0-02be-46f3-affc-149462237aa2/thumb/",
+        "landing_url": "https://www.flickr.com/photos/29507259@N02/7097578511",
+        "creator": "D Coetzee",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-026",
+      "category": "plants",
+      "name": "글라스 테라리움",
+      "price": 32000,
+      "list_price": 38000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://live.staticflickr.com/5654/21845592140_b203626f29_b.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/71f4dc47-848b-4861-9077-52aaa14d2154/thumb/",
+        "landing_url": "https://www.flickr.com/photos/132795455@N08/21845592140",
+        "creator": "Image Catalog",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-027",
+      "category": "plants",
+      "name": "로제트 다육식물",
+      "price": 15000,
+      "list_price": 18000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/T57PJUYFWM.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/0ab014ed-4b30-428c-af58-23ec011f9a69/thumb/",
+        "landing_url": "https://stocksnap.io/photo/succulent-plant-T57PJUYFWM",
+        "creator": "Kelly Ishmael",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-028",
+      "category": "kitchen-food",
+      "name": "우드 쿠킹 보드",
+      "price": 39000,
+      "list_price": 47000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://pd.w.org/2024/11/964672a81e00013e7.79134756-2048x1536.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/3fba3ec6-212d-43c5-8aa9-85130b15f49d/thumb/",
+        "landing_url": "https://wordpress.org/photos/photo/964672a81e/",
+        "creator": "ams67",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-029",
+      "category": "kitchen-food",
+      "name": "홈메이드 피자 키트",
+      "price": 25000,
+      "list_price": 30000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://pd.w.org/2026/01/6076960848665f103.89636104-2048x1536.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/80749564-f117-4db8-8186-acd39687b41c/thumb/",
+        "landing_url": "https://wordpress.org/photos/photo/6076960848/",
+        "creator": "渡邉厚夫(たいちょ渡邉)",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    {
+      "code": "DEMO-030",
+      "category": "kitchen-food",
+      "name": "오븐 피자 세트",
+      "price": 28000,
+      "list_price": 34000,
+      "stock": 25,
+      "image": {
+        "source_url": "https://pd.w.org/2026/05/6966a15a90b70b112.66359821-1536x2048.jpg",
+        "thumbnail_url": "https://api.openverse.org/v1/images/5f0ee28a-67ee-4ce9-a0c9-1be7b4d0872e/thumb/",
+        "landing_url": "https://wordpress.org/photos/photo/6966a15a90/",
+        "creator": "shreyadhakal",
+        "license": "cc0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    }
+  ]
+}
