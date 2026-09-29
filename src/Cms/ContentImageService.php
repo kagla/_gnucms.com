@@ -287,6 +287,30 @@ final class ContentImageService
         }
     }
 
+    /** 저장된 본문 사진을 다른 소유자 폴더로 복사한다. 원본 내용은 그대로 둔다. */
+    public function copyFolder(string $from, string $to): void
+    {
+        $this->assertKey($from);
+        $this->assertKey($to);
+        $source = $this->root . '/' . $from;
+        if (!is_dir($source)) {
+            return;
+        }
+        $target = $this->root . '/' . $to;
+        if (!is_dir($target) && !mkdir($target, 0775, true) && !is_dir($target)) {
+            throw DomainError::internal('이미지 저장 폴더를 만들 수 없습니다.');
+        }
+        foreach (glob($source . '/*') ?: [] as $path) {
+            $file = basename($path);
+            if (!is_file($path) || !$this->isFile($file)) {
+                continue;
+            }
+            if (!copy($path, $target . '/' . $file)) {
+                throw DomainError::internal('이미지를 복사하지 못했습니다.');
+            }
+        }
+    }
+
     /** move() 뒤에 본문 안의 사진 주소를 새 폴더로 바꾼다. */
     public static function relocatedHtml(string $from, string $to, string $html): string
     {

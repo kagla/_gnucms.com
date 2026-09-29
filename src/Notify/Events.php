@@ -8,7 +8,7 @@ namespace GnuCms\Notify;
  * 코어가 보내는 알림의 고정 목록. phone 이 false 인 것은 수신자가 이메일로만 식별되거나
  * 이메일 확인 자체가 목적이라 알림톡·문자로 보낼 수 없다.
  *
- * **inbox 는 "이 알림을 사이트 안 알림함에 쌓을 수 있는가"다.** 두 가지가 모두 참일 때만
+ * **inbox 는 "이 알림을 사이트 내 알림함에 쌓을 수 있는가"다.** 두 가지가 모두 참일 때만
  * 참이고, 새 알림을 더할 때는 반드시 이 차례로 따진다.
  *
  *  1. **받는 사람이 로그인할 수 있다고 기대할 수 있는가.** 알림함은 로그인해야 열린다.
@@ -46,16 +46,20 @@ final class Events
     public const ALL = [
         'password_reset' => ['label' => '비밀번호 재설정',
             'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => true, 'inbox' => false,
-            'secret' => ['링크']],
+            'secret' => ['링크'],
+            'sms_body' => '[#{사이트명}] #{이름}님, 비밀번호 재설정 링크입니다. #{링크} (#{유효시간} 동안 유효)'],
         'password_changed' => ['label' => '비밀번호 변경 안내',
             'vars' => ['사이트명', '이름', '일시', '링크'], 'phone' => true, 'inbox' => false,
             // 이 링크는 /forgot-password 다 — 누구나 열 수 있는 화면이고 토큰이 없다.
-            'secret' => []],
+            'secret' => [],
+            'sms_body' => '[#{사이트명}] #{이름}님의 비밀번호가 #{일시}에 변경되었습니다. 본인이 아니라면 #{링크}에서 재설정해 주세요.'],
         'welcome' => ['label' => '가입 완료 안내',
-            'vars' => ['사이트명', '이름'], 'phone' => true, 'inbox' => false, 'secret' => []],
+            'vars' => ['사이트명', '이름'], 'phone' => true, 'inbox' => false, 'secret' => [],
+            'sms_body' => '[#{사이트명}] #{이름}님, 가입이 완료되었습니다. 환영합니다.'],
         'comment_new' => ['label' => '새 댓글·답글',
             'vars' => ['사이트명', '이름', '글제목', '작성자', '링크'], 'phone' => true, 'inbox' => true,
-            'secret' => []],
+            'secret' => [],
+            'sms_body' => '[#{사이트명}] #{작성자}님이 「#{글제목}」에 댓글을 남겼습니다. #{링크}'],
         'email_verify' => ['label' => '이메일 인증',
             'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => false, 'inbox' => false,
             'secret' => ['링크']],
@@ -88,7 +92,13 @@ final class Events
         return (bool) (self::ALL[$key]['phone'] ?? false);
     }
 
-    /** 이 알림을 사이트 안 알림함에 쌓을 수 있는가. 무엇을 뜻하는지는 클래스 주석에 있다. */
+    /** 관리자가 아직 문자 본문을 저장하지 않았을 때 보여 줄 알림별 기본 문구. */
+    public static function defaultSmsBody(string $key): string
+    {
+        return (string) (self::ALL[$key]['sms_body'] ?? '');
+    }
+
+    /** 이 알림을 사이트 내 알림함에 쌓을 수 있는가. 무엇을 뜻하는지는 클래스 주석에 있다. */
     public static function inboxCapable(string $key): bool
     {
         return (bool) (self::ALL[$key]['inbox'] ?? false);

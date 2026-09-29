@@ -30,10 +30,11 @@
       <p class="schema-note"><?php if ((int) $backup_upload_max_mb > 0): ?>현재 서버의 웹 업로드 한도는 약 <?= $this->e((string) $backup_upload_max_mb) ?>MB입니다. <?php endif ?>더 큰 파일은 서버의 안전한 폴더에 올린 뒤 CLI에서 <code>verify</code>를 실행한 뒤 아래 DB 복원 절차를 따르세요. 파일명이 바뀌어도 내부 정보로 판별하며 기존 백업은 덮어쓰지 않습니다.</p>
     </div>
 
-    <?php if ($backup['archives'] === []): ?>
+    <?php if ($backup_pagination['total_items'] === 0): ?>
       <p class="schema-note">아직 전체 수동 백업이 없습니다.</p>
     <?php else: ?>
-      <div class="overflow-x-auto"><table class="table table-sm manual-backups"><thead><tr><th>백업 파일</th><th>DB</th><th>크기</th><th>검증</th><th>작업</th></tr></thead><tbody>
+      <p class="schema-note">전체 백업 <?= $this->e((string) $backup_pagination['total_items']) ?>개 중 <?= $this->e((string) (($backup_pagination['page'] - 1) * $backup_pagination['per_page'] + 1)) ?>–<?= $this->e((string) min($backup_pagination['page'] * $backup_pagination['per_page'], $backup_pagination['total_items'])) ?>개 표시</p>
+      <div class="overflow-x-auto landing" id="backup-list"><table class="table table-sm manual-backups"><thead><tr><th>백업 파일</th><th>DB</th><th>크기</th><th>검증</th><th>작업</th></tr></thead><tbody>
       <?php foreach ($backup['archives'] as $item): ?><tr<?= ($query['backup_uploaded'] ?? '') === $item['name'] ? ' id="backup-uploaded" class="is-uploaded-backup"' : '' ?>>
         <td><code><?= $this->e($item['name']) ?></code><?php if (($query['backup_uploaded'] ?? '') === $item['name']): ?> <span class="badge badge-sm badge-primary backup-uploaded-badge">방금 업로드</span><?php endif ?><br><small><?= $item['created_at'] !== null ? $this->date($item['created_at'], 'Y-m-d H:i:s') : $this->e((string) ($item['error'] ?? '')) ?></small></td>
         <td><?= $this->e((string) ($item['driver'] ?? '-')) ?></td>
@@ -41,29 +42,31 @@
         <td><?= $item['verified_at'] !== null ? $this->date($item['verified_at'], 'Y-m-d H:i:s') : '확인 필요' ?></td>
         <td><div class="backup-actions-row"><div class="backup-safe-actions">
           <a class="btn btn-xs" href="<?= $this->url('admin.backups.download', ['name' => $item['name']]) ?>">내려받기</a>
-          <form method="post" action="<?= $this->url('admin.backups.verify', ['name' => $item['name']]) ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-xs" type="submit">검증</button></form>
+          <form method="post" action="<?= $this->url('admin.backups.verify', ['name' => $item['name']]) ?>"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="backup_page" value="<?= $this->e((string) $backup_pagination['page']) ?>"><input type="hidden" name="garbage_page" value="<?= $this->e((string) $garbage_pagination['page']) ?>"><button class="btn btn-xs" type="submit">검증</button></form>
         </div><div class="backup-danger-actions">
-          <form method="post" action="<?= $this->url('admin.backups.delete', ['name' => $item['name']]) ?>" onsubmit="return confirm('이 전체 백업을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-xs btn-error btn-outline" type="submit">삭제</button></form>
+          <form method="post" action="<?= $this->url('admin.backups.delete', ['name' => $item['name']]) ?>" onsubmit="return confirm('이 전체 백업을 삭제할까요? 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="backup_page" value="<?= $this->e((string) $backup_pagination['page']) ?>"><input type="hidden" name="garbage_page" value="<?= $this->e((string) $garbage_pagination['page']) ?>"><button class="btn btn-xs btn-error btn-outline" type="submit">삭제</button></form>
         </div></div>
         </td>
       </tr><?php endforeach ?>
       </tbody></table></div>
+      <?php $this->insert('admin/_maintenance_pager', ['pagination' => $backup_pagination, 'section' => 'backup', 'other_page' => $garbage_pagination['page'], 'anchor' => 'backup-list', 'label' => '전체 백업']) ?>
     <?php endif ?>
 
     <div class="backup-instructions"><h3>DB 복원 절차</h3><p class="schema-note">원격 DB는 권한·버전·실행 시간 차이 때문에 웹에서 자동 복원하지 않습니다. 전체 백업을 내려받고 쓰기를 중지한 뒤 아래 절차를 서버 콘솔에서 실행하세요.</p><ol><?php foreach ($backup['instructions'] as $instruction): ?><li><code><?= $this->e($instruction) ?></code></li><?php endforeach ?></ol></div>
   </div>
 
-  <div class="form-section"><h2 class="form-section-title">업로드 파일 정리</h2>
+  <div class="form-section landing" id="garbage-list"><h2 class="form-section-title">업로드 파일 정리</h2>
     <?php if (($query['gc'] ?? '') !== ''): ?><?php if ((int) $query['gc'] === 0): ?><div class="alert alert-info"><span><?= $this->icon('info', 18) ?></span><span>정리할 파일이 없습니다.</span></div><?php else: ?><div class="alert alert-success"><span><?= $this->icon('check-circle', 18) ?></span><span>버려진 파일 <?= $this->e((string) (int) $query['gc']) ?>개를 정리했습니다.</span></div><?php endif ?><?php endif ?>
     <p class="schema-note">글에 붙지 못한 채 24시간 넘게 남은 첨부 파일과 그 축소본만 표시합니다. 글에서 사용 중이거나 방금 올린 파일은 제외합니다.</p>
-    <?php if ($garbage['items'] === []): ?>
+    <?php if ($garbage_pagination['total_items'] === 0): ?>
       <p class="schema-note upload-garbage-empty">현재 정리할 업로드 파일이 없습니다.</p>
     <?php else: ?>
-      <p class="upload-garbage-summary">삭제 예정 <strong><?= $this->e((string) $garbage['files']) ?>개</strong> · <?= $this->e(number_format($garbage['bytes'] / 1024, 1)) ?> KB</p>
+      <p class="upload-garbage-summary">전체 정리 대상 <strong><?= $this->e((string) $garbage['files']) ?>개 파일</strong> · <?= $this->e(number_format($garbage['bytes'] / 1024, 1)) ?> KB (저장 경로 <?= $this->e((string) $garbage_pagination['total_items']) ?>개 중 <?= $this->e((string) (($garbage_pagination['page'] - 1) * $garbage_pagination['per_page'] + 1)) ?>–<?= $this->e((string) min($garbage_pagination['page'] * $garbage_pagination['per_page'], $garbage_pagination['total_items'])) ?>개 표시)</p>
       <div class="overflow-x-auto"><table class="table table-sm upload-garbage-list"><thead><tr><th>저장 경로</th><th>파일 수</th><th>용량</th><th>마지막 변경 (<?= $this->e((string) $site['timezone']) ?>)</th></tr></thead><tbody>
       <?php foreach ($garbage['items'] as $item): ?><tr><td><code><?= $this->e($item['relative_path']) ?></code></td><td><?= $this->e((string) $item['file_count']) ?>개<?= $item['file_count'] > 1 ? ' (축소본 포함)' : '' ?></td><td><?= $this->e(number_format($item['size'] / 1024, 1)) ?> KB</td><td><?= $this->date((int) $item['mtime'], 'Y-m-d H:i:s') ?></td></tr><?php endforeach ?>
       </tbody></table></div>
-      <form method="post" action="<?= $this->url('admin.uploads.gc') ?>" class="schema-gc" onsubmit="return confirm('위 목록의 파일을 삭제할까요? 실행 시 대상을 다시 확인하며 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-sm btn-error btn-outline" type="submit">정리 대상 <?= $this->e((string) $garbage['files']) ?>개 삭제</button><span class="schema-note">실행 직전에 대상을 다시 확인한 후 삭제합니다.</span></form>
+      <?php $this->insert('admin/_maintenance_pager', ['pagination' => $garbage_pagination, 'section' => 'garbage', 'other_page' => $backup_pagination['page'], 'anchor' => 'garbage-list', 'label' => '업로드 파일 정리']) ?>
+      <form method="post" action="<?= $this->url('admin.uploads.gc') ?>" class="schema-gc" onsubmit="return confirm('현재 페이지뿐 아니라 전체 정리 대상 파일을 삭제할까요? 실행 시 대상을 다시 확인하며 삭제한 파일은 복구할 수 없습니다.')"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><button class="btn btn-sm btn-error btn-outline" type="submit">전체 정리 대상 <?= $this->e((string) $garbage['files']) ?>개 삭제</button><span class="schema-note">모든 페이지의 대상을 실행 직전에 다시 확인한 후 삭제합니다.</span></form>
     <?php endif ?>
   </div>
 </div></section>

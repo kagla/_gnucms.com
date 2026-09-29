@@ -111,16 +111,18 @@ final class Routes
             ->setName('admin.backups.restore');
         $slim->post('/admin/backups/{name:gnucms-mysql-[0-9-]+\\.(?:zip|tar)}/delete', [$backups, 'delete'])
             ->setName('admin.backups.delete');
+        $aligo = new AdminAligoController($app);
+        $slim->get('/admin/settings/messaging', [$aligo, 'messaging'])->setName('admin.settings.messaging');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
         $slim->post('/admin/mail/password', [$cms, 'mailPassword'])->setName('admin.mail.password');
         $slim->post('/admin/mail/test', [$cms, 'mailTest'])->setName('admin.mail.test');
-        $aligo = new AdminAligoController($app);
         $slim->get('/admin/aligo', [$aligo, 'form'])->setName('admin.aligo');
         $slim->post('/admin/aligo', [$aligo, 'save']);
         $slim->post('/admin/aligo/verify', [$aligo, 'verify'])->setName('admin.aligo.verify');
         $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
         $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
+        $slim->get('/admin/aligo/status', [$aligo, 'channelStatus'])->setName('admin.aligo.status');
         $slim->post('/admin/aligo/key', [$aligo, 'apiKey'])->setName('admin.aligo.key');
         $payment = new \GnuCms\Payment\SettingsController($app->paymentSettings());
         $slim->get('/admin/settings/payment', [$payment, 'handle'])->setName('admin.settings.payment');

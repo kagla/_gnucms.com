@@ -289,16 +289,28 @@ final class AccountService
      * 사람이 인증 링크를 실제로 눌러 토큰을 쓴 자리. 환영 알림이 여기 있는 이유는
      * 이 자리뿐이기 때문이다 — UserRepository::verifyEmail() 에 두면 설치(Installer),
      * 첫 관리자 생성(createRegistered() 의 열린 트랜잭션 안), 소셜 계정 연결
-     * (LinkingService)에서도 같이 나간다.
+     * (LinkingService)에서도 같이 나간다. 완료 화면에서 어느 주소를 인증했는지 알 수
+     * 있도록 인증을 마친 이메일 주소를 돌려준다.
      */
-    public function verifyEmail(string $token): void
+    public function verifyEmail(string $token): ?string
     {
-        $userId = $this->tokens->consume($token, TokenService::VERIFY_EMAIL);
+        try {
+            $userId = $this->tokens->consume($token, TokenService::VERIFY_EMAIL);
+        } catch (DomainError $e) {
+            $userId = $e->status() === 422 ? $this->tokens->ownerOf($token, TokenService::VERIFY_EMAIL) : null;
+            $verified = $userId === null ? null : $this->users->findById($userId);
+            if ($verified !== null && (bool) $verified['email_verified']) {
+                return (string) $verified['email'];
+            }
+            throw $e;
+        }
         $this->users->verifyEmail($userId);
         $user = $this->users->findById($userId);
         if ($user !== null) {
             $this->sendWelcome($user);
         }
+
+        return $user !== null ? (string) $user['email'] : null;
     }
 
     public function resendVerification(string $email): void

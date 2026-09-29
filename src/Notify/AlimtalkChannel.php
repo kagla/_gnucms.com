@@ -88,13 +88,20 @@ final class AlimtalkChannel implements ChannelInterface
             }
         }
 
+        $fallbackBody = $this->settings->smsBody($event);
+        $failover = $fallbackBody !== '' && $this->aligo->settings->isEnabled('sms');
+
         $jobId = $this->aligo->send([
             'channel' => 'at',
             'tpl_code' => $template['tpl_code'],
+            'failover' => $failover,
             'event_key' => $event,
             'secret_vars' => $secret,
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
-                'user_id' => $to->userId, 'vars' => $mapped]],
+                'user_id' => $to->userId, 'vars' => $mapped,
+                'fallback_body' => $failover ? $fallbackBody : null,
+                'fallback_vars' => $failover ? $values : [],
+                'fallback_secret_vars' => $failover ? Events::secretVars($event) : []]],
         ]);
         // 작업 행이 생겼다는 것과 알리고가 그것을 받았다는 것은 다른 사실이다 —
         // 그 둘을 가르는 이유는 PhoneOutcome 주석에 있다.

@@ -16,7 +16,7 @@ use GnuCms\Repository\NotificationRepository;
 use GnuCms\Repository\PostRepository;
 
 /**
- * 사이트 안 알림함, 그리고 댓글 알림이 채널로 나가는 자리.
+ * 사이트 내 알림함, 그리고 댓글 알림이 채널로 나가는 자리.
  *
  * 회원에게만 알린다. 비회원 글·댓글은 받을 사람을 특정할 수 없기 때문이다.
  * 알림을 만들다 실패해도 댓글 등록 자체는 막지 않는다 (부수적인 일이다).

@@ -9,7 +9,7 @@ use GnuCms\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * 사이트 안 알림함. 내 글에 댓글이 달리면 머리글 종에 표시가 뜨고,
+ * 사이트 내 알림함. 내 글에 댓글이 달리면 머리글 종에 표시가 뜨고,
  * 알림을 누르면 그 댓글 자리로 간다.
  */
 final class NotificationTest extends WebTestCase

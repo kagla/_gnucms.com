@@ -21,14 +21,15 @@ use GnuCms\Error\DomainError;
  *              한다). 원문은 로그에 남긴다.
  *   시간    — 앞선 채널이 이 요청의 발송 시간을 다 썼다. 보낼 수단이 없는 것도, 보내다
  *              터진 것도 아니라 **이번에는 시작하지 않은** 것이다. 실패로 세지 않고 한 줄만
- *              남긴다 — 이유와 상한은 BUDGET_SECONDS 주석에 있다. 바깥으로 나가지 않는
- *              채널(알림함)은 이 문을 지나지 않는다(NO_NETWORK).
+ *              남긴다 — 이유와 상한은 BUDGET_SECONDS 주석에 있다. 메일과 알림함은
+ *              이 상한과 관계없이 시도한다(ALWAYS_START).
  *   설정    — 관리자가 이 알림의 채널을 하나도 켜 두지 않았다. 사고가 아니라 설정이므로
  *              아무 일도 하지 않고 조용히 끝난다. 다만 **켜 둔 것이 있었는데 설정 쪽
  *              재확인이 그것을 도로 껐다면** 그건 설정이 아니라 사고에 가깝다 —
  *              그때는 한 줄을 남긴다(recordRevoked()).
  *
- * **재시도는 하지 않는다.** 실패한 채널을 다시 부르지 않는다. 문자·알림톡은 요청이
+ * **같은 채널을 재시도하지 않는다.** 알림톡 접수 뒤 배달 실패는 알리고 대체문자를 쓰고,
+ * 접수 전 실패에는 설정된 문자 채널을 한 번 시도한다. 문자·알림톡은 요청이
  * 나갔는지 모르는 채로 끊기는 일이 흔하고, 그때 한 번 더 보내면 진짜 전화기로 두 통이
  * 간다. 다시 보낼지는 사람이 정한다.
  *
@@ -117,15 +118,13 @@ final class Notifier
     private const BUDGET_SECONDS = 6.0;
 
     /**
-     * 예산이 걸리지 않는 채널. 예산은 **바깥 왕복**에 씌우는 상한이고(위 주석), 알림함은
-     * 같은 DB 에 한 줄 적는 일이라 그 상한이 지키려는 비용 자체가 없다 — 이 분기 이전부터
-     * 그 자리에 있던 기능이기도 하다. 가리지 않고 버리면, 앞사람의 문자가 7초를 쓴 댓글에서
-     * 뒷사람은 공짜로 남길 수 있는 알림함 한 줄조차 받지 못한다.
+     * 예산과 무관하게 시작할 채널. 메일은 항상 보내야 하고, 알림함은 같은 DB 에
+     * 한 줄 적는 일이므로 바깥 발송 시간 상한 때문에 버리지 않는다.
      *
      * 걸린 시간은 그래도 함께 센다($spent) — 지나간 시간은 어느 채널이 썼든 지나갔다.
      * 여기서 빼는 것은 "시작할지 말지"를 묻는 문 하나뿐이다.
      */
-    private const NO_NETWORK = ['inbox'];
+    private const ALWAYS_START = ['mail', 'inbox'];
 
     private NotifySettings $settings;
 
@@ -239,8 +238,14 @@ final class Notifier
         $delivered = 0;
         $failed = 0;
         $outOfTime = [];
+        $alimtalkAccepted = false;
 
         foreach (array_intersect(self::ORDER, $wanted) as $key) {
+            // 알림톡 접수 뒤의 배달 실패는 알리고의 대체발송이 처리한다.
+            // 접수 전에 실패하거나 지금 쓸 수 없으면 아래 문자 채널을 시도한다.
+            if ($key === 'sms' && $alimtalkAccepted) {
+                continue;
+            }
             $channel = $this->channels[$key] ?? null;
             if ($channel === null) {
                 // 켜 두었는데 채널 객체가 없다. 설정이 아니라 조립의 결함이므로 건너뛰기가
@@ -253,7 +258,7 @@ final class Notifier
             // 세지 않고(메일이 나갔는데 문자를 못 보냈다고 503 을 던지면 안 된다) 건너뛰기와도
             // 섞지 않는다 — 건너뛰기는 "보낼 수단이 없다"이고 이것은 "보낼 수 있는데 지금은
             // 안 한다"다. 그 사실은 아래에서 따로 한 줄 남긴다.
-            if ($this->spent >= self::BUDGET_SECONDS && !in_array($key, self::NO_NETWORK, true)) {
+            if ($this->spent >= self::BUDGET_SECONDS && !in_array($key, self::ALWAYS_START, true)) {
                 $outOfTime[] = $key;
                 continue;
             }
@@ -268,6 +273,9 @@ final class Notifier
                 }
                 $channel->send($event, $to, $vars);
                 $delivered++;
+                if ($key === 'alimtalk') {
+                    $alimtalkAccepted = true;
+                }
             } catch (\Throwable $e) {
                 // 모아 두었다가 끝나고 적지 않는다. 뒤 채널이 프로세스째 죽으면(타임아웃·
                 // 메모리) 모아 둔 기록은 함께 사라지고, 운영자에게는 아무 일도 없었던 것처럼
@@ -322,8 +330,7 @@ final class Notifier
      * 켤 채널이 하나도 없는 두 경우를 가른다.
      *
      * **관리자가 아무것도 켜 두지 않았다** — 설정이지 사고가 아니다. 조용히 끝낸다.
-     * 이 저장소의 기본값이 이미 그런 알림(welcome)을 갖고 있고, 그 한 줄이 매번 찍히면
-     * 정작 읽어야 할 줄을 덮는다.
+     * 현재 코어 이벤트는 메일을 항상 켜므로 이 갈래는 예비 방어선이다.
      *
      * **관리자는 켜 두었는데 엔진이 도로 껐다** — channelsFor() 의 재확인(전화 가능·
      * 알림함 가능·템플릿 유효)이 비어 있지 않던 설정을 비운 경우다. 카카오 승인이 풀린

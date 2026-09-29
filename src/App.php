@@ -710,18 +710,25 @@ final class App
         return $this->notifier;
     }
 
-    public function sendMailTest(): void
+    /** @return string 실제 사용한 전송 방식(native|smtp) */
+    public function sendMailTest(string $to): string
     {
-        $settings = $this->mailSettingsService()->runtime();
-        if ($settings === null) {
-            throw \GnuCms\Error\DomainError::validation(['enabled' => 'SMTP를 사용하도록 설정해 주세요.']);
+        $to = strtolower(trim($to));
+        if ($to === '' || strlen($to) > 254 || filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+            throw \GnuCms\Error\DomainError::validation([
+                'test_email' => '테스트 메일을 받을 올바른 이메일 주소를 입력해 주세요.',
+            ]);
         }
+        $settings = $this->mailSettingsService()->runtime();
         $siteName = (string) $this->cmsService()->settings()['site_name'];
         $this->mailer()->send(
-            (string) $settings['from_email'],
-            '[' . $siteName . '] SMTP 테스트 메일',
-            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 {$siteName} 관리자에서 보낸 테스트 메일입니다."
+            $to,
+            '[' . $siteName . '] 테스트 메일',
+            ($settings === null ? '서버 기본 메일 기능' : 'SMTP')
+                . "으로 보낸 테스트 메일입니다.\n\n이 메일이 도착했다면 {$siteName}의 메일 발송 기능이 작동하고 있습니다."
         );
+
+        return $settings === null ? 'native' : 'smtp';
     }
 
     public function adminService(): AdminService

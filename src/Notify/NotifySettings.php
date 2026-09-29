@@ -10,8 +10,8 @@ use GnuCms\Aligo\Variables;
 use GnuCms\Error\DomainError;
 
 /**
- * 이벤트마다 어느 채널(메일·알림톡·문자·인앱)을 켤지, 알림톡이면 승인 템플릿의 변수를
- * 코어 변수에 어떻게 이을지를 저장·검증한다. 발송 자체는 하지 않는다.
+ * 모든 이벤트의 메일을 켜고, 이벤트마다 알림톡·문자·인앱 사용 여부와 알림톡 승인
+ * 템플릿의 변수 연결을 저장·검증한다. 발송 자체는 하지 않는다.
  *
  * **알 수 없는 이벤트 키.** 관리자가 저장한 값은 업그레이드로 카탈로그(Events::ALL)에서
  * 빠진 이벤트를 계속 가리킬 수 있다 — 저장소에는 그 값이 그대로 남아 있는데 코드는 더는
@@ -53,10 +53,10 @@ final class NotifySettings
      *  남아 있든 걸러낸다. 알림함도 Events::inboxCapable() 로 똑같이 다룬다. */
     private const PHONE_CHANNELS = ['alimtalk', 'sms'];
 
-    /** 설정하기 전의 동작. 지금 코어가 하는 일을 그대로 둔다. */
+    /** 설치 직후에도 모든 코어 알림은 기본 메일로 보낸다. */
     private const DEFAULTS = [
-        'password_reset' => ['mail'], 'password_changed' => ['mail'], 'welcome' => [],
-        'comment_new' => ['inbox'], 'email_verify' => ['mail'],
+        'password_reset' => ['mail'], 'password_changed' => ['mail'], 'welcome' => ['mail'],
+        'comment_new' => ['mail', 'inbox'], 'email_verify' => ['mail'],
         'signup_attempt' => ['mail'], 'social_email_verify' => ['mail'],
     ];
 
@@ -145,7 +145,8 @@ final class NotifySettings
             $on = array_diff($on, ['alimtalk']);
         }
 
-        return array_values(array_intersect(self::CHANNELS, $on));
+        // 이전 설치에서 메일을 꺼 둔 값이 남아 있어도 코어 알림은 항상 메일을 시도한다.
+        return array_values(array_intersect(self::CHANNELS, array_merge(['mail'], $on)));
     }
 
     public function isOn(string $event, string $channel): bool
@@ -231,10 +232,10 @@ final class NotifySettings
             }
             if ($on && $channel === 'inbox' && !Events::inboxCapable($event)) {
                 throw DomainError::validation([$channel =>
-                    '이 알림은 사이트 안 알림함에 쌓을 수 없습니다. 알림함은 로그인한 회원이 읽는 곳이라'
+                    '이 알림은 사이트 내 알림함에 쌓을 수 없습니다. 알림함은 로그인한 회원이 읽는 곳이라'
                     . ' 지금은 새 댓글·답글 알림만 받습니다.']);
             }
-            $saved[$event . '.' . $channel] = $on ? '1' : '0';
+            $saved[$event . '.' . $channel] = ($channel === 'mail' || $on) ? '1' : '0';
         }
 
         // **채널이 꺼져 있어도 들어온 내용은 저장한다.** 예전에는 채널이 켜져 있을

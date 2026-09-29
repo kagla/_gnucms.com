@@ -266,7 +266,7 @@ final class AligoService
      *
      * 켜는 경우는 취소할 것이 없으므로 스위치만 바꾼다.
      *
-     * @return array{cancelled:int,failed:int,reasons:list<string>}
+     * @return array{cancelled:int,failed:int,reasons:list<string>,cancel_unverified?:bool}
      */
     public function setChannelEnabled(string $channel, bool $on): array
     {
@@ -275,7 +275,13 @@ final class AligoService
             return ['cancelled' => 0, 'failed' => 0, 'reasons' => []];
         }
 
-        return $this->cancelJobs($this->scheduledJobIdsForChannel($channel));
+        try {
+            return $this->cancelJobs($this->scheduledJobIdsForChannel($channel));
+        } catch (\Throwable) {
+            // 발송 허용은 이미 꺼졌다. 예약 목록 조회·취소가 예기치 않게 실패해도
+            // 끄기를 실패로 돌려주지 않고, 취소 결과를 확인하지 못했다고 알린다.
+            return ['cancelled' => 0, 'failed' => 0, 'reasons' => [], 'cancel_unverified' => true];
+        }
     }
 
     /**
@@ -370,17 +376,31 @@ final class AligoService
         return $this->alimtalkApi->profiles();
     }
 
-    public function status(): array
+    /** 스위치 저장 직후에도 안전하게 읽을 수 있는 계정·채널 상태. */
+    public function channelStatus(): array
     {
-        $runtime = $this->settings->runtime();
+        $values = $this->settings->formValues();
+        try {
+            $runtime = $this->settings->runtime();
+        } catch (DomainError) {
+            // 저장된 키가 손상돼도 끄기 이후의 상태 확인은 열려 있어야 한다.
+            $runtime = null;
+        }
+        $configured = $runtime !== null;
 
         return [
-            'configured' => $runtime !== null,
-            'sms_enabled' => $this->settings->isEnabled('sms'),
-            'alimtalk_enabled' => $this->settings->isEnabled('at'),
-            'test_mode' => $runtime !== null && $runtime['test_mode'],
-            'pending' => $this->history->pendingCount(),
+            'configured' => $configured,
+            'sms_switch_on' => $values['sms_enabled'],
+            'alimtalk_switch_on' => $values['alimtalk_enabled'],
+            'sms_enabled' => $configured && $values['sms_enabled'],
+            'alimtalk_enabled' => $configured && $values['alimtalk_enabled'],
+            'test_mode' => $configured && $values['test_mode'],
         ];
+    }
+
+    public function status(): array
+    {
+        return $this->channelStatus() + ['pending' => $this->history->pendingCount()];
     }
 
     /**

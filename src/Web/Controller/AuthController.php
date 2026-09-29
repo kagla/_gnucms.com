@@ -174,8 +174,37 @@ final class AuthController
     public function verifyEmail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $token = $request->getQueryParams()['token'] ?? '';
-        $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
-        return View::fromRequest($request)->render($response, 'auth/verified');
+        $email = $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
+        return View::fromRequest($request)->render($response, 'auth/verified', [
+            'verified_email' => $this->maskEmail($email),
+        ]);
+    }
+
+    /** 계정을 구분할 앞부분은 일부만 남기고 도메인은 모두 보여 준다. */
+    private function maskEmail(?string $email): ?string
+    {
+        if ($email === null) {
+            return null;
+        }
+        $at = strrpos($email, '@');
+        if ($at === false) {
+            return null;
+        }
+        $local = substr($email, 0, $at);
+        $domain = substr($email, $at + 1);
+
+        return $this->maskEmailPart($local, 2) . '@' . $domain;
+    }
+
+    private function maskEmailPart(string $value, int $visibleLength): string
+    {
+        $length = mb_strlen($value, 'UTF-8');
+        if ($length === 0) {
+            return '*';
+        }
+        $shown = min($visibleLength, $length - 1);
+
+        return mb_substr($value, 0, $shown, 'UTF-8') . str_repeat('*', $length - $shown);
     }
 
     /** 인증 메일을 다시 보낸다. 없는 이메일이나 이미 인증된 계정이면 조용히 같은 화면을 낸다. */

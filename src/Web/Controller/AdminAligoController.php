@@ -33,11 +33,56 @@ final class AdminAligoController
 
     public function form(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        return $this->renderSettings($request, $response);
+    }
+
+    /** 이전 통합 주소의 저장 결과를 새 메뉴로 보낸다. */
+    public function messaging(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
         $this->app->guestAcl()->assertGlobalAdmin();
         $query = $request->getQueryParams();
-        $notice = ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null;
+        if (($query['aligo_saved'] ?? '') === '1') {
+            $params = ['saved' => '1'];
+            foreach (['cancel_ok', 'cancel_failed', 'cancel_unknown'] as $key) {
+                if (isset($query[$key]) && is_scalar($query[$key])) {
+                    $params[$key] = (string) $query[$key];
+                }
+            }
+            return $this->redirect($request, $response, 'admin.aligo', $params, 'aligo-result');
+        }
+        if (is_scalar($query['notify_saved'] ?? null)) {
+            return $this->redirect($request, $response, 'admin.settings.notifications',
+                ['saved' => (string) $query['notify_saved']], 'events');
+        }
+        if (($query['mail_tested'] ?? '') === '1') {
+            return $this->redirect($request, $response, 'admin.mail', ['tested' => '1'], 'mail');
+        }
+        if (($query['mail_saved'] ?? '') === '1') {
+            return $this->redirect($request, $response, 'admin.mail', ['saved' => '1'], 'mail');
+        }
 
-        return $this->render($request, $response, null, [], null, null, [], $notice);
+        return $this->redirect($request, $response, 'admin.mail');
+    }
+
+    /** 문자·알림톡 계정과 발송 허용만 표시한다. */
+    private function renderSettings(ServerRequestInterface $request, ResponseInterface $response,
+        array $overrides = []): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $query = $request->getQueryParams();
+        $aligoValues = $overrides['aligo_values'] ?? $this->app->aligo()->settings->formValues();
+        $aligoValues['sender'] = PhoneNumber::format((string) ($aligoValues['sender'] ?? ''));
+
+        return View::fromRequest($request)->render($response, 'admin/aligo_settings', [
+            'values' => $aligoValues,
+            'status' => $this->app->aligo()->status(),
+            'errors' => $overrides['aligo_errors'] ?? [],
+            'error' => $overrides['aligo_error'] ?? null,
+            'error_at' => $overrides['aligo_error_at'] ?? null,
+            'notice' => ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null,
+            'profiles' => $overrides['aligo_profiles'] ?? [],
+            'verified' => $overrides['aligo_verified'] ?? null,
+        ]);
     }
 
     /**
@@ -58,12 +103,13 @@ final class AdminAligoController
                 throw $e;
             }
 
-            return $this->render(
-                $request, $response->withStatus(422), $this->reshow($input), $e->details(), null, null, []
-            );
+            return $this->renderSettings($request, $response->withStatus(422), [
+                'aligo_values' => $this->reshow($input), 'aligo_errors' => $e->details(),
+            ]);
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result), 'aligo-result');
+        return $this->redirect($request, $response, 'admin.aligo',
+            self::savedQuery($result), 'aligo-result');
     }
 
     public function verify(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -73,11 +119,12 @@ final class AdminAligoController
         try {
             $verified = $this->app->aligo()->verify();
         } catch (DomainError $e) {
-            return $this->render($request, $response->withStatus($e->status() === 422 ? 422 : 502),
-                null, $e->details(), $e->getMessage(), null, []);
+            return $this->renderSettings($request, $response->withStatus($e->status() === 422 ? 422 : 502), [
+                'aligo_errors' => $e->details(), 'aligo_error' => $e->getMessage(),
+            ]);
         }
 
-        return $this->render($request, $response, null, [], null, $verified, []);
+        return $this->renderSettings($request, $response, ['aligo_verified' => $verified]);
     }
 
     public function profiles(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -87,10 +134,12 @@ final class AdminAligoController
         try {
             $profiles = $this->app->aligo()->profiles();
         } catch (DomainError | TransportFailure $e) {
-            return $this->render($request, $response->withStatus(502), null, [], $e->getMessage(), null, [], null, 'profiles');
+            return $this->renderSettings($request, $response->withStatus(502), [
+                'aligo_error' => $e->getMessage(), 'aligo_error_at' => 'profiles',
+            ]);
         }
 
-        return $this->render($request, $response, null, [], null, null, $profiles);
+        return $this->renderSettings($request, $response, ['aligo_profiles' => $profiles]);
     }
 
     /**
@@ -101,21 +150,67 @@ final class AdminAligoController
     public function toggle(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $input = $this->input($request);
-        $this->assertCsrf($input);
-        $this->app->guestAcl()->assertGlobalAdmin();
+        $ajax = strtolower($request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest'
+            || stripos($request->getHeaderLine('Accept'), 'application/json') !== false;
         try {
+            $this->assertCsrf($input);
+            $this->app->guestAcl()->assertGlobalAdmin();
+            $channel = is_scalar($input['channel'] ?? null) ? (string) $input['channel'] : '';
+            $action = is_scalar($input['action'] ?? null) ? (string) $input['action'] : '';
+            if (!in_array($action, ['enable', 'disable'], true)) {
+                throw DomainError::validation(['action' => '켜기 또는 끄기를 선택해 주세요.']);
+            }
             $result = $this->app->aligo()->setChannelEnabled(
-                (string) ($input['channel'] ?? ''), ($input['action'] ?? '') === 'enable'
+                $channel, $action === 'enable'
             );
         } catch (DomainError $e) {
+            if ($ajax) {
+                $details = $e->details();
+                $detail = $details === [] ? null : reset($details);
+                return $this->toggleJson($response, [
+                    'ok' => false,
+                    'message' => is_scalar($detail) ? (string) $detail : $e->getMessage(),
+                ], $e->status());
+            }
             if ($e->status() !== 422) {
                 throw $e;
             }
 
-            return $this->render($request, $response->withStatus(422), null, $e->details(), null, null, []);
+            return $this->renderSettings($request, $response->withStatus(422), [
+                'aligo_errors' => $e->details(),
+            ]);
         }
 
-        return $this->redirect($request, $response, 'admin.aligo', self::savedQuery($result), 'aligo-result');
+        if ($ajax) {
+            return $this->toggleJson($response, [
+                'ok' => true,
+                'status' => $this->app->aligo()->channelStatus(),
+                'notice' => $this->savedNotice(self::savedQuery($result)),
+            ]);
+        }
+
+        return $this->redirect($request, $response, 'admin.aligo',
+            self::savedQuery($result), 'aligo-result');
+    }
+
+    /** 토글 응답이 끊겨도 브라우저가 실제 저장값을 다시 확인할 수 있다. */
+    public function channelStatus(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+
+        return $this->toggleJson($response, [
+            'ok' => true,
+            'status' => $this->app->aligo()->channelStatus(),
+        ]);
+    }
+
+    private function toggleJson(ResponseInterface $response, array $data, int $status = 200): ResponseInterface
+    {
+        $response->getBody()->write((string) json_encode($data,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return $response->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=utf-8')
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     /**
@@ -143,12 +238,15 @@ final class AdminAligoController
      * 저장·끄기가 함께 싣는 리다이렉트 쿼리. 두 길이 같은 취소 조율을 쓰므로 안내도
      * 같은 값으로 만든다 — 숫자만 싣고 문장은 savedNotice() 가 만든다.
      *
-     * @param array{cancelled:int,failed:int,reasons:list<string>} $result
+     * @param array{cancelled:int,failed:int,reasons:list<string>,cancel_unverified?:bool} $result
      * @return array<string,string>
      */
     private static function savedQuery(array $result): array
     {
         $query = ['saved' => '1'];
+        if (!empty($result['cancel_unverified'])) {
+            $query['cancel_unknown'] = '1';
+        }
         if ($result['cancelled'] > 0 || $result['failed'] > 0) {
             $query['cancel_ok'] = (string) $result['cancelled'];
             $query['cancel_failed'] = (string) $result['failed'];
@@ -168,10 +266,26 @@ final class AdminAligoController
      */
     public function notifications(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $this->app->guestAcl()->assertGlobalAdmin();
+        return $this->renderNotifications($request, $response);
+    }
 
-        return $this->renderNotifications($request, $response, null, [],
-            $this->notifySavedNotice($request->getQueryParams()));
+    private function renderNotifications(ServerRequestInterface $request, ResponseInterface $response,
+        ?array $posted = null, array $errors = []): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $view = $this->notifyRows($posted);
+        $error = ($errors !== [] && !isset($view['rows'][$view['open']]))
+            ? (string) reset($errors) : null;
+
+        return View::fromRequest($request)->render($response, 'admin/notify_settings', [
+            'events' => $view['rows'],
+            'templates' => $view['templates'],
+            'open' => $view['open'],
+            'errors' => $errors,
+            'error' => $error,
+            'notice' => $this->notifySavedNotice($request->getQueryParams()),
+            'status' => $this->app->aligo()->status(),
+        ]);
     }
 
     /**
@@ -193,15 +307,15 @@ final class AdminAligoController
                 throw $e;
             }
 
-            return $this->renderNotifications(
-                $request, $response->withStatus(422), $input, $e->details()
-            );
+            return $this->renderNotifications($request, $response->withStatus(422),
+                $input, $e->details());
         }
 
         // 쿼리에는 이벤트 키(카탈로그가 정한 열거값)만 싣는다. 문장은 아래에서 만든다 —
         // 화면에 그대로 찍을 문장을 쿼리로 받으면 공격자가 만든 URL 을 관리자가 열었을 때
         // 우리가 그 문장을 시스템 알림처럼 보여주게 된다(AdminMessageController 클래스 주석).
-        return $this->redirect($request, $response, 'admin.settings.notifications', ['saved' => $event]);
+        return $this->redirect($request, $response, 'admin.settings.notifications',
+            ['saved' => $event], 'events');
     }
 
     /** 저장 안내. 쿼리에 실려 온 이벤트 키로 라벨을 찾아 문장을 여기서 만든다. */
@@ -236,12 +350,10 @@ final class AdminAligoController
         ], $this->app->aligo()->templates->usable());
         $postedEvent = is_array($posted) && is_scalar($posted['event'] ?? null)
             ? (string) $posted['event'] : '';
-        // 가입에서 번호를 받는지는 CmsService 가 정규화한 값으로 읽는다 — 저장소를
-        // 직접 읽으면 손상된 값(라디오 밖의 값)이 그대로 올라와 세 값 가운데
-        // 무엇도 아닌 상태로 이 판단을 하게 된다.
-        $signupPhone = (string) ($this->app->cmsService()->settings()['signup_phone'] ?? 'off');
         $rows = [];
         foreach ($values as $key => $value) {
+            $storedSmsBody = $value['sms_body_stored'];
+            $defaultSmsBody = Events::defaultSmsBody($key);
             $on = [];
             foreach (NotifySettings::CHANNELS as $channel) {
                 $on[$channel] = in_array($channel, $value['channels'], true);
@@ -262,7 +374,11 @@ final class AdminAligoController
                 // 꺼져 있어도 저장된 값을 그대로 보여준다 — 다시 켤 때 다시 만들지
                 // 않아도 되는 것이 save() 가 이 값을 지우지 않는 이유다.
                 'var_map' => $value['alimtalk_var_map'],
-                'sms_body' => $value['sms_body_stored'],
+                // 아직 저장한 문구가 없으면 이벤트에 맞는 기본 문구로 시작한다. 이 값은
+                // 화면에서만 채우는 초깃값이며, 관리자가 저장한 문구는 그대로 우선한다.
+                'sms_body' => $storedSmsBody !== '' ? $storedSmsBody : $defaultSmsBody,
+                'sms_body_default' => $storedSmsBody === '' || $storedSmsBody === $defaultSmsBody,
+                'sms_body_template' => $defaultSmsBody,
                 // 아래 둘은 **저장된 것**을 말한다. 422 되보여주기에서 입력으로 덮이는
                 // tpl_code 와 달리, 관리자가 방금 무엇을 골랐든 저장소에 남아 있는 참조는
                 // 그대로다 — 그래서 입력 덮어쓰기와 섞지 않는다. 안내문 셋은 덮은 **뒤에**
@@ -284,7 +400,6 @@ final class AdminAligoController
             // 가리킨다. 예전에는 그래서 덮을 때 문장을 통째로 지웠는데, 그러면 죽은
             // 템플릿이라는 가장 중요한 사실이 하필 저장이 거절된 화면에서만 사라졌다.
             $row['alimtalk_notice'] = self::alimtalkNotice($row);
-            $row['reach_notice'] = self::reachNotice($row, $signupPhone);
             $row['sms_notice'] = self::smsNotice($row);
             $row['alimtalk_off_notice'] = self::alimtalkOffNotice($row);
             $rows[$key] = $row;
@@ -340,15 +455,12 @@ final class AdminAligoController
             // 없습니다」를 적게 된다(아직 저장되지 않았을 뿐이다). 아래 죽은 참조 문장이
             // 저장소를 보는 것은 반대 이유다: 그것은 저장된 참조에 대한 사실이다.
             return ($row['on']['alimtalk'] && $row['tpl_code'] === '')
-                ? '알림톡을 켜려면 쓸 템플릿을 고르고 변수를 이어야 합니다. 아직 고른 템플릿이 없습니다.'
+                ? '알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요.'
                 : null;
         }
 
         return sprintf(
-            '%s 저장해 두신 템플릿(%s)을 더는 쓸 수 없습니다 — 카카오 승인이 풀렸거나, 템플릿'
-            . ' 목록에서 사라졌거나, 본문이 바뀌어 변수 연결이 어긋났습니다. 운영 → 알림톡·문자 →'
-            . ' 템플릿에서 다시 가져오거나 다른 템플릿을 고르고, 이 설정을 아주 지우려면 아래'
-            . ' "고를 수 없게 된 템플릿 설정 지우기"를 체크해 저장해 주세요.',
+            '%s 저장된 템플릿(%s)을 사용할 수 없습니다. 템플릿을 다시 가져오거나 다른 템플릿을 고르세요.',
             $row['on']['alimtalk']
                 ? '알림톡을 켜 두었지만 지금은 나가지 않습니다.'
                 : '알림톡은 꺼져 있고, 지금 이대로는 켤 수도 없습니다.',
@@ -357,44 +469,8 @@ final class AdminAligoController
     }
 
     /**
-     * **가입에서 번호를 받지 않는데 이 알림을 전화로만 켠** 카드에 붙는 경고.
-     *
-     * 두 화면이 각자 참을 말하면서 함께 거짓이 되는 자리다. 가입 문지기는
-     * `email_verify` 가 닿는지만 묻고(그 이벤트는 전화 채널을 쓸 수 없다), 재설정
-     * 화면은 "누구에게든 보낼 수 있는가"를 묻는다 — 문자만 켜 두면 둘 다 참이다.
-     * 그런데 가입이 번호를 받지 않으면 그 사이트의 회원에게는 번호가 없고,
-     * `password_reset` 이 전화로만 나가는 순간 그 사람은 자기 계정 밖에 갇힌다.
-     *
-     * **가입을 막지는 않는다.** 재설정 설정 때문에 가입이 거절되는 것은 더 나쁜
-     * 놀라움이다. 대신 그 조합을 **고르는 자리**인 이 화면이 말한다 — 지금까지
-     * 이 화면은 알리고 미연결·스위치 꺼짐·테스트 모드·템플릿 없음은 모두 경고하면서
-     * 이 조합만 침묵했다.
-     *
-     * 판단은 화면에 그려진 체크 상태로 한다(방금 고른 것에 대고 말해야 한다).
-     * 전화를 쓸 수 없는 이벤트는 애초에 해당이 없고, 메일이나 알림함이 하나라도
-     * 켜져 있으면 번호 없는 회원에게도 길이 남아 있으므로 말하지 않는다.
-     */
-    private static function reachNotice(array $row, string $signupPhone): ?string
-    {
-        $phoneOnly = ($row['on']['sms'] || $row['on']['alimtalk'])
-            && !$row['on']['mail'] && !$row['on']['inbox'];
-        if (!$row['phone'] || !$phoneOnly || $signupPhone !== 'off') {
-            return null;
-        }
-
-        return '가입 화면에서 휴대폰번호를 받지 않도록 해 두었는데(설정 → 회원·글쓰기) 이 알림은'
-            . ' 전화로만 나가도록 켜져 있습니다. 번호가 없는 회원에게는 이 알림이 가지 않습니다'
-            . ($row['key'] === 'password_reset'
-                ? ' — 그 회원은 비밀번호를 스스로 되찾을 수 없습니다.'
-                : '.')
-            . ' 메일을 함께 켜거나, 가입에서 번호를 받도록 바꿔 주세요. 관리자가 회원 수정에서'
-            . ' 번호를 채워 준 회원에게는 그대로 나갑니다.';
-    }
-
-    /**
-     * 꺼진 문자 채널의 본문에 붙는 안내. 본문이 있을 때만 말한다 — 빈 칸 옆에서
-     * 「이 본문으로 나갑니다」는 가리킬 본문이 없는 문장이고, 이제는 칸을 비워 저장하면
-     * 실제로 지워지므로 지운 직후에 그 문장이 남아 있으면 거짓이 된다.
+     * 꺼진 문자 채널의 본문에 붙는 안내. 저장한 본문이 없으면 화면에 채운 알림별 기본
+     * 문구라는 점을 알려 주고, 직접 저장한 본문이면 다시 켤 때 그대로 쓰인다고 말한다.
      */
     private static function smsNotice(array $row): ?string
     {
@@ -402,8 +478,11 @@ final class AdminAligoController
             return null;
         }
 
-        return '문자 채널이 꺼져 있어 이 본문은 지금 쓰이지 않습니다. 여기서 고쳐 저장해 두면'
-            . ' 그대로 보관되고, 문자를 켜는 순간 이 본문으로 나갑니다. 칸을 비우고 저장하면 지워집니다.';
+        if ($row['sms_body_default']) {
+            return '문자를 켜면 아래 기본 문구로 발송합니다.';
+        }
+
+        return '문자를 켜기 전까지 이 본문은 저장만 됩니다.';
     }
 
     /**
@@ -417,8 +496,7 @@ final class AdminAligoController
             return null;
         }
 
-        return '알림톡 채널이 꺼져 있어 이 템플릿과 변수 연결은 지금 쓰이지 않습니다. 여기서'
-            . ' 고쳐 저장해 두면 그대로 보관되고, 알림톡을 켜는 순간 이대로 나갑니다.';
+        return '알림톡을 켜기 전까지 이 템플릿 연결은 저장만 됩니다.';
     }
 
     /**
@@ -429,7 +507,7 @@ final class AdminAligoController
     private static function withPostedInput(array $row, array $posted): array
     {
         foreach (NotifySettings::CHANNELS as $channel) {
-            $row['on'][$channel] = ($posted[$channel] ?? '') === '1';
+            $row['on'][$channel] = $channel === 'mail' || ($posted[$channel] ?? '') === '1';
         }
         $row['tpl_code'] = is_scalar($posted['tpl_code'] ?? null) ? trim((string) $posted['tpl_code']) : '';
         $map = [];
@@ -440,6 +518,8 @@ final class AdminAligoController
         }
         $row['var_map'] = $map;
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
+        $row['sms_body_default'] = trim($row['sms_body']) !== ''
+            && trim($row['sms_body']) === Events::defaultSmsBody((string) $row['key']);
         // 이 칸이 빠지면, 「알림톡을 끄고 저장하세요」라는 422 의 지시를 그대로 따른
         // 관리자가 303 과 「저장했습니다」를 받고도 참조는 그대로인 화면을 보게 된다 —
         // 화면이 시킨 대로 했는데 조용히 버려지는 수정이다. 카드의 모든 칸은 422 를
@@ -450,28 +530,6 @@ final class AdminAligoController
         $row = array_replace($row, self::bodySize($row['sms_body']));
 
         return $row;
-    }
-
-    private function renderNotifications(ServerRequestInterface $request, ResponseInterface $response,
-        ?array $posted, array $errors, ?string $notice = null): ResponseInterface
-    {
-        $view = $this->notifyRows($posted);
-        // 오류를 받아 줄 묶음이 없으면(카탈로그가 모르는 이벤트 키로 저장을 시도했을 때 —
-        // 업그레이드가 이벤트를 없앤 사이 열려 있던 폼이 그렇게 들어온다) 그 오류는 어느
-        // 카드에도 그려지지 않는다. 그대로 두면 422 인데 화면은 평소와 똑같아, 관리자는
-        // 저장이 안 된 줄도 모른다. 그럴 때는 화면 맨 위에서 말한다.
-        $orphan = ($errors !== [] && !isset($view['rows'][$view['open']]))
-            ? (string) reset($errors) : null;
-
-        return View::fromRequest($request)->render($response, 'admin/notify_settings', [
-            'events' => $view['rows'],
-            'templates' => $view['templates'],
-            'open' => $view['open'],
-            'errors' => $errors,
-            'error' => $orphan,
-            'notice' => $notice,
-            'status' => $this->app->aligo()->status(),
-        ]);
     }
 
     /**
@@ -499,6 +557,9 @@ final class AdminAligoController
      */
     private function savedNotice(array $query): array
     {
+        if (($query['cancel_unknown'] ?? '') === '1') {
+            return ['ok' => false, 'message' => '발송을 껐습니다. 예약 발송의 취소 결과는 확인하지 못했습니다. 발송 이력을 확인해 주세요.'];
+        }
         $ok = self::countParam($query, 'cancel_ok');
         $failed = self::countParam($query, 'cancel_failed');
         if ($ok === 0 && $failed === 0) {
@@ -549,31 +610,6 @@ final class AdminAligoController
         $values['alimtalk_enabled'] = $current['alimtalk_enabled'];
 
         return $values;
-    }
-
-    private function render(ServerRequestInterface $request, ResponseInterface $response,
-        ?array $values, array $errors, ?string $error, ?array $verified, array $profiles,
-        ?array $notice = null, ?string $errorAt = null): ResponseInterface
-    {
-        $values ??= $this->app->aligo()->settings->formValues();
-        // 발신번호는 언제나 하이픈 붙은 표시용 형태로 보여준다. PhoneNumber::format() 은
-        // 숫자가 아닌 문자를 걸러내고 패턴에 안 맞으면 숫자만 그대로 돌려주므로, 저장된
-        // 값이든 방금 입력해 실패한 값이든 이 자리 하나에서 안전하게 처리된다.
-        $values['sender'] = PhoneNumber::format((string) ($values['sender'] ?? ''));
-
-        return View::fromRequest($request)->render($response, 'admin/aligo_settings', [
-            'values' => $values,
-            'status' => $this->app->aligo()->status(),
-            'errors' => $errors,
-            'error' => $error,
-            // 오류를 그릴 자리. 폼마다 착지 지점이 다르므로(템플릿의 #aligo-result·#aligo-profiles)
-            // 오류는 그 폼이 착지하는 자리에 그려야 보인다. null 이면 공통 자리다.
-            'error_at' => $errorAt,
-            'verified' => $verified,
-            'profiles' => $profiles,
-            'notice' => $notice,
-            'query' => $request->getQueryParams(),
-        ]);
     }
 
     private function input(ServerRequestInterface $request): array

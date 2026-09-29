@@ -17,6 +17,9 @@ use GnuCms\Support\Clock;
  *   title      LMS 제목 (선택)
  *   tpl_code   알림톡 템플릿 코드 (알림톡 필수)
  *   failover   알림톡 실패 시 문자 대체발송 (선택)
+ *   recipients 의 fallback_body·fallback_vars 는 대체문자에 쓸 본문·변수 (선택).
+ *              없으면 알림톡 본문을 그대로 대체문자로 쓴다.
+ *   recipients 의 fallback_secret_vars 는 대체문자 이력에서 가릴 변수 이름 (선택)
  *   event_key  이 발송을 일으킨 알림 이벤트 (선택)
  *   secret_vars 값이 표에 남으면 안 되는 변수 이름들. 실제로 나가는 본문은 그대로이고,
  *               수신자 행에 적을 사본에서만 그 값이 '***' 로 바뀐다 (선택)
@@ -98,7 +101,7 @@ final class Dispatch
             // 변수값에 들어 있을 수 있고 원문에는 없을 수 있기 때문이다. 제목은 대체문자에
             // 싣지 않으므로 검사하지 않는다.
             foreach ($prepared as $one) {
-                MessageText::assertFits($one['body'], null);
+                MessageText::assertFits($one['fallback_body'], null);
             }
         }
 
@@ -130,7 +133,7 @@ final class Dispatch
                 // 신고된 발송에서는 그 값만 가려져 있다(secret_vars, prepare() 주석).
                 'body' => $one['stored'],
                 'status' => 'queued',
-                'fallback_body' => $failover ? $one['stored'] : null,
+                'fallback_body' => $failover ? $one['fallback_stored'] : null,
                 'requested_at' => Clock::now(),
             ]);
         }
@@ -241,11 +244,22 @@ final class Dispatch
             $seen[$phone] = true;
             $vars = (array) ($one['vars'] ?? []);
             $real = Variables::apply($body, $vars);
+            $fallbackTemplate = $one['fallback_body'] ?? null;
+            $fallbackVars = (array) ($one['fallback_vars'] ?? []);
+            $fallbackSecret = array_values(array_filter(
+                (array) ($one['fallback_secret_vars'] ?? []), 'is_string'));
+            $fallbackReal = is_string($fallbackTemplate) && $fallbackTemplate !== ''
+                ? Variables::apply($fallbackTemplate, $fallbackVars) : $real;
+            $fallbackStored = is_string($fallbackTemplate) && $fallbackTemplate !== ''
+                ? Variables::apply($fallbackTemplate, self::hide($fallbackVars, $fallbackSecret))
+                : ($secret === [] ? $real : Variables::apply($body, self::hide($vars, $secret)));
             $prepared[] = [
                 'phone' => $phone,
                 'name' => ($one['name'] ?? '') !== '' ? (string) $one['name'] : null,
                 'user_id' => ($one['user_id'] ?? '') !== '' ? (string) $one['user_id'] : null,
                 'body' => $real,
+                'fallback_body' => $fallbackReal,
+                'fallback_stored' => $fallbackStored,
                 // 가릴 것이 없으면 두 번 치환하지 않는다. '***' 는 빈 값이 아니므로
                 // Variables::apply() 가 거절하지 않는다 — 가린 쪽만 따로 터지는 일은 없다.
                 'stored' => $secret === [] ? $real : Variables::apply($body, self::hide($vars, $secret)),
@@ -322,7 +336,7 @@ final class Dispatch
                 $fields['recvname_' . $n] = $one['name'];
             }
             if (!empty($request['failover'])) {
-                $fields['fmessage_' . $n] = $one['body'];
+                $fields['fmessage_' . $n] = $one['fallback_body'];
             }
         }
 

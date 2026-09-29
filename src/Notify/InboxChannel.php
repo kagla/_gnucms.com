@@ -8,7 +8,7 @@ use GnuCms\Error\DomainError;
 use GnuCms\Service\NotificationService;
 
 /**
- * 사이트 안 알림함 채널. 기록은 예전부터 그 일을 하던 NotificationService 가 그대로
+ * 사이트 내 알림함 채널. 기록은 예전부터 그 일을 하던 NotificationService 가 그대로
  * 한다 — 이 채널은 알림 하나를 그 표의 한 줄로 옮길 뿐이다.
  *
  * **왜 만들어진 서비스가 아니라 callable 을 쥐는가.** App 의 게터들은 생성자 주입 +
