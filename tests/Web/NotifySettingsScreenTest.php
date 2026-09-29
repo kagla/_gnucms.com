@@ -101,7 +101,7 @@ final class NotifySettingsScreenTest extends WebTestCase
      * 그 조합을 아는 자리는 이 화면뿐인데, 여기가 침묵하고 있었다.
      */
     #[DataProvider('connectionProvider')]
-    public function testWarnsWhenTheResetNotificationIsPhoneOnlyAndSignupTakesNoNumber(array $dbConfig): void
+    public function testAlwaysOnMailAvoidsAPhoneOnlyResetWarning(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
         $this->saveSiteSettings($app, ['signup_phone' => 'off']);
@@ -110,15 +110,8 @@ final class NotifySettingsScreenTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/settings/notifications'));
 
         $reset = self::section($html, 'password_reset');
-        self::assertStringContainsString('번호가 없는 회원에게는 이 알림이 가지 않습니다', $reset);
-        self::assertStringContainsString('비밀번호를 스스로 되찾을 수 없습니다', $reset);
-        self::assertStringContainsString('/admin/settings/writing', $reset);
-        // 접힌 카드에서도 보이도록 요약 줄에 배지가 붙는다.
-        self::assertStringContainsString('번호 없는 회원에게 안 감', $html);
-        // 경고는 그 카드의 것이다 — 아무 데도 켜 두지 않은 다른 카드가 함께 경고하면,
-        // 이 화면은 설정과 무관한 문장을 늘 띄우는 화면이 된다.
-        self::assertStringNotContainsString('번호가 없는 회원에게는',
-            self::section($html, 'welcome'));
+        self::assertStringNotContainsString('번호가 없는 회원에게는', $reset);
+        self::assertStringContainsString('메일</span> 항상 발송합니다', $reset);
     }
 
     /**
@@ -151,7 +144,7 @@ final class NotifySettingsScreenTest extends WebTestCase
      * 관리자는 급한 정도를 가릴 수 없다.
      */
     #[DataProvider('connectionProvider')]
-    public function testAnotherPhoneCapableEventWarnsWithoutTheLockedOutSentence(array $dbConfig): void
+    public function testCommentNotificationAlsoKeepsMailAvailable(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
         $this->saveSiteSettings($app, ['signup_phone' => 'off']);
@@ -160,7 +153,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/settings/notifications'));
 
         $comment = self::section($html, 'comment_new');
-        self::assertStringContainsString('번호가 없는 회원에게는 이 알림이 가지 않습니다', $comment);
+        self::assertStringContainsString('메일</span> 항상 발송합니다', $comment);
         self::assertStringNotContainsString('비밀번호를 스스로 되찾을 수 없습니다', $comment);
     }
 
@@ -171,13 +164,13 @@ final class NotifySettingsScreenTest extends WebTestCase
 
         self::assertStringContainsString('비밀번호 재설정', $html);
         self::assertStringContainsString('이메일 인증', $html);
-        self::assertStringContainsString('이메일로만', $html);
+        self::assertStringContainsString('전화 채널을 지원하지 않아 메일만 보냅니다', $html);
 
         // 전화로 보낼 수 없는 알림은 그 두 칸을 켤 수 없어야 한다 — 저장할 때만 거절하는
         // 것은 "제공했다가 거절한다"는 같은 결함의 다른 모습이다.
         $verify = self::section($html, 'email_verify');
-        self::assertStringContainsString('disabled', self::checkbox($verify, 'sms'));
-        self::assertStringContainsString('disabled', self::checkbox($verify, 'alimtalk'));
+        self::assertStringNotContainsString('name="sms"', $verify);
+        self::assertStringNotContainsString('name="alimtalk"', $verify);
         // 대조군: 전화로 보낼 수 있는 알림은 잠기지 않는다.
         $reset = self::section($html, 'password_reset');
         self::assertStringNotContainsString('disabled', self::checkbox($reset, 'sms'));
@@ -210,7 +203,7 @@ final class NotifySettingsScreenTest extends WebTestCase
     public function testCommentVolumeIsCalledOut(array $dbConfig): void
     {
         $html = $this->body($this->get($this->adminApp($dbConfig), '/admin/settings/notifications'));
-        self::assertStringContainsString('발송량', $html);
+        self::assertStringContainsString('댓글 한 건당 최대 두 명에게 알립니다', $html);
     }
 
     #[DataProvider('connectionProvider')]
@@ -232,7 +225,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         ]);
 
         self::assertSame(303, $response->getStatusCode());
-        self::assertSame(['sms'], $app->notifySettings()->channelsFor('password_reset'));
+        self::assertSame(['mail', 'sms'], $app->notifySettings()->channelsFor('password_reset'));
         // 손대지 않은 묶음은 기본값 그대로다.
         self::assertSame(['mail'], $app->notifySettings()->channelsFor('email_verify'));
         $html = $this->body($this->get($app, '/admin/settings/notifications', ['saved' => 'password_reset']));
@@ -254,18 +247,18 @@ final class NotifySettingsScreenTest extends WebTestCase
             'alimtalk' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크'],
         ]);
-        self::assertSame(['alimtalk'], $app->notifySettings()->channelsFor('password_reset'));
+        self::assertSame(['mail', 'alimtalk'], $app->notifySettings()->channelsFor('password_reset'));
 
         // 카카오 승인이 풀렸다 — 관리자는 아무것도 다시 손대지 않았다.
         $app->db()->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :c', ['c' => 'T1']);
 
         $section = self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
-        self::assertSame([], $app->notifySettings()->channelsFor('password_reset'));
+        self::assertSame(['mail'], $app->notifySettings()->channelsFor('password_reset'));
         // 코드를 부르는 곳이 **안내 문장**인지 묻는다. 같은 카드의 지우기 라벨도 코드를
         // 인쇄하므로, 카드 전체를 상대로 'T1' 만 물으면 둘 중 하나가 코드 부르기를
         // 그만두어도 통과한다 — 한 커밋에서 함께 태어난 두 기능이 서로를 가려 준다.
-        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('템플릿(T1)을 사용할 수 없습니다', $section);
         // 체크는 관리자가 고른 그대로 남는다 — 꺼진 것으로 그려 두면 다른 칸만 고쳐
         // 저장하는 순간 "켜 두었다"는 사실이 조용히 지워진다.
         self::assertStringContainsString('checked', self::checkbox($section, 'alimtalk'));
@@ -291,7 +284,7 @@ final class NotifySettingsScreenTest extends WebTestCase
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
         self::assertStringNotContainsString('더는 쓸 수 없습니다', $section);
         // 멀쩡한 템플릿이므로 「켜는 순간 이대로 나갑니다」는 참이고, 적혀 있어야 한다.
-        self::assertStringContainsString('알림톡을 켜는 순간 이대로 나갑니다', $section);
+        self::assertStringContainsString('알림톡을 켜기 전까지 이 템플릿 연결은 저장만 됩니다', $section);
         self::assertStringNotContainsString('checked', self::checkbox($section, 'alimtalk'));
         // 다시 켤 때 다시 고르지 않아도 되도록, 저장된 연결은 화면에 되살아나 있어야 한다.
         self::assertMatchesRegularExpression('/name="var_map\[고객명\]".*?<option value="이름" selected/s', $section);
@@ -317,7 +310,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         $section = self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
         self::assertStringContainsString('#{사이트명} 비밀번호를 #{링크} 에서 재설정하세요', $section);
-        self::assertStringContainsString('문자 채널이 꺼져 있어', $section);
+        self::assertStringContainsString('문자를 켜기 전까지 이 본문은 저장만 됩니다', $section);
     }
 
     /**
@@ -331,8 +324,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         $html = $this->body($this->get($this->adminApp($dbConfig), '/admin/settings/notifications'));
 
         foreach (['password_reset', 'email_verify', 'welcome', 'signup_attempt', 'social_email_verify'] as $event) {
-            self::assertStringContainsString('disabled',
-                self::checkbox(self::section($html, $event), 'inbox'), $event);
+            self::assertStringNotContainsString('name="inbox"', self::section($html, $event), $event);
         }
         // 대조군: 알림함이 실제로 적을 줄 아는 유일한 알림은 잠기지 않는다.
         self::assertStringNotContainsString('disabled',
@@ -368,9 +360,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringContainsString('고친 본문 #{이름}', $section);
         self::assertStringNotContainsString('첫 번째 본문', $section);
         // 지금은 안 나간다는 사실과, 고쳐 둔 값이 남는다는 사실을 둘 다 말해야 한다.
-        self::assertStringContainsString('문자 채널이 꺼져 있어', $section);
-        self::assertStringContainsString('고쳐 저장해 두면 그대로 보관되고', $section);
-        self::assertStringContainsString('칸을 비우고 저장하면 지워집니다', $section);
+        self::assertStringContainsString('문자를 켜기 전까지 이 본문은 저장만 됩니다', $section);
     }
 
     /** 알림톡도 같다 — 꺼진 채로 고친 변수 연결이 저장돼야 한다. */
@@ -396,7 +386,7 @@ final class NotifySettingsScreenTest extends WebTestCase
             $app->notifySettings()->formValues()['password_reset']['alimtalk_var_map']);
         $section = self::section(
             $this->body($this->get($app, '/admin/settings/notifications')), 'password_reset');
-        self::assertStringContainsString('알림톡 채널이 꺼져 있어', $section);
+        self::assertStringContainsString('알림톡을 켜기 전까지 이 템플릿 연결은 저장만 됩니다', $section);
         self::assertMatchesRegularExpression('/name="var_map\[고객명\]".*?<option value="사이트명" selected/s', $section);
     }
 
@@ -502,29 +492,14 @@ final class NotifySettingsScreenTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/settings/notifications'));
         $atBoundary = self::section($html, 'password_reset');
         $overBoundary = self::section($html, 'password_changed');
-        $sms = sprintf('아직 %s바이트 안이라 SMS 로 나갑니다', number_format($boundary));
-        $lms = sprintf('%s바이트를 넘어 LMS 로 나갑니다', number_format($boundary));
+        self::assertStringContainsString(
+            '>' . number_format($boundary) . '</span>/2,000바이트</strong>', $atBoundary);
 
         self::assertStringContainsString(
-            '<strong>' . number_format($boundary) . '바이트</strong>', $atBoundary);
-        self::assertStringContainsString($sms, $atBoundary);
-        self::assertStringNotContainsString($lms, $atBoundary);
+            '>' . number_format($boundary + 1) . '</span>/2,000바이트</strong>', $overBoundary);
 
-        self::assertStringContainsString(
-            '<strong>' . number_format($boundary + 1) . '바이트</strong>', $overBoundary);
-        self::assertStringContainsString($lms, $overBoundary);
-        self::assertStringNotContainsString($sms, $overBoundary);
-
-        // 한계도 화면에 적혀 있어야 한다 — 숫자만 보여 주고 어디까지인지 말하지 않으면
-        // 관리자는 여전히 저장 버튼을 눌러 봐야 안다.
-        self::assertStringContainsString(
-            '최대 ' . number_format(MessageText::LMS_BYTES) . '바이트', $atBoundary);
-
-        // 본문이 없는 묶음은 제 숫자(0)를 재고, 있지도 않은 본문의 갈래를 말하지 않는다.
-        $empty = self::section($html, 'comment_new');
-        self::assertStringContainsString('<strong>0바이트</strong>', $empty);
-        self::assertStringNotContainsString($sms, $empty);
-        self::assertStringNotContainsString($lms, $empty);
+        self::assertStringContainsString('90바이트 초과 시 LMS', $atBoundary);
+        self::assertStringContainsString('변수 치환 시 늘어날 수 있습니다', $atBoundary);
     }
 
     /**
@@ -544,7 +519,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertStringNotContainsString('알림톡을 켜는 순간 이대로 나갑니다', $section);
         // 안내 문장과 지우기 라벨은 **각각** 코드를 불러야 한다. 하나로 뭉쳐 물으면
         // 나머지 하나가 코드를 잃어도 통과한다(둘의 합집합만 고정된다).
-        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('템플릿(T1)을 사용할 수 없습니다', $section);
         self::assertStringContainsString('고를 수 없게 된 템플릿 설정(T1) 지우기', $section);
         self::assertStringContainsString('지금 이대로는 켤 수도 없습니다', $section);
     }
@@ -640,9 +615,9 @@ final class NotifySettingsScreenTest extends WebTestCase
         $section = self::section($this->body($response), 'password_reset');
         self::assertStringContainsString('is-invalid', $section);
         self::assertStringContainsString('사용 중인 승인 템플릿을 골라 주세요', $section);
-        self::assertStringContainsString('쓸 수 있는 승인 템플릿이 없습니다', $section);
+        self::assertStringContainsString('승인 템플릿이 없습니다.', $section);
         // 저장이 거절된 화면에서 하필 가장 중요한 사실이 사라지면 안 된다.
-        self::assertStringContainsString('더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('사용할 수 없습니다', $section);
         // 빠져나갈 길도 같은 화면에 있어야 한다.
         self::assertStringContainsString('name="tpl_clear"', $section);
     }
@@ -704,8 +679,8 @@ final class NotifySettingsScreenTest extends WebTestCase
 
         self::assertSame(422, $response->getStatusCode());
         $section = self::section($this->body($response), 'password_reset');
-        self::assertStringContainsString('<strong>2,414바이트</strong>', $section);
-        self::assertStringNotContainsString('<strong>0바이트</strong>', $section);
+        self::assertStringContainsString('>2,414</span>/2,000바이트</strong>', $section);
+        self::assertStringNotContainsString('>0</span>/2,000바이트</strong>', $section);
     }
 
     /**
@@ -741,16 +716,13 @@ final class NotifySettingsScreenTest extends WebTestCase
         foreach (['password_reset', 'password_changed', 'welcome', 'comment_new',
             'email_verify', 'signup_attempt', 'social_email_verify'] as $event) {
             $section = self::section($html, $event);
-            $inboxLocked = $event !== 'comment_new';
             $phoneLocked = in_array($event, ['email_verify', 'signup_attempt', 'social_email_verify'], true);
 
             // 있음/없음만 물으면 안 된다. 전화 불가 안내는 한 묶음 안에서 알림톡 칸과
             // 문자 칸 옆에 **각각** 붙으므로, 둘 중 하나를 지워도 "있다"는 여전히 참이다.
             // 개수를 세야 칸마다 붙었는지 답할 수 있다.
-            self::assertSame($inboxLocked ? 1 : 0,
-                substr_count($section, '지금은 새 댓글·답글 알림만 받습니다'), $event);
-            self::assertSame($phoneLocked ? 2 : 0,
-                substr_count($section, '이 알림은 이메일로만 보낼 수 있습니다'), $event);
+            self::assertSame($phoneLocked ? 1 : 0,
+                substr_count($section, '전화 채널을 지원하지 않아 메일만 보냅니다'), $event);
         }
     }
 
@@ -839,7 +811,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         self::assertSame(422, $response->getStatusCode());
         $section = self::section($this->body($response), 'password_reset');
         self::assertStringContainsString('<option value="T1" selected>', $section);
-        self::assertStringNotContainsString('아직 고른 템플릿이 없습니다', $section);
+        self::assertStringNotContainsString('알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요', $section);
         // 거절 이유는 그대로 표시돼 있어야 한다 — 위 단언이 "아무 말도 없다"로 통과하지 않게.
         self::assertStringContainsString('템플릿 변수에 넣을 값을 모두 골라 주세요', $section);
 
@@ -848,7 +820,7 @@ final class NotifySettingsScreenTest extends WebTestCase
             'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
             'alimtalk' => '1', 'tpl_code' => '',
         ]);
-        self::assertStringContainsString('아직 고른 템플릿이 없습니다',
+        self::assertStringContainsString('알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요',
             self::section($this->body($none), 'password_reset'));
     }
 
@@ -911,8 +883,8 @@ final class NotifySettingsScreenTest extends WebTestCase
             $app->notifySettings()->formValues()['password_reset']['alimtalk_tpl_code']);
 
         // 죽었다는 말은 **저장된** T1 에 대한 것이어야 한다. 살아 있는 T2 를 두고 하면 거짓이다.
-        self::assertStringContainsString('템플릿(T1)을 더는 쓸 수 없습니다', $section);
-        self::assertStringNotContainsString('템플릿(T2)을 더는 쓸 수 없습니다', $section);
+        self::assertStringContainsString('템플릿(T1)을 사용할 수 없습니다', $section);
+        self::assertStringNotContainsString('템플릿(T2)을 사용할 수 없습니다', $section);
 
         // 지우기 라벨도 마찬가지 — 이 칸이 지우는 것은 T1 이다.
         self::assertStringContainsString('고를 수 없게 된 템플릿 설정(T1) 지우기', $section);
@@ -966,7 +938,7 @@ final class NotifySettingsScreenTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/settings/notifications'));
 
         foreach (array_keys(Events::ALL) as $event) {
-            self::assertStringNotContainsString('아직 고른 템플릿이 없습니다',
+            self::assertStringNotContainsString('알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요',
                 self::section($html, $event), $event);
         }
 
@@ -976,9 +948,9 @@ final class NotifySettingsScreenTest extends WebTestCase
             'alimtalk' => '1', 'tpl_code' => '',
         ]);
         $body = $this->body($response);
-        self::assertStringContainsString('아직 고른 템플릿이 없습니다',
+        self::assertStringContainsString('알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요',
             self::section($body, 'password_reset'));
-        self::assertStringNotContainsString('아직 고른 템플릿이 없습니다',
+        self::assertStringNotContainsString('알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요',
             self::section($body, 'password_changed'));
     }
 

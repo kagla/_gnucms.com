@@ -19,7 +19,7 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
-        self::assertCount(35, Schema::TABLES);
+        self::assertCount(37, Schema::TABLES);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(

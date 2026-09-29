@@ -9,6 +9,7 @@ use GnuCms\Extension\ExternalRequests;
 use GnuCms\Shop\Admin\AdminController;
 use GnuCms\Shop\Admin\CategoryController;
 use GnuCms\Shop\Admin\OrderController;
+use GnuCms\Shop\Admin\OperationsController;
 use GnuCms\Shop\Admin\ProductController;
 use GnuCms\Shop\Admin\ProductFormController;
 use GnuCms\Shop\Web\CommerceController;
@@ -29,6 +30,7 @@ final class Routes
         $commerce = new CommerceController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
         $pay = new PayController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
         $orders = new OrderController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
+        $operations = new OperationsController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
         $admin = new AdminController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
         $category = new CategoryController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
         $product = new ProductController($service, Service::PUBLIC_PREFIX, Service::ADMIN_PREFIX);
@@ -82,6 +84,15 @@ final class Routes
             }
         }
         $map('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        $map('GET', '/shipments', static fn ($request, $response) => $operations->shipments($request, $response), true);
+        $map('POST', '/shipments/export', static fn ($request, $response) => $operations->shipmentExport($request, $response), true);
+        $map('POST', '/shipments/print', static fn ($request, $response) => $operations->shipmentPrint($request, $response), true);
+        $map('POST', '/shipments/import', static fn ($request, $response) => $operations->shipmentImport($request, $response), true);
+        $map('GET', '/reports', static fn ($request, $response) => $operations->reports($request, $response), true);
+        $map('POST', '/reports/export', static fn ($request, $response) => $operations->reportExport($request, $response), true);
+        $map('GET', '/settlements', static fn ($request, $response) => $operations->settlements($request, $response), true);
+        $map('POST', '/settlements/import', static fn ($request, $response) => $operations->settlementImport($request, $response), true);
+        $map('POST', '/settlements/template', static fn ($request, $response) => $operations->settlementTemplate($response), true);
         foreach (['GET', 'POST'] as $method) {
             $map($method, '/feedback', static fn ($request, $response) => $admin->handle('feedback', $request, $response), true);
         }

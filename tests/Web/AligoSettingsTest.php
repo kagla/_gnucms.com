@@ -270,8 +270,8 @@ final class AligoSettingsTest extends WebTestCase
             'sms' => ['ok' => true, 'sms_count' => 42, 'lms_count' => 7, 'reason' => null],
         ]]);
 
-        self::assertStringContainsString('alert-warning', $html);
-        self::assertStringNotContainsString('alert-success', $html);
+        self::assertStringContainsString('alert alert-warning verify-result', $html);
+        self::assertStringNotContainsString('alert alert-success verify-result', $html);
         self::assertStringContainsString('알림톡 확인 실패', $html);
         self::assertStringContainsString('알림톡 응답을 확인할 수 없습니다.', $html);
         self::assertStringContainsString('SMS 42건 · LMS 7건 남았습니다', $html);
@@ -288,8 +288,8 @@ final class AligoSettingsTest extends WebTestCase
             'sms' => ['ok' => true, 'sms_count' => 500, 'lms_count' => 100, 'reason' => null],
         ]]);
 
-        self::assertStringContainsString('alert-success', $html);
-        self::assertStringNotContainsString('alert-warning', $html);
+        self::assertStringContainsString('alert alert-success verify-result', $html);
+        self::assertStringNotContainsString('alert alert-warning verify-result', $html);
         self::assertStringContainsString('알림톡 120건 남았습니다', $html);
         self::assertStringContainsString('SMS 500건 · LMS 100건 남았습니다', $html);
         self::assertStringNotContainsString('확인 실패', $html);
@@ -315,17 +315,17 @@ final class AligoSettingsTest extends WebTestCase
      */
     public function testEachChannelSwitchIsAButtonPairWithTheSavedStateHighlighted(): void
     {
-        $html = $this->renderAligoSettings(['status' => ['configured' => true, 'sms_enabled' => true,
-            'alimtalk_enabled' => false, 'test_mode' => false, 'pending' => 0]]);
+        $html = $this->renderAligoSettings(['status' => ['configured' => true, 'sms_switch_on' => true,
+            'alimtalk_switch_on' => false, 'test_mode' => false, 'pending' => 0]]);
 
         // 알림톡은 꺼져 있다: 끄기가 강조(눌림)되고 켜기가 제출한다.
-        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,600}?'
-            . '<button class="btn btn-sm join-item btn-outline" type="submit" name="action" value="enable" aria-pressed="false">켜기</button>\s*'
-            . '<button class="btn btn-sm join-item btn-neutral" type="button" aria-pressed="true">끄기</button>~su', $html);
+        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,1400}?'
+            . '<button class="btn btn-sm join-item btn-outline"[^>]*value="enable"[^>]*aria-pressed="false">켜기</button>\s*'
+            . '<button class="btn btn-sm join-item btn-neutral"[^>]*aria-pressed="true">끄기</button>~su', $html);
         // 문자는 켜져 있다: 켜기가 강조되고 끄기가 제출한다.
-        self::assertMatchesRegularExpression('~channel-switch-name">문자\(SMS·LMS\) 발송</span>.{0,600}?'
-            . '<button class="btn btn-sm join-item btn-success" type="button" aria-pressed="true">켜기</button>\s*'
-            . '<button class="btn btn-sm join-item btn-outline" type="submit" name="action" value="disable" aria-pressed="false">끄기</button>~su', $html);
+        self::assertMatchesRegularExpression('~channel-switch-name">문자\(SMS·LMS\) 발송</span>.{0,1400}?'
+            . '<button class="btn btn-sm join-item btn-success"[^>]*aria-pressed="true">켜기</button>\s*'
+            . '<button class="btn btn-sm join-item btn-outline"[^>]*value="disable"[^>]*aria-pressed="false">끄기</button>~su', $html);
     }
 
     /**
@@ -371,11 +371,11 @@ final class AligoSettingsTest extends WebTestCase
     /** 계정을 저장하기 전에는 켤 수 없다 — 켜기 버튼이 잠긴다. 끄기는 이미 꺼진 상태라 눌린 채다. */
     public function testTurningOnIsLockedUntilAnAccountIsSaved(): void
     {
-        $html = $this->renderAligoSettings(['status' => ['configured' => false, 'sms_enabled' => false,
-            'alimtalk_enabled' => false, 'test_mode' => false, 'pending' => 0]]);
+        $html = $this->renderAligoSettings(['status' => ['configured' => false, 'sms_switch_on' => false,
+            'alimtalk_switch_on' => false, 'test_mode' => false, 'pending' => 0]]);
 
-        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,600}?'
-            . 'value="enable" aria-pressed="false" disabled>켜기</button>~su', $html);
+        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,1400}?'
+            . 'value="enable"[^>]*aria-pressed="false" disabled>켜기</button>~su', $html);
     }
 
     /** 잔여 건수는 수천 단위가 보통이라 천 단위 구분 기호가 있어야 한눈에 읽힌다. */
@@ -425,7 +425,7 @@ final class AligoSettingsTest extends WebTestCase
             'error' => '채널 목록을 불러오지 못했습니다.', 'error_at' => 'profiles',
         ]);
 
-        self::assertStringContainsString('action="/admin/aligo/verify#aligo-result"', $html);
+        self::assertStringContainsString('action="/admin/aligo/verify#aligo-verify"', $html);
         self::assertStringContainsString('action="/admin/aligo/toggle#aligo-result"', $html);
         self::assertStringContainsString('action="/admin/aligo/profiles#aligo-profiles"', $html);
 
@@ -449,7 +449,7 @@ final class AligoSettingsTest extends WebTestCase
             'values' => ['user_id' => 'shop', 'sender' => '0212345678', 'senderkey' => 'SK1',
                 'channel_name' => '', 'api_key' => '', 'api_key_set' => true,
                 'test_mode' => false, 'sms_enabled' => true, 'alimtalk_enabled' => true],
-            'status' => ['configured' => true, 'sms_enabled' => true, 'alimtalk_enabled' => true,
+            'status' => ['configured' => true, 'sms_switch_on' => true, 'alimtalk_switch_on' => true,
                 'test_mode' => false, 'pending' => 0],
             'errors' => [], 'error' => null, 'error_at' => null, 'verified' => null, 'profiles' => [],
             'notice' => null, 'query' => [],

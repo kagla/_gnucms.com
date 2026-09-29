@@ -63,7 +63,7 @@ final class NotifySettingsTest extends DatabaseTestCase
     {
         $settings = $this->boot($config);
         self::assertSame(['mail'], $settings->channelsFor('password_reset'));
-        self::assertSame(['inbox'], $settings->channelsFor('comment_new'));
+        self::assertSame(['mail', 'inbox'], $settings->channelsFor('comment_new'));
     }
 
     #[DataProvider('connectionProvider')]
@@ -137,7 +137,7 @@ final class NotifySettingsTest extends DatabaseTestCase
         }
 
         $settings->save('comment_new', ['inbox' => '1']);
-        self::assertSame(['inbox'], $settings->channelsFor('comment_new'));
+        self::assertSame(['mail', 'inbox'], $settings->channelsFor('comment_new'));
     }
 
     /**
@@ -153,9 +153,9 @@ final class NotifySettingsTest extends DatabaseTestCase
             'email_verify.inbox' => '1', 'email_verify.sms' => '0', 'email_verify.alimtalk' => '0',
         ]);
 
-        self::assertSame([], $settings->channelsFor('email_verify'));
+        self::assertSame(['mail'], $settings->channelsFor('email_verify'));
         self::assertFalse($settings->isOn('email_verify', 'inbox'));
-        self::assertSame([], $settings->formValues()['email_verify']['channels']);
+        self::assertSame(['mail'], $settings->formValues()['email_verify']['channels']);
     }
 
     /** 화면이 켤 수 없는 칸을 꺼진 채로 그릴 수 있어야 한다 — 저장 때만 거절하는 것은 늦다. */
@@ -200,7 +200,7 @@ final class NotifySettingsTest extends DatabaseTestCase
         $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
-        self::assertSame(['alimtalk'], $settings->channelsFor('password_reset'));
+        self::assertSame(['mail', 'alimtalk'], $settings->channelsFor('password_reset'));
     }
 
     /**
@@ -304,10 +304,10 @@ final class NotifySettingsTest extends DatabaseTestCase
             'email_verify', 'signup_attempt', 'social_email_verify',
         ], array_keys($values));
 
-        self::assertSame(['alimtalk'], $values['password_reset']['channels']);
+        self::assertSame(['mail', 'alimtalk'], $values['password_reset']['channels']);
         self::assertSame(['tpl_code' => 'T1', 'var_map' => ['고객명' => '이름', '주소' => '링크']],
             $values['password_reset']['template']);
-        self::assertSame(['inbox'], $values['comment_new']['channels']);
+        self::assertSame(['mail', 'inbox'], $values['comment_new']['channels']);
         self::assertNull($values['comment_new']['template']);
         self::assertSame('', $values['comment_new']['sms_body']);
         self::assertSame('T1', $values['password_reset']['alimtalk_tpl_code']);

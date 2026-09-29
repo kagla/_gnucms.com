@@ -7,6 +7,8 @@ namespace GnuCms\Shop;
 use GnuCms\App;
 use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Catalog\Options;
+use GnuCms\Shop\Fulfillment\ManualCsvCarrierAdapter;
+use GnuCms\Payment\ManualSettlementAdapter;
 
 final class Service
 {
@@ -25,6 +27,9 @@ final class Service
     public readonly Commerce\Orders $orders;
     public readonly Commerce\Payments $payments;
     public readonly Commerce\CheckoutIntents $checkoutIntents;
+    public readonly Commerce\Fulfillment $fulfillment;
+    public readonly Commerce\Reports $reports;
+    public readonly Commerce\Settlements $settlements;
     public readonly ProductFeedback $feedback;
 
     public function __construct(public readonly App $app)
@@ -41,6 +46,9 @@ final class Service
         $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
         $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
         $this->checkoutIntents = new Commerce\CheckoutIntents($app, $this->cart, $this->orders, $this->payments);
+        $this->fulfillment = new Commerce\Fulfillment($this->store, $this->orders, new ManualCsvCarrierAdapter());
+        $this->reports = new Commerce\Reports($this->store);
+        $this->settlements = new Commerce\Settlements($this->store, new ManualSettlementAdapter($app->paymentProviders()));
         $this->feedback = new ProductFeedback($this->store);
     }
 }

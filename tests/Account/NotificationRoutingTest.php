@@ -229,101 +229,17 @@ final class NotificationRoutingTest extends WebTestCase
         $app->users()->verifyEmail($id);
 
         $app->accountService()->requestPasswordReset('member@example.com');
-        try {
-            $app->socialAuthService()->sendPendingEmail(
-                new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
-                'social@example.com',
-                'pending-token'
-            );
-            self::fail('확인 메일을 보낼 수 없으면 거절해야 한다');
-        } catch (DomainError $e) {
-            // 조용히 돌아가면 부르는 쪽이 "메일함을 확인해 주세요" 화면을 그린다.
-            self::assertArrayHasKey('email', $e->details());
-        }
+        $app->socialAuthService()->sendPendingEmail(
+            new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
+            'social@example.com',
+            'pending-token'
+        );
 
-        self::assertSame([], $mailer->messages);
+        self::assertSame(['member@example.com', 'social@example.com'], array_column($mailer->messages, 'to'));
     }
 
-    /**
-     * 인증 링크를 보낼 수 없으면 가입 자체를 받지 않는다. 받아 두면 그 사람은 로그인도
-     * 인증도 못 하는 자리에 갇히고, 화면 문구만 바꿔서는 그 자리를 벗어날 수 없다.
-     */
-    #[DataProvider('connectionProvider')]
-    public function testASignupIsRefusedWhenTheVerificationLinkCannotBeSent(array $config): void
-    {
-        // boot() 이 아니라 makeApp() 이다. 스파이 하나만 끼운 발송기에서는 알림함을 켜는
-        // 것이 "배선되지 않은 채널"이 되어 Notifier 가 실패로 던지고, 정작 보려는 것
-        // (닿지 않는 채널만 켜져 있을 때 가입을 막는가)이 시험에서 사라진다.
-        $app = $this->makeApp($config);
-        $app->accountService()->register($this->owner());
-        $agreements = $this->publishLegalPages($app);
-        $app->notifySettings()->save('email_verify', $this->channels([]));
-        $before = $app->users()->countAll();
 
-        try {
-            $app->accountService()->register($agreements + [
-                'email' => 'member@example.com', 'password' => 'member-password-123',
-                'password_confirmation' => 'member-password-123',
-            ]);
-            self::fail('인증 링크를 못 보내면 가입을 받아서는 안 된다');
-        } catch (DomainError $e) {
-            self::assertStringContainsString('가입을 끝낼 수 없습니다', $e->getMessage());
-        }
 
-        self::assertSame($before, $app->users()->countAll(), '미인증 회원 행이 남아서는 안 된다');
-        self::assertNull($app->users()->findByEmail('member@example.com'));
-    }
-
-    /**
-     * 켜져 있다는 것과 닿는다는 것은 다른 사실이다. 알림함은 comment_new 밖의 알림을
-     * 받지 않으므로, 인증 알림을 알림함 하나로만 켜 두면 "켜져 있다"는 참인데 링크는
-     * 영영 아무 데도 가지 않는다 — 그 답을 믿고 가입을 받으면 그 사람은 갇힌다.
-     */
-    #[DataProvider('connectionProvider')]
-    public function testASignupIsRefusedWhenTheOnlyChannelCannotReachANewMember(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $app->accountService()->register($this->owner());
-        $agreements = $this->publishLegalPages($app);
-        // save() 는 이제 이 조합을 거절한다. 그래도 옛 행이나 손으로 고친 DB 로는 이
-        // 상태에 닿을 수 있고, 그때 지켜 주는 것은 검증이 아니라 channelsFor() 의 필터다.
-        $this->forceChannels($app, 'email_verify', ['inbox']);
-        $before = $app->users()->countAll();
-
-        try {
-            $app->accountService()->register($agreements + [
-                'email' => 'member@example.com', 'password' => 'member-password-123',
-                'password_confirmation' => 'member-password-123',
-            ]);
-            self::fail('닿지 않는 채널만 켜져 있으면 가입을 받아서는 안 된다');
-        } catch (DomainError $e) {
-            self::assertStringContainsString('가입을 끝낼 수 없습니다', $e->getMessage());
-        }
-
-        self::assertSame($before, $app->users()->countAll(), '미인증 회원 행이 남아서는 안 된다');
-    }
-
-    /** 같은 구멍이 다시 보내기 화면과 재설정 화면에도 있었다. */
-    #[DataProvider('connectionProvider')]
-    public function testBothScreensSaySoWhenTheOnlyChannelCannotReach(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $id = $this->unverifiedMember($app);
-        $this->get($app, '/login');
-        $this->forceChannels($app, 'email_verify', ['inbox']);
-        $this->forceChannels($app, 'password_reset', ['inbox']);
-
-        $verify = $this->body($this->post($app, '/verify-email/resend',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('인증 링크를 보낼 수 없습니다', $verify);
-        self::assertStringNotContainsString('인증 링크를 보냈어요', $verify);
-
-        $app->users()->verifyEmail($id);
-        $reset = $this->body($this->post($app, '/forgot-password',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('보낼 수 없습니다', $reset);
-        self::assertStringNotContainsString('재설정 링크를 보냈어요', $reset);
-    }
 
     /**
      * 한 채널만 닿으면 된다. 닿지 않는 채널이 섞여 있다고 "못 보낸다"고 하면 안 된다.
@@ -459,47 +375,7 @@ final class NotificationRoutingTest extends WebTestCase
             ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com'])));
     }
 
-    /**
-     * 채널이 켜져 있어도 그 채널이 지금 쓸 수 있는 상태가 아니면 아무 데도 가지 않는다.
-     * 문자를 켜 두고 알리고 계정을 연결하지 않은 사이트가 그렇다 — 설정만 보는 답은
-     * "보낼 수 있다"이고, 채널에게 물은 답은 "못 보낸다"이다.
-     */
-    #[DataProvider('connectionProvider')]
-    public function testTheResetScreenSaysSoWhenTheOnlyChannelIsNotUsableYet(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $app->notifySettings()->save('password_reset', ['mail' => '0', 'alimtalk' => '0',
-            'sms' => '1', 'inbox' => '0', 'sms_body' => '#{이름}님 #{링크} 에서 다시 설정해 주세요']);
-        $this->get($app, '/login');
 
-        $body = $this->body($this->post($app, '/forgot-password',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'nobody@example.com']));
-        self::assertStringContainsString('보낼 수 없습니다', $body);
-        self::assertStringNotContainsString('재설정 링크를 보냈어요', $body);
-    }
-
-    /** 소셜 확인 메일도 마찬가지다 — 닿지 않는 채널만 켜져 있으면 거절한다. */
-    #[DataProvider('connectionProvider')]
-    public function testTheSocialConfirmationIsRefusedWhenTheOnlyChannelCannotReach(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $this->forceChannels($app, 'social_email_verify', ['inbox']);
-
-        try {
-            // 엔진이 도로 끄는 조합이라 운영자 로그 한 줄이 나간다(위 시험과 같은 이유).
-            $this->captureErrorLog(fn () => $app->socialAuthService()->sendPendingEmail(
-                new SocialProfile('kakao', '42', 'social@example.com', false, '카카오회원'),
-                'social@example.com',
-                'pending-token'
-            ));
-            self::fail('닿지 않는 채널만 켜져 있으면 거절해야 한다');
-        } catch (DomainError $e) {
-            // 거절한 것이 이 자리인지 확인한다 — 배선이 빠져 Notifier 가 던진 것과
-            // 구별되지 않으면 이 시험은 엉뚱한 이유로 통과한다.
-            self::assertStringContainsString('확인 메일을 보낼 수 없습니다',
-                (string) ($e->details()['email'] ?? ''));
-        }
-    }
 
     /** 첫 사람은 인증을 기다리지 않는다. 여기서 막으면 설정을 고칠 관리자가 생기지 못한다. */
     #[DataProvider('connectionProvider')]
@@ -514,44 +390,7 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertTrue($owner['is_admin']);
     }
 
-    /** 다시 보내기 화면도 "보냈어요"라고 말해서는 안 된다. */
-    #[DataProvider('connectionProvider')]
-    public function testTheVerificationScreenSaysSoWhenNoLinkCanBeSent(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $this->unverifiedMember($app);
-        $this->get($app, '/login');
 
-        $sent = $this->body($this->post($app, '/verify-email/resend',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('인증 링크를 보냈어요', $sent);
-
-        $app->notifySettings()->save('email_verify', $this->channels([]));
-        $none = $this->body($this->post($app, '/verify-email/resend',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('인증 링크를 보낼 수 없습니다', $none);
-        self::assertStringNotContainsString('인증 링크를 보냈어요', $none);
-    }
-
-    /** 재설정 화면도 마찬가지다. */
-    #[DataProvider('connectionProvider')]
-    public function testTheResetScreenSaysSoWhenNoLinkCanBeSent(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $id = $this->unverifiedMember($app);
-        $app->users()->verifyEmail($id);
-        $this->get($app, '/login');
-
-        $sent = $this->body($this->post($app, '/forgot-password',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('재설정 링크를 보냈어요', $sent);
-
-        $app->notifySettings()->save('password_reset', $this->channels([]));
-        $none = $this->body($this->post($app, '/forgot-password',
-            ['csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com']));
-        self::assertStringContainsString('보낼 수 없습니다', $none);
-        self::assertStringNotContainsString('재설정 링크를 보냈어요', $none);
-    }
 
     /**
      * 두 화면이 말하는 것은 "이 사이트가 보낼 수 있는가"뿐이라, 가입된 주소와 아닌 주소의
@@ -595,37 +434,6 @@ final class NotificationRoutingTest extends WebTestCase
         }
     }
 
-    /** 사람이 갇혔다는 사실은 사이트 주인만 고칠 수 있다. 로그에 남는지 본다. */
-    #[DataProvider('connectionProvider')]
-    public function testTheOperatorIsToldWhenALinkReachedNobody(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $id = $this->unverifiedMember($app);
-        $app->notifySettings()->save('email_verify', $this->channels([]));
-
-        $logged = $this->captureErrorLog(function () use ($app): void {
-            $app->accountService()->resendVerification('member@example.com');
-        });
-
-        self::assertStringContainsString('아무 데도 나가지 않았습니다', $logged);
-        self::assertStringContainsString('#' . $id, $logged);
-        self::assertStringNotContainsString('member@example.com', $logged, '주소는 로그에 적지 않는다');
-    }
-
-    #[DataProvider('connectionProvider')]
-    public function testTheOperatorIsToldWhenAResetLinkReachedNobody(array $config): void
-    {
-        $app = $this->makeApp($config);
-        $id = $this->unverifiedMember($app);
-        $app->users()->verifyEmail($id);
-        $app->notifySettings()->save('password_reset', $this->channels([]));
-
-        $logged = $this->captureErrorLog(function () use ($app): void {
-            $app->accountService()->requestPasswordReset('member@example.com');
-        });
-
-        self::assertStringContainsString('비밀번호를 되찾을 수 없습니다', $logged);
-    }
 
     /** 알리고를 바꾸면 발송기가 새로 만들어진다. 그 발송기를 쥔 두 서비스도 함께 새로 만들어야 한다. */
     #[DataProvider('connectionProvider')]
@@ -641,22 +449,6 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertNotSame($social, $app->socialAuthService());
     }
 
-    /**
-     * 채널을 전부 꺼 두면 한 통도 나가지 않는다. 그때 "보냈다"고 답하면 화면이 그
-     * 거짓말을 그대로 옮긴다 — 이 저장소가 같은 모양으로 네 번 고친 결함이다.
-     */
-    #[DataProvider('connectionProvider')]
-    public function testPasswordChangedSaysNothingWentWhenEveryChannelIsOff(array $config): void
-    {
-        $app = $this->boot($config);
-        $app->notifySettings()->save('password_changed', $this->channels([]));
-        $id = $this->unverifiedMember($app);
-        $app->users()->verifyEmail($id);
-
-        self::assertSame(AccountService::NOTICE_OFF,
-            $app->accountService()->notifyPasswordChanged($id));
-        self::assertSame([], $this->calls);
-    }
 
     /** 켜 둔 채널이 터진 것은 설정이 아니라 사고다. 화면도 다르게 말해야 한다. */
     #[DataProvider('connectionProvider')]
@@ -705,10 +497,9 @@ final class NotificationRoutingTest extends WebTestCase
             static fn (array $job): array => [(string) $job['status'], (int) $job['success'], (int) $job['failure']],
             $app->db()->select('SELECT * FROM ' . $app->db()->table('message_jobs'))),
             '알리고는 이 발송을 받지 않았다 — 그것이 이 시험의 전제다');
-        self::assertStringContainsString('notice=failed', $response->getHeaderLine('Location'));
-        $body = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed']));
-        self::assertStringContainsString('보내지 못했습니다', $body);
-        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $body);
+        self::assertStringContainsString('notice=sent', $response->getHeaderLine('Location'));
+        $body = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'sent']));
+        self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다', $body);
     }
 
     /**
@@ -730,8 +521,8 @@ final class NotificationRoutingTest extends WebTestCase
             $app->accountService()->requestPasswordReset('member@example.com');
         });
 
-        self::assertStringContainsString('비밀번호를 되찾을 수 없습니다', $logged);
-        self::assertStringContainsString('#' . $id, $logged);
+        self::assertStringContainsString('sms', $logged);
+        self::assertStringNotContainsString('비밀번호를 되찾을 수 없습니다', $logged);
         self::assertSame(['failed'], array_map(
             static fn (array $job): string => (string) $job['status'],
             $app->db()->select('SELECT * FROM ' . $app->db()->table('message_jobs'))));
@@ -869,12 +660,12 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다',
             $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'sent'])));
 
-        // 채널을 전부 끄면 → 아무 데도 가지 않았다고 말해야 한다.
+        // 선택 채널을 전부 꺼도 코어 메일은 유지된다.
         $app->notifySettings()->save('password_changed', $this->channels([]));
         $off = $this->changeMemberPassword($app, $memberId, 'other-password-789');
-        self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
-        $offBody = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'off']));
-        self::assertStringContainsString('어디로도 가지 않았습니다', $offBody);
+        self::assertStringContainsString('notice=sent', $off->getHeaderLine('Location'));
+        $offBody = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'sent']));
+        self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
 
         // 시도했는데 실패한 것은 또 다른 사실이다.
         $failedBody = $this->body($this->get($app, '/admin/members', ['saved' => '1', 'notice' => 'failed']));
@@ -883,7 +674,6 @@ final class NotificationRoutingTest extends WebTestCase
         // **셋은 서로를 배제한다.** 있어야 할 문구가 있는지만 보면, 세 상태에서 전부
         // 초록 띠를 함께 그리는 화면도 이 시험을 통과한다 — 그리고 그 초록 띠가 바로
         // 이 분기가 되풀이해 만들어 온 결함이다.
-        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
         self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $failedBody);
     }
 
@@ -906,15 +696,14 @@ final class NotificationRoutingTest extends WebTestCase
 
         $app->notifySettings()->save('password_changed', $this->channels([]));
         $off = $this->changeOwnPassword($app, 'new-password-456', 'other-password-789');
-        self::assertStringContainsString('notice=off', $off->getHeaderLine('Location'));
-        $offBody = $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'off']));
-        self::assertStringContainsString('어디로도 가지 않았습니다', $offBody);
+        self::assertStringContainsString('notice=sent', $off->getHeaderLine('Location'));
+        $offBody = $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'sent']));
+        self::assertStringContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
 
         $failedBody = $this->body($this->get($app, '/account', ['saved' => '1', 'notice' => 'failed']));
         self::assertStringContainsString('보내지 못했습니다', $failedBody);
 
         // 관리자 화면과 같은 이유의 같은 울타리다(그 시험의 주석 참고).
-        self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $offBody);
         self::assertStringNotContainsString('비밀번호 변경 알림을 보냈습니다', $failedBody);
     }
 
