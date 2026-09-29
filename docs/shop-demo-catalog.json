@@ -51,6 +51,17 @@
       "price": 27900,
       "list_price": 33000,
       "stock": 25,
+      "option_groups": ["본체 색상", "빛 색상"],
+      "options": [
+        {"value1": "아이보리", "value2": "전구색", "price": 0, "stock": 6, "stock_alert": 2, "active": 1},
+        {"value1": "아이보리", "value2": "주백색", "price": 0, "stock": 6, "stock_alert": 2, "active": 1},
+        {"value1": "차콜", "value2": "전구색", "price": 2000, "stock": 5, "stock_alert": 2, "active": 1},
+        {"value1": "차콜", "value2": "주백색", "price": 2000, "stock": 5, "stock_alert": 2, "active": 1}
+      ],
+      "extras": [
+        {"value1": "추가 구성", "value2": "LED 전구 1개", "price": 4500, "stock": 15, "stock_alert": 3, "active": 1},
+        {"value1": "추가 구성", "value2": "케이블 정리 클립", "price": 2500, "stock": 20, "stock_alert": 3, "active": 1}
+      ],
       "image": {
         "source_url": "https://live.staticflickr.com/1747/42381074432_33733f4667_b.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/642c96b0-b59e-4d96-a9a8-43383f6b11ef/thumb/",
@@ -99,6 +110,15 @@
       "price": 24000,
       "list_price": 29000,
       "stock": 25,
+      "option_groups": ["세트 구성"],
+      "options": [
+        {"value1": "2개입", "price": 0, "stock": 10, "stock_alert": 2, "active": 1},
+        {"value1": "4개입", "price": 21000, "stock": 8, "stock_alert": 2, "active": 1}
+      ],
+      "extras": [
+        {"value1": "선물 서비스", "value2": "선물 상자", "price": 3000, "stock": 15, "stock_alert": 3, "active": 1},
+        {"value1": "선물 서비스", "value2": "이름 각인", "price": 5000, "stock": 12, "stock_alert": 3, "active": 1}
+      ],
       "image": {
         "source_url": "https://images.rawpixel.com/editor_1024/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvcHUyMzM0NzYzLWltYWdlLWt3eXJuampiLmpwZw.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/66296729-2105-4e37-99c0-426bf389d6a9/thumb/",
@@ -291,6 +311,21 @@
       "price": 39000,
       "list_price": 47000,
       "stock": 25,
+      "option_groups": ["색상", "사이즈"],
+      "options": [
+        {"value1": "크림", "value2": "230", "price": 0, "stock": 4, "stock_alert": 1, "active": 1},
+        {"value1": "크림", "value2": "240", "price": 0, "stock": 5, "stock_alert": 1, "active": 1},
+        {"value1": "크림", "value2": "250", "price": 0, "stock": 6, "stock_alert": 1, "active": 1},
+        {"value1": "크림", "value2": "260", "price": 0, "stock": 4, "stock_alert": 1, "active": 1},
+        {"value1": "블랙", "value2": "230", "price": 2000, "stock": 3, "stock_alert": 1, "active": 1},
+        {"value1": "블랙", "value2": "240", "price": 2000, "stock": 5, "stock_alert": 1, "active": 1},
+        {"value1": "블랙", "value2": "250", "price": 2000, "stock": 5, "stock_alert": 1, "active": 1},
+        {"value1": "블랙", "value2": "260", "price": 2000, "stock": 3, "stock_alert": 1, "active": 1}
+      ],
+      "extras": [
+        {"value1": "액세서리", "value2": "컬러 신발끈", "price": 3000, "stock": 20, "stock_alert": 3, "active": 1},
+        {"value1": "액세서리", "value2": "쿠션 인솔", "price": 7000, "stock": 15, "stock_alert": 3, "active": 1}
+      ],
       "image": {
         "source_url": "https://cdn.stocksnap.io/img-thumbs/960w/0XLU8VP4UC.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/d2acf599-b657-4b53-8db3-a2a9755e2019/thumb/",
@@ -355,6 +390,17 @@
       "price": 99000,
       "list_price": 119000,
       "stock": 25,
+      "option_groups": ["색상", "연결 방식"],
+      "options": [
+        {"value1": "블루", "value2": "유선", "price": 0, "stock": 5, "stock_alert": 2, "active": 1},
+        {"value1": "블루", "value2": "블루투스", "price": 20000, "stock": 4, "stock_alert": 2, "active": 1},
+        {"value1": "블랙", "value2": "유선", "price": 5000, "stock": 5, "stock_alert": 2, "active": 1},
+        {"value1": "블랙", "value2": "블루투스", "price": 25000, "stock": 4, "stock_alert": 2, "active": 1}
+      ],
+      "extras": [
+        {"value1": "액세서리", "value2": "하드 케이스", "price": 15000, "stock": 12, "stock_alert": 3, "active": 1},
+        {"value1": "액세서리", "value2": "오디오 케이블", "price": 9000, "stock": 18, "stock_alert": 3, "active": 1}
+      ],
       "image": {
         "source_url": "https://live.staticflickr.com/65535/52459692877_015fdf1c3a_b.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/15738182-16d4-4253-a94d-e8d8ecacd063/thumb/",
@@ -499,6 +545,17 @@
       "price": 25000,
       "list_price": 30000,
       "stock": 25,
+      "option_groups": ["크기", "도우"],
+      "options": [
+        {"value1": "2인", "value2": "씬", "price": 0, "stock": 8, "stock_alert": 2, "active": 1},
+        {"value1": "2인", "value2": "팬", "price": 2000, "stock": 7, "stock_alert": 2, "active": 1},
+        {"value1": "4인", "value2": "씬", "price": 12000, "stock": 6, "stock_alert": 2, "active": 1},
+        {"value1": "4인", "value2": "팬", "price": 15000, "stock": 5, "stock_alert": 2, "active": 1}
+      ],
+      "extras": [
+        {"value1": "토핑", "value2": "모차렐라 치즈", "price": 3500, "stock": 20, "stock_alert": 4, "active": 1},
+        {"value1": "토핑", "value2": "올리브·할라피뇨", "price": 2500, "stock": 20, "stock_alert": 4, "active": 1}
+      ],
       "image": {
         "source_url": "https://pd.w.org/2026/01/6076960848665f103.89636104-2048x1536.jpg",
         "thumbnail_url": "https://api.openverse.org/v1/images/80749564-f117-4db8-8186-acd39687b41c/thumb/",

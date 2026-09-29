@@ -73,6 +73,28 @@ function downloadDemoImage(array $product, string $path): void
     imagedestroy($source);
 }
 
+/** Keep option comparison independent of database ids and timestamps. */
+function demoOptionSnapshot(array $loaded): array
+{
+    $rows = static function (array $items): array {
+        return array_map(static fn (array $row): array => [
+            'value1' => (string) ($row['value1'] ?? ''),
+            'value2' => (string) ($row['value2'] ?? ''),
+            'value3' => (string) ($row['value3'] ?? ''),
+            'price' => (int) ($row['price'] ?? 0),
+            'stock' => (int) ($row['stock'] ?? 0),
+            'stock_alert' => (int) ($row['stock_alert'] ?? 0),
+            'active' => (int) ($row['active'] ?? 0),
+        ], $items);
+    };
+    return [
+        'select_groups' => array_values($loaded['select_groups'] ?? []),
+        'select' => $rows($loaded['select'] ?? []),
+        'extra_groups' => array_values($loaded['extra_groups'] ?? []),
+        'extra' => $rows($loaded['extra'] ?? []),
+    ];
+}
+
 foreach ($catalog['products'] as $product) {
     downloadDemoImage($product, $imageDir . '/' . $product['code'] . '.jpg');
 }
@@ -100,6 +122,26 @@ foreach ($catalog['products'] as $index => $product) {
         'summary' => '<p>' . htmlspecialchars($catalog['notice'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>',
         'description' => '<p>' . htmlspecialchars($product['name'] . ' — ' . $catalog['notice'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'], [$file]);
     $created++;
+}
+
+$optionProducts = 0;
+$optionUpdates = 0;
+foreach ($catalog['products'] as $product) {
+    $groups = is_array($product['option_groups'] ?? null) ? array_values($product['option_groups']) : [];
+    $options = is_array($product['options'] ?? null) ? $product['options'] : [];
+    $extras = is_array($product['extras'] ?? null) ? $product['extras'] : [];
+    if ($groups === [] && $options === [] && $extras === []) continue;
+    $stored = $shop->products->byCode($product['code']);
+    if ($stored === null) throw new RuntimeException($product['code'] . ' 옵션을 적용할 상품을 찾지 못했습니다.');
+    $normalized = $shop->options->validate((int) $stored['price'], $groups, $options, $extras);
+    $optionProducts++;
+    if (demoOptionSnapshot($stored['options']) === demoOptionSnapshot($normalized)) continue;
+    $shop->store->transaction(function () use ($shop, $stored, $normalized): void {
+        $shop->options->replace((int) $stored['id'], $normalized, 'demo-seed');
+        $shop->store->execute('UPDATE ' . $shop->store->table('yc_products')
+            . ' SET version = version + 1, updated_at = ? WHERE id = ?', [time(), (int) $stored['id']]);
+    });
+    $optionUpdates++;
 }
 
 $shop->settings->setPaymentEnvironment('test');
@@ -130,5 +172,6 @@ if ($member === null) {
     chmod($credentialFile, 0600);
 }
 
-echo '분류 ' . count($categoryIds) . '개, 신규 상품 ' . $created . '개; 이니시스 테스트 카드 결제 설정 완료.' . PHP_EOL;
+echo '분류 ' . count($categoryIds) . '개, 신규 상품 ' . $created . '개, 옵션 상품 ' . $optionProducts
+    . '개(갱신 ' . $optionUpdates . '개); 이니시스 테스트 카드 결제 설정 완료.' . PHP_EOL;
 echo '데모 회원 정보: ' . $credentialFile . PHP_EOL;
