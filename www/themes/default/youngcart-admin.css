@@ -200,10 +200,23 @@
 .yc-admin-page .yc-option-group{display:grid;grid-template-columns:4.5rem minmax(0,16rem) minmax(0,1fr);gap:.6rem;align-items:center}
 .yc-admin-page .yc-option-label{font-size:13px;font-weight:700}
 .yc-admin-page .yc-edit-form :is(.label,.yc-checks){font-size:13px;align-items:center}
-.yc-admin-page .yc-shop-settings-form label.label:has(>input:is([type="checkbox"],[type="radio"])){width:max-content;max-width:100%;justify-self:start}
+.yc-admin-page .yc-shop-settings-form label.label:has(>input:is([type="checkbox"],[type="radio"])){width:max-content;max-width:100%;justify-self:start;gap:.6rem;color:var(--yc-ink);font-size:14px;font-weight:600;line-height:1.5}
 .yc-admin-page .yc-shop-settings-form .yc-fields>label.label:has(>input:is([type="checkbox"],[type="radio"])){align-self:start}
-.yc-admin-page .yc-payment-mode-options{display:flex;flex-wrap:wrap;gap:.4rem 1.25rem}
+.yc-admin-page .yc-sir-services-banner{position:relative;isolation:isolate;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:1.25rem;min-height:132px;margin:0 0 1.25rem;padding:1.5rem 1.75rem;overflow:hidden;border:1px solid #ffffff29;border-radius:var(--yc-admin-radius);background:linear-gradient(120deg,#17243d 0%,#294b70 58%,#177578 100%);color:#fff;text-decoration:none;box-shadow:0 8px 24px #1020331f}
+.yc-admin-page .yc-sir-services-banner::before,.yc-admin-page .yc-sir-services-banner::after{position:absolute;z-index:-1;width:13rem;height:13rem;border-radius:50%;background:#ffffff0d;content:"";pointer-events:none}
+.yc-admin-page .yc-sir-services-banner::before{right:11%;top:-9.5rem}
+.yc-admin-page .yc-sir-services-banner::after{right:-4rem;bottom:-10rem;width:17rem;height:17rem}
+.yc-admin-page .yc-sir-services-banner:hover{color:#fff;background:linear-gradient(120deg,#1b2d4c 0%,#315981 58%,#188287 100%)}
+.yc-admin-page .yc-sir-services-mark{display:grid;place-items:center;width:52px;height:52px;border:1px solid #ffffff42;border-radius:14px;background:#ffffff17;box-shadow:inset 0 1px 0 #ffffff24}
+.yc-admin-page .yc-sir-services-copy{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:.25rem}
+.yc-admin-page .yc-sir-services-copy small{padding:.18rem .5rem;border-radius:999px;background:#ffffff18;color:#d9fbff;font-size:11.5px;font-weight:750;letter-spacing:.03em}
+.yc-admin-page .yc-sir-services-copy strong{font-size:21px;line-height:1.4;letter-spacing:-.035em}
+.yc-admin-page .yc-sir-services-copy>span{color:#e7f1f5;font-size:13.5px;line-height:1.6}
+.yc-admin-page .yc-sir-services-action{display:inline-flex;align-items:center;gap:.4rem;padding:.65rem .85rem;border:1px solid #ffffff38;border-radius:8px;background:#ffffff14;font-size:13px;font-weight:700;white-space:nowrap}
+.yc-admin-page .yc-sir-services-banner:hover .yc-sir-services-action{background:#ffffff22}
+.yc-admin-page .yc-payment-mode-options{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;margin:.75rem 0 1.25rem}
 .yc-admin-page .yc-payment-mode-options>.label{width:max-content;max-width:100%;cursor:pointer}
+.yc-admin-page .yc-payment-bank-fields{padding-top:.25rem}
 /* Keep numeric inputs and copy buttons together; checkboxes retain their own size. */
 .yc-admin-page .yc-option-input-group{display:inline-flex;align-items:center;flex-wrap:nowrap;gap:.4rem;white-space:nowrap}
 .yc-admin-page .yc-option-input-group>.input{flex:0 0 6.5rem;width:6.5rem}
@@ -283,6 +296,9 @@
   .yc-admin-page .yc-workflow a{padding:1rem}
 }
 @media(max-width:640px){
+  .yc-admin-page .yc-sir-services-banner{grid-template-columns:auto minmax(0,1fr);gap:.9rem 1rem;min-height:0;padding:1.25rem}
+  .yc-admin-page .yc-sir-services-action{grid-column:2;justify-self:start}
+  .yc-admin-page .yc-sir-services-copy strong{font-size:18px}
   .yc-admin-page .yc-edit-form .yc-settings-block .yc-kcp-fields{grid-template-columns:minmax(0,1fr)}
   .yc-admin-page .yc-edit-form .yc-kcp-fields>.yc-field-wide{grid-column:auto}
   .yc-admin-page .yc-option-group{grid-template-columns:1fr}

@@ -44,6 +44,11 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </fieldset>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 카드 결제와 무통장입금은 아래 결제 항목에서 설정합니다.</span></label>
   </div></section>
+  <a class="yc-sir-services-banner" href="https://sir.kr/services" target="_blank" rel="noopener noreferrer" aria-label="SIR 부가서비스 새 창에서 보기">
+    <span class="yc-sir-services-mark" aria-hidden="true"><?= $this->icon('shield', 28) ?></span>
+    <span class="yc-sir-services-copy"><small>SIR 부가서비스</small><strong>쇼핑몰 운영에 필요한 서비스를 한곳에서</strong><span>전자결제 · 본인인증 · 알림·메시징 서비스를 확인하고 신청하세요.</span></span>
+    <span class="yc-sir-services-action">부가서비스 보기 <?= $this->icon('external', 15) ?></span>
+  </a>
   <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">온라인 PG 결제는 에스크로 배송 절차가 필요 없는 신용카드만 사용합니다. 계좌이체·가상계좌·휴대폰 결제는 제공하지 않습니다. 무통장입금은 PG를 거치지 않고 아래 계좌를 안내하며 관리자가 입금을 확인합니다.</p>
     <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider"><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">새 주문에 적용합니다. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
@@ -134,11 +139,11 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
       <?php endif ?>
     </div></div>
     <?php endforeach; endforeach ?>
-    <h3 class="yc-settings-subtitle">온라인 결제 수단</h3><div class="yc-fields">
+    <h3 class="yc-settings-subtitle">온라인 결제 수단</h3><div class="yc-payment-mode-options">
       <label class="label"><input type="hidden" name="payment_method_card" value="0"><input class="checkbox checkbox-sm" type="checkbox" name="payment_method_card" value="1"<?= ($values['payment_method_card'] ?? '1') === '1' ? ' checked' : '' ?>> 신용카드</label>
+      <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="payment_manual_enabled" value="1"<?= ($values['payment_manual_enabled'] ?? '0') === '1' ? ' checked' : '' ?>> 무통장입금 사용</label>
     </div>
-    <label class="label"><input class="checkbox checkbox-sm" type="checkbox" name="payment_manual_enabled" value="1"<?= ($values['payment_manual_enabled'] ?? '0') === '1' ? ' checked' : '' ?>> 무통장입금 사용</label>
-    <div class="yc-fields">
+    <div class="yc-fields yc-payment-bank-fields">
       <?php foreach (['bank' => '은행', 'account' => '계좌번호', 'holder' => '예금주'] as $key => $label): $name = 'payment_manual_' . $key; ?>
       <fieldset class="fieldset<?= isset($errors[$name]) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend"><label for="yc-setting-<?= $name ?>"><?= $label ?></label></legend>
         <input class="input input-bordered input-sm" type="text" id="yc-setting-<?= $name ?>" name="<?= $name ?>" maxlength="50" value="<?= $this->e((string) ($values[$name] ?? '')) ?>">
