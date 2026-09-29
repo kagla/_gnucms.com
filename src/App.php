@@ -452,7 +452,8 @@ final class App
                 $this->mailer(),
                 (string) $this->config('app.url', GNUCMS_URL),
                 $this->cmsService(),
-                $this->consents()
+                $this->consents(),
+                $this->mailSettingsService()->enabled()
             );
             $this->accountService->setPasswordThrottle($this->passwordThrottle());
             // 발송기는 new 가 끝난 **뒤에** 끼운다. 이 게터는 그 대입이 끝난 자리에서만
@@ -589,6 +590,17 @@ final class App
         return $this->mailSettingsService;
     }
 
+    /** 저장 직후에도 이 요청 안에서 새 메일 방식과 인증 정책을 다시 조립한다. */
+    public function refreshMailSettings(): void
+    {
+        $this->mailer = null;
+        $this->notifySettings = null;
+        $this->notifier = null;
+        $this->accountService = null;
+        $this->socialAuthService = null;
+        $this->linkingService = null;
+    }
+
     /**
      * 테스트에서 알리고 전송기를 가짜로 바꾼다. 메일의 setMailer() 와 같은 이유다 —
      * 화면을 지나는 시험이 실제 알리고 서버를 부르면 안 된다. 발송을 막는 문(채널
@@ -677,7 +689,8 @@ final class App
         if ($this->notifySettings === null) {
             $this->notifySettings = new NotifySettings(
                 new NotifySettingsRepository($this->db()),
-                $this->aligo()->templates
+                $this->aligo()->templates,
+                fn (): bool => $this->mailSettingsService()->enabled()
             );
         }
 
@@ -700,7 +713,8 @@ final class App
         if ($this->notifier === null) {
             $settings = $this->notifySettings();
             $this->notifier = new Notifier($settings, [
-                new MailChannel($this->mailer()),
+                new MailChannel($this->mailer(),
+                    fn (): bool => $this->mailSettingsService()->enabled()),
                 new AlimtalkChannel($this->aligo(), $settings),
                 new SmsChannel($this->aligo(), $settings),
                 new InboxChannel(fn (): NotificationService => $this->notificationService()),
@@ -719,7 +733,14 @@ final class App
                 'test_email' => '테스트 메일을 받을 올바른 이메일 주소를 입력해 주세요.',
             ]);
         }
-        $settings = $this->mailSettingsService()->runtime();
+        $mailSettings = $this->mailSettingsService();
+        $mode = $mailSettings->mode();
+        if ($mode === MailSettingsService::MODE_DISABLED) {
+            throw \GnuCms\Error\DomainError::validation([
+                'test_email' => '이메일 미사용 상태에서는 테스트 메일을 보낼 수 없습니다.',
+            ]);
+        }
+        $settings = $mailSettings->runtime();
         $siteName = (string) $this->cmsService()->settings()['site_name'];
         $this->mailer()->send(
             $to,
@@ -728,7 +749,7 @@ final class App
                 . "으로 보낸 테스트 메일입니다.\n\n이 메일이 도착했다면 {$siteName}의 메일 발송 기능이 작동하고 있습니다."
         );
 
-        return $settings === null ? 'native' : 'smtp';
+        return $mode;
     }
 
     public function adminService(): AdminService

@@ -141,10 +141,12 @@ final class AuthController
         } elseif ($avatarFile !== null) {
             $this->app->avatars()->delete($avatarFile);
         }
-        if ($user['newly_created'] && $user['is_admin'] && $user['email_verified']) {
+        if ($user['newly_created'] && $user['email_verified']) {
             $this->recordLogin($request, (int) $user['id'], (string) $user['email'], 'success');
             $this->storeSession($user);
-            return $this->redirectTo($request, $response, 'admin.index');
+            return $user['is_admin']
+                ? $this->redirectTo($request, $response, 'admin.index')
+                : $this->homeRedirect($request, $response);
         }
         return View::fromRequest($request)->render($response, 'auth/check_email',
             ['deliverable' => $this->app->accountService()

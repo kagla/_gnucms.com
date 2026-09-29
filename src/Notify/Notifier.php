@@ -118,7 +118,7 @@ final class Notifier
     private const BUDGET_SECONDS = 6.0;
 
     /**
-     * 예산과 무관하게 시작할 채널. 메일은 항상 보내야 하고, 알림함은 같은 DB 에
+     * 예산과 무관하게 시작할 채널. 사용 중인 메일은 항상 보내야 하고, 알림함은 같은 DB 에
      * 한 줄 적는 일이므로 바깥 발송 시간 상한 때문에 버리지 않는다.
      *
      * 걸린 시간은 그래도 함께 센다($spent) — 지나간 시간은 어느 채널이 썼든 지나갔다.
@@ -348,6 +348,9 @@ final class Notifier
     private function recordRevoked(string $event): void
     {
         $stored = $this->settings->storedChannelsFor($event);
+        if (!$this->settings->mailEnabled()) {
+            $stored = array_diff($stored, ['mail']);
+        }
         if ($stored === []) {
             return;
         }

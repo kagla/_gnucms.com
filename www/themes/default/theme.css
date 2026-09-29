@@ -706,10 +706,15 @@ select.select:-webkit-autofill:focus{
 .mail-method-item > div{display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem}
 .mail-method-item strong{font-size:13.5px;font-weight:800;color:var(--color-base-content)}
 .mail-method-item p{color:var(--bc-mid);font-size:12.5px;line-height:1.55}
+.mail-mode-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.mail-mode-options .mail-method-item{display:block;cursor:pointer}
+.mail-mode-options .mail-method-item > span{display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem}
+.mail-mode-options .mail-method-item:has(input:checked){border-color:var(--color-primary);background:color-mix(in srgb,var(--color-primary) 7%,var(--color-base-100))}
 .mail-current-badge{font-weight:800;box-shadow:0 0 0 1px color-mix(in srgb,var(--color-primary) 30%,transparent)}
 .mail-test-controls{display:flex;align-items:stretch;gap:.5rem;width:100%;max-width:38rem}
 .mail-test-controls .input{flex:1;min-width:0}
 .mail-test-controls .btn{flex:none}
+@media(max-width:760px){.mail-mode-options{grid-template-columns:1fr}}
 .aligo-verify-form{margin-top:1rem}
 .messaging-section{margin-top:1.5rem}
 
