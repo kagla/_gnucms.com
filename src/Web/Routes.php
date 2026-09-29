@@ -187,7 +187,7 @@ final class Routes
             ResponseInterface $response
         ) use ($app): ResponseInterface {
             return View::fromRequest($request)->render($response, 'health', [
-                'dialect' => $app->db()->dialect()->name(),
+                'dialect' => 'mysql',
             ]);
         });
 

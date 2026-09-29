@@ -23,6 +23,12 @@ final class ConnectionTest extends TestCase
         );
     }
 
+    public function testRejectsNonMysqlDsn(): void
+    {
+        $this->expectException(DomainError::class);
+        Connection::create(['dsn' => 'unsupported:host=localhost']);
+    }
+
     public function testInsertReturnsGeneratedId(): void
     {
         $id = $this->db->insert('widgets', ['name' => '가', 'qty' => 1]);

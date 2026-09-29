@@ -217,8 +217,7 @@ final class Options
                 $id = Input::id($id);
                 $initial = $this->store->get('yc_options', $id);
                 $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET version = version + 1 WHERE id = ?', [(int) $initial['product_id']]);
-                $old = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_options') . ' WHERE id = ?'
-                    . ($this->store->db->dialect()->name() === 'mysql' ? ' FOR UPDATE' : ''), [$id])
+                $old = $this->store->selectOne('SELECT * FROM ' . $this->store->table('yc_options') . ' WHERE id = ? FOR UPDATE', [$id])
                     ?? throw DomainError::notFound('옵션을 찾을 수 없습니다.');
                 try {
                     $this->store->assertStockUnchanged($input, $old);

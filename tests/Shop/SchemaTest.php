@@ -139,7 +139,7 @@ final class SchemaTest extends ShopTestCase
         $db = $this->app->db();
         // 결제 이전 스키마를 재현하므로 결제 인덱스도 먼저 지운다.
         foreach (['yc_order_pay_by', 'yc_order_payment'] as $index) {
-            $db->execute('DROP INDEX ' . $db->index($index) . ($db->dialect()->name() === 'mysql' ? ' ON ' . $db->table('yc_orders') : ''));
+            $db->execute('DROP INDEX ' . $db->index($index) . ' ON ' . $db->table('yc_orders'));
         }
         foreach (array_keys(Schema::PAYMENT_COLUMNS) as $column) {
             $db->execute('ALTER TABLE ' . $db->table('yc_orders') . ' DROP COLUMN ' . $column);
@@ -174,11 +174,10 @@ final class SchemaTest extends ShopTestCase
         $db = $this->app->db();
         // 28판 모양(code 있음, slug·path 없음)의 표를 손으로 만든다.
         foreach (['yc_cat_parent', 'yc_cat_order', 'yc_cat_path', 'yc_cat_slug', 'yc_cat_legacy_code'] as $index) {
-            $db->execute('DROP INDEX ' . ($db->dialect()->name() === 'mysql' ? $db->index($index) . ' ON ' . $db->table('yc_categories') : $db->index($index)));
+            $db->execute('DROP INDEX ' . $db->index($index) . ' ON ' . $db->table('yc_categories'));
         }
         $db->execute('DROP TABLE ' . $db->table('yc_categories'));
-        $bin = $db->dialect()->name() === 'mysql' ? ' COLLATE utf8mb4_bin' : '';
-        $db->execute('CREATE TABLE ' . $db->table('yc_categories') . ' (' . strtr('id {AUTO_PK}, code VARCHAR(10)' . $bin . ' NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
+        $db->execute('CREATE TABLE ' . $db->table('yc_categories') . ' (' . strtr('id {AUTO_PK}, code VARCHAR(10) COLLATE utf8mb4_bin NOT NULL UNIQUE, parent_id BIGINT NULL, depth SMALLINT NOT NULL,
             name VARCHAR(100) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, active SMALLINT NOT NULL DEFAULT 1, no_coupon SMALLINT NOT NULL DEFAULT 0,
             head_html {TEXT} NOT NULL, tail_html {TEXT} NOT NULL, list_columns SMALLINT NOT NULL, list_rows SMALLINT NOT NULL, image_width INTEGER NOT NULL,
             image_height INTEGER NOT NULL, extra {TEXT} NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL', $db->dialect()->typeMap()) . ')' . $db->dialect()->tableSuffix());
@@ -217,9 +216,7 @@ final class SchemaTest extends ShopTestCase
         $db = $this->app->db();
         foreach (self::INDEXES as $index => $table) {
             $physical = $db->prefix() . $index;
-            $exists = match ($db->dialect()->name()) {
-                'mysql' => $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]),
-            };
+            $exists = $db->selectOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$db->tableName($table), $physical]);
             self::assertNotNull($exists, $index);
         }
     }

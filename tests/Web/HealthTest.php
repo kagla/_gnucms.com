@@ -16,7 +16,7 @@ final class HealthTest extends WebTestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('text/html', $response->getHeaderLine('Content-Type'));
-        self::assertStringContainsString($app->db()->dialect()->name(), $this->body($response));
+        self::assertStringContainsString('mysql', $this->body($response));
     }
 
     /** @dataProvider connectionProvider */

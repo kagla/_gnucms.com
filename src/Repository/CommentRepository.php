@@ -21,7 +21,7 @@ final class CommentRepository
         'image_key'      => null,
     ];
 
-    /** LIKE 검색의 이스케이프 문자. DB 방언마다 다르게 다루는 백슬래시는 피한다. */
+    /** LIKE 검색의 이스케이프 문자. 백슬래시 대신 명시적인 문자를 쓴다. */
     private const LIKE_ESCAPE = '!';
 
     /** @var Connection */

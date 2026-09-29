@@ -25,19 +25,9 @@ final class DbSetupTest extends TestCase
         @rmdir($this->dir);
     }
 
-    public function testAvailableTypesFollowLoadedDrivers(): void
-    {
-        self::assertSame(['mysql'], array_keys(DbSetup::TYPES));
-        self::assertSame(['mysql'], DbSetup::availableTypes(['pdo', 'pdo_sqlite', 'pdo_mysql', 'pdo_unsupported']));
-        self::assertSame([], DbSetup::availableTypes(['pdo', 'pdo_sqlite']));
-        self::assertSame(['mysql'], DbSetup::availableTypes(['pdo', 'pdo_mysql']));
-        self::assertSame([], DbSetup::availableTypes(['pdo', 'pdo_unsupported']));
-        self::assertSame([], DbSetup::availableTypes(['pdo']));
-    }
-
     public function testMysqlDsnIsAssembled(): void
     {
-        $db = DbSetup::dsnFrom(['type' => 'mysql', 'host' => 'db.local', 'port' => '3307', 'name' => 'site', 'user' => 'u', 'password' => 'p']);
+        $db = DbSetup::dsnFrom(['host' => 'db.local', 'port' => '3307', 'name' => 'site', 'user' => 'u', 'password' => 'p']);
 
         self::assertSame('mysql:host=db.local;port=3307;dbname=site;charset=utf8mb4', $db['dsn']);
         self::assertSame('u', $db['username']);
@@ -46,7 +36,7 @@ final class DbSetupTest extends TestCase
 
     public function testMysqlDsnUsesDefaultPort(): void
     {
-        $db = DbSetup::dsnFrom(['type' => 'mysql', 'host' => 'localhost', 'name' => 'site', 'user' => 'u']);
+        $db = DbSetup::dsnFrom(['host' => 'localhost', 'name' => 'site', 'user' => 'u']);
 
         self::assertSame('mysql:host=localhost;port=3306;dbname=site;charset=utf8mb4', $db['dsn']);
         self::assertSame('', $db['password']);
@@ -55,7 +45,7 @@ final class DbSetupTest extends TestCase
     public function testServerFieldsAreValidated(): void
     {
         try {
-            DbSetup::dsnFrom(['type' => 'mysql', 'host' => 'a;b', 'port' => '70000', 'name' => '', 'user' => '']);
+            DbSetup::dsnFrom(['host' => 'a;b', 'port' => '70000', 'name' => '', 'user' => '']);
             self::fail('422 가 나와야 한다');
         } catch (DomainError $e) {
             self::assertSame(422, $e->status());
@@ -63,15 +53,9 @@ final class DbSetupTest extends TestCase
         }
     }
 
-    public function testUnknownTypeIsRejected(): void
-    {
-        $this->assertValidation(['type' => 'oracle'], 'type');
-        $this->assertValidation(['type' => 'sqlite'], 'type');
-    }
-
     public function testPrefixIsValidatedAndSeparatesSites(): void
     {
-        $base = ['type' => 'mysql', 'host' => 'localhost', 'name' => 'test', 'user' => 'test'];
+        $base = ['host' => 'localhost', 'name' => 'test', 'user' => 'test'];
         $firstConfig = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig('first_');
         $secondConfig = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig('second_');
 

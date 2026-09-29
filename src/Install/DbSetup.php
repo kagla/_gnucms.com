@@ -9,40 +9,16 @@ use GnuCms\Db\Schema;
 use GnuCms\Error\DomainError;
 
 /**
- * 설치 2단계. 종류별 칸을 DSN 으로 조립하고 접속을 시험한다.
+ * 설치 2단계. 입력 칸을 MySQL DSN으로 조립하고 접속을 시험한다.
  * 사람이 DSN 문법을 알 필요가 없게 하는 것이 목적이다.
  */
 final class DbSetup
 {
-    public const TYPES = [
-        'mysql'  => 'MySQL / MariaDB',
-    ];
-
     private const MYSQL_PORT = 3306;
-
-    /**
-     * 이 서버에서 쓸 수 있는 종류. pdo_{종류} 확장이 있어야 한다.
-     *
-     * @param string[]|null $extensions 실제 대신 쓸 확장 목록
-     * @return string[]
-     */
-    public static function availableTypes(?array $extensions = null): array
-    {
-        $loaded = array_map('strtolower', $extensions ?? get_loaded_extensions());
-
-        return array_values(array_filter(
-            array_keys(self::TYPES),
-            static fn (string $type): bool => in_array('pdo_' . $type, $loaded, true)
-        ));
-    }
 
     /** @return array{dsn: string, username: ?string, password: ?string, prefix: string} */
     public static function dsnFrom(array $input): array
     {
-        $type = (string) ($input['type'] ?? '');
-        if (!isset(self::TYPES[$type])) {
-            throw DomainError::validation(['type' => 'DB 종류를 고르세요.']);
-        }
         $prefix = trim((string) ($input['prefix'] ?? ''));
         if ($prefix !== '' && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,28}_$/D', $prefix) !== 1) {
             throw DomainError::validation([
@@ -104,6 +80,6 @@ final class DbSetup
             }
         }
 
-        return ['dialect' => $db->dialect()->name(), 'has_tables' => $hasTables, 'has_admin' => $hasAdmin];
+        return ['dialect' => 'mysql', 'has_tables' => $hasTables, 'has_admin' => $hasAdmin];
     }
 }

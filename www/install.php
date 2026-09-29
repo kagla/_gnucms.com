@@ -140,10 +140,8 @@ if ($step === 1) {
 
 // ---------- 2. 데이터베이스 ----------
 if ($step === 2) {
-    $types = DbSetup::availableTypes();
     $saved = $session->get('db') ?? [];
     $values = array_merge([
-        'type' => (string) ($types[0] ?? ''),
         'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '', 'prefix' => '',
     ], (array) ($saved['input'] ?? []), $post);
     $probe = null;
@@ -164,17 +162,9 @@ if ($step === 2) {
             $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
         }
     }
-    $radios = '';
-    foreach (DbSetup::TYPES as $key => $label) {
-        $on = in_array($key, $types, true);
-        $radios .= '<label class="' . ($on ? '' : 'off') . '"><input type="radio" name="type" value="' . h($key) . '"'
-            . ($values['type'] === $key ? ' checked' : '') . ($on ? '' : ' disabled') . '>' . h($label)
-            . ($on ? '' : '<span class="hint">드라이버 없음</span>') . '</label>';
-    }
     $body = '<p class="intro">MySQL/MariaDB 서버의 접속 정보를 입력하세요.</p>'
         . (isset($errors['_']) ? '<p class="alert">' . h($errors['_']) . '</p>' : '')
-        . '<form method="post"><div class="radios">' . $radios . '</div>' . err($errors, 'type')
-        . '<div id="server">'
+        . '<form method="post"><div id="server">'
         . field('호스트', 'host', $values['host'], $errors)
         . field('포트', 'port', $values['port'], $errors, 'text', '비우면 기본값 (MySQL/MariaDB 3306)', 'inputmode="numeric"')
         . field('DB 이름', 'name', $values['name'], $errors)
@@ -278,7 +268,7 @@ if ($method === 'POST') {
         $errors = $e->details() !== [] ? $e->details() : ['_' => $e->getMessage()];
     }
 }
-$dbLabel = DbSetup::TYPES[(string) ($db['input']['type'] ?? '')] ?? (string) ($db['probe']['dialect'] ?? '');
+$dbLabel = 'MySQL / MariaDB';
 $body = '<p class="intro">아래 내용으로 설치합니다. 표를 만들고, 관리자를 만들고, <code>config/config.php</code> 를 씁니다.</p>';
 foreach ($errors as $message) {
     $body .= '<p class="alert">' . h((string) $message) . '</p>';

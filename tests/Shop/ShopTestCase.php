@@ -37,7 +37,7 @@ abstract class ShopTestCase extends DatabaseTestCase
 
     protected function tearDown(): void
     {
-        if (isset($this->app) && $this->app->db()->dialect()->name() === 'mysql') (new CoreSchema($this->app->db()))->drop();
+        if (isset($this->app)) (new CoreSchema($this->app->db()))->drop();
         if (isset($this->root) && is_dir($this->root)) {
             $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
             foreach ($files as $file) $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());

@@ -149,7 +149,7 @@ final class Installer
         }
 
         return [
-            'dialect'      => $db->dialect()->name(),
+            'dialect'      => 'mysql',
             'admin_email'  => $adminEmail,
             'config_path'  => $this->configPath,
             'self_deleted' => $selfDeleted,

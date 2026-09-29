@@ -66,7 +66,7 @@ final class Categories
                 $newPath = $above . $id . '/';
                 $this->store->update('yc_categories', $id, $row + ['path' => $newPath]);
                 if ($newPath !== $existing['path']) {
-                    // 하위 전체의 path 앞부분을 바꾸고 depth 를 차이만큼 옮긴다. 분류는 많지 않아 행마다 고친다(방언 차이 없음).
+                    // 하위 전체의 path 앞부분을 바꾸고 depth 를 차이만큼 옮긴다. 분류는 많지 않아 행마다 고친다.
                     $delta = (int) $row['depth'] - (int) $existing['depth'];
                     $rows = $this->store->select('SELECT id, path, depth FROM ' . $this->store->table('yc_categories') . ' WHERE path LIKE ? AND id <> ?', [$existing['path'] . '%', $id]);
                     foreach ($rows as $node) {

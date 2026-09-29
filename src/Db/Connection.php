@@ -6,26 +6,25 @@ namespace GnuCms\Db;
 
 use PDO;
 use PDOException;
-use GnuCms\Db\Dialect\DialectInterface;
+use GnuCms\Db\Dialect\MysqlDialect;
 use GnuCms\Error\DomainError;
 use Throwable;
 
 /**
- * PDO 얇은 래퍼. 여기서 쓰는 SQL 은 지원 DB 공통 문법이어야 하며,
- * 방언 차이는 전부 DialectInterface 를 통해서만 표현한다.
+ * MySQL/MariaDB용 PDO 얇은 래퍼.
  */
 final class Connection
 {
     /** @var PDO */
     private $pdo;
 
-    /** @var DialectInterface */
+    /** @var MysqlDialect */
     private $dialect;
 
     /** @var string */
     private $prefix;
 
-    private function __construct(PDO $pdo, DialectInterface $dialect, string $prefix)
+    private function __construct(PDO $pdo, MysqlDialect $dialect, string $prefix)
     {
         $this->pdo = $pdo;
         $this->dialect = $dialect;
@@ -43,7 +42,11 @@ final class Connection
             throw DomainError::internal('db.prefix 는 영문으로 시작하고 영문·숫자·밑줄만 쓰며, 밑줄로 끝나는 30자 이하 문자열이어야 합니다.');
         }
 
-        $dialect = DialectFactory::fromDsn($dsn);
+        $driver = strtolower((string) strstr($dsn, ':', true));
+        if ($driver !== 'mysql') {
+            throw DomainError::internal('MySQL/MariaDB DSN만 사용할 수 있습니다.');
+        }
+        $dialect = new MysqlDialect();
 
         try {
             $pdo = new PDO(
@@ -70,7 +73,7 @@ final class Connection
         return $this->pdo;
     }
 
-    public function dialect(): DialectInterface
+    public function dialect(): MysqlDialect
     {
         return $this->dialect;
     }
