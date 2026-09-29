@@ -214,7 +214,7 @@ final class AdminPageTest extends WebTestCase
             'from_email' => 'owner@gmail.com', 'from_name' => GNUCMS,
         ]);
         self::assertSame(303, $saved->getStatusCode());
-        self::assertSame('/admin/mail?saved=1', $saved->getHeaderLine('Location'));
+        self::assertSame('/admin/mail?saved=1#mail', $saved->getHeaderLine('Location'));
         $savedMail = $this->body($this->get($app, '/admin/mail'));
         self::assertStringNotContainsString('google-app-password', $savedMail);
         self::assertStringContainsString('placeholder="••••••••••••••••"', $savedMail);
@@ -649,9 +649,9 @@ final class AdminPageTest extends WebTestCase
 
         $page = $this->body($this->get($app, '/admin/settings/maintenance'));
         self::assertStringContainsString('업로드 파일 정리', $page);
-        self::assertStringContainsString('삭제 예정 <strong>1개</strong>', $page);
+        self::assertStringContainsString('전체 정리 대상 <strong>1개 파일</strong>', $page);
         self::assertStringContainsString(basename($abandoned['path']), $page);
-        self::assertStringContainsString('정리 대상 1개 삭제', $page);
+        self::assertStringContainsString('전체 정리 대상 1개 삭제', $page);
 
         $cleaned = $this->post($app, '/admin/uploads/gc', ['csrf_token' => $_SESSION['csrf_token']]);
         self::assertSame(303, $cleaned->getStatusCode());
@@ -733,7 +733,7 @@ final class AdminPageTest extends WebTestCase
 
         $savedPage = $this->body($this->get($app, '/admin/settings/social'));
         self::assertStringNotContainsString('google-client-secret', $savedPage);
-        self::assertStringContainsString('placeholder="••••••••••••••••"', $savedPage);
+        self::assertStringContainsString('placeholder="********************"', $savedPage);
         self::assertStringContainsString('data-oauth-secret-toggle', $savedPage);
         self::assertStringContainsString(
             'data-secret-url="/admin/settings/social/google/secret"', $savedPage

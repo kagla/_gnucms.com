@@ -52,14 +52,14 @@ final class UnwiredNotifierTest extends TestCase
     }
 
     /** 기본값이 "채널 없음"인 알림(welcome)은 이 길에서도 나가지 않는다. */
-    public function testSendsNothingForAnEventTheDefaultsLeaveOff(): void
+    public function testSendsWelcomeMailByDefault(): void
     {
         $mailer = new CollectingMailer();
 
         $sent = $this->notifier($mailer, 'Owner\\B')->notify('welcome', $this->to(), $this->vars());
 
-        self::assertFalse($sent);
-        self::assertSame([], $mailer->messages);
+        self::assertTrue($sent);
+        self::assertCount(1, $mailer->messages);
     }
 
     /**
@@ -112,9 +112,7 @@ final class UnwiredNotifierTest extends TestCase
         $notifier = $this->notifier(new CollectingMailer(), 'Owner\\H');
 
         self::assertTrue($notifier->canReach('password_reset', $this->to()));
-        // 기본값이 "채널 없음"인 알림은 이 길로 아무 데도 못 간다 — notify() 가 실제로
-        // 아무것도 보내지 않는 그 알림이다(위 시험). 두 답이 갈리면 화면이 거짓말한다.
-        self::assertFalse($notifier->canReach('welcome', $this->to()));
+        self::assertTrue($notifier->canReach('welcome', $this->to()));
         // 주소가 없으면 메일 채널이 스스로 못 간다고 답한다.
         self::assertFalse($notifier->canReach('password_reset',
             Recipient::forUser(['id' => '1', 'display_name' => '홍길동'])));

@@ -463,7 +463,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringContainsString('href="/shop/c/%EC%9D%98%EB%A5%98" target="_blank"', $edit);
         // "이 분류에 상품 등록"은 상품 등록 폼을 열며 대표 분류를 미리 고른다. 모르는 값은 무시한다.
         self::assertStringContainsString('href="/admin/shop/products/new?category=' . $top['id'] . '"', $edit);
-        self::assertStringContainsString('<option value="' . $top['id'] . '" title="슬러그 의류 · 번호 ' . $top['id'] . '" selected', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => (string) $top['id']])));
+        self::assertMatchesRegularExpression('~<option value="' . $top['id'] . '" title="슬러그 의류 · 번호 ' . $top['id'] . '"[^>]* selected~', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => (string) $top['id']])));
         self::assertStringNotContainsString('" selected>의류</option>', $this->body($this->get($this->app, '/admin/shop/products/new', ['category' => 'zz'])));
         self::assertStringContainsString('href="/shop" target="_blank"', $form);
         self::assertStringContainsString('image_key=' . rawurlencode('categories/' . $top['id']), $edit);
