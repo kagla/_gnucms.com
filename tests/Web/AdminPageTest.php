@@ -11,6 +11,34 @@ use Slim\Psr7\UploadedFile;
 final class AdminPageTest extends WebTestCase
 {
     #[DataProvider('connectionProvider')]
+    public function testGnucmsComAdminExposesReleaseMenusAndMysqlMaintenance(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
+        $adminId = $app->users()->create(
+            'theme-admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '테마관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+
+        $dashboard = $this->body($this->get($app, '/admin'));
+        self::assertStringContainsString('href="/admin/messages/send"', $dashboard);
+        self::assertStringContainsString('href="/admin/shop"', $dashboard);
+
+        $settings = $this->body($this->get($app, '/admin/settings'));
+        self::assertStringContainsString('href="/admin/aligo"', $settings);
+        self::assertStringContainsString('href="/admin/settings/notifications"', $settings);
+        self::assertStringContainsString('href="/admin/settings/payment"', $settings);
+
+        $maintenance = $this->body($this->get($app, '/admin/settings/maintenance'));
+        self::assertStringContainsString('MySQL/MariaDB 구조 갱신은 자동 백업을 만들지 않습니다.', $maintenance);
+        self::assertStringNotContainsString('SQLite', $maintenance);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testGuestCannotOpenAdminPage(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

@@ -12,6 +12,19 @@ use PHPUnit\Framework\Attributes\DataProvider;
 final class AuthPageTest extends WebTestCase
 {
     #[DataProvider('connectionProvider')]
+    public function testGnucmsComRegistrationIncludesTheReleasePhoneField(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig, [], 'gnucmscom');
+        $this->saveSiteSettings($app, ['signup_phone' => 'required']);
+
+        $register = $this->body($this->get($app, '/register'));
+
+        self::assertStringContainsString('name="phone"', $register);
+        self::assertMatchesRegularExpression('/<input[^>]+name="phone"[^>]+required/', $register);
+        self::assertStringContainsString('/themes/default/phone-format.js', $register);
+    }
+
+    #[DataProvider('connectionProvider')]
     public function testLoginAndRegisterPagesRender(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);

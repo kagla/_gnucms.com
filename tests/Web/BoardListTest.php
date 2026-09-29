@@ -102,7 +102,7 @@ final class BoardListTest extends WebTestCase
         $app = $this->makeApp($dbConfig, [], 'gnucmscom');
 
         $body = $this->body($this->get($app, '/'));
-        self::assertStringContainsString('필요한 것만 담은', $body);
+        self::assertStringContainsString('커뮤니티와 쇼핑몰을 함께 운영하는', $body);
         self::assertStringContainsString('README 보기', $body);
     }
 
@@ -112,10 +112,14 @@ final class BoardListTest extends WebTestCase
         $app = $this->makeApp($dbConfig, [], 'gnucmscom');
         $body = $this->body($this->get($app, '/'));
 
-        self::assertStringContainsString('가벼운 오픈소스 CMS', $body);
+        self::assertStringContainsString('MySQL/MariaDB 기반의 게시판', $body);
         self::assertStringContainsString('PHP 8.2+', $body);
-        self::assertStringContainsString('<dd>SQLite · MySQL</dd>', $body);
-        self::assertStringContainsString('"softwareRequirements":"PHP 8.2+, PDO SQLite/MySQL"', $body);
+        self::assertStringContainsString('<dd>MySQL · MariaDB</dd>', $body);
+        self::assertStringContainsString('"softwareRequirements":"PHP 8.2+, PDO MySQL, MySQL or MariaDB"', $body);
+        self::assertStringContainsString('이니시스, NHN KCP, 토스페이먼츠, 나이스페이먼츠', $body);
+        self::assertStringContainsString('피킹·포장 명세, 택배 CSV', $body);
+        self::assertStringContainsString('알리고 알림톡·문자', $body);
+        self::assertStringNotContainsString('SQLite', $body);
         self::assertStringContainsString('https://github.com/kagla/gnucms', $body);
         self::assertStringContainsString('href="https://github.com/kagla/gnucms/releases/latest"', $body);
         self::assertStringContainsString('data-github-release-version>확인 중</strong>', $body);
@@ -142,7 +146,7 @@ final class BoardListTest extends WebTestCase
         self::assertStringContainsString('홈 최신글 6', $body);
         self::assertStringContainsString('홈 최신글 2', $body);
         self::assertStringNotContainsString('홈 최신글 1', $body);
-        self::assertStringContainsString('GNUCMS · 가벼운 PHP CMS', $body);
+        self::assertStringContainsString('GNUCMS · 커뮤니티와 쇼핑몰을 위한 PHP CMS', $body);
     }
 
     /** @dataProvider connectionProvider */

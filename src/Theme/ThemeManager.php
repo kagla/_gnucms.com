@@ -27,12 +27,17 @@ final class ThemeManager
     }
 
     /**
-     * 템플릿 경로. 지금은 선택 테마 하나뿐이다. 나중에 테마끼리 폴백하고 싶으면
-     * 여기에 default 를 뒤에 더하면 PhpView 가 차례로 찾는다.
+     * 선택 테마의 파일을 먼저 찾고, 없는 화면과 조각은 기본 테마에서 찾는다.
+     * 기본 테마 자체를 선택한 때에는 같은 경로를 중복하지 않는다.
      */
     public function templatePaths(): array
     {
-        return [$this->templateRoot . DIRECTORY_SEPARATOR . $this->name];
+        $selected = $this->templateRoot . DIRECTORY_SEPARATOR . $this->name;
+        if ($this->name === self::DEFAULT_THEME) {
+            return [$selected];
+        }
+
+        return [$selected, $this->templateRoot . DIRECTORY_SEPARATOR . self::DEFAULT_THEME];
     }
 
     /**

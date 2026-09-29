@@ -120,7 +120,7 @@ final class PhpView implements ViewInterface
         }
     }
 
-    /** '{이름}.php' 의 실제 경로. 없으면 예외 — 다른 테마로 조용히 폴백하지 않는다. */
+    /** '{이름}.php' 의 실제 경로. 설정된 경로를 순서대로 찾고 없으면 예외를 던진다. */
     public function resolve(string $template): string
     {
         if ($template === '' || strpos($template, '..') !== false || strpos($template, "\0") !== false) {

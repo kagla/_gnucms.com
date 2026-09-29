@@ -27,7 +27,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
 <meta property="og:image" content="https://gnucms.com/og.png">
 <meta property="og:image:width" content="1731">
 <meta property="og:image:height" content="909">
-<meta property="og:image:alt" content="GNUCMS · 가벼운 오픈소스 PHP CMS">
+<meta property="og:image:alt" content="GNUCMS · 커뮤니티와 쇼핑몰을 위한 PHP CMS">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="<?= $this->e($__seo_title) ?>">
 <meta name="twitter:description" content="<?= $this->e($__seo_description) ?>">
@@ -436,6 +436,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
   });
 })();
 </script>
+<script src="<?= $this->asset('phone-format.js') ?>" defer></script>
 <?php $this->start('scripts') ?><?php $this->stop() ?>
 </body>
 </html>

@@ -35,9 +35,12 @@ final class ThemeManagerTest extends TestCase
         rmdir($this->root);
     }
 
-    public function testTemplatePathsPointAtTheSelectedThemeOnly(): void
+    public function testTemplatePathsFallBackToDefaultAfterTheSelectedTheme(): void
     {
-        self::assertSame([$this->root . '/templates/modern'], $this->manager('modern')->templatePaths());
+        self::assertSame([
+            $this->root . '/templates/modern',
+            $this->root . '/templates/default',
+        ], $this->manager('modern')->templatePaths());
         self::assertSame([$this->root . '/templates/default'], $this->manager('default')->templatePaths());
     }
 

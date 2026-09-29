@@ -44,6 +44,15 @@
           </label>
           <?php if (array_key_exists('password_confirmation', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['password_confirmation']) ?></p><?php endif ?>
         </fieldset>
+        <?php if (($site['signup_phone'] ?? 'off') !== 'off'): ?>
+        <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
+          <legend class="fieldset-legend">휴대폰번호<?php if ($site['signup_phone'] !== 'required'): ?> <span class="legend-hint">선택</span><?php endif ?></legend>
+          <label class="input input-bordered input-block">
+            <input type="tel" name="phone" inputmode="numeric" autocomplete="tel" value="<?= $this->e(\GnuCms\Aligo\PhoneNumber::format((string) ($values['phone'] ?? ''))) ?>" placeholder="010-1234-5678"<?php if ($site['signup_phone'] === 'required'): ?> required<?php endif ?>>
+          </label>
+          <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
+        </fieldset>
+        <?php endif ?>
         <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
           <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">선택 · JPG, PNG, WebP · 2MB 이하</span></legend>
           <input class="file-input file-input-bordered input-block" type="file" name="profile_image" accept="image/jpeg,image/png,image/webp">

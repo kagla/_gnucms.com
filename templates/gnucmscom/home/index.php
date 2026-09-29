@@ -1,7 +1,7 @@
 <?php $this->layout('layout') ?>
-<?php $this->start('title') ?>GNUCMS · 가벼운 PHP CMS<?php $this->stop() ?>
-<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상에서 동작하며 SQLite와 MySQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다.<?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상에서 동작하며 SQLite와 MySQL을 지원하는 가벼운 오픈소스 CMS입니다. 게시판, 회원, 댓글, 콘텐츠 관리와 소셜 로그인을 제공합니다."><?php $this->stop() ?>
+<?php $this->start('title') ?>GNUCMS · 커뮤니티와 쇼핑몰을 위한 PHP CMS<?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다."><?php $this->stop() ?>
 <?php $this->start('extra_head') ?>
 <script type="application/ld+json"><?php echo json_encode([
   '@context' => 'https://schema.org',
@@ -9,10 +9,10 @@
   'name' => 'GNUCMS',
   'applicationCategory' => 'ContentManagementSystem',
   'operatingSystem' => 'Web server with PHP 8.2 or later',
-  'description' => '게시판, 회원, 댓글, 콘텐츠 관리 기능을 제공하는 가벼운 오픈소스 PHP CMS',
+  'description' => '게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림 기능을 제공하는 오픈소스 PHP CMS',
   'url' => 'https://gnucms.com/',
   'downloadUrl' => 'https://github.com/kagla/gnucms/archive/refs/heads/main.zip',
-  'softwareRequirements' => 'PHP 8.2+, PDO SQLite/MySQL',
+  'softwareRequirements' => 'PHP 8.2+, PDO MySQL, MySQL or MariaDB',
   'license' => 'https://opensource.org/license/mit',
   'codeRepository' => 'https://github.com/kagla/gnucms',
   'inLanguage' => 'ko-KR',
@@ -60,9 +60,9 @@ $freshAfter = time() - 86400;
           <span class="product-release-dot" aria-hidden="true"></span><span>GitHub 최신</span><strong data-github-release-version>확인 중</strong><?= $this->icon('external', 13) ?>
         </a>
       </div>
-      <h1>필요한 것만 담은 가벼운 PHP CMS</h1>
+      <h1>커뮤니티와 쇼핑몰을 함께 운영하는 PHP CMS</h1>
       <div class="product-hero-summary">
-        <p class="product-lead">일반 웹호스팅에 바로 올려 쓰는 게시판 중심 오픈소스 CMS입니다.</p>
+        <p class="product-lead">MySQL/MariaDB 기반의 게시판, 회원, 쇼핑몰과 결제 기능을 일반 웹호스팅에서 바로 운영합니다.</p>
         <div class="product-actions">
           <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms#readme" target="_blank" rel="noopener">README 보기</a>
           <a class="product-button product-button-secondary" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub 저장소</a>
@@ -174,10 +174,10 @@ $freshAfter = time() - 86400;
     <div class="product-shell product-section-split">
       <div>
         <p class="product-label">ABOUT GNUCMS</p>
-        <h2>작은 사이트부터 커뮤니티까지</h2>
+        <h2>커뮤니티부터 쇼핑몰 운영까지</h2>
       </div>
       <div class="product-rich-copy">
-        <p>게시판, 회원, 댓글, 첨부파일과 콘텐츠 관리를 한 시스템에서 운영합니다. SQLite와 MySQL 중 환경에 맞는 데이터베이스를 선택할 수 있고, 별도의 프런트엔드 빌드 과정이 필요하지 않습니다.</p>
+        <p>게시판, 회원, 콘텐츠와 쇼핑몰을 한 시스템에서 운영합니다. 상품 옵션과 주문, 신용카드 결제, 배송·정산 리포트, 메일·알림톡·문자까지 관리하며 별도의 프런트엔드 빌드 과정이 필요하지 않습니다.</p>
       </div>
     </div>
   </section>
@@ -186,12 +186,15 @@ $freshAfter = time() - 86400;
     <div class="product-shell">
       <div class="product-section-heading">
         <div><p class="product-label">CORE FEATURES</p><h2>운영에 필요한 핵심 기능</h2></div>
-        <p>설치 직후 시작하고 관리 콘솔에서 사이트에 맞게 조정합니다.</p>
+        <p>v0.6.0의 쇼핑몰·결제·메시징 기능까지 관리 콘솔에서 한 번에 운영합니다.</p>
       </div>
       <div class="product-feature-list product-feature-list-compact">
-        <article><span>01</span><h3>유연한 게시판</h3><p>네 가지 목록 형태와 분류, 공지, 비밀글, 게시판별 권한을 설정합니다.</p></article>
-        <article><span>02</span><h3>회원과 소셜 로그인</h3><p>이메일 인증과 Google·Kakao·Naver 로그인을 지원합니다.</p></article>
-        <article><span>03</span><h3>댓글과 운영 도구</h3><p>계층형 댓글, 알림, 첨부파일과 관리 기능을 제공합니다.</p></article>
+        <article><span>01</span><h3>유연한 게시판</h3><p>네 가지 목록 형태와 분류, 공지, 비밀글, 첨부파일, 게시판별 권한을 설정합니다.</p></article>
+        <article><span>02</span><h3>회원과 소셜 로그인</h3><p>이메일 인증과 Google·Kakao·Naver 로그인, 휴대폰번호 수집 정책을 지원합니다.</p></article>
+        <article><span>03</span><h3>내장 쇼핑몰</h3><p>무제한 분류, 선택·추가 옵션, 장바구니, 주문, 후기와 상품문의를 운영합니다.</p></article>
+        <article><span>04</span><h3>신용카드 결제</h3><p>이니시스, NHN KCP, 토스페이먼츠, 나이스페이먼츠 승인·취소 흐름을 연결합니다.</p></article>
+        <article><span>05</span><h3>배송과 정산</h3><p>피킹·포장 명세, 택배 CSV, 운송장 일괄 등록과 매출·PG 정산 리포트를 제공합니다.</p></article>
+        <article><span>06</span><h3>통합 알림</h3><p>메일, 사이트 알림, 알리고 알림톡·문자를 이벤트별로 설정하고 발송 이력을 관리합니다.</p></article>
       </div>
     </div>
   </section>
@@ -204,13 +207,13 @@ $freshAfter = time() - 86400;
       </div>
       <dl class="product-facts">
         <div><dt>Runtime</dt><dd>PHP 8.2 이상</dd></div>
-        <div><dt>Database</dt><dd>SQLite · MySQL</dd></div>
+        <div><dt>Database</dt><dd>MySQL · MariaDB</dd></div>
         <div><dt>Rendering</dt><dd>서버 렌더링 PHP 템플릿</dd></div>
         <div><dt>License</dt><dd>MIT 오픈소스 라이선스</dd></div>
       </dl>
       <div class="product-principles">
         <article><h3>보안을 기본값으로</h3><p>CSRF 보호, 비밀번호 해시, 로그인 시도 제한, HTML 정제와 권한 검사를 기본 흐름에 포함합니다.</p></article>
-        <article><h3>데이터베이스 선택 자유</h3><p>두 데이터베이스에서 동일한 기능을 제공하며, 작은 사이트는 별도 DB 서버 없이 SQLite로 시작할 수 있습니다.</p></article>
+        <article><h3>MySQL 기반의 일관된 운영</h3><p>MySQL과 MariaDB를 지원하며, 설치와 업그레이드가 같은 스키마 흐름을 사용합니다.</p></article>
         <article><h3>직접 소유하는 데이터</h3><p>애플리케이션과 데이터가 자신의 서버에 남습니다. 외부 SaaS에 콘텐츠 운영을 종속시키지 않습니다.</p></article>
       </div>
     </div>
@@ -221,12 +224,12 @@ $freshAfter = time() - 86400;
       <div>
         <p class="product-label">QUICK START</p>
         <h2>설치</h2>
-        <p>GNUCMS 파일을 서버에 올리고 브라우저로 접속하면 서버 점검, 데이터베이스 연결, 사이트 정보와 관리자 생성을 차례로 안내합니다.</p>
+        <p>GNUCMS 파일을 서버에 올리고 브라우저로 접속하면 서버 점검, MySQL/MariaDB 연결, 사이트 정보와 관리자 생성을 차례로 안내합니다.</p>
       </div>
       <ol class="product-install-steps">
         <li><span>1</span><div><strong>파일 업로드</strong><small>배포 파일 전체를 서버에 올립니다.</small></div></li>
         <li><span>2</span><div><strong>웹 루트 지정</strong><small>도메인의 문서 루트를 <code>www/</code>로 지정합니다.</small></div></li>
-        <li><span>3</span><div><strong>브라우저 설치</strong><small>사이트에 접속해 데이터베이스와 첫 관리자를 설정합니다.</small></div></li>
+        <li><span>3</span><div><strong>브라우저 설치</strong><small>사이트에 접속해 MySQL/MariaDB와 첫 관리자를 설정합니다.</small></div></li>
       </ol>
     </div>
   </section>

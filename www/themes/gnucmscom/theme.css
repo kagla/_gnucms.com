@@ -116,7 +116,7 @@
   --color-warning-content:#2a2005;
   --color-error:#fca5a5;
   --color-error-content:#2e0c0c;
-  --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
+  --field-border:color-mix(in srgb,var(--color-base-content) 45%,transparent);
   --field-border-width:var(--border);
 
   --brand-vivid:#d58d70;
@@ -157,7 +157,7 @@
     --color-warning-content:#2a2005;
     --color-error:#fca5a5;
     --color-error-content:#2e0c0c;
-    --field-border:color-mix(in srgb,var(--color-base-content) 18%,transparent);
+    --field-border:color-mix(in srgb,var(--color-base-content) 45%,transparent);
     --field-border-width:var(--border);
     --brand-vivid:#d58d70;
     --brand-deep:#edb59d;
@@ -2445,6 +2445,59 @@ body:not(.admin-page){font-size:15px;line-height:1.68}
 .site-header-cta{font-size:13.5px}
 .drawer-panel .menu li>a,.drawer-panel .menu li>button{font-size:14.5px}
 .drawer-panel .menu-title{font-size:12px}
+
+/* v0.6 관리 화면: 기본 템플릿으로 폴백하는 메시징·결제 화면도 이 테마에서 같은 구조로 표시한다. */
+p.fieldset-label{display:block}
+.toggle-list{display:flex;flex-direction:column;gap:.5rem}
+.channel-switches{display:grid;gap:.5rem}
+.channel-switch{display:flex;align-items:center;gap:.75rem}
+.channel-switch-name{flex:1;min-width:0;font-size:13.5px;font-weight:700}
+.channel-switch form{margin:0}
+.landing{scroll-margin-top:calc(var(--nav-h,0px) + var(--tabs-h,0px) + 1rem)}
+.checkbox,.radio,.file-input{border-color:var(--input-color,var(--field-border))}
+.mail-method-guide,.aligo-verify-form{margin-top:1rem}
+.mail-method-item{padding:1rem;border:var(--border) solid var(--bc-10);border-radius:var(--radius-field);background:var(--color-base-200)}
+.mail-method-item>div{display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem}
+.mail-method-item strong{font-size:13.5px;font-weight:800;color:var(--color-base-content)}
+.mail-method-item p{color:var(--bc-mid);font-size:12.5px;line-height:1.55}
+.mail-current-badge{font-weight:800;box-shadow:0 0 0 1px color-mix(in srgb,var(--color-primary) 30%,transparent)}
+.mail-test-controls{display:flex;align-items:stretch;gap:.5rem;width:100%;max-width:38rem}
+.mail-test-controls .input{flex:1;min-width:0}
+.mail-test-controls .btn{flex:none}
+.messaging-section{margin-top:1.5rem}
+.settings-card .yc-payment-mode-options{display:flex;flex-wrap:wrap;gap:.4rem 1.25rem}
+.settings-card .yc-payment-mode-options>.label{width:max-content;max-width:100%;cursor:pointer}
+.notify-event{margin-top:.75rem;border:var(--border) solid var(--bc-10);border-radius:var(--radius-box);background:var(--color-base-100)}
+.notify-event>summary{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.875rem 1rem;cursor:pointer;list-style:none}
+.notify-event>summary::-webkit-details-marker{display:none}
+.notify-event>summary:hover{background:var(--color-base-200)}
+.notify-event>summary:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+.notify-event[open]>summary{border-bottom:var(--border) solid var(--bc-10)}
+.notify-event-name{margin-right:auto;font-size:14px;font-weight:800;letter-spacing:-.02em}
+.notify-event-action{color:var(--color-primary);font-size:13px;font-weight:700}
+.notify-event>form{padding:0 1rem 1.125rem}
+.notify-settings-modal::backdrop{background:var(--backdrop);backdrop-filter:blur(2px)}
+.notify-settings-modal .modal-box{width:min(44rem,calc(100vw - 2rem));max-width:44rem;max-height:82vh;padding:1.25rem;border:var(--border) solid color-mix(in srgb,var(--color-base-content) 28%,transparent);background:var(--color-base-100);color:var(--color-base-content);box-shadow:var(--shadow-4)}
+.notify-settings-modal-header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.75rem;padding-bottom:.625rem;border-bottom:var(--border) solid var(--bc-20)}
+.notify-settings-modal-header h2{margin:0;color:var(--color-base-content);font-size:1.125rem;font-weight:900}
+.notify-settings-modal-header h2:focus{outline:none}
+.notify-settings-modal [data-notify-modal-body]{color:var(--color-base-content)}
+.notify-settings-modal .form-section{margin-top:.875rem;padding-top:.75rem;border-top-color:var(--bc-20)}
+.notify-settings-modal .form-section:first-of-type{margin-top:0;padding-top:0}
+.notify-settings-modal .toggle-list{gap:0}
+.notify-settings-modal .form-section-title,.notify-settings-modal .fieldset-legend{color:var(--color-base-content);font-weight:800}
+.notify-settings-modal .notify-sms-body-legend{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%}
+.notify-settings-modal .notify-sms-body-legend .btn{margin-left:auto;color:var(--color-primary)}
+.notify-settings-modal .fieldset-label{color:var(--bc-strong);font-size:12px;line-height:1.45}
+.notify-settings-modal .toggle-row{padding:.6rem .125rem;border:0;border-bottom:var(--border) solid var(--bc-10);border-radius:0;background:transparent;color:var(--color-base-content)}
+.notify-settings-modal .toggle-row:hover{background:var(--color-base-200)}
+.notify-settings-modal .textarea,.notify-settings-modal .select{border-color:var(--field-border);background:var(--color-base-100);color:var(--color-base-content)}
+.notify-settings-modal .textarea{min-height:5.5rem}
+.notify-settings-modal .form-actions{margin-top:.875rem;padding-top:.875rem;border-top-color:var(--bc-20)}
+.notify-fixed-channel{display:flex;align-items:center;gap:.4rem;margin-bottom:.375rem;color:var(--bc-strong);font-size:12.5px}
+.notify-varmap{margin-top:.75rem}
+.notify-varmap .toggle-row{justify-content:space-between;gap:.75rem}
+.notify-varmap .select{width:auto;min-width:9rem}
 
 .product-label{font-size:12px;line-height:1.35}
 .product-lead{font-size:17px;line-height:1.8}
