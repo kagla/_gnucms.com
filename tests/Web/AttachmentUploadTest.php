@@ -20,7 +20,7 @@ final class AttachmentUploadTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         if ($settings !== []) {
-            $app->cms()->saveSettings($settings);
+            $this->saveSiteSettings($app, $settings);
         }
         $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
         $app->users()->verifyEmail($id);

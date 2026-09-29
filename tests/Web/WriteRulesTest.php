@@ -13,8 +13,8 @@ final class WriteRulesTest extends WebTestCase
     private function guestBoardApp(array $dbConfig, string $minChars): \GnuCms\App
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1', 'post_min_chars' => $minChars]);
-        $app->boardService()->create($this->adminAcl(), [
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1', 'post_min_chars' => $minChars]);
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);
 
@@ -71,11 +71,11 @@ final class WriteRulesTest extends WebTestCase
     public function testShortCommentIsRejectedWhenCommentMinimumIsSet(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['comment_min_chars' => '5']);
-        $app->boardService()->create($this->adminAcl(), [
+        $this->saveSiteSettings($app, ['comment_min_chars' => '5']);
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '본문입니다']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '본문입니다']);
         $this->get($app, '/posts/' . $post['id']);
 
         $short = $this->post($app, '/posts/' . $post['id'] . '/comments', [
@@ -96,12 +96,12 @@ final class WriteRulesTest extends WebTestCase
     public function testEditorsCarryTheMinimumSoTheyCanWarnBeforeSubmit(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1', 'post_min_chars' => '10', 'comment_min_chars' => '5']);
-        $app->boardService()->create($this->adminAcl(), [
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1', 'post_min_chars' => '10', 'comment_min_chars' => '5']);
+        $app->boardService()->create($this->adminAclFor($app), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest', 'perm_comment' => 'guest',
         ]);
         // 최소 글자수가 10자이므로 씨앗 글도 그만큼 길어야 한다.
-        $post = $app->postService()->create($this->adminAcl(), 'free', ['title' => '글', 'content' => '열 글자가 넘는 본문입니다']);
+        $post = $app->postService()->create($this->adminAclFor($app), 'free', ['title' => '글', 'content' => '열 글자가 넘는 본문입니다']);
 
         // 편집기가 textarea 를 숨겨 브라우저 검사가 못 도므로, 제출 전 알림에 쓸 값을 칸에 실어 보낸다.
         self::assertStringContainsString('data-min-chars="10"', $this->body($this->get($app, '/boards/free/new')));

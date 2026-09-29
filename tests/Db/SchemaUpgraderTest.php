@@ -8,10 +8,10 @@ use GnuCms\Db\Connection;
 use GnuCms\Db\MaintenanceRequired;
 use GnuCms\Db\Schema;
 use GnuCms\Db\SchemaUpgrader;
-use PHPUnit\Framework\TestCase;
+use GnuCms\Tests\Support\DatabaseTestCase;
 use RuntimeException;
 
-final class SchemaUpgraderTest extends TestCase
+final class SchemaUpgraderTest extends DatabaseTestCase
 {
     private string $storage;
     private Connection $db;
@@ -20,8 +20,7 @@ final class SchemaUpgraderTest extends TestCase
     {
         $this->storage = sys_get_temp_dir() . '/' . GNUCMS_ID . '-upgrader-' . bin2hex(random_bytes(4));
         mkdir($this->storage, 0775, true);
-        $this->db = Connection::create(['dsn' => 'sqlite::memory:']);
-        (new Schema($this->db))->create();
+        $this->db =  $this->freshDatabase(self::mysqlConfig());
     }
 
     protected function tearDown(): void
@@ -49,7 +48,7 @@ final class SchemaUpgraderTest extends TestCase
         self::assertDirectoryDoesNotExist($this->storage . '/backups');
     }
 
-    public function testUpgradesWithBackupAndRecordsStamp(): void
+    public function testUpgradesAndRecordsStamp(): void
     {
         $this->setStoredStamp('9.oldhash');
 
@@ -57,31 +56,10 @@ final class SchemaUpgraderTest extends TestCase
 
         $schema = new Schema($this->db);
         self::assertSame($schema->stamp(), $schema->storedStamp());
-        $backups = glob($this->storage . '/backups/*.sqlite') ?: [];
-        self::assertCount(1, $backups);
-        self::assertMatchesRegularExpression('~/board-v9-\d{8}-\d{6}\.sqlite$~', $backups[0]);
-        self::assertSame($backups[0], $this->setting('system.schema_backup'));
+        self::assertSame('', $this->setting('system.schema_backup'));
         self::assertNotNull($this->setting('system.schema_upgraded_at'));
-        // 백업은 열 수 있는 SQLite 파일이고 표가 들어 있다.
-        $copy = Connection::create(['dsn' => 'sqlite:' . $backups[0]]);
-        self::assertTrue((new Schema($copy))->exists());
+        self::assertFalse($this->upgrader()->status()['can_backup']);
         self::assertFileDoesNotExist($this->storage . '/upgrade-failed.json');
-    }
-
-    public function testKeepsOnlyFiveBackups(): void
-    {
-        mkdir($this->storage . '/backups', 0775, true);
-        for ($i = 1; $i <= 5; $i++) {
-            touch($this->storage . '/backups/board-v1-20260101-00000' . $i . '.sqlite');
-        }
-        $this->setStoredStamp('9.oldhash');
-
-        $this->upgrader()->run();
-
-        $names = array_map('basename', glob($this->storage . '/backups/*.sqlite') ?: []);
-        self::assertCount(5, $names);
-        self::assertNotContains('board-v1-20260101-000001.sqlite', $names);
-        self::assertContains('board-v1-20260101-000005.sqlite', $names);
     }
 
     public function testFailureWritesMarkerAndThrows(): void
@@ -98,8 +76,7 @@ final class SchemaUpgraderTest extends TestCase
             self::fail('MaintenanceRequired 가 나와야 한다');
         } catch (MaintenanceRequired $e) {
             self::assertSame(MaintenanceRequired::FAILED, $e->kind());
-            self::assertNotNull($e->backup());
-            self::assertFileExists((string) $e->backup());
+            self::assertNull($e->backup());
         }
 
         self::assertSame('9.oldhash', (new Schema($this->db))->storedStamp());
@@ -112,7 +89,7 @@ final class SchemaUpgraderTest extends TestCase
     public function testRecentFailureSkipsRetry(): void
     {
         $this->setStoredStamp('9.oldhash');
-        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time(), 'message' => 'x', 'backup' => '/tmp/b.sqlite']));
+        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time(), 'message' => 'x', 'backup' => '/tmp/previous-backup.sql']));
         $calls = 0;
 
         try {
@@ -120,7 +97,7 @@ final class SchemaUpgraderTest extends TestCase
             self::fail('MaintenanceRequired 가 나와야 한다');
         } catch (MaintenanceRequired $e) {
             self::assertSame(MaintenanceRequired::FAILED, $e->kind());
-            self::assertSame('/tmp/b.sqlite', $e->backup());
+            self::assertSame('/tmp/previous-backup.sql', $e->backup());
         }
         self::assertSame(0, $calls);
     }
@@ -156,69 +133,6 @@ final class SchemaUpgraderTest extends TestCase
         self::assertSame(0, $calls);
     }
 
-    public function testRetryReusesExistingBackup(): void
-    {
-        $this->setStoredStamp('9.oldhash');
-        mkdir($this->storage . '/backups', 0775, true);
-        $existing = $this->storage . '/backups/board-v9-20260101-000000.sqlite';
-        touch($existing);
-        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing, 'stamp' => '9.oldhash']));
-
-        try {
-            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
-            self::fail('MaintenanceRequired 가 나와야 한다');
-        } catch (MaintenanceRequired $e) {
-            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
-            self::assertSame($existing, $e->backup());
-        }
-
-        $files = glob($this->storage . '/backups/*.sqlite') ?: [];
-        self::assertCount(1, $files);
-        self::assertSame($existing, $files[0]);
-    }
-
-    public function testRetryIgnoresBackupTakenAtAnotherStamp(): void
-    {
-        $this->setStoredStamp('9.oldhash');
-        mkdir($this->storage . '/backups', 0775, true);
-        $existing = $this->storage . '/backups/board-v8-20260101-000000.sqlite';
-        touch($existing);
-        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $existing, 'stamp' => '8.older']));
-
-        try {
-            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
-            self::fail('MaintenanceRequired 가 나와야 한다');
-        } catch (MaintenanceRequired $e) {
-            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
-            self::assertNotNull($e->backup());
-            self::assertNotSame($existing, $e->backup());
-            self::assertMatchesRegularExpression('~/board-v9-\d{8}-\d{6}\.sqlite$~', (string) $e->backup());
-        }
-
-        $files = glob($this->storage . '/backups/*.sqlite') ?: [];
-        self::assertCount(2, $files);
-    }
-
-    public function testRetryTakesNewBackupWhenMarkerBackupIsGone(): void
-    {
-        $this->setStoredStamp('9.oldhash');
-        $gone = $this->storage . '/backups/board-v9-20260101-000000.sqlite';
-        file_put_contents($this->storage . '/upgrade-failed.json', json_encode(['at' => time() - 61, 'message' => 'x', 'backup' => $gone]));
-
-        try {
-            $this->upgrader(static function (): void { throw new RuntimeException('boom again'); })->run();
-            self::fail('MaintenanceRequired 가 나와야 한다');
-        } catch (MaintenanceRequired $e) {
-            self::assertSame(MaintenanceRequired::FAILED, $e->kind());
-            self::assertNotNull($e->backup());
-            self::assertNotSame($gone, $e->backup());
-        }
-
-        $files = glob($this->storage . '/backups/board-v9-*.sqlite') ?: [];
-        self::assertCount(1, $files);
-        self::assertFileExists($files[0]);
-    }
-
     public function testUnwritableStorageIsReportedAsFailure(): void
     {
         if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
@@ -238,50 +152,6 @@ final class SchemaUpgraderTest extends TestCase
         }
 
         self::assertStringContainsString('잠금 파일', implode("\n", $lines));
-    }
-
-    public function testStatusListsBackupsNewestFirst(): void
-    {
-        mkdir($this->storage . '/backups', 0775, true);
-        touch($this->storage . '/backups/board-v8-20260101-000000.sqlite');
-        touch($this->storage . '/backups/board-v9-20260201-000000.sqlite');
-
-        $status = $this->upgrader()->status();
-
-        self::assertSame(Schema::VERSION, $status['version']);
-        self::assertSame((new Schema($this->db))->stamp(), $status['stamp']);
-        self::assertTrue($status['can_backup']);
-        self::assertSame(5, $status['keep']);
-        self::assertNull($status['upgraded_at']);
-        self::assertSame(
-            ['board-v9-20260201-000000.sqlite', 'board-v8-20260101-000000.sqlite'],
-            array_column($status['backups'], 'name')
-        );
-    }
-
-    public function testDeletesAutomaticBackupAndClearsLastBackupReference(): void
-    {
-        mkdir($this->storage . '/backups', 0775, true);
-        $name = 'board-v9-20260201-000000.sqlite';
-        $path = $this->storage . '/backups/' . $name;
-        file_put_contents($path, 'sqlite backup');
-        $this->db->execute(
-            'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
-            ['system.schema_backup', $path, '2026-09-04 00:00:00']
-        );
-
-        $deleted = $this->upgrader()->deleteBackup($name);
-
-        self::assertSame($name, $deleted['deleted']);
-        self::assertFileDoesNotExist($path);
-        self::assertNull($this->upgrader()->status()['backup']);
-    }
-
-    public function testAutomaticBackupDeleteRejectsPaths(): void
-    {
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('자동 DB 백업 파일 이름이 올바르지 않습니다');
-        $this->upgrader()->deleteBackup('../board-v9-20260201-000000.sqlite');
     }
 
     private function upgrader(?callable $migrate = null, ?callable $log = null): SchemaUpgrader

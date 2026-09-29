@@ -23,14 +23,18 @@ return [
         'kakao' => ['client_id' => '', 'client_secret' => ''],
     ],
 
-    // DSN 은 sqlite: / mysql: 중 하나로 시작한다.
+    // MySQL/MariaDB만 지원한다. 미리 만든 DB와 전용 계정을 지정한다.
     'db' => [
-        'dsn'      => 'sqlite:' . __DIR__ . '/../storage/board.sqlite',
+        'dsn'      => 'mysql:host=localhost;port=3306;dbname=gnucms;charset=utf8mb4',
         'username' => null,
         'password' => null,
         // 한 DB 에 여러 사이트를 둘 때만 사용. 예: site1_ (설치 후에는 바꾸지 않는다)
         'prefix'   => '',
     ],
+
+    // 여러 서버가 같은 결제 설정 DB를 쓸 때 각 서버의 요청 IPv4를 개별 지정한다.
+    // 비워 두면 관리자 결제 설정의 기본 요청 서버 IPv4를 사용한다.
+    'payment' => ['inicis' => ['client_ip' => '']],
 
     // 세션·메일·설정 암호화에 쓰는 시크릿. 32바이트 이상 임의 문자열. 설치기가 만들어 준다.
     'auth' => [

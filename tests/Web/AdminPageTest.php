@@ -162,7 +162,7 @@ final class AdminPageTest extends WebTestCase
     public function testAdminEmailLogsInAndRendersDashboard(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['theme' => 'modern']);
+        $this->saveSiteSettings($app, ['theme' => 'modern']);
         $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
         $app->users()->verifyEmail($id);
 
@@ -347,6 +347,7 @@ final class AdminPageTest extends WebTestCase
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
+        $app->users()->verifyEmail($adminId);
         $memberId = $app->users()->create(
             'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '일반회원'
         );
@@ -535,7 +536,7 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('설치 이후 없음', $body);
     }
 
-    /** 옮긴 시각·백업 목록·비SQLite 안내, 세 갈래를 모두 확인한다. */
+    /** 갱신 시각과 수동 백업 안내를 확인한다. 기존 백업 파일은 지우지 않는다. */
     #[DataProvider('connectionProvider')]
     public function testSettingsPageShowsSchemaBackupsAndUpgradedAt(array $dbConfig): void
     {
@@ -568,32 +569,10 @@ final class AdminPageTest extends WebTestCase
             $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
             self::assertStringContainsString('2026-08-30 10:02:03 Asia/Seoul', $body);
-            self::assertStringContainsString('<dt>마지막 백업</dt><dd>board-v9-20260201-000000.sqlite</dd>', $body);
-
-            if ($app->db()->dialect()->name() !== 'sqlite') {
-                self::assertStringContainsString('스키마 갱신 직전 자동 DB 백업은 SQLite에서만', $body);
-                return;
-            }
-
-            self::assertStringContainsString('2026-02-01 09:00:05', $body);
-            self::assertStringContainsString('schema-backups', $body);
-            self::assertStringNotContainsString('설치 이후 없음', $body);
-            $newerPos = strpos($body, 'board-v9-20260201-000000.sqlite');
-            $olderPos = strpos($body, 'board-v8-20260101-000000.sqlite');
-            self::assertIsInt($newerPos);
-            self::assertIsInt($olderPos);
-            self::assertLessThan($olderPos, $newerPos, '최신 백업이 먼저 나와야 한다');
-
-            $deleted = $this->post($app, '/admin/schema-backups/' . basename($older) . '/delete', [
-                'csrf_token' => $_SESSION['csrf_token'],
-            ]);
-            self::assertSame(303, $deleted->getStatusCode(), $this->body($deleted));
-            self::assertStringContainsString('schema_backup_deleted=', $deleted->getHeaderLine('Location'));
-            self::assertFileDoesNotExist($older);
-            $afterDelete = $this->body($this->get($app, '/admin/settings/maintenance', [
-                'schema_backup_deleted' => basename($older),
-            ]));
-            self::assertStringContainsString('자동 DB 백업을 삭제했습니다', $afterDelete);
+            self::assertStringContainsString('배포 전에 아래 전체 백업', $body);
+            self::assertStringNotContainsString('schema-backups', $body);
+            self::assertFileExists($older);
+            self::assertFileExists($newer);
         } finally {
             @unlink($older);
             @unlink($newer);
@@ -876,6 +855,242 @@ final class AdminPageTest extends WebTestCase
         self::assertSame(303, $cleared->getStatusCode());
         self::assertSame('', $app->turnstileSettingsService()->runtime()['secret_key']);
         self::assertFalse($app->turnstile()->isEnabled());
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testAdminSetsAndClearsAMembersPhoneNumber(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        self::assertStringContainsString('name="phone"', $form);
+
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '010-1234-5678',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($memberId)['phone']);
+        self::assertStringContainsString(
+            'value="010-1234-5678"',
+            $this->body($this->get($app, '/admin/members/' . $memberId . '/edit')),
+            '저장된 번호는 하이픈을 넣어 보여줘야 한다'
+        );
+
+        $cleared = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode(), $this->body($cleared));
+        self::assertNull($app->users()->findById($memberId)['phone']);
+    }
+
+    /**
+     * 컨트롤러·템플릿까지 실제로 거치는 HTTP 단 확인. AuthController::register() 가
+     * phone[]=x 를 is_scalar 가드 없이 (string) 캐스팅해 경고를 냈던 것과 같은 결함이
+     * 관리자 회원 수정 화면에서도 날 수 있다 — array_merge($member, $input) 이
+     * $input 의 배열을 그대로 얹기 때문이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testMemberUpdateRedisplaysPhoneSafelyOnValidationFailure(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        // 이메일을 비워 검증을 실패시키면서, 번호는 배열로 보낸다.
+        $response = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => '', 'display_name' => 'member', 'status' => 'active',
+            'phone' => ['x'],
+        ]);
+        self::assertSame(422, $response->getStatusCode());
+        $body = $this->body($response);
+        self::assertStringNotContainsString('value="Array"', $body);
+        self::assertNull($app->users()->findById($memberId)['phone']);
+    }
+
+    /**
+     * signup_phone 은 가입 화면이 무엇을 물을지를 정할 뿐, 관리자가 무엇을 관리할
+     * 수 있는지는 정하지 않는다 — off 인 동안 번호를 지우고 싶은 회원은 관리자에게
+     * 요청할 수밖에 없으므로, 관리자 화면은 정책과 무관하게 늘 입력 가능해야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminCanChangeAMembersPhoneEvenWhenSignupPhoneIsOff(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'off']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
+        self::assertNotEmpty($tag, '휴대폰번호 입력칸이 있어야 한다');
+        self::assertStringNotContainsString('disabled', $tag[0], 'off 여도 관리자 화면의 번호 칸은 늘 입력 가능해야 한다');
+
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '010-1234-5678',
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame('01012345678', $app->users()->findById($memberId)['phone'], 'off 여도 관리자는 번호를 넣을 수 있어야 한다');
+
+        $cleared = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => 'member', 'status' => 'active', 'phone' => '',
+        ]);
+        self::assertSame(303, $cleared->getStatusCode(), $this->body($cleared));
+        self::assertNull($app->users()->findById($memberId)['phone'], 'off 여도 관리자는 번호를 지울 수 있어야 한다');
+    }
+
+    /**
+     * 폼이 저장된 번호로 미리 채워지지 않으면, "손대지 않았다"는 제출이 실제로는
+     * 빈 값을 다시 저장해 번호를 지워 버린다 — off 트랩과 반대 방향의 같은 사고다.
+     * 화면에 실제로 찍힌 값을 그대로 다시 제출해 확인한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminFormPrefillsTheStoredNumberSoAnUntouchedSaveKeepsIt(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $memberId = $app->users()->create(
+            'member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), 'member', false
+        );
+        $app->users()->verifyEmail($memberId);
+        $app->users()->updatePhone($memberId, '01055556666');
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        $form = $this->body($this->get($app, '/admin/members/' . $memberId . '/edit'));
+        preg_match('/name="phone"[\s\S]*?value="([^"]*)"/', $form, $m);
+        self::assertSame('010-5555-6666', $m[1] ?? null, '폼은 저장된 번호를 미리 채워야 한다');
+
+        // 표시 이름만 바꾸고, 폼에 이미 찍혀 있던 번호 값을 그대로 다시 제출한다 — 손대지 않은 셈이다.
+        $saved = $this->post($app, '/admin/members/' . $memberId . '/edit', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'member@example.com',
+            'display_name' => '새이름', 'status' => 'active', 'phone' => $m[1],
+        ]);
+        self::assertSame(303, $saved->getStatusCode(), $this->body($saved));
+        self::assertSame(
+            '01055556666',
+            $app->users()->findById($memberId)['phone'],
+            '번호 칸을 건드리지 않았다면 그대로 남아야 한다'
+        );
+    }
+
+    /**
+     * 회원 목록은 번호를 가린 채 보여준다(전체 번호는 회원 수정 화면에서만 보인다) — 목록은
+     * 훑어보는 화면이고 수정은 의도한 행위이기 때문이다. 하이픈을 넣어 검색해도 저장된
+     * 숫자만 번호와 걸린다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAdminMembersListSearchesByPhoneAndShowsItMasked(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->saveSiteSettings($app, ['signup_phone' => 'optional']);
+        $adminId = $app->users()->create(
+            'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $app->users()->verifyEmail($adminId);
+        $phoneMemberId = $app->users()->create(
+            'phone-member@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '전화회원', false
+        );
+        $app->users()->verifyEmail($phoneMemberId);
+        $app->users()->updatePhone($phoneMemberId, '01012345678');
+        $otherPhoneMemberId = $app->users()->create(
+            'other-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '다른전화회원', false
+        );
+        $app->users()->verifyEmail($otherPhoneMemberId);
+        $app->users()->updatePhone($otherPhoneMemberId, '01099998888');
+        $noPhoneMemberId = $app->users()->create(
+            'no-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '번호없음회원', false
+        );
+        $app->users()->verifyEmail($noPhoneMemberId);
+        // 형식을 맞출 수 없는 값이 저장돼 있을 수 있다(예전 데이터·외부 이관). 가리지
+        // 못한다고 해서 원본을 그대로 보여 주면, 가려 보여 주는 것이 존재 이유인 이
+        // 목록이 열리는 쪽으로 실패한다.
+        $oddPhoneMemberId = $app->users()->create(
+            'odd-phone@example.com', password_hash('member-password-123', PASSWORD_DEFAULT), '이상한번호회원', false
+        );
+        $app->users()->verifyEmail($oddPhoneMemberId);
+        $app->users()->updatePhone($oddPhoneMemberId, '0101234');
+
+        $this->get($app, '/login');
+        $this->post($app, '/login', [
+            'csrf_token' => $_SESSION['csrf_token'], 'email' => 'admin@example.com', 'password' => 'admin-password-123',
+        ]);
+
+        // 목록은 저장된 번호를 가려서 보여준다. 가운데만 가리고, 번호가 없으면 대시로 표시한다.
+        $list = $this->body($this->get($app, '/admin/members'));
+        self::assertStringContainsString('010-****-5678', $list, '목록은 번호를 가려서 보여줘야 한다');
+        self::assertStringNotContainsString('01012345678', $list);
+        self::assertStringNotContainsString('010-1234-5678', $list, '목록은 전체 번호를 그대로 보여주면 안 된다');
+        self::assertStringContainsString('<span class="muted">—</span>', $list, '번호가 없는 회원은 대시로 표시해야 한다');
+        self::assertStringNotContainsString('0101234', $list, '가리지 못하는 값은 아예 보여주지 않아야 한다');
+
+        // 하이픈을 넣어 검색해도 숫자만 뽑아 비교하므로 걸린다.
+        $searched = $this->body($this->get($app, '/admin/members', ['q' => '010-1234-5678']));
+        self::assertStringContainsString('전화회원', $searched);
+        self::assertStringNotContainsString('다른전화회원', $searched);
+        self::assertStringNotContainsString('번호없음회원', $searched);
+
+        // 일부 자릿수만 넣어도 걸린다.
+        $partial = $this->body($this->get($app, '/admin/members', ['q' => '1234']));
+        self::assertStringContainsString('전화회원', $partial);
+        self::assertStringNotContainsString('다른전화회원', $partial);
+
+        // 숫자가 없는 검색어는 이름/이메일만 보고, 번호를 가진 회원을 모두 끌고 오면 안 된다.
+        $byName = $this->body($this->get($app, '/admin/members', ['q' => '없는이름']));
+        self::assertStringContainsString('조건에 맞는 회원이 없습니다', $byName);
+
+        // 검색어가 배열(q[]=x)로 와도 검색창을 안전하게 다시 채워야 한다 — 이 branch가
+        // AuthController::register() 와 관리자 회원 수정에서 두 번 냈던 결함과 같은 자리다.
+        $arrayQuery = $this->get($app, '/admin/members', ['q' => ['x']]);
+        self::assertSame(200, $arrayQuery->getStatusCode());
+        self::assertStringNotContainsString('value="Array"', $this->body($arrayQuery));
     }
 
 }

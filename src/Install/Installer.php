@@ -22,6 +22,7 @@ final class Installer
 {
     private string $configPath;
     private string $storageDir;
+
     /** @var string|null install.php 경로. null 이면 스스로 지우지 않는다 */
     private ?string $installScript;
 

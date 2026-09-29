@@ -166,8 +166,9 @@ PHP);
         self::assertStringContainsString('예약 안내문', $body);
 
         // 이전 설치의 사용 설정이 남아 있어도 제거한 모듈은 실행되지 않는다.
+        // /shop 과 /admin/shop 은 이제 코어 쇼핑몰의 주소라, 모듈 별칭 주소로만 확인한다.
         $state->update(static fn (array $enabled): array => [...$enabled, 'modules/shop']);
-        foreach (['/shop', '/shop/orders', '/admin/shop', '/admin/shop/products', '/modules/shop', '/modules/shop/admin'] as $path) {
+        foreach (['/modules/shop', '/modules/shop/admin'] as $path) {
             self::assertSame(404, $this->get($app, $path)->getStatusCode(), $path);
         }
         foreach (['/', '/account', '/admin/modules', '/plugins/retained/preview'] as $path) {
@@ -176,8 +177,6 @@ PHP);
             $body = $this->body($response);
             self::assertStringNotContainsString('작은 쇼핑몰', $body);
             self::assertStringNotContainsString('쇼핑몰 관리', $body);
-            self::assertStringNotContainsString('href="/shop', $body);
-            self::assertStringNotContainsString('href="/admin/shop', $body);
             self::assertStringNotContainsString('내 주문', $body);
         }
         $response = $this->post($app, '/admin/modules/shop/state', ['enabled' => '0', 'csrf_token' => $_SESSION['csrf_token']]);
@@ -326,26 +325,56 @@ PHP);
     $context->route('GET', '/admin', static fn ($request, $response) => $response, admin: true);
 };
 PHP;
-        $this->package('modules/shop', ['route_prefix' => '/shop', 'public_path' => '/', 'entry_path' => '/admin'], $bootstrap);
+        $this->package('modules/store', ['route_prefix' => '/store', 'public_path' => '/', 'entry_path' => '/admin'], $bootstrap);
         $this->package('modules/public', ['route_prefix' => '/public', 'public_path' => '/'], $bootstrap);
         $app = $this->makeApp($dbConfig);
         $adminId = $app->users()->create('public-links@example.test', '', '관리자', true);
         $this->get($app, '/login');
         $this->sessionUser($adminId);
         $manager = new Manager(new Catalog($this->extensionRoot), new StateStore($app->storageDir() . '/extensions'));
-        $manager->setEnabledMany(['modules/shop' => true, 'modules/public' => true]);
+        $manager->setEnabledMany(['modules/store' => true, 'modules/public' => true]);
         $body = $this->body($this->get($app, '/admin/modules'));
         self::assertSame(2, substr_count($body, 'class="extension-public-entry"'));
-        foreach (['/shop', '/public'] as $url) {
+        foreach (['/store', '/public'] as $url) {
             self::assertStringContainsString('href="' . $url . '">' . $url . '</a>', $body);
             self::assertStringContainsString('class="btn btn-ghost btn-square btn-xs" href="' . $url . '" target="_blank" rel="noopener noreferrer" title="사용자 화면을 새 창으로 열기"', $body);
         }
         self::assertStringNotContainsString('사용자 화면 열기', $body);
-        self::assertStringContainsString('href="/shop/admin"', $body);
-        $manager->setEnabled('modules/shop', false);
+        self::assertStringContainsString('href="/store/admin"', $body);
+        $manager->setEnabled('modules/store', false);
         $body = $this->body($this->get($app, '/admin/modules'));
         self::assertSame(1, substr_count($body, 'class="extension-public-entry"'));
-        self::assertStringNotContainsString('href="/shop"', $body);
+        self::assertStringNotContainsString('href="/store"', $body);
+    }
+
+    /** `/shop` 을 기본 주소로 선언한 모듈은 실행되지 않는다. 코어 쇼핑몰이 그 주소의 주인이다. */
+    #[DataProvider('connectionProvider')]
+    public function testAModuleDeclaringTheShopPrefixDoesNotTakeOver(array $dbConfig): void
+    {
+        $bootstrap = <<<'PHP'
+<?php
+file_put_contents(__DIR__ . '/ran', 'unexpected');
+return static function ($context): void {
+    $context->route('GET', '/', static fn ($request, $response) => $response);
+};
+PHP;
+        $this->package('modules/yc', ['route_prefix' => '/shop', 'public_path' => '/'], $bootstrap);
+        $app = $this->makeApp($dbConfig, [], 'default');
+        $manager = new Manager(new Catalog($this->extensionRoot), new StateStore($app->storageDir() . '/extensions'));
+        $manager->setEnabled('modules/yc', true);
+
+        $shop = $this->get($app, '/shop');
+        self::assertSame(200, $shop->getStatusCode());
+        self::assertStringContainsString('youngcart.css', $this->body($shop));
+        self::assertStringContainsString('data-yc-search-menu', $this->body($shop));
+        self::assertFileDoesNotExist($this->extensionRoot . '/modules/yc/ran');
+
+        $adminId = $app->users()->create('shop-prefix@example.test', '', '관리자', true);
+        $this->get($app, '/login');
+        $this->sessionUser($adminId);
+        $body = $this->body($this->get($app, '/admin/modules'));
+        self::assertStringContainsString('기본 주소가 다른 경로와 겹칩니다: /shop', $body);
+        self::assertStringContainsString('실행 불가', $body);
     }
 
     #[DataProvider('connectionProvider')]

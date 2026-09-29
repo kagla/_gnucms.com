@@ -92,7 +92,7 @@ final class PasswordThrottleWebTest extends WebTestCase
     public function testGuestPostPasswordLocksAfterFiveWrongTries(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), ['board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest']);
         $this->get($app, '/boards/free/new');
         $created = $this->post($app, '/boards/free/new', [

@@ -56,13 +56,6 @@ final class PackageSchema
                 }
             }
             $all = array_values(array_unique(array_merge($tables, $before === null ? [] : self::decodeTables($before['table_names']))));
-            if ($this->db->dialect()->name() === 'sqlite') {
-                $dir = $this->storageDir . '/backups/extensions';
-                if (!is_dir($dir)) mkdir($dir, 0700, true);
-                $backup = $dir . '/' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(6)) . '.sqlite';
-                $this->db->execute("VACUUM INTO '" . str_replace("'", "''", $backup) . "'");
-                chmod($backup, 0600);
-            }
             $encoded = json_encode($all, JSON_THROW_ON_ERROR);
             if ($before === null) {
                 $this->db->execute('INSERT INTO ' . $this->db->table('extension_schemas')
@@ -103,10 +96,7 @@ final class PackageSchema
     public function exists(string $table): bool
     {
         $physical = $this->db->tableName($table);
-        return match ($this->db->dialect()->name()) {
-            'sqlite' => $this->db->selectOne("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [$physical]) !== null,
-            'mysql' => $this->db->selectOne('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$physical]) !== null,
-        };
+        return $this->db->selectOne('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$physical]) !== null;
     }
 
     private static function decodeTables(string $encoded): array

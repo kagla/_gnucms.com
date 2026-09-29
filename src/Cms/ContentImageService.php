@@ -260,6 +260,63 @@ final class ContentImageService
         }
     }
 
+    /** 임시 폴더의 사진을 소유자 폴더로 옮긴다(첫 저장). 임시 폴더가 없으면 아무것도 하지 않는다. 본문 주소는 relocatedHtml() 로 바꾼다. */
+    public function move(string $from, string $to): void
+    {
+        $this->assertKey($from);
+        $this->assertKey($to);
+        $source = $this->root . '/' . $from;
+        if (!is_dir($source)) {
+            return;
+        }
+        $target = $this->root . '/' . $to;
+        if (!is_dir($target) && !mkdir($target, 0775, true) && !is_dir($target)) {
+            throw DomainError::internal('이미지 저장 폴더를 만들 수 없습니다.');
+        }
+        foreach (glob($source . '/*') ?: [] as $path) {
+            $file = basename($path);
+            if (!is_file($path) || !$this->isFile($file)) {
+                continue;
+            }
+            if (!rename($path, $target . '/' . $file)) {
+                throw DomainError::internal('이미지를 옮기지 못했습니다.');
+            }
+        }
+        if ((glob($source . '/*') ?: []) === []) {
+            @rmdir($source);
+        }
+    }
+
+    /** 저장된 본문 사진을 다른 소유자 폴더로 복사한다. 원본 내용은 그대로 둔다. */
+    public function copyFolder(string $from, string $to): void
+    {
+        $this->assertKey($from);
+        $this->assertKey($to);
+        $source = $this->root . '/' . $from;
+        if (!is_dir($source)) {
+            return;
+        }
+        $target = $this->root . '/' . $to;
+        if (!is_dir($target) && !mkdir($target, 0775, true) && !is_dir($target)) {
+            throw DomainError::internal('이미지 저장 폴더를 만들 수 없습니다.');
+        }
+        foreach (glob($source . '/*') ?: [] as $path) {
+            $file = basename($path);
+            if (!is_file($path) || !$this->isFile($file)) {
+                continue;
+            }
+            if (!copy($path, $target . '/' . $file)) {
+                throw DomainError::internal('이미지를 복사하지 못했습니다.');
+            }
+        }
+    }
+
+    /** move() 뒤에 본문 안의 사진 주소를 새 폴더로 바꾼다. */
+    public static function relocatedHtml(string $from, string $to, string $html): string
+    {
+        return str_replace('/media/editor/' . $from . '/', '/media/editor/' . $to . '/', $html);
+    }
+
     public function deleteFolder(string $key): void
     {
         $this->assertKey($key);
@@ -289,9 +346,16 @@ final class ContentImageService
         return ['path' => $path, 'mime' => $mime];
     }
 
+    /**
+     * 사진 폴더 키. 두 모양을 받는다.
+     *   - 옛 평평한 키 `{32자리}` — 내용 관리·글·댓글이 쓴다.
+     *   - `종류/식별자` — `categories/10`, `products/123` 처럼 소유 레코드의 id 로 폴더를 구분한다.
+     *     첫 저장 전에는 id 가 없으므로 `tmp/{32자리}` 에 모았다가 저장하면서 move() 로 옮긴다.
+     * 종류는 소문자 20자 이내, 식별자는 양의 정수(19자리 이내) 또는 32자리 키만이라 경로를 벗어날 수 없다.
+     */
     private function assertKey(string $key): void
     {
-        if (preg_match('/^[a-f0-9]{32}$/D', $key) !== 1) {
+        if (preg_match('/^(?:[a-f0-9]{32}|[a-z]{1,20}\/(?:[1-9][0-9]{0,18}|[a-f0-9]{32}))$/D', $key) !== 1) {
             throw DomainError::validation(['upload' => '이미지 저장 정보를 확인할 수 없습니다.']);
         }
     }

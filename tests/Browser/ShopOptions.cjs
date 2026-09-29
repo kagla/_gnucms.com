@@ -1,0 +1,294 @@
+// Render the actual purchase partial and intercept all requests; no running shop or database required.
+// PUPPETEER_MODULE=/path/to/puppeteer-core CHROME_BIN=/path/to/chrome node tests/Browser/ShopOptions.cjs
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {execFileSync} = require('node:child_process');
+const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer-core');
+const root = path.resolve(__dirname, '../..');
+const render = count => execFileSync('php', [path.join(__dirname, 'ShopOptionsFixture.php'), String(count)], {cwd: root, encoding: 'utf8'});
+
+(async () => {
+  const browser = await puppeteer.launch({executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
+  try {
+    const page = await browser.newPage(), posts = [], errors = [];
+    let html = '', failure = null, held = null, holdNext = false;
+    await page.setRequestInterception(true);
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (request.method() === 'POST') {
+        posts.push({path: url.pathname, data: new URLSearchParams(request.postData())});
+        if (request.headers().accept === 'application/json') {
+          if (holdNext) { holdNext = false; held = request; return; }
+          if (failure === 'network') return request.abort('failed');
+          if (failure === 'html') return request.respond({status: 502, contentType: 'text/html', body: 'Bad gateway'});
+          if (failure) return request.respond({status: failure.status || 422, contentType: 'application/json', body: JSON.stringify(failure)});
+          return request.respond({status: 200, contentType: 'application/json', body: JSON.stringify({redirect: posts.at(-1).data.get('action') === 'buy' ? '/cms/shop/checkout?flow=buy' : '/cms/shop/cart?added=1'})});
+        }
+        return request.respond({status: 200, body: 'submitted'});
+      }
+      if (['/cms/shop/cart', '/cms/shop/checkout'].includes(url.pathname)) return request.respond({status: 200, body: 'cart or checkout'});
+      if (url.pathname === '/cms/shop/item') return request.respond({status: 200, contentType: 'text/html', body: html});
+      if (['/vendor/daisyui/daisyui.css', '/themes/default/theme.css', '/themes/default/youngcart.css', '/themes/default/youngcart.js'].includes(url.pathname)) {
+        return request.respond({status: 200, contentType: url.pathname.endsWith('.js') ? 'text/javascript' : 'text/css', body: fs.readFileSync(path.join(root, 'www', url.pathname))});
+      }
+      return request.abort();
+    });
+    const open = async (count = 3) => { html = render(count); await page.goto('https://gnucms.test/cms/shop/item'); };
+    const step = index => '[data-yc-option-step="' + index + '"]';
+    const select = (index, value) => page.select(step(index), value);
+    const value = selector => page.$eval(selector, el => el.value);
+    const visible = selector => page.$eval(selector, el => el.getClientRects().length > 0);
+    const text = selector => page.$eval(selector, el => el.textContent);
+    const disabled = (index, value) => page.$eval(step(index), (el, value) => Array.from(el.options).find(option => option.value === value).disabled, value);
+    const fieldDisabled = index => page.$eval(step(index), el => el.disabled);
+    const line = id => '[data-yc-selected-option="' + id + '"]';
+    const selectionOrder = () => page.$$eval('[data-yc-selected-option]', rows => rows.map(row => Number(row.dataset.ycSelectedOption)));
+    const qty = id => line(id) + ' [data-yc-line-quantity]';
+    const setQty = (id, value) => page.$eval(qty(id), (el, value) => { el.value = value; el.dispatchEvent(new Event('input', {bubbles: true})); }, value);
+    const extra = '[name="extras[201]"]';
+    const extraControls = '[data-yc-quantity-controls]:has(' + extra + ')';
+    const extraMinus = extraControls + ' [data-yc-quantity-minus]';
+    const extraPlus = extraControls + ' [data-yc-quantity-plus]';
+    const cart = 'button[value=cart]';
+    const submit = async () => { await Promise.all([page.waitForNavigation(), page.click(cart)]); };
+    await page.setViewport({width: 1280, height: 960});
+    await open();
+    assert.equal(await visible(step(0)), true);
+    assert.equal(await visible(step(1)), true);
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(0), false);
+    assert.equal(await fieldDisabled(1), true);
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await page.$eval(cart, el => el.disabled), true);
+    assert.equal(await page.$eval(step(0), el => el.getAttribute('aria-label')), '색상');
+    assert.deepEqual(await page.$$eval('[data-yc-option-stage]>span', labels => labels.map(el => el.textContent)), ['색상', '사이즈', '재질']);
+    assert.equal(await page.$eval(step(0), el => Array.from(el.options).find(option => option.value === '빨강').textContent), '빨강');
+    assert.equal(await page.$eval(step(0), el => Array.from(el.options).find(option => option.value === '파랑').textContent), '파랑');
+    assert.doesNotMatch(await text('[data-yc-option-stages]'), /재고|\d단계/);
+    assert.match(await text(step(1)), /먼저 색상 옵션/);
+    assert.equal(await disabled(0, '품절색'), true);
+    await select(0, '빨강');
+    assert.equal(await visible(step(1)), true);
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(1), false);
+    assert.equal(await fieldDisabled(2), true);
+    assert.doesNotMatch(await text(step(1)), /재고/);
+    assert.equal(await disabled(1, 'M'), true);
+    assert.equal(await page.$eval(step(1), el => Array.from(el.options).some(option => option.value === 'L')), false);
+    await select(1, 'S');
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(2), false);
+    assert.match(await text(step(2)), /면 · 재고 3개 \(\+500원\)/);
+    assert.equal(await disabled(2, '실크'), true);
+    // Even a scripted attempt to select a disabled choice must not resolve an option ID.
+    await select(2, '실크');
+    assert.equal(await value(step(2)), '');
+    assert.equal(await value('[name=option_id]'), '');
+    await select(2, '면');
+    assert.equal(await value(qty(101)), '1');
+    assert.equal(await value(step(2)), '');
+    assert.equal(await visible('[data-yc-single-quantity]'), false);
+    assert.equal(await text('[data-yc-total]'), '10,500원');
+    assert.equal(await page.$eval(qty(101), el => el.max), '3');
+    assert.equal(await page.$eval(cart, el => el.disabled), false);
+    await select(2, '면');
+    assert.equal(await page.$$eval('[data-yc-selected-option]', rows => rows.length), 1);
+    assert.match(await text('[data-yc-option-feedback]'), /이미 추가/);
+    await setQty(101, '4');
+    assert.equal(await value(qty(101)), '3', 'quantity over stock is capped at available stock');
+    await setQty(101, '2');
+    await page.click('.yc-extras summary');
+    assert.equal(await page.$eval(extraMinus, el => el.disabled), true);
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '0');
+    await page.click(extraPlus);
+    assert.equal(await value(extra), '1');
+    assert.equal(await text('[data-yc-total]'), '23,000원');
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '0');
+    assert.equal(await text('[data-yc-total]'), '21,000원');
+    for (let i = 0; i < 5; i++) await page.click(extraPlus);
+    assert.equal(await value(extra), '4');
+    assert.equal(await page.$eval(extraPlus, el => el.getAttribute('aria-disabled')), 'true');
+    assert.equal(await text('[data-yc-total]'), '29,000원');
+    await page.$eval(extra, el => { el.value = '5'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    assert.equal(await value(extra), '4');
+    await page.$eval(extra, el => { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    assert.equal(await page.$eval(extraPlus, el => el.disabled), false);
+    assert.equal(await page.$eval('[name="extras[202]"]', el => el.disabled), true);
+    assert.equal(await page.$$eval('[data-yc-quantity-controls]:has([name="extras[202]"]) button', buttons => buttons.every(button => button.disabled)), true);
+    assert.equal(posts.length, 0, 'quantity controls must never submit the purchase form');
+    assert.equal(await text('[data-yc-total]'), '23,000원');
+    await select(0, '파랑');
+    assert.equal(await value(step(1)), '');
+    assert.equal(await visible(step(2)), true);
+    assert.equal(await fieldDisabled(1), false);
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await page.$eval(step(2), el => el.options.length), 1);
+    assert.doesNotMatch(await text(step(2)), /재고/);
+    assert.equal(await value('[name=option_id]'), '');
+    assert.equal(await visible(line(101)), true);
+    assert.equal(await page.$eval(cart, el => el.disabled), false);
+    await select(1, 'L'); await select(2, '실크');
+    assert.equal(await text('[data-yc-total]'), '32,000원');
+    assert.match(await text(line(104)), /재고 2개.*-1,000원/);
+    await select(2, '면');
+    assert.equal(await text('[data-yc-total]'), '42,000원');
+    assert.deepEqual(await selectionOrder(), [105, 104, 101]);
+    await page.click(line(105) + ' [data-yc-line-remove]');
+    assert.equal(await text('[data-yc-total]'), '32,000원');
+    assert.deepEqual(await selectionOrder(), [104, 101]);
+    await submit();
+    assert.equal(posts.at(-1).path, '/cms/shop/cart/add');
+    for (const [key, expected] of Object.entries({product_id: '10', 'selections[101]': '2', 'selections[104]': '1', 'extras[201]': '1', action: 'cart', csrf_token: 'browser-test-csrf'})) assert.equal(posts.at(-1).data.get(key), expected);
+    assert.equal(posts.at(-1).data.has('option_id'), false);
+    assert.equal(posts.at(-1).data.has('quantity'), false);
+    assert.equal(posts.at(-1).data.has('selections[105]'), false);
+
+    for (const count of [0, 1, 2, 3]) {
+      await open(count);
+      if (count === 0) {
+        assert.equal(await page.$(step(0)), null);
+        assert.equal(await value('[name=option_id]'), '0');
+        await page.click('.yc-extras summary'); await page.click(extraPlus);
+        assert.equal(await text('[data-yc-total]'), '12,000원');
+        await page.click(extraMinus);
+        assert.equal(await text('[data-yc-total]'), '10,000원');
+      } else {
+        await select(0, '0');
+        if (count > 1) await select(1, 'S');
+        if (count > 2) await select(2, '면');
+        assert.equal(await value(qty(count === 3 ? 107 : 101)), '1');
+        if (count === 2) {
+          await select(1, 'M');
+          assert.equal(await value(qty(102)), '1');
+          assert.deepEqual(await selectionOrder(), [102, 101]);
+          assert.equal(await text('[data-yc-total]'), '21,500원');
+          await page.click(line(101) + ' [data-yc-line-plus]');
+          assert.equal(await value(qty(101)), '2');
+          await page.click(line(101) + ' [data-yc-line-minus]');
+          assert.equal(await value(qty(101)), '1');
+          assert.deepEqual(await selectionOrder(), [102, 101]);
+        }
+      }
+      assert.equal(await page.$eval(cart, el => el.disabled), false);
+    }
+    await select(0, '__proto__'); await select(1, 'S'); await select(2, '면');
+    assert.equal(await value(qty(108)), '1');
+    await select(1, '');
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await value('[name=option_id]'), '');
+    await select(0, '');
+    assert.equal(await fieldDisabled(1), true);
+    assert.equal(await fieldDisabled(2), true);
+    assert.equal(await page.$eval(cart, el => el.disabled), false);
+    await page.click('.yc-extras summary');
+    for (const width of [360, 390, 768]) {
+      await page.setViewport({width, height: 960});
+      for (const theme of ['light', 'dark']) {
+        await page.$eval('html', (el, theme) => { el.dataset.theme = theme; }, theme);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        assert.equal(await page.$eval(step(0), el => getComputedStyle(el).appearance), 'auto');
+        assert.equal(await page.$eval(extraControls, control => {
+          const children = [...control.children].map(el => el.getBoundingClientRect());
+          return children.every(rect => rect.width >= 38 && rect.height >= 40) && children[0].right <= children[1].left + 1 && children[1].right <= children[2].left + 1;
+        }), true, 'extra quantity controls stay in minus/input/plus order on mobile');
+        if (width === 390) await page.screenshot({path: '/tmp/gnucms-extra-quantity-' + theme + '.png', fullPage: true});
+      }
+    }
+    for (const id of [107, 108]) await page.click(line(id) + ' [data-yc-line-remove]');
+    assert.equal(await page.$eval(cart, el => el.disabled), true);
+    assert.equal(await visible('[data-yc-selections]'), false);
+    // Product minimum/maximum applies to the combined quantity, while each row has its own stock limit.
+    html = render(2).replace('data-buy-max="10"', 'data-buy-max="3"').replace('value="1" min="1" max="10"', 'value="2" min="2" max="3"');
+    await page.goto('https://gnucms.test/cms/shop/item');
+    await select(0, '0'); await select(1, 'S');
+    assert.equal(await page.$eval(qty(101), el => el.validity.customError), true);
+    await select(1, 'M');
+    assert.equal(await page.$eval(qty(101), el => el.validity.valid), true);
+    await setQty(101, '3');
+    assert.equal(await page.$eval(qty(101), el => el.validity.customError), true);
+    await setQty(101, '1');
+    assert.equal(await page.$eval(qty(101), el => el.validity.valid), true);
+    // Stock may change after the product page was opened. Failed adds stay on the product.
+    await open(2); await select(0, '0'); await select(1, 'S');
+    await page.click('.yc-extras summary');
+    await page.$eval(extra, el => { el.value = '4'; el.dispatchEvent(new Event('input', {bubbles: true})); });
+    failure = {error: {message: '입력값을 확인해 주세요.', details: {'10:201': '선물 포장: 재고가 부족합니다. 구매 가능 수량: 2개 <script>bad()</script>'}},
+      availability: {product_id: 10, items: {101: {stock: 3, in_cart: 0}, 102: {stock: 4, in_cart: 0}, 201: {stock: 2, in_cart: 1}, 202: {stock: 0, in_cart: 0}}}};
+    const feedbackBox = '[data-yc-purchase-feedback]';
+    const failedSubmit = async (button = cart) => {
+      const before = posts.length;
+      await page.click(button);
+      await page.waitForFunction(() => !document.querySelector('[data-yc-purchase]').hasAttribute('aria-busy') && !document.querySelector('[data-yc-purchase-feedback]').hidden);
+      assert.equal(posts.length, before + 1);
+      assert.equal(new URL(page.url()).pathname, '/cms/shop/item');
+    };
+    await failedSubmit();
+    assert.equal(await value(extra), '4', 'failed requests must preserve the requested quantity');
+    assert.equal(await value(qty(101)), '1');
+    assert.equal(await page.$eval(extra, el => el.max), '2');
+    assert.equal(await page.$eval(extra, el => el.validity.rangeOverflow), true);
+    assert.equal(await page.$eval(extraPlus, el => el.getAttribute('aria-disabled')), 'true');
+    assert.match(await text('.yc-extra-row:has(' + extra + ') [data-yc-stock-note]'), /현재 담을 수 있는 수량: 1개.*장바구니에 1개/);
+    assert.match(await text(feedbackBox), /<script>bad\(\)<\/script>/);
+    assert.equal(await page.$(feedbackBox + ' script'), null);
+    await page.screenshot({path: '/tmp/gnucms-purchase-stock-error.png', fullPage: true});
+    await page.click(extraMinus); // Correct to the current stock limit without auto-changing the submitted request.
+    await page.click(extraMinus);
+    assert.equal(await value(extra), '1');
+    failure = null;
+    await Promise.all([page.waitForNavigation(), page.click('button[value=buy]')]);
+    assert.equal(new URL(page.url()).pathname, '/cms/shop/checkout');
+    assert.equal(posts.at(-1).data.get('action'), 'buy');
+    assert.equal(posts.at(-1).data.get('extras[201]'), '1');
+    // Base products also stay editable; zero-stock extras can be removed without removing the product.
+    await open(0); await page.click('.yc-extras summary'); await page.click(extraPlus);
+    failure = {error: {message: '추가옵션이 품절되었습니다.'}, availability: {product_id: 10, items: {0: {stock: 10, in_cart: 0}, 201: {stock: 0, in_cart: 0}}}};
+    await failedSubmit(); assert.equal(await value(extra), '1');
+    await page.click(extraMinus); assert.equal(await value(extra), '0');
+    assert.equal(await page.$eval(extra, el => el.validity.valid), true);
+    failure = null; await submit(); assert.equal(posts.at(-1).data.get('extras[201]'), '0');
+    // A selected combination that sold out remains visible until explicitly removed.
+    await open(2); await select(0, '0'); await select(1, 'S');
+    failure = {error: {message: '선택옵션이 품절되었습니다.'}, availability: {product_id: 10, items: {101: {stock: 0, in_cart: 0}, 102: {stock: 4, in_cart: 0}, 201: {stock: 4, in_cart: 0}}}};
+    await failedSubmit();
+    assert.equal(await value(qty(101)), '1'); assert.equal(await page.$eval(qty(101), el => el.max), '0');
+    assert.equal(await disabled(1, 'S'), true);
+    await page.click(line(101) + ' [data-yc-line-remove]'); await select(1, 'M');
+    failure = null; await submit(); assert.equal(posts.at(-1).data.has('selections[101]'), false);
+    await open(0);
+    for (const error of ['network', 'html', {status: 403, error: {message: '화면을 새로고침해 주세요.'}}]) {
+      failure = error; await failedSubmit();
+      assert.equal(await value('[name=quantity]'), '1');
+    }
+    failure = null; holdNext = true;
+    await page.click(cart);
+    while (!held) await new Promise(resolve => setTimeout(resolve, 10));
+    const beforeDuplicate = posts.length;
+    assert.equal(await text(cart), '재고 확인 중…');
+    assert.equal(await page.$eval('[name=quantity]', el => el.disabled), true);
+    await page.$eval('[data-yc-purchase]', form => { form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); });
+    assert.equal(posts.length, beforeDuplicate, 'pending submission cannot create a second request');
+    await held.respond({status: 422, contentType: 'application/json', body: JSON.stringify({error: {message: '재고를 다시 확인해 주세요.'}})}); held = null;
+    await page.waitForFunction(() => !document.querySelector('[data-yc-purchase]').hasAttribute('aria-busy'));
+    assert.equal(await page.$eval('[name=quantity]', el => el.disabled), false);
+    assert.equal(await text(cart), '장바구니 담기');
+    await page.setJavaScriptEnabled(false); await open();
+    assert.equal(await visible('[data-yc-option-stages]'), false);
+    assert.equal(await visible('[data-yc-option-fallback]'), true);
+    await page.click('.yc-extras summary');
+    assert.equal(await visible(extraPlus), false);
+    assert.equal(await visible(extraMinus), false);
+    assert.equal(await visible(extra), true);
+    await page.$eval(extra, el => { el.value = '2'; });
+    await page.select('[name=option_id]', '101'); await submit();
+    assert.equal(posts.at(-1).data.get('extras[201]'), '2');
+    assert.equal(posts.at(-1).data.get('option_id'), '101');
+    assert.equal(posts.at(-1).data.has('option_step[1]'), false);
+    assert.deepEqual(errors, []);
+    console.log('Shop option browser checks passed: multiple combinations, per-row quantity/removal, stock and combined limits, totals/submission, AJAX stock changes, preserved drafts, sold-out recovery, pending requests/network errors, dependent fields, mobile/dark and no-JS fallback.');
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

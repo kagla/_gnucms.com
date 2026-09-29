@@ -8,7 +8,7 @@ use PDO;
 
 interface DialectInterface
 {
-    /** 'sqlite' | 'mysql' */
+    /** 'mysql' */
     public function name(): string;
 
     /** 식별자를 방언에 맞게 인용한다. 인용 문자가 섞인 이름은 거부한다. */

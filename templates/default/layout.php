@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="<?= $this->asset('favicon.svg') ?>">
 <title><?php $this->start('title') ?><?= $this->e($site['site_name']) ?><?php $this->stop() ?></title>
 <?php $this->start('meta_description') ?><meta name="description" content="<?= $this->e($site['site_tagline']) ?>"><?php $this->stop() ?>
 <?php $this->start('seo_meta') ?><?php $this->stop() ?>
@@ -119,6 +120,7 @@
           <nav class="tabs tabs-border" aria-label="주요 메뉴">
             <a class="tab<?php if (trim($this->block('nav_section')) === 'home'): ?> tab-active<?php endif ?>" href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> aria-current="page"<?php endif ?>>홈</a>
             <a class="tab<?php if (trim($this->block('nav_section')) === 'all'): ?> tab-active<?php endif ?>" href="<?= $this->url('posts.all') ?>"<?php if (trim($this->block('nav_section')) === 'all'): ?> aria-current="page"<?php endif ?>>전체 글</a>
+            <?php if ($shop_visible ?? false): $shopActive = trim($this->block('nav_section')) === 'shop'; ?><a class="tab<?= $shopActive ? ' tab-active' : '' ?>" href="<?= $this->url('shop.index') ?>"<?= $shopActive ? ' aria-current="page"' : '' ?>>쇼핑몰</a><?php endif ?>
             <?php foreach ($public_extensions ?? [] as $key => $extension): $selected = trim($this->block('nav_section')) === $key; ?>
               <a class="tab<?= $selected ? ' tab-active' : '' ?>" href="<?= $this->e($extension['url']) ?>"<?= $selected ? ' aria-current="page"' : '' ?>><?= $this->e($extension['name']) ?></a>
             <?php endforeach ?>
@@ -251,6 +253,7 @@
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
         <li><a href="<?= $this->url('posts.all') ?>"><?= $this->icon('document', 18) ?> 전체 글</a></li>
+        <?php if ($shop_visible ?? false): ?><li><a href="<?= $this->url('shop.index') ?>"><?= $this->icon('gift', 18) ?> 쇼핑몰</a></li><?php endif ?>
         <?php foreach ($public_extensions ?? [] as $extension): ?><li><a href="<?= $this->e($extension['url']) ?>"><?= $this->icon('gift', 18) ?> <?= $this->e($extension['name']) ?></a></li><?php endforeach ?>
         <?php // 상단 탭과 동일하게, 게시판 화면에서는 현재 게시판만 이어서 보여 준다. ?>
         <?php if (isset($board['board_key'])): ?>
@@ -404,6 +407,7 @@
   });
 })();
 </script>
+<script src="<?= $this->asset('phone-format.js') ?>" defer></script>
 <?php $this->start('scripts') ?><?php $this->stop() ?>
 </body>
 </html>

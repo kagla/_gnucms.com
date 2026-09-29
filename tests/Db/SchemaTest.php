@@ -19,7 +19,7 @@ final class SchemaTest extends WebTestCase
     {
         $db = $this->freshDatabase($config);
 
-        self::assertCount(15, Schema::TABLES);
+        self::assertCount(36, Schema::TABLES);
 
         foreach (Schema::TABLES as $table) {
             $this->assertSame(
@@ -28,6 +28,31 @@ final class SchemaTest extends WebTestCase
                 $table . ' 테이블의 초기 행 수가 올바라야 한다'
             );
         }
+    }
+
+    /** 쇼핑몰 표는 코어가 만든다. 모듈 시절(modules/youngcart)에 만든 표는 그대로 두고 확장 스키마 기록만 지운다. */
+    #[DataProvider('connectionProvider')]
+    public function testShopTablesAreCoreTablesAndTheModuleRecordIsRetired(array $config): void
+    {
+        $db = $this->freshDatabase($config);
+        $schema = new Schema($db);
+        $schema->create();
+        self::assertNotNull($db->selectOne('SELECT COUNT(*) AS c FROM ' . $db->table('yc_orders')));
+        $db->insert('extension_schemas', ['package_key' => 'modules/youngcart', 'schema_version' => 3, 'table_names' => json_encode(\GnuCms\Shop\Schema::TABLES), 'state' => 'ready']);
+        $schema->migrateAll();
+        self::assertNull($db->selectOne('SELECT package_key FROM ' . $db->table('extension_schemas') . " WHERE package_key = 'modules/youngcart'"));
+        $schema->migrateAll(); // 멱등
+        self::assertSame(Schema::VERSION, explode('.', $schema->stamp())[0]);
+    }
+
+    /** 도장은 쇼핑몰 스키마 파일까지 덮는다. src/Shop/Schema.php 만 고쳐도 판 번호 없이 갱신이 돈다. */
+    #[DataProvider('connectionProvider')]
+    public function testStampCoversTheShopSchemaFile(array $config): void
+    {
+        $stamp = (new Schema(Connection::create($config)))->stamp();
+        self::assertMatchesRegularExpression('/^' . Schema::VERSION . '\.[0-9a-f]{12}$/D', $stamp);
+        $coreOnly = Schema::VERSION . '.' . substr((string) hash_file('xxh128', dirname(__DIR__, 2) . '/src/Db/Schema.php'), 0, 12);
+        self::assertNotSame($coreOnly, $stamp, '쇼핑몰 스키마 파일이 도장에 섞여 있어야 한다');
     }
 
     #[DataProvider('connectionProvider')]

@@ -7,6 +7,7 @@ namespace GnuCms\Tests\Support;
 use GnuCms\App;
 use GnuCms\Auth\Acl;
 use GnuCms\Auth\Identity;
+use GnuCms\Cms\CmsService;
 use GnuCms\Db\Schema;
 use GnuCms\Web\Kernel;
 use Psr\Http\Message\ResponseInterface;
@@ -15,6 +16,40 @@ use Psr\Http\Message\UploadedFileInterface;
 
 abstract class WebTestCase extends DatabaseTestCase
 {
+    /**
+     * $_SESSION 은 PHP 프로세스 전역이다 — makeApp() 이 스키마는 매번 새로 만들어도
+     * 세션까지 지우지는 않으므로, 이전 테스트가 세션에 남긴 값(예: 알리고 중복발송
+     * 방지 지문)이 다음 테스트로 새어 들어간다. 같은 프로세스에서 똑같은 요청 내용으로
+     * 다음 테스트가 실행될 때 특히 잘 드러난다.
+     * makeApp() 은 한 테스트 메서드 안에서 여러 번 불리기도 하고(로그인을 한 앱에서
+     * 하고 다음 앱에서도 쓰는 식으로 세션 유지에 기대는 경우가 있다), 그때는 지우면
+     * 안 되므로 여기, 테스트 메서드 시작 시점 한 번만 지운다.
+     *
+     * $_SESSION 배열을 메모리에서 비우는 것만으로는 부족하다. 이 프로세스에는 실제
+     * HTTP 쿠키 왕복이 없는데도(각 request()가 그냥 Kernel::handle() 을 직접 부르는
+     * PSR-7 호출일 뿐이다) 로그인 유지 테스트는 여러 request() 에 걸쳐 세션이 살아
+     * 있어야 하므로, SessionGuard::process() 가 부르는 session_start() 는 쿠키가 없어도
+     * PHP 세션 모듈이 프로세스 안에 캐시해 둔 이전 세션 아이디를 그대로 재사용한다.
+     * 그 아이디의 세션 파일이 디스크에 남아 있으면 다음 테스트의 첫 session_start() 가
+     * 그 파일을 다시 읽어 들여 방금 비운 $_SESSION 을 도로 채워 버린다. 그래서 세션을
+     * 한 번 열어 session_destroy() 로 파일까지 지우고, session_id('') 로 캐시된 아이디를
+     * 비워서 다음 session_start() 가 완전히 새 아이디로 시작하게 만든다.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        if (session_id() !== '') {
+            session_start();
+            session_destroy();
+            session_id('');
+        }
+        $_SESSION = [];
+    }
+
     /**
      * @param array $configOverrides 기본 설정 위에 덮어쓸 값. 최상위 키 단위로 합쳐진다.
      *                                예: ['debug' => false] 로 프로덕션 오류 화면을 테스트한다.
@@ -56,10 +91,72 @@ abstract class WebTestCase extends DatabaseTestCase
             $theme = is_string($env) && $env !== '' ? $env : null;
         }
         if (is_string($theme) && $theme !== '') {
-            $app->cms()->saveSettings(['theme' => $theme]);
+            $this->saveSiteSettings($app, ['theme' => $theme]);
         }
 
         return $app;
+    }
+
+    /**
+     * 서비스가 만들어질 때 그 값을 한 번 읽어 가는 설정들. 설정 키 => 그 값을 읽어 간
+     * App 의 비공개 서비스 필드. 그 서비스가 이미 있으면 설정을 고쳐도 닿지 않는다.
+     */
+    private const SETTINGS_READ_ONCE_AT_BOOT = [
+        'post_min_chars' => 'postService',        // App::postService() → setContentMinChars()
+        'comment_min_chars' => 'commentService',  // App::commentService() → setContentMinChars()
+        'attach_max_mb' => 'attachmentService',   // App::attachments() → uploads.max_bytes
+        'attach_limit' => 'attachmentService',    // App::attachments() → setAttachmentLimit()
+    ];
+
+    /**
+     * 사이트 설정을 바꾼다. 테스트에서 설정을 바꿀 때는 언제나 이 길로 온다.
+     *
+     * CmsService 는 settings() 를 메모리에 캐시한다(CmsService::$settingsCache). 그런데
+     * $app->cms() 가 돌려주는 것은 그 캐시를 모르는 맨 CmsRepository 다. 그래서 화면을
+     * 한 번이라도 그렸거나 서비스를 한 번이라도 쓴 앱에서 $app->cms()->saveSettings() 로
+     * 값을 바꾸면 DB 만 바뀌고, 정작 검사 대상인 서비스는 옛 값을 계속 본다.
+     *
+     * 이 함정은 이 분기에서만 세 번 값을 치렀다. 두 번은 바꾸지도 않은 설정으로 돌아간
+     * 테스트가 없는 실패를 보고했고(그중 하나는 Critical 로 올라갔다), 한 번은 고친 것을
+     * 실제로는 확인하지 않는 빈 테스트가 통과했다 — 고침을 되돌려 보고서야 드러났다.
+     *
+     * 저장 자체는 리포지토리로 한다. 설정 저장 화면들(saveSettings·saveGeneralSettings·
+     * saveWritingSettings)은 저마다 자기 묶음의 키를 전부 검증하고 빠진 키는 기본값으로
+     * 덮어쓰므로, 키 하나만 바꾸는 통로로 쓸 수 없다. 대신 저장한 뒤 서비스가 들고 있는
+     * 캐시를 비워, 다음 settings() 가 DB 를 다시 읽게 한다. 필드 이름이 바뀌면 이
+     * ReflectionProperty 가 바로 예외를 던지므로 조용히 어긋나지는 않는다.
+     *
+     * **이 헬퍼가 닿는 곳과 닿지 못하는 곳.** 닿는 것은 settings() 를 그때그때 읽는
+     * 코드뿐이다. 값을 한 번 읽어 자기 안에 옮겨 담는 서비스에는 닿지 못한다 —
+     * post_min_chars·comment_min_chars·attach_max_mb·attach_limit 네 개가 그렇다
+     * (App::postService()·commentService()·attachments() 가 만들어질 때 한 번 읽는다).
+     * 이미 만들어진 서비스를 여기서 다시 만들 수는 없으므로, 그 넷을 요청 뒤에 바꾸려
+     * 들면 조용히 지나가지 않고 그 자리에서 실패시킨다. 없는 보장을 말없이 해 주는
+     * 시늉을 하느니 시끄럽게 막는 편이 낫다 — 이 함정이 세 번째 희생자를 낸 방식이
+     * 정확히 "다 된 줄 알았다"였다.
+     *
+     * 그 넷은 서비스가 생기기 전에(=첫 요청 전에) 바꾸거나, AttachmentFormTest 처럼
+     * 해당 서비스를 reflection 으로 끊어 다시 만들게 한 뒤 이 헬퍼를 부르면 된다.
+     */
+    protected function saveSiteSettings(App $app, array $settings): void
+    {
+        foreach (self::SETTINGS_READ_ONCE_AT_BOOT as $key => $property) {
+            if (!array_key_exists($key, $settings)
+                || (new \ReflectionProperty(App::class, $property))->getValue($app) === null) {
+                continue;
+            }
+            self::fail(sprintf(
+                "'%s' 는 App::\$%s 가 만들어질 때 한 번만 읽어 가는 값이라, 이미 만들어진"
+                . " 뒤에는 설정을 바꿔도 그 서비스에 닿지 않습니다. 그대로 두면 이 테스트는"
+                . " 바꾸지 않은 값으로 돌아가 통과해 버립니다. 그 서비스가 만들어지기"
+                . " 전에(=첫 요청 전에) 바꾸거나, AttachmentFormTest 처럼 ReflectionProperty"
+                . " 로 App::\$%s 를 null 로 끊어 다시 만들게 한 뒤 부르세요.",
+                $key, $property, $property
+            ));
+        }
+
+        $app->cms()->saveSettings($settings);
+        (new \ReflectionProperty(CmsService::class, 'settingsCache'))->setValue($app->cmsService(), null);
     }
 
     /** 게시판·글을 만들 때 쓴다. 1단계에는 로그인이 없으므로 화면은 항상 게스트다. */
@@ -68,15 +165,53 @@ abstract class WebTestCase extends DatabaseTestCase
         return new Acl(Identity::user('1', '관리자', true));
     }
 
-    protected function get(App $app, string $path, array $query = []): ResponseInterface
+    /** adminAclFor() 가 심는 회원. 다른 시험이 쓰는 주소와 겹치지 않는 이름이다. */
+    private const SEEDED_ADMIN_EMAIL = 'seeded-admin@example.test';
+
+    /**
+     * adminAcl() 과 같은 관리자이지만 **users 행이 실제로 있는** 신원.
+     *
+     * adminAcl() 은 아무 회원 행도 없이 신원만 만든다. 화면 권한만 보는 시험에는 그것으로
+     * 충분하지만, 그 신원으로 **글이나 댓글을 쓰면** 그 글에 달린 댓글의 알림이 글쓴이를
+     * 찾다가 없는 회원을 만난다 — NotificationService 는 그것을 무결성 신호로 보고
+     * 「받을 사람이 모두 활성 회원이 아니어서 …」 한 줄을 남기고, 그 줄이 스위트 실행마다
+     * 스무 줄 넘게 stderr 로 쏟아졌다. 로그를 끄는 대신 그 회원을 만들어 두는 쪽을
+     * 고른다: 저 줄은 진짜 사고를 알리는 유일한 신호라, 시험 소음과 구별되지 않게 두면
+     * 사람이 출력을 읽지 않게 된다.
+     *
+     * 같은 앱에서 여러 번 불러도 회원은 하나다 — 부르는 자리마다 새로 만들면 주소가
+     * 겹쳐 거절된다.
+     */
+    protected function adminAclFor(App $app): Acl
     {
-        return $this->request($app, 'GET', $path, $query);
+        $user = $app->users()->findByEmail(self::SEEDED_ADMIN_EMAIL);
+        $id = $user === null
+            ? $app->users()->create(self::SEEDED_ADMIN_EMAIL,
+                password_hash('seeded-admin-password-123', PASSWORD_DEFAULT), '관리자', true)
+            : (int) $user['id'];
+
+        return new Acl(Identity::user((string) $id, '관리자', true));
     }
 
-    protected function request(App $app, string $method, string $path, array $query = []): ResponseInterface
+    protected function get(App $app, string $path, array $query = [], array $server = []): ResponseInterface
+    {
+        return $this->request($app, 'GET', $path, $query, $server);
+    }
+
+    /**
+     * $server 는 post() 와 같은 $_SERVER 형태의 값이다. 진짜 SAPI 는 그중 HTTP_* 를 요청
+     * 헤더로도 만들어 주므로(Slim 의 createFromGlobals 가 하는 일) 여기서도 같이 심는다 —
+     * 헤더로 UA 를 읽는 코드(결제 페이지의 기기 판별)가 테스트에서만 빈 값을 보지 않게.
+     */
+    protected function request(App $app, string $method, string $path, array $query = [], array $server = []): ResponseInterface
     {
         $uri = $path . ($query === [] ? '' : '?' . http_build_query($query));
-        $request = (new ServerRequestFactory())->createServerRequest($method, $uri);
+        $request = (new ServerRequestFactory())->createServerRequest($method, $uri, $server);
+        foreach ($server as $name => $value) {
+            if (is_string($name) && is_string($value) && str_starts_with($name, 'HTTP_')) {
+                $request = $request->withHeader(strtr(strtolower(substr($name, 5)), '_', '-'), $value);
+            }
+        }
 
         return Kernel::create($app, dirname(__DIR__, 2) . '/templates', '')->handle($request);
     }
@@ -138,6 +273,31 @@ abstract class WebTestCase extends DatabaseTestCase
             'error'    => UPLOAD_ERR_OK,
             'size'     => strlen($contents),
         ];
+    }
+
+    /**
+     * error_log() 를 파일로 돌려 그 사이에 적힌 줄을 돌려준다.
+     *
+     * 운영자 로그는 화면에 나오지 않는 진단이라, 그것이 실제로 적히는지 보려면 받아 볼
+     * 자리가 필요하다. 로그를 받는 곳을 바꿔 끼울 수 있는 발송기(Notifier·
+     * NotificationService)와 달리 AccountService 같은 자리는 error_log() 를 직접 부르고,
+     * App 이 조립한 발송기도 마찬가지다 — 그 줄을 보려면 여기를 지나야 한다.
+     */
+    protected function captureErrorLog(callable $run): string
+    {
+        $file = sys_get_temp_dir() . '/' . GNUCMS_ID . '-notify-log-' . getmypid() . '.log';
+        @unlink($file);
+        $previous = (string) ini_get('error_log');
+        ini_set('error_log', $file);
+        try {
+            $run();
+        } finally {
+            ini_set('error_log', $previous);
+        }
+        $written = is_file($file) ? (string) file_get_contents($file) : '';
+        @unlink($file);
+
+        return $written;
     }
 
     /** 공유 임시 업로드 폴더를 비운다. collectGarbage 의 개수 단언이 이전 실행에 흔들리지 않게. */

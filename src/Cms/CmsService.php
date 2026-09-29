@@ -24,6 +24,9 @@ final class CmsService
         'social_login_enabled' => '1',
         'registration_enabled' => '1',
         'social_registration_enabled' => '1',
+        // 가입 화면에서 휴대폰번호를 받을지: off(받지 않음) / optional(선택) / required(필수).
+        // 기존 사이트가 업그레이드 다음 날 갑자기 번호를 요구받지 않도록 기본은 off 다.
+        'signup_phone' => 'off',
         'guest_write_enabled' => '0',
         'theme' => 'default',
         'post_min_chars' => '0',
@@ -92,6 +95,9 @@ final class CmsService
             && $settings['registration_enabled'];
         $settings['social_registration_enabled'] = $settings['social_login_enabled']
             && $settings['social_registration_enabled'];
+        // 알 수 없는 값(수기 편집 등으로 손상된 저장값)은 화면을 막지 않도록 조용히
+        // off 로 되돌린다. required 로 잘못 떨어지면 손상된 사이트의 가입이 막힌다.
+        $settings['signup_phone'] = self::normalizePhonePolicy($settings['signup_phone']);
         $settings['guest_write_enabled'] = $settings['guest_write_enabled'] === '1';
         $settings['post_min_chars'] = max(0, (int) $settings['post_min_chars']);
         $settings['comment_min_chars'] = max(0, (int) $settings['comment_min_chars']);
@@ -351,11 +357,29 @@ final class CmsService
         return $html;
     }
 
+    /**
+     * signup_phone 은 세 값만 허용하되, 관리자 화면에는 라디오만 있어 벗어난 값은
+     * 조작·손상 상황뿐이다. 그런 값에 오류 화면을 보여주는 대신 조용히 off 로
+     * 되돌린다 — 오류로 막으면 손상된 값이 남아 있는 한 다른 설정 저장까지 막힌다.
+     */
+    private static function normalizePhonePolicy(mixed $raw): string
+    {
+        if (!is_scalar($raw)) {
+            return 'off';
+        }
+        $value = (string) $raw;
+
+        return in_array($value, ['off', 'optional', 'required'], true) ? $value : 'off';
+    }
+
     public function saveWritingSettings(Acl $acl, array $input): void
     {
         $acl->assertGlobalAdmin();
         $v = new Validator($input);
         $settings = [
+            // 가입 화면에서 휴대폰번호를 받을지. 기존 사이트의 가입 흐름을 바꾸지
+            // 않도록 기본은 off 다.
+            'signup_phone' => self::normalizePhonePolicy($input['signup_phone'] ?? 'off'),
             'guest_write_enabled' => $v->bool('guest_write_enabled', false) ? '1' : '0',
             'post_min_chars' => (string) $v->int('post_min_chars', 0, 0, 10000),
             'comment_min_chars' => (string) $v->int('comment_min_chars', 0, 0, 1000),

@@ -1,0 +1,679 @@
+<?php
+
+declare(strict_types=1);
+
+namespace GnuCms\Tests\Web;
+
+use GnuCms\Aligo\AligoService;
+use GnuCms\App;
+use GnuCms\Mail\SecretCipher;
+use GnuCms\Support\Clock;
+use GnuCms\Tests\Support\FakeAligoTransport;
+use GnuCms\Tests\Support\WebTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+final class MessageHistoryTest extends WebTestCase
+{
+    /** 전역 관리자로 로그인한 앱. csrf_token 은 /login 을 한 번 거쳐야 세션에 생긴다. */
+    private function adminApp(array $dbConfig): App
+    {
+        $app = $this->makeApp($dbConfig);
+        $adminId = $app->users()->create(
+            'history-admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
+        );
+        $this->get($app, '/login');
+        session_start();
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_epoch'] = 0;
+        session_write_close();
+
+        return $app;
+    }
+
+    /**
+     * 접수까지만 끝난 작업. Dispatch 가 접수 직후에 실제로 남기는 모양 그대로다 —
+     * 수신자가 'accepted'(결과를 기다리는 중)인데 작업은 'sent'(전원 성공)인 조합은
+     * 코드가 만들 수 없는 상태이므로 심지 않는다.
+     */
+    private function seed(App $app): int
+    {
+        $db = $app->db();
+        $now = Clock::now();
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '안녕하세요', 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+            'status' => 'sending', 'test_mode' => 0, 'created_at' => $now]);
+        $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M1', 'phone' => '01012345678',
+            'body' => '안녕하세요', 'status' => 'accepted', 'requested_at' => $now]);
+
+        return $jobId;
+    }
+
+    /** 예약된 작업 하나(수신자 1명, mid 하나, 아직 접수된 채로 취소를 기다리는 상태). */
+    private function seedScheduled(App $app, int $secondsFromNow = 3600): array
+    {
+        $db = $app->db();
+        $scheduledAt = gmdate('Y-m-d H:i:s', Clock::timestamp() + $secondsFromNow);
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '예약 발송', 'failover' => 0, 'total' => 1, 'success' => 0, 'failure' => 0,
+            'status' => 'scheduled', 'scheduled_at' => $scheduledAt, 'test_mode' => 0,
+            'created_at' => '2026-09-17 10:00:00']);
+        $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => 'M1', 'phone' => '01012345678',
+            'body' => '예약 발송', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
+
+        return ['id' => $jobId, 'scheduled_at' => $scheduledAt];
+    }
+
+    /** 이미 끝난 작업 — 취소를 제공하면 안 되는 대조군. */
+    private function seedSent(App $app): int
+    {
+        return (int) $app->db()->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '이미 보냄', 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+            'status' => 'sent', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+    }
+
+    /**
+     * 취소 대상이 되는 두 묶음(mid)을 직접 심는다. 502명짜리 진짜 예약(Dispatch 의
+     * 500명 단위 청크)을 만들지 않고도, 부분 취소(한 묶음 성공·한 묶음 실패)를
+     * 재현하기 위한 최소 상태다 — Dispatch::cancel() 은 job_id 의 서로 다른 mid 개수만큼
+     * 취소를 시도한다.
+     */
+    private function seedScheduledWithTwoBatches(App $app): int
+    {
+        $db = $app->db();
+        $scheduledAt = gmdate('Y-m-d H:i:s', Clock::timestamp() + 3600);
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '예약 발송', 'failover' => 0, 'total' => 2, 'success' => 0, 'failure' => 0,
+            'status' => 'scheduled', 'scheduled_at' => $scheduledAt, 'test_mode' => 0,
+            'created_at' => '2026-09-17 10:00:00']);
+        foreach (['M1' => '01011110001', 'M2' => '01011110002'] as $mid => $phone) {
+            $db->insert('message_recipients', ['job_id' => $jobId, 'mid' => $mid, 'phone' => $phone,
+                'body' => '예약 발송', 'status' => 'accepted', 'requested_at' => '2026-09-17 10:00:00']);
+        }
+
+        return $jobId;
+    }
+
+    /**
+     * 실제 알리고 대신 가짜 전송기를 끼운다. 취소가 실제로 알리고를 부르는지 확인하는
+     * 시험은 진짜 서버를 부르면 안 된다.
+     */
+    private function fakeAligo(App $app): FakeAligoTransport
+    {
+        $transport = new FakeAligoTransport();
+        $app->setAligo(new AligoService($app->db(), $transport,
+            new SecretCipher('web-test-secret-that-is-long-enough')));
+
+        return $transport;
+    }
+
+    /** 취소 호출이 실제로 알리고 계정을 조회할 수 있게 계정과 채널을 준비해 둔다. */
+    private function ready(App $app): void
+    {
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K',
+            'sender' => '0212345678', 'senderkey' => 'SK1']);
+        $app->aligo()->settings->setEnabled('sms', true);
+    }
+
+    /**
+     * 이력 목록은 작업 단위라 수신번호가 아예 실리지 않는다 — 가려서 보여주는 것이
+     * 아니라 애초에 없다. 번호는 상세에서만 보인다(아래 testDetailShowsTheWholeNumber).
+     * 그래서 표시용 하이픈 형태뿐 아니라 숫자 원문도 함께 없는지 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testListCarriesNoRecipientNumbersAtAll(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringNotContainsString('010-1234-5678', $html);
+        self::assertStringNotContainsString('01012345678', $html);
+        self::assertStringContainsString('결과를 기다리는 중', $html);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testDetailShowsTheWholeNumber(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $jobId = $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId));
+
+        self::assertStringContainsString('010-1234-5678', $html);
+        self::assertStringContainsString('안녕하세요', $html);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testGuestCannotOpenTheHistory(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->assertLoginRedirect($this->get($app, '/admin/messages/history'), '/admin/messages/history');
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRefreshRouteIsNotCapturedAsAnId(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $response = $this->post($app, '/admin/messages/history/refresh', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        self::assertStringContainsString('/admin/messages/history', $response->getHeaderLine('Location'));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testJobStatusesAllRenderDistinctLabels(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $db = $app->db();
+        foreach (['sending', 'sent', 'failed', 'partial', 'unknown'] as $status) {
+            $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+                'body' => '본문 ' . $status, 'failover' => 0, 'total' => 1, 'success' => 0, 'failure' => 0,
+                'status' => $status, 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+        }
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        // 각 상태 배지는 서로 다른 색(class)과 문구 조합으로 정확히 한 번 나타나야 한다.
+        // "실패"·"성공" 같은 낱말은 표 머리글에도 나오므로, 배지 마크업 전체를 맞춰
+        // 머리글과 절대 혼동되지 않게 한다 — partial 이 sent 처럼 보이면 이 assert 가 깨진다.
+        foreach ([
+            'badge-ghost badge-soft">결과를 기다리는 중</span>',
+            'badge-success badge-soft">성공</span>',
+            'badge-error badge-soft">실패</span>',
+            'badge-warning badge-soft">일부만 발송</span>',
+            'badge-warning badge-soft">결과를 알 수 없음</span>',
+        ] as $badgeMarkup) {
+            self::assertSame(1, substr_count($html, $badgeMarkup), $badgeMarkup . ' 배지 개수');
+        }
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRecipientStatusesAllRenderDistinctLabels(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $db = $app->db();
+        $jobId = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+            'body' => '안녕하세요', 'failover' => 0, 'total' => 5, 'success' => 2, 'failure' => 2,
+            'status' => 'partial', 'test_mode' => 0, 'created_at' => '2026-09-17 10:00:00']);
+        $phones = ['01011110001', '01011110002', '01011110003', '01011110004', '01011110005'];
+        foreach (['queued', 'accepted', 'sent', 'failed', 'unknown'] as $i => $status) {
+            $db->insert('message_recipients', ['job_id' => $jobId, 'phone' => $phones[$i],
+                'body' => '안녕하세요', 'status' => $status, 'requested_at' => '2026-09-17 10:00:00']);
+        }
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId));
+
+        // 다섯 수신자 상태 각각 서로 다른 배지(색+문구)로 정확히 한 번씩 나타나야 한다.
+        foreach ([
+            'badge-sm badge-ghost badge-soft">대기 중</span>',
+            'badge-sm badge-info badge-soft">결과를 기다리는 중</span>',
+            'badge-sm badge-success badge-soft">전송 성공</span>',
+            'badge-sm badge-error badge-soft">전송 실패</span>',
+            'badge-sm badge-warning badge-soft">결과를 알 수 없음</span>',
+        ] as $badgeMarkup) {
+            self::assertSame(1, substr_count($html, $badgeMarkup), $badgeMarkup . ' 배지 개수');
+        }
+    }
+
+    /**
+     * 조회가 계속 실패하면(키가 취소됐다든가) 관리자는 결과가 천천히 "결과를 알 수
+     * 없음"으로 바뀌는 것만 볼 뿐 이유를 알 수 없었다. 사유를 화면에 적되, 목록 자체는
+     * 저장된 값으로 그대로 보여준다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailingLookupIsShownAsAWarningWithoutBreakingTheList(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        // 알리고 계정을 저장하지 않은 채로 결과를 기다리는 건이 있으면 조회가 실패한다.
+        $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringContainsString('결과를 물어보다 실패했습니다', $html);
+        self::assertStringContainsString('알리고 계정을 먼저 저장해 주세요', $html);
+        // 목록은 그대로 보인다 — 조회 실패가 화면을 깨뜨리지 않는다.
+        self::assertStringContainsString('결과를 기다리는 중', $html);
+    }
+
+    /** 조회가 잘 되면 경고 띠는 나오지 않는다 — 있지도 않은 실패를 매번 보여주면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testNoWarningWhenThereIsNothingToLookUp(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringNotContainsString('결과를 물어보다 실패했습니다', $html);
+    }
+
+    /**
+     * 상세 화면의 안내는 서버가 만든 문장만 보여준다. 예전에는 ?notice= 로 아무 문장이나
+     * 성공 알림처럼 띄울 수 있었다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testDetailDoesNotEchoANoticeFromTheUrl(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $jobId = $this->seed($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId,
+            ['notice' => '계정이 만료되었습니다. 여기로 로그인하세요']));
+
+        self::assertStringNotContainsString('계정이 만료되었습니다', $html);
+    }
+
+    /** 발송 안내는 그 발송의 상세에서만 보여준다 — 아무 작업에나 붙일 수 없다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheSentNoticeOnlyShowsOnItsOwnJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $jobId = $this->seed($app);
+
+        $mine = $this->body($this->get($app, '/admin/messages/history/' . $jobId, ['sent' => (string) $jobId]));
+        $other = $this->body($this->get($app, '/admin/messages/history/' . $jobId, ['sent' => (string) ($jobId + 7)]));
+
+        self::assertStringContainsString('발송을 시작했습니다', $mine);
+        self::assertStringNotContainsString('발송을 시작했습니다', $other);
+    }
+
+    /**
+     * 손으로 누른 갱신이 실패하면 목록으로 돌아가며 그 사실을 알려야 한다. 돌아간
+     * 화면이 다시 조회하지는 않는다 — 방금 찍힌 재확인 표시(60초) 안이라 아무것도
+     * 묻지 않고 지나가므로, 실패했다는 사실이 깃발로 따라오지 않으면 조용히 사라진다.
+     * URL 에는 깃발만 싣고 문장은 서버가 만든다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAFailedManualRefreshSaysSoOnTheListItReturnsTo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $this->seed($app);
+
+        $response = $this->post($app, '/admin/messages/history/refresh', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode());
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('1', $query['failed'] ?? null);
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['failed' => '1']));
+        self::assertStringContainsString('결과 조회에 실패했습니다', $html);
+    }
+
+    /** 예약 작업의 상세에는 발송 예정 시각과 취소 버튼이 함께 보여야 한다. */
+    #[DataProvider('connectionProvider')]
+    public function testHistoryShowsTheScheduleAndOffersCancel(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $scheduled = $this->seedScheduled($app);
+        $sentJobId = $this->seedSent($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id']));
+
+        self::assertStringContainsString('예약됨', $html);
+        self::assertStringContainsString('발송 예정', $html);
+        $expectedDisplay = (new \DateTimeImmutable($scheduled['scheduled_at'], new \DateTimeZone('UTC')))
+            ->setTimezone(new \DateTimeZone('Asia/Seoul'))->format('Y.m.d H:i');
+        self::assertStringContainsString($expectedDisplay, $html, '한국 시각으로 바뀌어 보여야 한다');
+        self::assertStringContainsString(
+            '/admin/messages/history/' . $scheduled['id'] . '/cancel', $html, '취소 폼이 있어야 한다'
+        );
+        self::assertStringContainsString('예약 취소', $html);
+
+        // 이미 끝난 작업(취소할 수 없는 상태)은 취소 버튼을 보여주면 안 된다.
+        $sentHtml = $this->body($this->get($app, '/admin/messages/history/' . $sentJobId));
+        self::assertStringNotContainsString('예약 취소', $sentHtml);
+        self::assertStringNotContainsString(
+            '/admin/messages/history/' . $sentJobId . '/cancel', $sentHtml
+        );
+    }
+
+    /**
+     * 취소는 두 묶음 중 하나만 성공할 수 있다. 화면은 "취소했습니다"로 뭉개지 않고
+     * 성공·실패 개수를 그대로 보여줘야 한다 — 아직 나갈 발송이 남아 있다는 사실을
+     * 관리자가 놓치면 안 된다. 왜 실패했는지는 문장이 단정하지 않는다(아래
+     * testACancellationFailureThatIsNotTheCutoffIsNotBlamedOnTheCutoff 참고).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testCancellingFromTheScreenReportsPartialFailure(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $jobId = $this->seedScheduledWithTwoBatches($app);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $transport->queue(200, '{"result_code":-804,"message":"too late"}');
+
+        $response = $this->post($app, '/admin/messages/history/' . $jobId . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('1', $query['cancel_ok']);
+        self::assertSame('1', $query['cancel_failed']);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $jobId, $query));
+        self::assertStringContainsString('1개 취소', $html);
+        self::assertStringContainsString('1개는 취소하지 못했습니다', $html);
+        // 부분 취소를 "전부 취소했습니다"처럼 보여주면 안 된다.
+        self::assertStringNotContainsString('예약을 취소했습니다.', $html);
+        // 이번 실패는 실제로 시한 초과(-804)였지만, 그건 수신자 행의 "사유" 칸이
+        // 말한다 — 안내 문장은 원인을 단정하지 않는다.
+        self::assertStringContainsString('발송 5분 전까지만 취소할 수 있습니다', $html,
+            '실제로 받은 사유는 그 묶음의 수신자 행에 그대로 남아야 한다');
+
+        $job = $app->db()->selectOne('SELECT status FROM ' . $app->db()->table('message_jobs')
+            . ' WHERE id = ?', [$jobId]);
+        self::assertSame('scheduled', $job['status'], '남은 묶음이 아직 나갈 것이므로 취소됐다고 적으면 안 된다');
+    }
+
+    /**
+     * 취소가 거절되는 이유는 시한 초과만이 아니다 — 알리고에 닿지 못했을 수도, 서버
+     * IP 가 등록돼 있지 않을 수도 있다. 예전에는 어느 쪽이든 "발송 5분 전을 지나
+     * 취소할 수 없었습니다. 예정대로 발송됩니다."라고 단정해, 다시 눌렀으면 멈출 수
+     * 있었을 발송을 두고 관리자에게 다시 시도하지 말라고 말했다. 화면은 이제 결과만
+     * 말하고, 실제 사유는 그 묶음의 수신자 행에 적혀 상세 표의 "사유" 칸에 보인다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testACancellationFailureThatIsNotTheCutoffIsNotBlamedOnTheCutoff(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $scheduled = $this->seedScheduled($app);
+
+        // -201: 등록되지 않은 IP. 시한과는 아무 상관이 없고, 고치면 다시 취소할 수 있다.
+        $transport->queue(200, '{"result_code":-201,"message":"not registered"}');
+
+        $response = $this->post($app, '/admin/messages/history/' . $scheduled['id'] . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+        parse_str((string) parse_url($response->getHeaderLine('Location'), PHP_URL_QUERY), $query);
+        self::assertSame('0', $query['cancel_ok']);
+        self::assertSame('1', $query['cancel_failed']);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id'], $query));
+        self::assertStringContainsString('취소하지 못했습니다', $html);
+        self::assertStringNotContainsString('발송 5분 전을 지나', $html, '알 수 없는 사유를 지어내면 안 된다');
+        self::assertStringContainsString('등록되지 않은 IP에서 요청했습니다', $html,
+            '실제 사유는 수신자 행의 "사유" 칸에 그대로 있어야 한다');
+
+        $row = $app->db()->selectOne('SELECT rslt_message FROM ' . $app->db()->table('message_recipients')
+            . ' WHERE job_id = ?', [$scheduled['id']]);
+        self::assertStringContainsString('취소하지 못했습니다', (string) $row['rslt_message']);
+        self::assertStringContainsString('등록되지 않은 IP', (string) $row['rslt_message']);
+    }
+
+    /**
+     * 취소한 뒤의 이력 한 줄은 스스로 모순되면 안 된다. 예전에는 취소가 숫자에 전혀
+     * 나타나지 않아, 접수 건수를 그대로 쥔 채 "성공 1 · 실패 0 · 취소됨" 으로 남았다 —
+     * 아무에게도 가지 않았는데 1건 성공이라고 적힌 줄이다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testACancelledJobsRowCountsTheCancellationInsteadOfClaimingSuccess(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $transport = $this->fakeAligo($app);
+        $this->ready($app);
+        $scheduled = $this->seedScheduled($app);
+        // 접수 직후의 모양: 알리고가 1건을 접수했다고 적혀 있다.
+        $app->db()->update('message_jobs', ['success' => 1], 'id = :id', ['id' => $scheduled['id']]);
+
+        $transport->queue(200, '{"result_code":1,"cancel_date":"2026-09-18 10:00:00"}');
+        $response = $this->post($app, '/admin/messages/history/' . $scheduled['id'] . '/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+        self::assertSame(303, $response->getStatusCode(), $this->body($response));
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+        self::assertStringContainsString('<td data-label="성공" class="right">0</td>', $html,
+            '아무에게도 가지 않았으므로 성공은 0 이다');
+        self::assertStringContainsString('<td data-label="취소" class="right">1</td>', $html,
+            '멈춘 1명은 취소 칸에 그대로 보여야 한다');
+        self::assertStringContainsString('badge-ghost badge-soft">취소됨</span>', $html);
+
+        $detail = $this->body($this->get($app, '/admin/messages/history/' . $scheduled['id']));
+        self::assertStringContainsString('총 · 성공 · 실패 · 취소', $detail);
+        self::assertStringContainsString('1 · 0 · 0 · 1', $detail);
+    }
+
+    /**
+     * 취소 라우트는 CSRF 표는 갖고 있지만 로그인하지 않은 손님을 로그인 화면으로
+     * 돌려보내야 한다 — 200 이 아니라는 사실만으로는 부족하다(예: 403 도 200 이 아니다).
+     * /login 을 먼저 열어 세션에 유효한 csrf_token 을 얻어 두면, 그 표는 통과하고
+     * 그 뒤의 관리자 검사에서 로그인 화면으로 밀려나는지를 정확히 가릴 수 있다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testGuestCannotCancel(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $this->get($app, '/login');
+
+        $response = $this->post($app, '/admin/messages/history/1/cancel', [
+            'csrf_token' => $_SESSION['csrf_token'],
+        ]);
+
+        $this->assertLoginRedirect($response);
+    }
+
+    /**
+     * 알림이 만든 작업과 관리자가 손으로 보낸 작업을 심는다. event_key 는 Dispatch 가
+     * 실제로 적는 자리 그대로다 — 알림은 Notify\Events 의 키, 수동 발송은 NULL.
+     */
+    private function seedWithEventKeys(App $app): array
+    {
+        $db = $app->db();
+        $ids = [];
+        // 'blank' 는 event_key 를 빈 문자열로 쥔 작업이다. Dispatch 는 'event_key' 를
+        // 주지 않은 요청에 NULL 을 적지만, 확장이 '' 를 실어 보내면 이 모양이 남는다 —
+        // 뜻은 NULL 과 같고(수동 발송), 거르기가 한쪽만 세면 그 작업은 어느 갈래에도
+        // 들어가지 못한 채 '전체'에만 나타난다.
+        // 'gone' 은 업그레이드로 카탈로그에서 빠졌거나 확장이 쓰는 키다 — 라벨을 찾을 수
+        // 없다고 '-' 로 뭉개면 수동 발송과 구별되지 않아, 사람이 보낸 적 없는 작업이
+        // 사람 것으로 읽힌다.
+        foreach (['manual' => null, 'reset' => 'password_reset', 'comment' => 'comment_new',
+            'blank' => '', 'gone' => 'retired_event'] as $name => $key) {
+            $ids[$name] = (int) $db->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+                'body' => '본문 ' . $name, 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+                'status' => 'sent', 'test_mode' => 0, 'event_key' => $key,
+                'created_at' => '2026-09-17 10:00:00']);
+        }
+
+        return $ids;
+    }
+
+    /** 목록에서 그 작업의 줄이 있는지. 목록은 본문을 보여주지 않으므로 상세 링크로 가린다. */
+    private static function listsJob(string $html, int $jobId): bool
+    {
+        return str_contains($html, '/admin/messages/history/' . $jobId . '"');
+    }
+
+    /**
+     * 그 작업의 표 한 줄만 잘라 온다. 화면 전체를 상대로 라벨을 물으면 거르기 <select>
+     * 가 모든 이벤트 라벨을 적어 두고 있어 표의 칸을 통째로 지워도 통과한다 — 실제로
+     * 그렇게 통과했고, 그래서 줄 단위로 묻는다.
+     */
+    private static function jobRow(string $html, int $jobId): string
+    {
+        $at = strpos($html, '/admin/messages/history/' . $jobId . '"');
+        self::assertNotFalse($at, '작업 ' . $jobId . ' 의 줄이 목록에 없습니다.');
+        $start = strrpos(substr($html, 0, $at), '<tr');
+        self::assertNotFalse($start);
+        $end = strpos($html, '</tr>', $at);
+        self::assertNotFalse($end);
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /**
+     * message_jobs.event_key 는 알림이 보낼 때마다 적히는데 여태 어느 화면도 보여주지
+     * 않았다. 알림 한 통이 작업 하나를 만들기 때문에, 이 값이 보이지 않으면 비밀번호
+     * 재설정과 댓글 알림과 관리자의 일괄 발송이 목록에서 서로 구별되지 않는다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheListNamesTheNotificationThatProducedEachJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history'));
+
+        self::assertStringContainsString('비밀번호 재설정', self::jobRow($html, $ids['reset']));
+        self::assertStringContainsString('새 댓글·답글', self::jobRow($html, $ids['comment']));
+        self::assertStringContainsString('관리자 수동 발송', self::jobRow($html, $ids['manual']));
+        // 같은 줄에 다른 알림의 이름이 섞이지 않는다 — 라벨을 줄마다 다시 찾는지 본다.
+        self::assertStringNotContainsString('새 댓글·답글', self::jobRow($html, $ids['reset']));
+    }
+
+    /** 거르기 목록 자체가 아니라 표의 칸이 그 사실을 말하는지. 목록 밖 어디에서도 나오지 않는 문구다. */
+    #[DataProvider('connectionProvider')]
+    public function testAJobWithNoEventKeyIsCalledAManualSendRatherThanLeftBlank(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $ids['manual']));
+
+        self::assertStringContainsString('관리자 수동 발송', $html);
+    }
+
+    /** 상세에서도 같은 사실을 말해야 한다 — 목록에서 고른 줄을 열었더니 사라지면 안 된다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheDetailNamesTheNotificationThatProducedTheJob(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history/' . $ids['reset']));
+
+        self::assertStringContainsString('보낸 알림', $html);
+        self::assertStringContainsString('비밀번호 재설정', $html);
+    }
+
+    /**
+     * 댓글 한 건이 최대 두 통을 만든다 — 거를 수 없으면 알림이 일괄 발송을 금세 덮는다.
+     * 거르기는 이벤트별로도, "관리자가 손으로 보낸 것"으로도 되어야 한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testTheListCanBeFilteredToOneNotificationAndToManualSends(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $onlyReset = $this->body($this->get($app, '/admin/messages/history', ['event' => 'password_reset']));
+        self::assertTrue(self::listsJob($onlyReset, $ids['reset']));
+        self::assertFalse(self::listsJob($onlyReset, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyReset, $ids['comment']));
+
+        $onlyManual = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+        self::assertTrue(self::listsJob($onlyManual, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyManual, $ids['reset']));
+
+        // 거르지 않으면 셋 다 보인다 — 위 단언들이 "아무것도 안 나온다"로 통과하지 않게.
+        $all = $this->body($this->get($app, '/admin/messages/history'));
+        foreach ($ids as $id) {
+            self::assertTrue(self::listsJob($all, $id));
+        }
+    }
+
+    /**
+     * event_key 가 빈 문자열인 작업도 "관리자 수동 발송"이다 — NULL 과 뜻이 같다.
+     * 거르기가 NULL 만 세면 그 작업은 '전체'에만 나타나고 어느 갈래에도 들어가지 못한다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEmptyEventKeyCountsAsAManualSendToo(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $onlyManual = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+
+        self::assertTrue(self::listsJob($onlyManual, $ids['blank']), '빈 문자열도 수동 발송이다');
+        self::assertTrue(self::listsJob($onlyManual, $ids['manual']));
+        self::assertFalse(self::listsJob($onlyManual, $ids['reset']));
+        self::assertStringContainsString('관리자 수동 발송', self::jobRow($onlyManual, $ids['blank']));
+    }
+
+    /**
+     * 카탈로그가 더는 모르는 키는 **그대로** 보여준다. 라벨이 없다고 '-' 로 적으면
+     * 그 줄은 수동 발송처럼 읽히고, 사람이 보낸 적 없는 작업이 사람 것으로 오해된다
+     * (업그레이드로 이벤트가 빠졌거나 확장이 자기 키를 쓰는 경우에 실제로 생긴다).
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnEventKeyTheCatalogueNoLongerKnowsIsPrintedAsItIs(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $row = self::jobRow($this->body($this->get($app, '/admin/messages/history')), $ids['gone']);
+
+        self::assertStringContainsString('retired_event', $row);
+        self::assertStringNotContainsString('관리자 수동 발송', $row);
+    }
+
+    /**
+     * 쿼리는 열거값만 받는다. 모르는 값으로 빈 목록을 보여주면 "그 알림은 한 번도 나가지
+     * 않았다"는 거짓을 말하게 되므로, 거르지 않은 것으로 본다.
+     */
+    #[DataProvider('connectionProvider')]
+    public function testAnUnknownFilterValueDoesNotHideEverything(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $ids = $this->seedWithEventKeys($app);
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['event' => "' OR 1=1 --"]));
+
+        foreach ($ids as $id) {
+            self::assertTrue(self::listsJob($html, $id));
+        }
+        self::assertStringNotContainsString('OR 1=1', $html);
+    }
+
+    /** 거르기는 페이저와 갱신 버튼을 건너서도 살아남아야 한다 — 풀리면 보던 목록을 잃는다. */
+    #[DataProvider('connectionProvider')]
+    public function testTheFilterSurvivesPagingAndTheRefreshButton(array $dbConfig): void
+    {
+        $app = $this->adminApp($dbConfig);
+        $manual = $this->seedWithEventKeys($app)['manual'];
+        $oldest = 0;
+        for ($i = 0; $i < 21; $i++) {
+            $id = (int) $app->db()->insert('message_jobs', ['channel' => 'sms', 'sender' => '0212345678',
+                'body' => '재설정 ' . $i, 'failover' => 0, 'total' => 1, 'success' => 1, 'failure' => 0,
+                'status' => 'sent', 'test_mode' => 0, 'event_key' => 'password_reset',
+                'created_at' => '2026-09-17 10:00:00']);
+            $oldest = $oldest === 0 ? $id : $oldest;
+        }
+
+        $html = $this->body($this->get($app, '/admin/messages/history', ['event' => 'password_reset']));
+        self::assertStringContainsString('page=2', $html);
+        self::assertStringContainsString('event=password_reset', $html);
+
+        $second = $this->body($this->get($app, '/admin/messages/history',
+            ['event' => 'password_reset', 'page' => '2']));
+        // 거른 22건(위에서 심은 password_reset 하나 + 21건) 중 두 번째 쪽에 남는 둘.
+        // 총 개수까지 거르지 않으면 페이저와 목록이 서로 다른 집합을 가리키게 되고,
+        // 거르기가 두 번째 쪽에 닿지 않으면 수동 발송 작업이 여기 섞여 나온다.
+        self::assertTrue(self::listsJob($second, $oldest));
+        self::assertFalse(self::listsJob($second, $manual));
+
+        // 총 개수까지 거르지 않으면 한 건짜리 목록에 두 쪽짜리 페이저가 붙고, 그 두 번째
+        // 쪽은 비어 있다 — 목록과 페이저가 서로 다른 집합을 가리키는 상태다.
+        $manualOnly = $this->body($this->get($app, '/admin/messages/history', ['event' => 'manual']));
+        self::assertTrue(self::listsJob($manualOnly, $manual));
+        self::assertStringNotContainsString('page=2', $manualOnly);
+
+        $refreshed = $this->post($app, '/admin/messages/history/refresh', [
+            'csrf_token' => $_SESSION['csrf_token'], 'event' => 'password_reset',
+        ]);
+        self::assertSame(303, $refreshed->getStatusCode());
+        self::assertStringContainsString('event=password_reset', $refreshed->getHeaderLine('Location'));
+    }
+}

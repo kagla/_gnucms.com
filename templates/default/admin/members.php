@@ -7,7 +7,9 @@
   <div><h1>회원 관리</h1><p class="page-sub">회원 정보를 수정하거나 필요한 경우 이용을 차단합니다. 소유자 권한은 변경되지 않습니다.</p></div>
 </div>
 <?php if ($saved): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>회원 정보를 저장했습니다.</span></div><?php endif ?>
-<?php if ($mail_failed): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림 메일은 보내지 못했습니다. 메일 설정을 확인하세요.</span></div><?php endif ?>
+<?php if ($password_notice === 'sent'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>비밀번호 변경 알림을 보냈습니다.</span></div><?php endif ?>
+<?php if ($password_notice === 'off'): ?><div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림은 어디로도 가지 않았습니다. 이 알림의 채널이 모두 꺼져 있거나, 이 회원에게 보낼 수단이 없습니다. 알림 설정을 확인하세요.</span></div><?php endif ?>
+<?php if ($password_notice === 'failed'): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림을 보내지 못했습니다. 알림 설정을 확인하세요.</span></div><?php endif ?>
 <form class="inline-search" method="get" action="<?= $this->url('admin.members') ?>" role="search">
   <label class="input input-bordered">
     <span class="input-icon" aria-hidden="true"><?= $this->icon('search', 16) ?></span>
@@ -18,10 +20,10 @@
 <section class="card">
   <div class="table-wrap">
     <table class="table table-zebra">
-      <thead><tr><th>회원</th><th>가입일</th><th>상태</th><th class="right">관리</th></tr></thead>
+      <thead><tr><th>회원</th><th>휴대폰번호</th><th>가입일</th><th>상태</th><th class="right">관리</th></tr></thead>
       <tbody>
       <?php if ($members === []): ?>
-        <tr class="table-empty"><td colspan="4">조건에 맞는 회원이 없습니다.</td></tr>
+        <tr class="table-empty"><td colspan="5">조건에 맞는 회원이 없습니다.</td></tr>
       <?php else: foreach ($members as $member): ?>
         <tr>
           <td data-label="회원">
@@ -35,6 +37,7 @@
               </div>
             </div>
           </td>
+          <td data-label="휴대폰번호"><?= !is_scalar($member['phone']) || (string) $member['phone'] === '' ? '<span class="muted">—</span>' : $this->e(\GnuCms\Aligo\PhoneNumber::mask((string) $member['phone'])) ?></td>
           <td data-label="가입일"><?= $this->date($member['created_at'], 'Y.m.d') ?></td>
           <?php $status_label = $member['status'] === 'active' ? '활성' : ($member['status'] === 'withdrawn' ? '탈퇴' : '차단'); ?>
           <td data-label="상태"><span class="badge badge-sm <?= $member['status'] === 'active' ? 'badge-success' : ($member['status'] === 'withdrawn' ? 'badge-ghost' : 'badge-error') ?> badge-soft"><?= $status_label ?></span></td>

@@ -139,7 +139,13 @@ final class AdminCmsController
         $input = $this->input($request);
         $this->assertCsrf($input);
         try {
-            $this->app->oauthSettingsService()->save($this->app->guestAcl(), $input);
+            $provider = isset($input['provider']) && is_scalar($input['provider'])
+                ? (string) $input['provider'] : '';
+            if ($provider !== '') {
+                $this->app->oauthSettingsService()->saveProvider($this->app->guestAcl(), $provider, $input);
+            } else {
+                $this->app->oauthSettingsService()->save($this->app->guestAcl(), $input);
+            }
             $this->app->refreshOauthProviders();
         } catch (DomainError $e) {
             if ($e->status() !== 422) {
@@ -147,6 +153,9 @@ final class AdminCmsController
             }
             $values = $this->app->oauthSettingsService()->formValues($this->app->guestAcl());
             foreach (array_keys($values) as $key) {
+                if ($provider !== '' && $key !== $provider) {
+                    continue;
+                }
                 $values[$key]['enabled'] = !empty($input[$key . '_enabled']);
                 $values[$key]['client_id'] = is_scalar($input[$key . '_client_id'] ?? null)
                     ? (string) $input[$key . '_client_id'] : '';
@@ -182,14 +191,8 @@ final class AdminCmsController
 
     public function maintenance(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $acl = $this->app->guestAcl();
-        $acl->assertGlobalAdmin();
-        return View::fromRequest($request)->render($response, 'admin/maintenance', [
-            'query' => $request->getQueryParams(), 'schema' => $this->app->schemaUpgrader()->status(),
-            'backup' => $this->app->backups()->status(),
-            'garbage' => $this->app->attachments()->garbageCandidates($acl),
-            'backup_upload_max_mb' => AttachmentService::serverMaxMb(), 'backup_error' => null,
-        ]);
+        return View::fromRequest($request)->render($response, 'admin/maintenance',
+            MaintenanceViewData::build($this->app, $request->getQueryParams()));
     }
 
     public function uploadsGc(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -200,13 +203,33 @@ final class AdminCmsController
         $url = RouteContext::fromRequest($request)->getRouteParser()
             ->urlFor('admin.settings.maintenance', [], ['gc' => (string) $result['deleted']]);
 
-        return $response->withHeader('Location', $url)->withStatus(303);
+        return $response->withHeader('Location', $url . '#garbage-list')->withStatus(303);
     }
 
     public function mailForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return $this->renderMailForm($request, $response,
-            $this->app->mailSettingsService()->formValues($this->app->guestAcl()), [], null);
+        return $this->renderMailSettings($request, $response);
+    }
+
+    private function renderMailSettings(ServerRequestInterface $request, ResponseInterface $response,
+        array $overrides = []): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $values = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
+        $query = $request->getQueryParams();
+        return View::fromRequest($request)->render($response, 'admin/mail', [
+            'values' => $overrides['values'] ?? $values,
+            'errors' => $overrides['errors'] ?? [],
+            'query' => [
+                'saved' => ($query['saved'] ?? '') === '1' ? '1' : '',
+                'tested' => ($query['tested'] ?? '') === '1' ? '1' : '',
+                'transport' => in_array(($query['transport'] ?? ''), ['native', 'smtp'], true)
+                    ? (string) $query['transport'] : '',
+            ],
+            'test_error' => $overrides['test_error'] ?? null,
+            'test_values' => $overrides['test_values'] ?? ['test_email' => ''],
+            'test_errors' => $overrides['test_errors'] ?? [],
+        ]);
     }
 
     public function mail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -222,9 +245,11 @@ final class AdminCmsController
             $current = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
             $input['password'] = '';
             $input['password_set'] = $current['password_set'];
-            return $this->renderMailForm($request, $response->withStatus(422), $input, $e->details(), null);
+            return $this->renderMailSettings($request, $response->withStatus(422), [
+                'values' => $input, 'errors' => $e->details(),
+            ]);
         }
-        return $this->redirect($request, $response, 'admin.mail', ['saved' => '1']);
+        return $this->redirect($request, $response, 'admin.mail', ['saved' => '1'], 'mail');
     }
 
     public function mailPassword(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -243,29 +268,25 @@ final class AdminCmsController
 
     public function mailTest(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $this->assertCsrf($this->input($request));
+        $input = $this->input($request);
+        $this->assertCsrf($input);
         $this->app->guestAcl()->assertGlobalAdmin();
+        $email = isset($input['test_email']) && is_scalar($input['test_email'])
+            ? (string) $input['test_email'] : '';
         try {
-            $this->app->sendMailTest();
+            $transport = $this->app->sendMailTest($email);
         } catch (DomainError $e) {
-            return $this->renderMailForm(
-                $request,
-                $response->withStatus($e->status() === 422 ? 422 : 502),
-                $this->app->mailSettingsService()->formValues($this->app->guestAcl()),
-                $e->details(),
-                $e->getMessage()
+            return $this->renderMailSettings(
+                $request, $response->withStatus($e->status() === 422 ? 422 : 502), [
+                    'test_values' => ['test_email' => $email],
+                    'test_errors' => $e->details(),
+                    'test_error' => $e->status() === 422 ? null : $e->getMessage(),
+                ]
             );
         }
-        return $this->redirect($request, $response, 'admin.mail', ['tested' => '1']);
-    }
-
-    private function renderMailForm(ServerRequestInterface $request, ResponseInterface $response,
-        array $values, array $errors, ?string $testError): ResponseInterface
-    {
-        return View::fromRequest($request)->render($response, 'admin/mail', [
-            'values' => $values, 'errors' => $errors, 'query' => $request->getQueryParams(),
-            'test_error' => $testError,
-        ]);
+        return $this->redirect($request, $response, 'admin.mail', [
+            'tested' => '1', 'transport' => $transport,
+        ], 'mail-test');
     }
 
     public function pages(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -585,11 +606,14 @@ final class AdminCmsController
     }
 
     private function redirect(ServerRequestInterface $request, ResponseInterface $response, string $route,
-        array $query = []): ResponseInterface
+        array $query = [], string $fragment = ''): ResponseInterface
     {
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor($route);
         if ($query !== []) {
             $url .= '?' . http_build_query($query);
+        }
+        if ($fragment !== '') {
+            $url .= '#' . $fragment;
         }
         return $response->withHeader('Location', $url)->withStatus(303);
     }

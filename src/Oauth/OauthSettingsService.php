@@ -39,6 +39,10 @@ final class OauthSettingsService
         foreach (self::PROVIDERS as $key => $label) {
             $fallback = is_array($this->fallback[$key] ?? null) ? $this->fallback[$key] : [];
             $secret = (string) ($stored[$key . '.client_secret'] ?? $fallback['client_secret'] ?? '');
+            $secretLength = $secret === '' ? 0 : mb_strlen(
+                array_key_exists($key . '.client_secret', $stored)
+                    ? $this->cipher->decrypt($secret) : $secret
+            );
             $defaultEnabled = (string) ($fallback['client_id'] ?? '') !== ''
                 && ($key === 'kakao' || $secret !== '');
             $values[$key] = [
@@ -48,6 +52,7 @@ final class OauthSettingsService
                     ? $stored[$key . '.enabled'] === '1' : $defaultEnabled,
                 'client_id' => (string) ($stored[$key . '.client_id'] ?? $fallback['client_id'] ?? ''),
                 'client_secret_set' => $secret !== '',
+                'client_secret_mask' => str_repeat('*', $secretLength),
                 'client_secret_optional' => $key === 'kakao',
                 'console_url' => self::CONSOLE_URLS[$key],
                 'redirect_uri' => $this->redirectUri($key),
@@ -59,12 +64,29 @@ final class OauthSettingsService
 
     public function save(Acl $acl, array $input): void
     {
+        $this->saveSelected($acl, $input, array_keys(self::PROVIDERS));
+    }
+
+    /** 다른 제공자의 미완성 설정 때문에 이 제공자의 저장이 함께 거절되지 않게 한다. */
+    public function saveProvider(Acl $acl, string $provider, array $input): void
+    {
+        $acl->assertGlobalAdmin();
+        if (!array_key_exists($provider, self::PROVIDERS)) {
+            throw DomainError::validation(['provider' => '지원하지 않는 소셜 로그인 제공자입니다.']);
+        }
+        $this->saveSelected($acl, $input, [$provider]);
+    }
+
+    /** @param list<string> $providers */
+    private function saveSelected(Acl $acl, array $input, array $providers): void
+    {
         $acl->assertGlobalAdmin();
         $stored = $this->settings->all();
         $v = new Validator($input);
         $saved = [];
 
-        foreach (self::PROVIDERS as $key => $label) {
+        foreach ($providers as $key) {
+            $label = self::PROVIDERS[$key];
             $enabled = $v->bool($key . '_enabled', false);
             $clientId = $v->optionalString($key . '_client_id', 500, '') ?? '';
             $secret = $v->optionalString($key . '_client_secret', 1000, null);

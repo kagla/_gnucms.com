@@ -88,6 +88,17 @@ final class PhpView implements ViewInterface
         return $view;
     }
 
+    /**
+     * 쇼핑몰 화면. 테마 경로마다 /shop 을 앞에 둔 뷰라 템플릿의 상대 이름(_header, admin/_nav)이
+     * 그대로 동작하고, 다른 테마는 templates/<테마>/shop/ 으로 덮어쓴다.
+     */
+    public function forShop(): self
+    {
+        $view = clone $this;
+        $view->paths = [...array_map(static fn (string $path): string => $path . '/shop', $this->paths), ...$this->paths];
+        $view->icons = null;
+        return $view;
+    }
 
     /** 조각이 있는가. 목록 형태처럼 없을 수 있는 조각을 고를 때 쓴다. */
     public function exists(string $template): bool

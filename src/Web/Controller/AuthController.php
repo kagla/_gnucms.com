@@ -115,7 +115,10 @@ final class AuthController
             if ($e->status() !== 422) {
                 throw $e;
             }
-            $values = ['email' => $input['email'] ?? ''];
+            $values = [
+                'email' => isset($input['email']) && is_scalar($input['email']) ? $input['email'] : '',
+                'phone' => isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '',
+            ];
             foreach ($this->app->cmsService()->consentDocuments('signup') as $doc) {
                 $values['agree_' . $doc['id']] = isset($input['agree_' . $doc['id']]);
             }
@@ -143,7 +146,9 @@ final class AuthController
             $this->storeSession($user);
             return $this->redirectTo($request, $response, 'admin.index');
         }
-        return View::fromRequest($request)->render($response, 'auth/check_email');
+        return View::fromRequest($request)->render($response, 'auth/check_email',
+            ['deliverable' => $this->app->accountService()
+                ->canSendVerificationLink((string) $user['email'])]);
     }
 
     private function assertAnyRegistrationEnabled(): void
@@ -169,8 +174,37 @@ final class AuthController
     public function verifyEmail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $token = $request->getQueryParams()['token'] ?? '';
-        $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
-        return View::fromRequest($request)->render($response, 'auth/verified');
+        $email = $this->app->accountService()->verifyEmail(is_scalar($token) ? (string) $token : '');
+        return View::fromRequest($request)->render($response, 'auth/verified', [
+            'verified_email' => $this->maskEmail($email),
+        ]);
+    }
+
+    /** 계정을 구분할 앞부분은 일부만 남기고 도메인은 모두 보여 준다. */
+    private function maskEmail(?string $email): ?string
+    {
+        if ($email === null) {
+            return null;
+        }
+        $at = strrpos($email, '@');
+        if ($at === false) {
+            return null;
+        }
+        $local = substr($email, 0, $at);
+        $domain = substr($email, $at + 1);
+
+        return $this->maskEmailPart($local, 2) . '@' . $domain;
+    }
+
+    private function maskEmailPart(string $value, int $visibleLength): string
+    {
+        $length = mb_strlen($value, 'UTF-8');
+        if ($length === 0) {
+            return '*';
+        }
+        $shown = min($visibleLength, $length - 1);
+
+        return mb_substr($value, 0, $shown, 'UTF-8') . str_repeat('*', $length - $shown);
     }
 
     /** 인증 메일을 다시 보낸다. 없는 이메일이나 이미 인증된 계정이면 조용히 같은 화면을 낸다. */
@@ -201,7 +235,10 @@ final class AuthController
                 'return_url' => $returnUrl,
             ]);
         }
-        return View::fromRequest($request)->render($response, 'auth/check_email');
+        // 적어 낸 주소로 묻되 그 주소를 **찾아보지는 않는다** — 답은 모양으로만 정해지고,
+        // 가입된 주소든 아니든 같다(AccountService::canSendVerificationLink).
+        return View::fromRequest($request)->render($response, 'auth/check_email',
+            ['deliverable' => $this->app->accountService()->canSendVerificationLink($email)]);
     }
 
     public function forgotForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -225,7 +262,18 @@ final class AuthController
                 'errors' => $e->details(), 'values' => ['email' => $email],
             ]);
         }
-        return View::fromRequest($request)->render($response, 'auth/reset_sent');
+        // "당신에게 보냈다"가 아니라 "이 설정으로 누구에게든 보낼 수 있다"만 말한다.
+        // 앞의 것을 말하면 이 화면이 가입 여부를 묻는 도구가 된다(canSendResetLink).
+        //
+        // **같은 것은 응답 본문이고, 응답 시간까지 같지는 않다.** 계정이 있는 주소에서만
+        // 실제 발송이 일어나므로, 전화 채널을 켜 두면 그쪽이 알리고 왕복만큼(보통 1초
+        // 안팎) 눈에 띄게 느리다. 방문 요청 안에서 보내는 이 구조에서 시간까지 맞추려면
+        // 없는 주소에도 인위적 지연을 넣어야 하고, 그 지연은 그 자체로 새로운 부하
+        // 창구가 된다. 그래서 맞추는 대신 **수확 속도를 묶어 둔다**: 주소마다 10분에
+        // 3회, 한 회선(IP)마다 10분에 5회이고, 그 셈은 주소를 찾아보기 전에 일어난다
+        // (AccountService::countResetRequest()).
+        return View::fromRequest($request)->render($response, 'auth/reset_sent',
+            ['deliverable' => $this->app->accountService()->canSendResetLink()]);
     }
 
     public function resetForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

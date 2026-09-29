@@ -56,14 +56,14 @@ final class InstallSessionTest extends TestCase
     {
         $store = [];
         $s = new InstallSession($store);
-        $s->set('db', ['dsn' => 'sqlite::memory:']);
+        $s->set('db', ['dsn' => 'mysql:host=localhost;dbname=install_test']);
 
-        self::assertSame(['dsn' => 'sqlite::memory:'], $s->get('db'));
+        self::assertSame(['dsn' => 'mysql:host=localhost;dbname=install_test'], $s->get('db'));
         self::assertNull($s->get('site'));
-        self::assertSame(['dsn' => 'sqlite::memory:'], $store['data']['db']);
+        self::assertSame(['dsn' => 'mysql:host=localhost;dbname=install_test'], $store['data']['db']);
 
         $again = new InstallSession($store);
-        self::assertSame(['dsn' => 'sqlite::memory:'], $again->get('db'));
+        self::assertSame(['dsn' => 'mysql:host=localhost;dbname=install_test'], $again->get('db'));
     }
 
     public function testResetClearsEverything(): void

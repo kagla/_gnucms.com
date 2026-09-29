@@ -50,6 +50,15 @@ use GnuCms\Cms\ContentImageService;
 use GnuCms\Cms\ContentRenderer;
 use GnuCms\Cms\HtmlSanitizer;
 use GnuCms\Maintenance\BackupManager;
+use GnuCms\Aligo\AligoService;
+use GnuCms\Aligo\StreamTransport;
+use GnuCms\Notify\AlimtalkChannel;
+use GnuCms\Notify\InboxChannel;
+use GnuCms\Notify\MailChannel;
+use GnuCms\Notify\Notifier;
+use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\SettingsRepository as NotifySettingsRepository;
+use GnuCms\Notify\SmsChannel;
 
 /**
  * 설정으로부터 객체 그래프를 조립한다. 컨테이너 라이브러리를 쓰지 않는 이유는
@@ -145,6 +154,19 @@ final class App
     private ?ContentImageService $contentImages = null;
 
     private ?BackupManager $backupManager = null;
+
+    private ?AligoService $aligoService = null;
+
+    private ?NotifySettings $notifySettings = null;
+
+    private ?Notifier $notifier = null;
+
+    private array $paymentSettings = [];
+    private ?\GnuCms\Payment\ProviderRegistry $paymentProviders = null;
+
+    private array $paymentGateways = [];
+
+    private ?\GnuCms\Shop\Service $shop = null;
 
     private ?string $configFile;
 
@@ -252,7 +274,15 @@ final class App
             $this->notificationService = new NotificationService(
                 $this->notifications(),
                 $this->posts(),
-                $this->comments()
+                $this->comments(),
+                $this->users(),
+                $this->cmsService(),
+                (string) $this->config('app.url', GNUCMS_URL),
+                // 발송기는 만들어진 채로 넘기지 않는다 — 알림함 채널이 이 서비스를
+                // 지연해서 받는 것과 같은 고리를 반대쪽에서 막고(notifier() 주석),
+                // setMailer()·setAligo() 가 발송기를 끊어도 이 서비스만 옛 사본을
+                // 들고 남지 않게 한다.
+                fn (): Notifier => $this->notifier()
             );
         }
 
@@ -425,6 +455,13 @@ final class App
                 $this->consents()
             );
             $this->accountService->setPasswordThrottle($this->passwordThrottle());
+            // 발송기는 new 가 끝난 **뒤에** 끼운다. 이 게터는 그 대입이 끝난 자리에서만
+            // 메모이즈되므로, 언젠가 notifier() 쪽 조립이 계정 서비스를 되짚더라도
+            // 반쯤 만들어진 것을 받을지언정 무한 재귀로 가지는 않는다. 위의
+            // setPasswordThrottle() 과 같은 이유의 같은 차례다.
+            $this->accountService->setNotifier($this->notifier());
+            // 탈퇴는 번호를 지우는 것으로 끝나지 않는다 — 이미 걸린 예약도 멈춘다.
+            $this->accountService->setAligo($this->aligo());
         }
 
         return $this->accountService;
@@ -477,6 +514,8 @@ final class App
         $this->mailer = $mailer;
         $this->accountService = null;
         $this->socialAuthService = null;
+        $this->linkingService = null;
+        $this->notifier = null;
     }
 
     public function socialAuthService(): SocialAuthService
@@ -487,12 +526,15 @@ final class App
                     $this->db(), $this->users(), $this->identities(),
                     $this->cmsService(), $this->consents(), $this->avatars()
                 );
+                // 소셜로 처음 가입하는 사람의 가입 완료 안내가 이 서비스에서 나간다.
+                $this->linkingService->setNotifier($this->notifier());
             }
             $this->socialAuthService = new SocialAuthService(
                 $this->providerRegistry(), $this->linkingService, $this->mailer(),
                 (string) $this->config('app.url', GNUCMS_URL),
                 $this->cmsService()
             );
+            $this->socialAuthService->setNotifier($this->notifier());
         }
         return $this->socialAuthService;
     }
@@ -547,24 +589,155 @@ final class App
         return $this->mailSettingsService;
     }
 
-    public function sendMailTest(): void
+    /**
+     * 테스트에서 알리고 전송기를 가짜로 바꾼다. 메일의 setMailer() 와 같은 이유다 —
+     * 화면을 지나는 시험이 실제 알리고 서버를 부르면 안 된다. 발송을 막는 문(채널
+     * 허용 스위치)은 AligoService::send() 안에 있으므로 이 교체로 열리지 않는다.
+     */
+    public function setAligo(AligoService $service): void
     {
-        $settings = $this->mailSettingsService()->runtime();
-        if ($settings === null) {
-            throw \GnuCms\Error\DomainError::validation(['enabled' => 'SMTP를 사용하도록 설정해 주세요.']);
+        $this->aligoService = $service;
+        // 알림 설정과 알림 발송기는 이 서비스(와 그 템플릿 사본)를 쥔 채 조립된다.
+        // 끊어 주지 않으면 가짜로 바꾼 뒤에도 알림은 진짜 알리고로 나간다 —
+        // setMailer() 가 accountService 를 끊는 것과 같은 이유다.
+        $this->notifySettings = null;
+        $this->notifier = null;
+        // 발송기를 끊었으면 그 발송기를 이미 받아 쥔 서비스도 함께 끊어야 한다.
+        // 그러지 않으면 그 서비스들만 옛 발송기(=진짜 알리고)를 계속 들고 있다.
+        $this->accountService = null;
+        $this->socialAuthService = null;
+        $this->linkingService = null;
+        // 회원 관리(차단)도 이 서비스를 쥔다 — 끊지 않으면 차단이 가짜가 아닌 진짜
+        // 알리고로 취소를 부르러 나간다.
+        $this->adminService = null;
+    }
+
+    public function aligo(): AligoService
+    {
+        if ($this->aligoService === null) {
+            $this->aligoService = new AligoService(
+                $this->db(),
+                new StreamTransport(),
+                new SecretCipher((string) $this->config('auth.secret', ''))
+            );
         }
+
+        return $this->aligoService;
+    }
+
+    public function shop(): \GnuCms\Shop\Service
+    {
+        return $this->shop ??= new \GnuCms\Shop\Service($this);
+    }
+
+    public function paymentProviders(): \GnuCms\Payment\ProviderRegistry
+    {
+        return $this->paymentProviders ??= new \GnuCms\Payment\ProviderRegistry();
+    }
+
+    public function paymentSettings(string $provider = 'inicis'): \GnuCms\Payment\Settings
+    {
+        return $this->paymentSettings[$provider] ??= new \GnuCms\Payment\Settings($this, $provider);
+    }
+
+    public function paymentGateway(string $provider): \GnuCms\Payment\Gateway
+    {
+        if (!isset($this->paymentGateways[$provider])) {
+            $gateway = $this->paymentProviders()->get($provider)->gateway($this->paymentSettings($provider));
+            if ($gateway->id() !== $provider) throw new \LogicException('결제사와 게이트웨이 ID가 다릅니다.');
+            $this->paymentGateways[$provider] = $gateway;
+        }
+        return $this->paymentGateways[$provider];
+    }
+
+    /** 테스트·내부 서비스에서 전송기를 주입한 게이트웨이를 등록한다. */
+    public function setPaymentGateway(\GnuCms\Payment\Gateway $gateway): void
+    {
+        $this->paymentProviders()->get($gateway->id());
+        $this->paymentGateways[$gateway->id()] = $gateway;
+    }
+
+    /** 기존 코어 호출과의 호환. 쇼핑몰은 paymentGateway()를 사용한다. */
+    public function inicisGateway(): \GnuCms\Payment\Gateway
+    {
+        return $this->paymentGateway('inicis');
+    }
+
+    public function setInicisGateway(\GnuCms\Payment\InicisGateway $gateway): void
+    {
+        $this->setPaymentGateway($gateway);
+    }
+
+    /**
+     * 이벤트마다 어느 채널을 켤지 저장한 설정. 알림 발송기와 관리자 설정 화면이 같은
+     * 사본을 본다 — 채널 둘(알림톡·문자)이 이 객체에게 본문·템플릿을 묻기 때문이다.
+     */
+    public function notifySettings(): NotifySettings
+    {
+        if ($this->notifySettings === null) {
+            $this->notifySettings = new NotifySettings(
+                new NotifySettingsRepository($this->db()),
+                $this->aligo()->templates
+            );
+        }
+
+        return $this->notifySettings;
+    }
+
+    /**
+     * 코어 알림의 유일한 출구.
+     *
+     * **알림함 채널만 callable 을 받는 이유.** 이 게터는 다른 게터들과 같이 new 가 끝난
+     * **뒤에** 메모이즈한다($this->notifier 대입은 맨 마지막이다). 그래서 조립 도중에
+     * notificationService() 를 만들면, 언젠가 그 서비스가 알림을 보내게 되는 순간
+     * (알림함에 적는 김에 메일도 보내는 식) 그 게터가 다시 notifier() 를 부르고, 아직
+     * null 인 메모이즈를 지나 무한 재귀가 된다. 발송 시점에야 서비스를 만들면 notifier()
+     * 가 먼저 끝나 메모이즈되므로 그 고리가 닫히지 않는다. postService() 의
+     * setAttachmentResolver() 가 같은 이유로 쓰는 같은 해법이다.
+     */
+    public function notifier(): Notifier
+    {
+        if ($this->notifier === null) {
+            $settings = $this->notifySettings();
+            $this->notifier = new Notifier($settings, [
+                new MailChannel($this->mailer()),
+                new AlimtalkChannel($this->aligo(), $settings),
+                new SmsChannel($this->aligo(), $settings),
+                new InboxChannel(fn (): NotificationService => $this->notificationService()),
+            ]);
+        }
+
+        return $this->notifier;
+    }
+
+    /** @return string 실제 사용한 전송 방식(native|smtp) */
+    public function sendMailTest(string $to): string
+    {
+        $to = strtolower(trim($to));
+        if ($to === '' || strlen($to) > 254 || filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+            throw \GnuCms\Error\DomainError::validation([
+                'test_email' => '테스트 메일을 받을 올바른 이메일 주소를 입력해 주세요.',
+            ]);
+        }
+        $settings = $this->mailSettingsService()->runtime();
         $siteName = (string) $this->cmsService()->settings()['site_name'];
         $this->mailer()->send(
-            (string) $settings['from_email'],
-            '[' . $siteName . '] SMTP 테스트 메일',
-            "SMTP 설정이 정상적으로 작동합니다.\n\n이 메일은 {$siteName} 관리자에서 보낸 테스트 메일입니다."
+            $to,
+            '[' . $siteName . '] 테스트 메일',
+            ($settings === null ? '서버 기본 메일 기능' : 'SMTP')
+                . "으로 보낸 테스트 메일입니다.\n\n이 메일이 도착했다면 {$siteName}의 메일 발송 기능이 작동하고 있습니다."
         );
+
+        return $settings === null ? 'native' : 'smtp';
     }
 
     public function adminService(): AdminService
     {
         if ($this->adminService === null) {
             $this->adminService = new AdminService($this->db(), $this->users(), $this->boardService());
+            // 차단은 그 회원에게 걸린 예약 발송도 멈춘다. 게터들과 같은 차례로 new 가
+            // 끝난 뒤에 끼운다(accountService() 의 setNotifier() 주석과 같은 이유).
+            $this->adminService->setAligo($this->aligo());
         }
         return $this->adminService;
     }

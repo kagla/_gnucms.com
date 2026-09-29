@@ -42,9 +42,7 @@ final class KernelUpgradeTest extends WebTestCase
         self::assertSame(200, $response->getStatusCode());
         $schema = new Schema($app->db());
         self::assertSame($schema->stamp(), $schema->storedStamp());
-        if ($app->db()->dialect()->name() === 'sqlite') {
-            self::assertCount(1, glob($this->storage . '/backups/board-v9-*.sqlite') ?: []);
-        }
+        self::assertDirectoryDoesNotExist($this->storage . '/backups');
     }
 
     #[DataProvider('connectionProvider')]

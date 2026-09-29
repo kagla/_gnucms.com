@@ -22,39 +22,17 @@ final class DbSetupTest extends TestCase
 
     protected function tearDown(): void
     {
-        @unlink($this->dir . '/board.sqlite');
         @rmdir($this->dir);
     }
 
     public function testAvailableTypesFollowLoadedDrivers(): void
     {
-        self::assertSame(['sqlite', 'mysql'], array_keys(DbSetup::TYPES));
-        self::assertSame(['sqlite', 'mysql'], DbSetup::availableTypes(['pdo', 'pdo_sqlite', 'pdo_mysql', 'pdo_unsupported']));
-        self::assertSame(['sqlite'], DbSetup::availableTypes(['pdo', 'pdo_sqlite']));
+        self::assertSame(['mysql'], array_keys(DbSetup::TYPES));
+        self::assertSame(['mysql'], DbSetup::availableTypes(['pdo', 'pdo_sqlite', 'pdo_mysql', 'pdo_unsupported']));
+        self::assertSame([], DbSetup::availableTypes(['pdo', 'pdo_sqlite']));
         self::assertSame(['mysql'], DbSetup::availableTypes(['pdo', 'pdo_mysql']));
         self::assertSame([], DbSetup::availableTypes(['pdo', 'pdo_unsupported']));
         self::assertSame([], DbSetup::availableTypes(['pdo']));
-    }
-
-    public function testSqliteDsnFromAbsolutePath(): void
-    {
-        $db = DbSetup::dsnFrom(['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite']);
-
-        self::assertSame(['dsn' => 'sqlite:' . $this->dir . '/board.sqlite', 'username' => null, 'password' => null, 'prefix' => ''], $db);
-    }
-
-    public function testSqliteRejectsRelativePathAndUnwritableFolder(): void
-    {
-        $this->assertValidation(['type' => 'sqlite', 'sqlite_path' => 'storage/board.sqlite'], 'sqlite_path');
-        $this->assertValidation(['type' => 'sqlite', 'sqlite_path' => '/nonexistent-' . bin2hex(random_bytes(3)) . '/board.sqlite'], 'sqlite_path');
-    }
-
-    public function testSqliteRejectsPathUnderPublic(): void
-    {
-        $this->assertValidation(
-            ['type' => 'sqlite', 'sqlite_path' => dirname(__DIR__, 2) . '/www/board.sqlite'],
-            'sqlite_path'
-        );
     }
 
     public function testMysqlDsnIsAssembled(): void
@@ -88,17 +66,20 @@ final class DbSetupTest extends TestCase
     public function testUnknownTypeIsRejected(): void
     {
         $this->assertValidation(['type' => 'oracle'], 'type');
+        $this->assertValidation(['type' => 'sqlite'], 'type');
     }
 
     public function testPrefixIsValidatedAndSeparatesSites(): void
     {
-        $base = ['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite'];
-        $firstConfig = DbSetup::dsnFrom($base + ['prefix' => 'first_']);
-        $secondConfig = DbSetup::dsnFrom($base + ['prefix' => 'second_']);
+        $base = ['type' => 'mysql', 'host' => 'localhost', 'name' => 'test', 'user' => 'test'];
+        $firstConfig = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig('first_');
+        $secondConfig = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig('second_');
 
         $first = Connection::create($firstConfig);
         $second = Connection::create($secondConfig);
+        (new Schema($first))->drop();
         (new Schema($first))->create();
+        (new Schema($second))->drop();
         (new Schema($second))->create();
         $first->insert('boards', $this->boardRow('first'));
         $second->insert('boards', $this->boardRow('second'));
@@ -115,14 +96,15 @@ final class DbSetupTest extends TestCase
 
     public function testProbeReportsEmptyThenTablesThenAdmin(): void
     {
-        $config = DbSetup::dsnFrom(['type' => 'sqlite', 'sqlite_path' => $this->dir . '/board.sqlite']);
+        $config = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig('probe_');
 
+        (new Schema(Connection::create($config)))->drop();
         $empty = DbSetup::probe($config);
-        self::assertSame(['dialect' => 'sqlite', 'has_tables' => false, 'has_admin' => false], $empty);
+        self::assertSame(['dialect' => 'mysql', 'has_tables' => false, 'has_admin' => false], $empty);
 
         $db = Connection::create($config);
         (new Schema($db))->create();
-        self::assertSame(['dialect' => 'sqlite', 'has_tables' => true, 'has_admin' => false], DbSetup::probe($config));
+        self::assertSame(['dialect' => 'mysql', 'has_tables' => true, 'has_admin' => false], DbSetup::probe($config));
 
         $db->insert('users', [
             'email' => 'a@example.com', 'email_verified' => 1, 'password_hash' => 'x', 'display_name' => '관리자',

@@ -17,8 +17,16 @@ final class Manager
     private array $services = [];
     private array $navigation = [];
 
+    /** 코어로 옮겨 간 옛 모듈 키. 상태 파일에 남아 있어도 목록에 보이지 않고 다음 저장 때 빠진다. */
+    private const RETIRED = ['modules/youngcart'];
+
     /** 성공적으로 등록한 확장만 공개 메뉴에 표시한다. */
     public function navigation(): array { return $this->navigation; }
+
+    private static function live(array $keys): array
+    {
+        return array_values(array_diff($keys, self::RETIRED));
+    }
 
     public function __construct(private Catalog $catalog, private StateStore $state)
     {
@@ -28,7 +36,7 @@ final class Manager
     {
         $packages = $this->catalog->all();
         $snapshot = $this->state->snapshot();
-        $enabled = $snapshot['enabled'];
+        $enabled = self::live($snapshot['enabled']);
         foreach ($enabled as $key) {
             if (!isset($packages[$key])) {
                 [$section, $id] = explode('/', $key, 2);
@@ -36,6 +44,7 @@ final class Manager
                     'key' => $key, 'id' => $id, 'section' => $section, 'name' => $id,
                     'description' => '', 'version' => '', 'requires' => [], 'optional' => [],
                     'entry_path' => null, 'public_path' => null, 'route_prefix' => null, 'admin_route_prefix' => null, 'admin_test' => false,
+                    'aliases' => true,
                     'error' => '활성화된 패키지의 파일을 찾을 수 없습니다.',
                 ];
             }
@@ -65,6 +74,7 @@ final class Manager
         }
         $this->state->update(function (array $active) use ($changes): array {
             $packages = $this->catalog->all();
+            $active = self::live($active);
             $candidate = $active;
             foreach ($changes as $key => $enabled) {
                 if (!is_bool($enabled)) {
@@ -105,7 +115,7 @@ final class Manager
         $this->services = [];
         $this->navigation = [];
         $packages = $this->catalog->all();
-        $active = $this->state->read();
+        $active = self::live($this->state->read());
         $order = [];
         foreach ($active as $key) {
             try {
@@ -134,7 +144,7 @@ final class Manager
                 continue;
             }
             try {
-                $context = new Context($app, $key, $services, $package['route_prefix'], $package['admin_route_prefix']);
+                $context = new Context($app, $key, $services, $package['route_prefix'], $package['admin_route_prefix'], $package['aliases']);
                 $register = (static fn (string $file) => require $file)($package['directory'] . '/bootstrap.php');
                 if (!is_callable($register)) {
                     throw new \RuntimeException('Invalid extension entry point');
@@ -179,7 +189,7 @@ final class Manager
         if ($package === null || !$package['admin_test']) {
             throw DomainError::notFound('관리자 테스트를 지원하는 확장이 아닙니다.');
         }
-        $active = $this->state->read();
+        $active = self::live($this->state->read());
         $this->order($key, $packages, array_values(array_unique([...$active, $key])), [], []);
         foreach ($package['requires'] as $dependency) {
             if (isset($this->runtimeErrors[$dependency])) {
@@ -187,7 +197,7 @@ final class Manager
             }
         }
         try {
-            $context = new Context($app, $key, $this->services, $package['route_prefix'], $package['admin_route_prefix']);
+            $context = new Context($app, $key, $this->services, $package['route_prefix'], $package['admin_route_prefix'], $package['aliases']);
             $register = (static fn (string $file) => require $file)($package['directory'] . '/bootstrap.php');
             if (!is_callable($register)) {
                 throw new \RuntimeException('Invalid extension entry point');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Account;
 
+use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Db\Connection;
 use GnuCms\Support\Clock;
 use GnuCms\Support\IpAddress;
@@ -59,17 +60,20 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE id = ?',
             [$id]
         );
     }
 
+    /** 칸 목록은 findById() 와 같아야 한다 — 두 곳에서 온 회원 행이 같은 자리
+     *  (Notify\Recipient::forUser() 가 읽는 phone 이 그렇다)로 흘러 들어가는데, 어느
+     *  길로 왔느냐에 따라 값이 있고 없고가 갈리면 알아채기 어려운 결함이 된다. */
     public function findByEmail(string $email): ?array
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
@@ -127,9 +131,10 @@ final class UserRepository
         return mb_substr($base, 0, 100 - 13) . bin2hex(random_bytes(6));
     }
 
-    public function createRegistered(string $email, string $passwordHash, string $displayName, ?string $registeredIp = null): int
+    public function createRegistered(string $email, string $passwordHash, string $displayName,
+        ?string $registeredIp = null, ?string $phone = null): int
     {
-        return $this->db->transaction(function () use ($email, $passwordHash, $displayName, $registeredIp): int {
+        return $this->db->transaction(function () use ($email, $passwordHash, $displayName, $registeredIp, $phone): int {
             $isFirst = $this->db->execute(
                 'UPDATE ' . $this->db->table('site_settings') . ' SET setting_value = ?, updated_at = ?'
                 . ' WHERE setting_key = ? AND setting_value = ?',
@@ -137,7 +142,7 @@ final class UserRepository
             ) === 1;
 
             $id = $this->create($email, $passwordHash, $this->uniqueDisplayName($displayName), $isFirst);
-            $this->db->update('users', ['registered_ip' => IpAddress::normalize($registeredIp)],
+            $this->db->update('users', ['registered_ip' => IpAddress::normalize($registeredIp), 'phone' => $phone],
                 'id = :id', ['id' => $id]);
             if ($isFirst) {
                 $this->verifyEmail($id);
@@ -248,6 +253,14 @@ final class UserRepository
                 'session_epoch' => (int) $user['session_epoch'] + 1,
                 'avatar_file' => null,
                 'avatar_source' => null,
+                // 번호도 함께 지운다. 탈퇴는 이 시스템이 개인정보를 놓아주겠다고
+                // 약속하는 유일한 순간인데, 번호만 남기면 가장 연락하기 쉬운 값이
+                // 남는다. 관리자 회원 수정은 탈퇴 회원을 거부하므로(AdminService),
+                // 여기서 지우지 않으면 DB 를 직접 건드리는 것 말고는 지울 방법이
+                // 없다. 이미 발송된 건의 수신번호는 message_recipients 가 따로
+                // 들고 있고, 발송 화면·수신자 확인은 모두 활성 회원만 보므로
+                // 지워도 잃는 것이 없다.
+                'phone' => null,
                 'withdrawn_ip' => IpAddress::normalize($clientIp),
                 'withdrawn_at' => $now,
                 'updated_at' => $now,
@@ -255,20 +268,71 @@ final class UserRepository
         });
     }
 
+    /**
+     * 관리자 회원 관리 목록. 차단·탈퇴 회원도 일부러 포함한다 — 관리자가 손댈 수
+     * 있어야 하는 사람들이라 여기서 감추면 찾을 방법이 없어진다. 발송 화면의 회원
+     * 고르기(searchActive)는 정반대로 활성 회원만 본다.
+     */
     public function listForAdmin(string $query = '', int $limit = 100): array
     {
         $limit = max(1, min(200, $limit));
-        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, avatar_file, created_at'
+        $sql = 'SELECT id, email, email_verified, display_name, is_admin, status, avatar_file, phone, created_at'
             . ' FROM ' . $this->db->table('users');
         $params = [];
         if ($query !== '') {
-            $sql .= ' WHERE LOWER(email) LIKE ? OR LOWER(display_name) LIKE ?';
-            $needle = '%' . mb_strtolower($query) . '%';
-            $params = [$needle, $needle];
+            [$match, $params] = $this->searchMatch($query);
+            $sql .= ' WHERE ' . $match;
         }
         $sql .= ' ORDER BY id DESC LIMIT ' . $limit;
 
         return $this->db->select($sql, $params);
+    }
+
+    /**
+     * 발송 화면의 회원 고르기. 활성 회원만 돌려준다 — CommentService 의 원칙("차단된
+     * 회원은 없는 회원과 같게 다룬다")을 따르는, 회원 관리 목록과는 일부러 반대인
+     * 규칙이다. 두 화면이 같이 쓰는 것은 "무엇과 일치하는가"(searchMatch)뿐이고
+     * "누구를 보여 주는가"는 각자 정한다.
+     */
+    public function searchActive(string $query, int $limit = 20): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+        [$match, $params] = $this->searchMatch($query);
+        $limit = max(1, min(100, $limit));
+
+        return $this->db->select(
+            'SELECT id, display_name, phone, email FROM ' . $this->db->table('users')
+            . ' WHERE ' . $match . ' AND status = ?'
+            . ' ORDER BY id DESC LIMIT ' . $limit,
+            [...$params, 'active']
+        );
+    }
+
+    /**
+     * 이름·이메일·번호 검색 조건 한 벌. 상태 조건은 붙이지 않는다 — 부르는 쪽이
+     * 각자 정한다(listForAdmin 은 전원, searchActive 는 활성 회원만).
+     *
+     * @return array{0: string, 1: array<int, string>} 괄호로 묶은 조건과 바인딩 값
+     */
+    private function searchMatch(string $query): array
+    {
+        $needle = '%' . mb_strtolower($query) . '%';
+        $conditions = ['LOWER(email) LIKE ?', 'LOWER(display_name) LIKE ?'];
+        $params = [$needle, $needle];
+
+        // 번호는 숫자만 저장하므로 검색어에서도 숫자만 뽑아 비교한다. 숫자가
+        // 하나도 없으면(이름 검색 등) 조건 자체를 붙이지 않는다 — 안 그러면
+        // `phone LIKE '%%'` 가 번호를 가진 회원을 모두 끌고 온다.
+        $digits = PhoneNumber::digits($query);
+        if ($digits !== '') {
+            $conditions[] = 'phone LIKE ?';
+            $params[] = '%' . $digits . '%';
+        }
+
+        return ['(' . implode(' OR ', $conditions) . ')', $params];
     }
 
     public function countAll(): int
@@ -304,6 +368,21 @@ final class UserRepository
     {
         $this->db->update('users', [
             'display_name' => $displayName,
+            'updated_at' => Clock::now(),
+        ], 'id = :id', ['id' => $id]);
+    }
+
+    /**
+     * 프로필·관리자 수정에서 번호만 바꾼다. updateDisplayName()·updateForAdmin() 과
+     * 나란히 두 번째 UPDATE 로 도는 이유는 updateForAdmin() 이 상태가 바뀔 때만
+     * session_epoch 를 올리는 부수효과를 갖고 있어서다(그 메서드 안의 $epoch 계산) —
+     * 번호 저장이 그 판단에 끼어들면 상태를 안 바꿨는데도 세션이 끊기거나, 반대로
+     * 번호 칸 하나 때문에 그 메서드의 이름과 책임이 흐려진다. 세션은 건드리지 않는다.
+     */
+    public function updatePhone(int $id, ?string $phone): void
+    {
+        $this->db->update('users', [
+            'phone' => $phone,
             'updated_at' => Clock::now(),
         ], 'id = :id', ['id' => $id]);
     }

@@ -39,4 +39,15 @@ final class TokenService
 
         return (int) $row['user_id'];
     }
+
+    /** 사용 여부와 관계없이 실제로 발급했던 토큰의 회원 번호를 찾는다. */
+    public function ownerOf(string $plain, string $purpose): ?int
+    {
+        if ($plain === '') {
+            return null;
+        }
+        $row = $this->tokens->find(hash('sha256', $plain), $purpose);
+
+        return $row === null ? null : (int) $row['user_id'];
+    }
 }

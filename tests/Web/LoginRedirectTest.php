@@ -77,7 +77,7 @@ final class LoginRedirectTest extends WebTestCase
 
     public function testForgedPostDestinationCannotLeaveSiteAndMemberStillCannotAccessAdmin(): void
     {
-        $app = $this->makeApp(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]);
+        $app = $this->makeApp(\GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig(), [], 'default');
         $this->get($app, '/login');
         $id = $app->users()->create('redirect-member@example.com', password_hash('redirect-password-123', PASSWORD_DEFAULT), '회원');
         $app->users()->verifyEmail($id);

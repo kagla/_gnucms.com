@@ -6,7 +6,6 @@ namespace GnuCms\Db;
 
 use GnuCms\Db\Dialect\DialectInterface;
 use GnuCms\Db\Dialect\MysqlDialect;
-use GnuCms\Db\Dialect\SqliteDialect;
 use GnuCms\Error\DomainError;
 
 final class DialectFactory
@@ -16,12 +15,10 @@ final class DialectFactory
         $driver = strtolower(substr($dsn, 0, (int) strpos($dsn, ':')));
 
         switch ($driver) {
-            case 'sqlite':
-                return new SqliteDialect();
             case 'mysql':
                 return new MysqlDialect();
         }
 
-        throw DomainError::internal('지원하지 않는 DB 드라이버입니다: ' . $driver);
+        throw DomainError::internal('MySQL/MariaDB만 지원합니다. 지원하지 않는 DB 드라이버: ' . $driver);
     }
 }
