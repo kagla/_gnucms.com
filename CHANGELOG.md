@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/kagla/gnucms/compare/v0.6.0...v0.7.0) (2026-09-29)
+
+
+### Features
+
+* add configurable mail delivery modes ([8fd96ee](https://github.com/kagla/gnucms/commit/8fd96ee1da0e8185bd0b88b82c0872c5a9425790))
+* 메일 발송 방식 3단계 설정 ([70adb36](https://github.com/kagla/gnucms/commit/70adb36a6db80e7675e00b8a4484311109b98372))
+
 ## [0.6.0](https://github.com/kagla/gnucms/compare/v0.5.0...v0.6.0) (2026-09-29)
 
 
