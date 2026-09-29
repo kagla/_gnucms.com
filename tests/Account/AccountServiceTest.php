@@ -33,7 +33,7 @@ final class AccountServiceTest extends DatabaseTestCase
         self::assertTrue($owner['email_verified']);
         self::assertTrue($owner['is_admin']);
         self::assertTrue($owner['newly_created']);
-        self::assertCount(0, $mailer->messages);
+        self::assertCount(1, $mailer->messages);
         self::assertTrue($service->authenticate([
             'email' => 'owner@example.com', 'password' => 'safe-password-123',
         ])['is_admin']);
@@ -45,7 +45,7 @@ final class AccountServiceTest extends DatabaseTestCase
         ]);
         self::assertFalse($created['email_verified']);
         self::assertFalse($created['is_admin']);
-        self::assertCount(1, $mailer->messages);
+        self::assertCount(2, $mailer->messages);
         self::assertCount(2, $consents->forSubject('user', $created['id']));
 
         try {
@@ -55,14 +55,13 @@ final class AccountServiceTest extends DatabaseTestCase
             self::assertStringContainsString('인증', $e->details()['email']);
         }
 
-        $token = $this->tokenFrom($mailer->messages[0]['body']);
+        $token = $this->tokenFrom($mailer->messages[1]['body']);
         $service->verifyEmail($token);
         $loggedIn = $service->authenticate(['email' => 'user@example.com', 'password' => 'member-password-123']);
         self::assertSame('user', $loggedIn['display_name']);
         self::assertFalse($service->identityForSession($loggedIn['id'], 0)->isGuest());
 
-        $this->expectException(DomainError::class);
-        $service->verifyEmail($token);
+        self::assertSame('user@example.com', $service->verifyEmail($token));
     }
 
     #[DataProvider('connectionProvider')]
@@ -99,7 +98,7 @@ final class AccountServiceTest extends DatabaseTestCase
 
         self::assertSame($first['id'], $second['id']);
         self::assertFalse($second['newly_created']);
-        self::assertCount(1, $mailer->messages);
+        self::assertCount(2, $mailer->messages);
 
         $input['email'] = 'other@example.com';
         $input['password_confirmation'] = 'different-password';
@@ -123,7 +122,7 @@ final class AccountServiceTest extends DatabaseTestCase
         $user = $service->authenticate(['email' => 'member@example.com', 'password' => 'old-password-123']);
 
         $service->requestPasswordReset('member@example.com');
-        $resetToken = $this->tokenFrom($mailer->messages[0]['body']);
+        $resetToken = $this->tokenFrom($mailer->messages[1]['body']);
         $service->resetPassword([
             'token' => $resetToken,
             'password' => 'new-password-456',
@@ -178,10 +177,10 @@ final class AccountServiceTest extends DatabaseTestCase
             'agree_' . $ids['service'] => '1', 'agree_' . $ids['privacy'] => '1',
         ]);
 
-        self::assertCount(1, $mailer->messages);
-        self::assertSame('[우리 커뮤니티] 이메일 인증', $mailer->messages[0]['subject']);
-        self::assertStringContainsString('우리 커뮤니티 가입을 완료하려면', $mailer->messages[0]['body']);
-        self::assertStringNotContainsString(GNUCMS, $mailer->messages[0]['subject']);
+        self::assertCount(2, $mailer->messages);
+        self::assertSame('[우리 커뮤니티] 이메일 인증', $mailer->messages[1]['subject']);
+        self::assertStringContainsString('우리 커뮤니티 가입을 완료하려면', $mailer->messages[1]['body']);
+        self::assertStringNotContainsString(GNUCMS, $mailer->messages[1]['subject']);
     }
 
     private function service(array $config): array

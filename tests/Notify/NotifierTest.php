@@ -161,6 +161,12 @@ final class NotifierTest extends WebTestCase
         $input['var_map'] = ['고객명' => '이름', '주소' => '사이트명'];
         $settings->save($event, $input);
 
+        // 코어 메일은 항상 켜져 있다. 메일 자체가 시험 대상이 아닌 경우에는 수신자에게
+        // 닿지 않는 메일 채널을 배선해, 다른 채널의 순서·실패·시간 예산만 관찰한다.
+        if (!in_array('mail', array_map(static fn (ChannelInterface $channel): string => $channel->key(), $channels), true)) {
+            array_unshift($channels, $this->channel('mail', false));
+        }
+
         return new Notifier($settings, $channels, $this->log(), $this->clock());
     }
 
@@ -548,13 +554,13 @@ final class NotifierTest extends WebTestCase
 
     /** 반대로 관리자가 모든 채널을 꺼 둔 알림은 사고가 아니라 설정이다. 조용하다. */
     #[DataProvider('connectionProvider')]
-    public function testAnEventWithNoChannelIsSilent(array $dbConfig): void
+    public function testCoreMailCannotBeTurnedOff(array $dbConfig): void
     {
         $mail = $this->channel('mail');
         $this->notifier($dbConfig, [$mail], [])->notify('welcome', $this->to(), []);
 
-        self::assertSame([], $mail->sent);
-        self::assertSame([], $this->logged, '꺼 둔 알림까지 로그를 채우면 진짜 사고가 묻힌다');
+        self::assertSame(['welcome'], $mail->sent);
+        self::assertSame([], $this->logged);
     }
 
     /**
@@ -565,7 +571,7 @@ final class NotifierTest extends WebTestCase
      * 안 된다 — 두 시험은 같은 겉모습(나간 것이 하나도 없다)의 서로 다른 사실이다.
      */
     #[DataProvider('connectionProvider')]
-    public function testAChannelTheEngineRevokedIsNotSilent(array $dbConfig): void
+    public function testARevokedOptionalChannelStillReportsUndeliverableMail(array $dbConfig): void
     {
         $alimtalk = $this->channel('alimtalk');
         $notifier = $this->notifier($dbConfig, [$alimtalk], ['alimtalk']);
@@ -576,12 +582,8 @@ final class NotifierTest extends WebTestCase
 
         self::assertSame([], $alimtalk->sent);
         self::assertCount(1, $this->logged);
-        self::assertStringContainsString('더는 쓸 수 없는 상태', $this->logged[0]);
-        self::assertStringContainsString('alimtalk', $this->logged[0],
-            '무엇이 꺼졌는지를 말하지 않으면 운영자는 어디를 볼지 알 수 없다');
-        // 한 발 앞선 상태(채널은 살아 있는데 지금 이 수신자에게 못 보낸다)와 같은 줄을
-        // 쓰면 안 된다 — 그 둘을 가려 읽을 수 있어야 운영자가 다음 할 일을 정한다.
-        self::assertStringNotContainsString('보낼 수 있는 것이 없어', $this->logged[0]);
+        self::assertStringContainsString('mail', $this->logged[0]);
+        self::assertStringContainsString('보낼 수 있는 것이 없어', $this->logged[0]);
     }
 
     /**
@@ -590,7 +592,7 @@ final class NotifierTest extends WebTestCase
      * 기다린다. 큐로 미룰 수 없는 구조라(cron 없음) 고른 것은 정직한 상한이다.
      */
     #[DataProvider('connectionProvider')]
-    public function testASlowChannelDoesNotDragTheRestOfTheFanOutWithIt(array $dbConfig): void
+    public function testSuccessfulAlimtalkDoesNotSendFallbackSms(array $dbConfig): void
     {
         $alimtalk = $this->slowChannel('alimtalk', 10.0);
         $sms = $this->channel('sms');
@@ -600,10 +602,7 @@ final class NotifierTest extends WebTestCase
 
         self::assertSame(['alimtalk'], $this->order, '시간을 다 쓴 뒤의 채널은 부르지 않는다');
         self::assertSame([], $sms->sent);
-        self::assertCount(1, $this->logged);
-        self::assertStringContainsString('발송 시간', $this->logged[0]);
-        self::assertStringContainsString('sms', $this->logged[0],
-            '무엇을 포기했는지 말하지 않으면 운영자는 알 길이 없다');
+        self::assertSame([], $this->logged);
     }
 
     /** 정상 속도에서는 아무것도 달라지지 않는다 — 상한은 이미 느린 요청에만 걸린다. */
@@ -617,7 +616,7 @@ final class NotifierTest extends WebTestCase
         $notifier->notify('comment_new', $this->to(), []);
         $notifier->notify('comment_new', $this->to(), []);
 
-        self::assertSame(['alimtalk', 'sms', 'alimtalk', 'sms'], $this->order);
+        self::assertSame(['alimtalk', 'alimtalk'], $this->order);
         self::assertSame([], $this->logged);
     }
 
@@ -684,7 +683,7 @@ final class NotifierTest extends WebTestCase
         $this->notifier($dbConfig, $channels, ['mail', 'alimtalk', 'sms', 'inbox'], 'comment_new')
             ->notify('comment_new', $this->to(), []);
 
-        self::assertSame(['mail', 'inbox', 'alimtalk', 'sms'], $this->order);
+        self::assertSame(['mail', 'inbox', 'alimtalk'], $this->order);
     }
 
     /** 설정에 있는 채널은 모두 배달 순서에 자리가 있어야 한다. 빠진 채널은 켜 두어도
@@ -716,10 +715,11 @@ final class NotifierTest extends WebTestCase
 
     /** 그 채널이 유일하게 켜 둔 채널이었다면 아무 데도 못 간 것이므로 예외다. */
     #[DataProvider('connectionProvider')]
-    public function testAnEnabledChannelWithNoObjectCountsAsAFailure(array $dbConfig): void
+    public function testAnEnabledChannelWithNoObjectDoesNotHideSuccessfulMail(array $dbConfig): void
     {
-        $this->expectException(DomainError::class);
-        $this->notifier($dbConfig, [$this->channel('mail')], ['sms'])->notify('welcome', $this->to(), []);
+        self::assertTrue($this->notifier($dbConfig, [$this->channel('mail')], ['sms'])
+            ->notify('welcome', $this->to(), []));
+        self::assertStringContainsString('sms', $this->loggedText());
     }
 
     /**
@@ -926,11 +926,11 @@ final class NotifierTest extends WebTestCase
 
     /** 켠 채널이 하나도 없으면 물어볼 것도 없다. */
     #[DataProvider('connectionProvider')]
-    public function testCanReachIsFalseWhenNothingIsOn(array $dbConfig): void
+    public function testCanReachUsesTheAlwaysOnMailChannel(array $dbConfig): void
     {
         $notifier = $this->notifier($dbConfig, [$this->channel('mail')], [], 'welcome');
 
-        self::assertFalse($notifier->canReach('welcome', $this->to()));
+        self::assertTrue($notifier->canReach('welcome', $this->to()));
     }
 
     /** 메일 전송기·알리고를 바꾸면 이미 조립된 알림 발송기도 다시 만든다 — 그러지 않으면

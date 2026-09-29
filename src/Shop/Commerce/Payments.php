@@ -167,8 +167,10 @@ final class Payments
         // 취소가 두 번 빠진다. 요청 키가 확정 취소 누계를 담고 있어 반복 조회는 더하지 않는다.
         $settled = (int) $payment['cancelled'] - array_sum(array_column($this->pendingRefunds($order), 'amount'));
         if ((int) $order['paid_at'] > 0 && $settled > (int) $order['refunded_amount']) {
+            $syncKey = 'sync-' . substr(hash('sha256', (string) $payment['transaction_id'] . '-' . $settled), 0, 64);
             $this->orders->recordRefund((int) $order['id'], $settled - (int) $order['refunded_amount'],
-                'pg:' . $order['payment_provider'], '결제사 조회로 확인한 취소', 'sync-' . $payment['transaction_id'] . '-' . $settled);
+                'pg:' . $order['payment_provider'], '결제사 조회로 확인한 취소', $syncKey,
+                ['id' => (string) $payment['transaction_id'], 'at' => Clock::timestamp()]);
         }
         if ((int) ($payment['open_cancellations'] ?? 0) > 0) {
             throw DomainError::validation(['refund' => '결제사에서 아직 확정되지 않은 환불 요청이 있습니다. 환불 대조를 진행해 주세요.']);
@@ -212,6 +214,7 @@ final class Payments
         }
         $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
         if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
+        $result = [];
         if ($this->isPgOrder($order)) {
             if (in_array($order['payment_method'], ['virtual_account', 'mobile'], true)
                 && !in_array($order['payment_provider'], ['toss', 'nicepay'], true)) {
@@ -225,9 +228,9 @@ final class Payments
             }
             $gateway = $this->app->paymentGateway((string) $order['payment_provider']);
             $gw = self::gatewayOrder($order);
-            ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->cancel($gw, $amount, $remaining, $reason, $key));
+            $result = ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->cancel($gw, $amount, $remaining, $reason, $key));
         }
-        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key);
+        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key, $result);
     }
 
     /**
@@ -250,7 +253,8 @@ final class Payments
         $pending = $gateway->pendingRefunds($gw)[$key] ?? null;
         if ($pending === null) throw DomainError::validation(['refund' => '대조할 환불 요청이 없습니다. 화면을 새로고침해 주세요.']);
         $gateway->confirmRefund($gw, $key, $reference);
-        return $this->orders->recordRefund((int) $order['id'], (int) $pending['amount'], $actor, '결제사 확인: ' . $reference, $key);
+        return $this->orders->recordRefund((int) $order['id'], (int) $pending['amount'], $actor, '결제사 확인: ' . $reference, $key,
+            ['id' => $reference, 'at' => (int) ($pending['at'] ?? Clock::timestamp()), 'tax' => $pending['tax'] ?? []]);
     }
 
     /** 결제사가 처리하지 않은 것으로 확인된 환불 요청을 닫는다. 주문 금액은 그대로다. */

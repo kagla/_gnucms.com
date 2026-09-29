@@ -167,15 +167,19 @@
   if(checkAll){
     var boxes=[].slice.call(root.querySelectorAll('input[name="ids[]"]'));
     var counter=root.querySelector('[data-yc-selection-count]'),deleteButton=root.querySelector('[data-yc-delete-selected]');
+    var selectionButtons=[].slice.call(root.querySelectorAll('[data-yc-requires-selection]'));
     function syncSelection(){
       var count=boxes.filter(function(box){return box.checked;}).length;
       checkAll.checked=boxes.length>0&&count===boxes.length;checkAll.indeterminate=count>0&&count<boxes.length;
       if(counter){counter.textContent=count+'개 선택';}
       if(deleteButton){deleteButton.disabled=count===0;}
+      selectionButtons.forEach(function(button){button.disabled=count===0;});
     }
     checkAll.addEventListener('change',function(){boxes.forEach(function(box){box.checked=checkAll.checked;});syncSelection();});
     boxes.forEach(function(box){box.addEventListener('change',syncSelection);});syncSelection();
   }
+  var printPage=root.querySelector('[data-yc-print-page]');
+  if(printPage){printPage.addEventListener('click',function(){window.print();});}
   // 선택 상품 작업: 누른 단추에 따라 분류 또는 삭제를 처리한다.
   var selection=root.querySelector('[data-yc-selection-form]');
   if(selection){

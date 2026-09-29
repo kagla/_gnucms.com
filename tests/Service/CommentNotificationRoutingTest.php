@@ -101,7 +101,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
             array_column($mailer->messages, 'to'), '사람마다 한 통씩 나간다');
     }
 
-    /** 설정을 건드리지 않은 사이트의 기본값은 알림함 하나다. 예전과 똑같이 한 줄이 남는다. */
+    /** 설정을 건드리지 않은 사이트도 메일과 알림함으로 함께 알린다. */
     #[DataProvider('connectionProvider')]
     public function testTheInboxStillGetsTheNotification(array $dbConfig): void
     {
@@ -116,7 +116,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app->notificationService()->notifyComment($postId, $commentId);
 
         self::assertSame([[$writer, 'comment', $postId, $commentId]], $this->inbox($app));
-        self::assertSame([], $mailer->messages, '켜지 않은 채널로는 나가지 않는다');
+        self::assertSame(['writer@example.com'], array_column($mailer->messages, 'to'));
     }
 
     /**
@@ -316,7 +316,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
      * 닿지 않으면 관리자가 끈 알림이 계속 쌓인다.
      */
     #[DataProvider('connectionProvider')]
-    public function testNothingGoesOutWhenEveryChannelIsOff(array $dbConfig): void
+    public function testMailStillGoesOutWhenOptionalChannelsAreOff(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
         $mailer = $this->collectMail($app);
@@ -330,7 +330,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $app->notificationService()->notifyComment($postId, $commentId);
 
         self::assertSame([], $this->inbox($app));
-        self::assertSame([], $mailer->messages);
+        self::assertSame(['writer@example.com'], array_column($mailer->messages, 'to'));
     }
 
     /** 글쓴이가 부모 댓글도 쓴 사람이면 두 자격이 겹친다. 그래도 한 번만 간다. */
@@ -420,7 +420,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         $app->notificationService()->notifyComment($postId, $replyId);
 
-        self::assertCount(1, $sent, '한 사람에게 10초를 쓴 뒤 두 번째 사람은 시작하지 않는다');
+        self::assertCount(2, $sent, '메일은 코어 필수 채널이라 시간 상한 뒤에도 시도한다');
     }
 
     /**
@@ -456,8 +456,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         self::assertSame([], $this->jobs($app), '보낼 수 없는 채널로 발송을 만들지는 않는다');
         self::assertSame([], $this->inbox($app));
-        self::assertStringContainsString('더는 쓸 수 없는 상태', $logged);
-        self::assertStringContainsString('comment_new', $logged);
+        self::assertSame('', $logged, '메일이 남아 있으면 알림 전체가 중단된 상태가 아니다');
     }
 
     /** 이 알림으로 켤 채널. 관리자 화면이 저장하는 그 길로 저장한다. */

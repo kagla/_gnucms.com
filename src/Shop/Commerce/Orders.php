@@ -516,16 +516,41 @@ final class Orders
      * 계층도 같은 키의 재요청을 캐시된 결과로 돌려주므로(PG 를 다시 부르지 않는다) 여기서
      * 세지 않으면 한 번의 환불이 두 번 빠진다.
      */
-    public function recordRefund(int $id, int $amount, string $actor, string $reason, string $key): array
+    public function recordRefund(int $id, int $amount, string $actor, string $reason, string $key, array $result = []): array
     {
-        $this->store->transaction(function () use ($id, $amount, $actor, $reason, $key): void {
+        $this->store->transaction(function () use ($id, $amount, $actor, $reason, $key, $result): void {
+            if (!preg_match('/^[A-Za-z0-9_-]{3,100}$/D', $key)) throw DomainError::validation(['refund' => '환불 요청 키를 확인해 주세요.']);
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
             $order = $this->get($id);
+            if ($this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_order_refunds')
+                . ' WHERE order_id = ? AND refund_key = ?', [$id, $key]) !== null) return;
             $keys = is_array($order['payment']['refund_keys'] ?? null) ? $order['payment']['refund_keys'] : [];
+            // 48판 이전에는 키가 결제 상세에만 저장됐다. 누계는 이전 원장으로 이미 옮겼으므로 다시 더하지 않는다.
             if (in_array($key, $keys, true)) return;
             $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
             if ($amount < 1 || $amount > $remaining) throw DomainError::validation(['refund' => '환불 금액을 확인해 주세요.']);
-            $keys[] = $key;
+            $refunds = $this->store->select('SELECT amount, taxable_amount, supply_amount, vat_amount, tax_free_amount FROM '
+                . $this->store->table('yc_order_refunds') . ' WHERE order_id = ? ORDER BY id', [$id]);
+            $state = ['refunds' => array_map(static fn (array $refund): array => ['status' => 'succeeded', 'result' => [
+                'amount' => (int) $refund['amount'], 'tax' => ['taxable_amount' => (int) $refund['taxable_amount'],
+                    'supply_amount' => (int) $refund['supply_amount'], 'vat_amount' => (int) $refund['vat_amount'],
+                    'tax_free_amount' => (int) $refund['tax_free_amount']]]], $refunds)];
+            $tax = is_array($result['tax'] ?? null) ? $result['tax'] : [];
+            $validTax = array_reduce(['taxable_amount', 'supply_amount', 'vat_amount', 'tax_free_amount'],
+                static fn (bool $valid, string $field): bool => $valid && isset($tax[$field]) && is_int($tax[$field]) && $tax[$field] >= 0, true)
+                && (int) ($tax['taxable_amount'] ?? -1) === (int) ($tax['supply_amount'] ?? -2) + (int) ($tax['vat_amount'] ?? -2)
+                && $amount === (int) ($tax['taxable_amount'] ?? -1) + (int) ($tax['tax_free_amount'] ?? -1);
+            if (!$validTax) $tax = TaxAmounts::refund($order, $state, $amount, $remaining);
+            if (!in_array($key, $keys, true)) $keys[] = $key;
             $detail = ['refund_keys' => array_values($keys)] + $order['payment'];
+            $transactionId = is_string($result['id'] ?? null) ? mb_substr($result['id'], 0, 191) : '';
+            $createdAt = is_int($result['at'] ?? null) && $result['at'] > 0 ? $result['at'] : Clock::timestamp();
+            $this->store->insert('yc_order_refunds', ['order_id' => $id, 'payment_provider' => (string) $order['payment_provider'],
+                'refund_key' => $key, 'transaction_id' => $transactionId, 'amount' => $amount,
+                'taxable_amount' => (int) $tax['taxable_amount'], 'supply_amount' => (int) $tax['supply_amount'],
+                'vat_amount' => (int) $tax['vat_amount'], 'tax_free_amount' => (int) $tax['tax_free_amount'],
+                'status' => 'succeeded', 'reason' => mb_substr($reason, 0, 500), 'actor' => mb_substr($actor, 0, 100),
+                'created_at' => $createdAt]);
             $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, payment_detail = ?, updated_at = ? WHERE id = ?',
                 [$amount, json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id]);
             $this->history($id, $order['status'], $actor, '환불 ' . number_format($amount) . '원: ' . $reason);
