@@ -28,6 +28,13 @@ final class CmsRepository
         return $settings;
     }
 
+    /**
+     * 준 키만 그대로 덮어쓴다. 검증도, 캐시 무효화도 하지 않는다 — CmsService 는
+     * settings() 를 메모리에 캐시하므로(CmsService::$settingsCache), 이미 만들어진
+     * CmsService 를 두고 여기로 직접 쓰면 그 인스턴스는 옛 값을 계속 본다.
+     * 사람이 저장하는 길은 CmsService 의 save*Settings() 이고, 그쪽이 저장 뒤에
+     * 캐시를 비운다. 테스트에서는 WebTestCase::saveSiteSettings() 를 쓴다.
+     */
     public function saveSettings(array $settings): void
     {
         $this->db->transaction(function () use ($settings): void {

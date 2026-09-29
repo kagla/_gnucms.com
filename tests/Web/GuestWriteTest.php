@@ -15,7 +15,7 @@ final class GuestWriteTest extends WebTestCase
     private function makeGuestBoard(array $dbConfig): \GnuCms\App
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['guest_write_enabled' => '1']);
+        $this->saveSiteSettings($app, ['guest_write_enabled' => '1']);
         $app->boardService()->create($this->adminAcl(), [
             'board_key' => 'free', 'name' => '자유', 'perm_write' => 'guest',
         ]);

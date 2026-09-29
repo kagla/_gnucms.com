@@ -23,7 +23,7 @@ final class BackupCliTest extends TestCase
         }
         $this->configFile = $this->root . '/config.php';
         $config = [
-            'db' => ['dsn' => 'sqlite:' . $this->root . '/board.sqlite'],
+            'db' => \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig(),
             'storage' => ['dir' => $this->root],
             'uploads' => ['dir' => $this->root . '/uploads'],
             'editor' => ['dir' => $this->root . '/editor'],
@@ -32,6 +32,7 @@ final class BackupCliTest extends TestCase
         file_put_contents($this->configFile,
             "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n");
         $db = Connection::create($config['db']);
+        (new Schema($db))->drop();
         (new Schema($db))->create();
     }
 
@@ -53,8 +54,8 @@ final class BackupCliTest extends TestCase
         $extension = class_exists(\ZipArchive::class) ? 'zip' : 'tar';
         [$status, $created] = $this->runCommand('create --format=' . $extension);
         self::assertSame(0, $status, $created);
-        self::assertMatchesRegularExpression('/파일: (gnucms-sqlite-\d{8}-\d{6}\.' . $extension . ')/', $created);
-        preg_match('/파일: (gnucms-sqlite-\d{8}-\d{6}\.' . $extension . ')/', $created, $match);
+        self::assertMatchesRegularExpression('/파일: (gnucms-mysql-\d{8}-\d{6}\.' . $extension . ')/', $created);
+        preg_match('/파일: (gnucms-mysql-\d{8}-\d{6}\.' . $extension . ')/', $created, $match);
         $name = $match[1];
 
         [$status, $listed] = $this->runCommand('list');
@@ -66,15 +67,15 @@ final class BackupCliTest extends TestCase
         copy($this->root . '/backups/manual/' . $name, $external);
         [$status, $verified] = $this->runCommand('verify ' . escapeshellarg($external));
         self::assertSame(0, $status, $verified);
-        self::assertStringContainsString('DB: sqlite', $verified);
+        self::assertStringContainsString('DB: mysql', $verified);
 
         [$status, $notConfirmed] = $this->runCommand('restore ' . escapeshellarg($name));
         self::assertSame(2, $status, $notConfirmed);
         self::assertStringContainsString('--yes', $notConfirmed);
 
         [$status, $restored] = $this->runCommand('restore ' . escapeshellarg($external) . ' --yes');
-        self::assertSame(0, $status, $restored);
-        self::assertStringContainsString('복원 직전 안전 백업:', $restored);
+        self::assertSame(1, $status, $restored);
+        self::assertStringContainsString('자동 복원을 지원하지 않습니다', $restored);
 
         [$status, $notDeleted] = $this->runCommand('delete ' . escapeshellarg($name));
         self::assertSame(2, $status, $notDeleted);
@@ -96,7 +97,7 @@ final class BackupCliTest extends TestCase
         [$status, $created] = $this->runCommand('create --format=tar');
 
         self::assertSame(0, $status, $created);
-        self::assertMatchesRegularExpression('/파일: gnucms-sqlite-\d{8}-\d{6}\.tar/', $created);
+        self::assertMatchesRegularExpression('/파일: gnucms-mysql-\d{8}-\d{6}\.tar/', $created);
     }
 
     /** @return array{int,string} */

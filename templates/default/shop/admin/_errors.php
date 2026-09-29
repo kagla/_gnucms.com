@@ -1,0 +1,2 @@
+<?php if ($notice !== ''): ?><div class="alert alert-success" role="status"><?= $this->e($notice) ?></div><?php endif ?>
+<?php if ($errors !== []): ?><div class="alert alert-error yc-alert-summary" role="alert" id="yc-errors" tabindex="-1" data-yc-errors><div><strong>입력 내용을 확인해 주세요</strong><ul><?php foreach ($errors as $field => $message): ?><li<?= is_string($field) ? ' data-yc-error-field="' . $this->e($field) . '"' : '' ?>><?= $this->e($message) ?></li><?php endforeach ?></ul></div></div><?php endif ?>

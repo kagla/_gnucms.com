@@ -9,27 +9,27 @@ use GnuCms\Db\Connection;
 use GnuCms\Db\Schema;
 
 /**
- * 데이터 제공자로 사용 가능한 DB 를 모두 돌린다. SQLite 는 항상 돌고,
- * MySQL/MariaDB는 환경변수가 있을 때만 추가된다.
+ * 전용 MySQL/MariaDB 테스트 DB를 사용한다. 운영 DB를 지정하지 않는다.
  */
 abstract class DatabaseTestCase extends TestCase
 {
+    public static function mysqlConfig(string $prefix = ''): array
+    {
+        $dsn = (string) getenv('TEST_MYSQL_DSN');
+        if (!str_starts_with($dsn, 'mysql:')) {
+            throw new \RuntimeException('전용 테스트 DB의 TEST_MYSQL_DSN을 설정하세요. 테스트는 해당 DB의 테이블을 삭제합니다.');
+        }
+        return [
+            'dsn' => $dsn,
+            'username' => getenv('TEST_MYSQL_USER') ?: null,
+            'password' => getenv('TEST_MYSQL_PASS') ?: null,
+            'prefix' => $prefix,
+        ];
+    }
+
     public static function connectionProvider(): array
     {
-        $cases = [
-            'sqlite' => [['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]],
-        ];
-
-        $mysql = getenv('TEST_MYSQL_DSN');
-        if (is_string($mysql) && $mysql !== '') {
-            $cases['mysql'] = [[
-                'dsn'      => $mysql,
-                'username' => getenv('TEST_MYSQL_USER') ?: null,
-                'password' => getenv('TEST_MYSQL_PASS') ?: null,
-            ]];
-        }
-
-        return $cases;
+        return ['mysql' => [self::mysqlConfig()]];
     }
 
     protected function freshDatabase(array $config): Connection

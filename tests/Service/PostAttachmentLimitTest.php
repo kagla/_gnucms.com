@@ -14,7 +14,7 @@ final class PostAttachmentLimitTest extends WebTestCase
     public function testAttachmentCountIsLimitedBySetting(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['attach_limit' => '2']);
+        $this->saveSiteSettings($app, ['attach_limit' => '2']);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_file' => true]);
 
@@ -43,7 +43,7 @@ final class PostAttachmentLimitTest extends WebTestCase
     public function testZeroMeansUnlimited(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['attach_limit' => '0']);
+        $this->saveSiteSettings($app, ['attach_limit' => '0']);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_file' => true]);
 
@@ -78,7 +78,7 @@ final class PostAttachmentLimitTest extends WebTestCase
     public function testUploadSizeFollowsSiteSetting(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
-        $app->cms()->saveSettings(['attach_max_mb' => '1']);
+        $this->saveSiteSettings($app, ['attach_max_mb' => '1']);
         $acl = $this->adminAcl();
         $app->boardService()->create($acl, ['board_key' => 'free', 'name' => '자유', 'use_file' => true]);
 

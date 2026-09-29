@@ -15,7 +15,8 @@ final class ConnectionTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->db = Connection::create(['dsn' => 'sqlite::memory:', 'username' => null, 'password' => null]);
+        $this->db = Connection::create(\GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig());
+        $this->db->execute('DROP TABLE IF EXISTS widgets');
         $types = $this->db->dialect()->typeMap();
         $this->db->execute(
             'CREATE TABLE widgets (id ' . $types['{AUTO_PK}'] . ', name VARCHAR(50) NOT NULL, qty INTEGER NOT NULL DEFAULT 0)'
@@ -66,8 +67,7 @@ final class ConnectionTest extends TestCase
     public function testUpdateRejectsPositionalWhereParameters(): void
     {
         // PDO 는 한 문장에서 이름 파라미터와 위치 파라미터를 섞는 것을 금지한다.
-        // SQLite 만 이 혼용을 눈감아 주기 때문에, 막지 않으면 SQLite 테스트는 통과하고
-        // MySQL에서 SQLSTATE[HY093] 로 터진다. 그래서 즉시 거부한다.
+        // 혼용하면 MySQL에서 SQLSTATE[HY093]으로 실패하므로 즉시 거부한다.
         $this->expectException(DomainError::class);
         $this->db->update('widgets', ['qty' => 9], 'qty = ?', [1]);
     }

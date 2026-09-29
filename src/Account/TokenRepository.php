@@ -53,4 +53,14 @@ final class TokenRepository
 
         return $updated === 1 ? $row : null;
     }
+
+    /** 이미 쓰였거나 교체된 링크도 어느 회원의 것이었는지는 확인할 수 있게 한다. */
+    public function find(string $hash, string $purpose): ?array
+    {
+        return $this->db->selectOne(
+            'SELECT id, user_id, expires_at, used_at FROM ' . $this->db->table('user_tokens')
+            . ' WHERE token_hash = ? AND purpose = ?',
+            [$hash, $purpose]
+        );
+    }
 }

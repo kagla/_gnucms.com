@@ -9,7 +9,6 @@ use GnuCms\Error\DomainError;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
-use GnuCms\Service\AttachmentService;
 use Slim\Psr7\Stream;
 use Slim\Routing\RouteContext;
 use GnuCms\View\View;
@@ -68,6 +67,7 @@ final class BackupController
 
         return $this->redirect($request, $response, [
             'backup_uploaded' => (string) $result['name'],
+            'backup_page' => (string) MaintenanceViewData::backupPageFor($this->app, (string) $result['name']),
         ], 'backup-uploaded');
     }
 
@@ -99,20 +99,6 @@ final class BackupController
         }
 
         return $this->redirect($request, $response, ['backup_deleted' => (string) $result['deleted']]);
-    }
-
-    public function deleteAutomatic(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-    {
-        $this->assertAdminRequest($request);
-        try {
-            $result = $this->app->schemaUpgrader()->deleteBackup((string) $args['name']);
-        } catch (Throwable $e) {
-            return $this->renderError($request, $response, $e->getMessage());
-        }
-
-        return $this->redirect($request, $response, [
-            'schema_backup_deleted' => (string) $result['deleted'],
-        ]);
     }
 
     public function download(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -161,14 +147,11 @@ final class BackupController
         ResponseInterface $response,
         string $message
     ): ResponseInterface {
-        return View::fromRequest($request)->render($response->withStatus(422), 'admin/maintenance', [
-            'query' => [],
-            'schema' => $this->app->schemaUpgrader()->status(),
-            'backup' => $this->app->backups()->status(),
-            'garbage' => $this->app->attachments()->garbageCandidates($this->app->guestAcl()),
-            'backup_upload_max_mb' => AttachmentService::serverMaxMb(),
-            'backup_error' => $message,
-        ]);
+        $input = $request->getParsedBody();
+        $pages = is_array($input) ? array_intersect_key($input,
+            ['backup_page' => true, 'garbage_page' => true]) : [];
+        return View::fromRequest($request)->render($response->withStatus(422), 'admin/maintenance',
+            MaintenanceViewData::build($this->app, $pages, $message));
     }
 
     private function redirect(
@@ -178,6 +161,18 @@ final class BackupController
         ?string $fragment = null
     ): ResponseInterface {
         $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('admin.settings.maintenance');
+        $input = $request->getParsedBody();
+        if (is_array($input)) {
+            foreach (['backup_page', 'garbage_page'] as $name) {
+                if (array_key_exists($name, $query)) {
+                    continue;
+                }
+                $value = $input[$name] ?? null;
+                if (is_scalar($value) && ctype_digit((string) $value) && (int) $value > 0) {
+                    $query[$name] = (string) min(1000000, (int) $value);
+                }
+            }
+        }
         $location = $url . '?' . http_build_query($query);
         if ($fragment !== null && $fragment !== '') {
             $location .= '#' . rawurlencode($fragment);

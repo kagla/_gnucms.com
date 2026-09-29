@@ -18,6 +18,10 @@ final class Schema
         'site_settings', 'contents', 'consent_uses', 'consents_given', 'notifications',
         'password_attempts', 'login_events', 'write_rate_limits',
         'extension_schemas',
+        'message_jobs', 'message_recipients', 'alimtalk_templates',
+        'pay_inicis_settings', 'pay_inicis_transactions', // 31판까지의 원본 보관·백업
+        'pay_settings', 'pay_transactions',
+        ...\GnuCms\Shop\Schema::TABLES,
     ];
 
     private const INDEXES = [
@@ -28,7 +32,10 @@ final class Schema
         'ux_password_attempts', 'ix_comments_parent',
         'ux_consent_uses', 'ix_consent_uses_content', 'ux_consents_given', 'ix_consents_given_content',
         'ix_login_events_user', 'ix_login_events_ip', 'ix_login_events_time',
+        'ix_pay_transactions_event',
         'ux_write_rate_limits',
+        'ix_message_recipients_job', 'ix_message_recipients_mid', 'ix_message_recipients_fallback',
+        'ux_alimtalk_templates_code', 'ix_message_jobs_created', 'ix_message_jobs_scheduled',
     ];
 
     /** @var Connection */
@@ -58,20 +65,25 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '22';
+    public const VERSION = '47';
 
     /**
-     * DB 에 적어 두는 도장. 판 번호 뒤에 이 파일의 내용 해시를 붙인다.
+     * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
      *
      * 판 번호만 적어 두면, 판을 올린 뒤 마이그레이션을 더 손볼 때 그 사이 들어온 요청이
      * '다 됐다' 도장을 먼저 찍어 버린다. 그러면 나중에 추가한 칸은 영영 건너뛴다.
      * 파일이 바뀌면 도장도 달라지므로 그런 어긋남이 스스로 풀린다.
      * migrate* 는 모두 멱등이라 한 번 더 도는 값은 싸다.
+     *
+     * 이 파일과 쇼핑몰 스키마 파일(src/Shop/Schema.php)을 함께 해시한다. 쇼핑몰은 표를
+     * 만드는 몸통이 이 파일 밖에 있는 유일한 마이그레이션이라, 섞지 않으면 그 파일만
+     * 고친 변경이 도장을 그대로 두고 기존 사이트를 건너뛴다.
      */
     public function stamp(): string
     {
-        $hash = hash_file('xxh128', __FILE__);
-        return self::VERSION . '.' . substr($hash === false ? '' : $hash, 0, 12);
+        $hash = hash('xxh128', (string) file_get_contents(__FILE__)
+            . (string) file_get_contents(dirname(__DIR__) . '/Shop/Schema.php'));
+        return self::VERSION . '.' . substr($hash, 0, 12);
     }
 
     /** DB 에 적힌 도장. site_settings 가 없는 아주 오래된 설치면 null. */
@@ -130,7 +142,10 @@ final class Schema
         $this->migrateLoginEvents();
         $this->migrateWriteRateLimits();
         $this->migrateProfileImages();
+        $this->migrateAligoMessaging();
+        $this->migratePayments();
         $this->migrateExtensionSchemas();
+        $this->migrateShop();
         $stamp = $this->stamp();
         $this->ensureSiteSetting('system.schema_version', $stamp);
         $this->db->execute(
@@ -152,6 +167,7 @@ final class Schema
         foreach ($this->statements() as $sql) {
             $this->db->execute($this->expand($sql));
         }
+        \GnuCms\Shop\Schema::migrate($this->db);
 
         // 새로 만든 스키마는 이미 최신이다. 첫 요청에서 헛돌지 않게 표시해 둔다.
         $this->ensureSiteSetting('system.schema_version', $this->stamp());
@@ -248,6 +264,158 @@ final class Schema
         $this->addColumnIfMissing('users', 'avatar_source', 'VARCHAR(10) NULL');
     }
 
+    /** 알리고 발송 작업·수신자·알림톡 템플릿 사본. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migrateAligoMessaging(): void
+    {
+        // 판 23 을 이미 적용한 설치에는 message_jobs 표가 있으므로 칸만 붙인다. 아래
+        // 루프가 만드는 ix_message_jobs_scheduled 인덱스보다 반드시 앞서야 한다 — 칸이
+        // 없는 채로 인덱스를 만들려 하면 createIndexIfMissing() 이 "칸 없음" 오류를
+        // "이미 있음"으로 오인해 조용히 삼키고, 인덱스는 영영 만들어지지 않는다.
+        $datetime = $this->db->dialect()->typeMap()['{DATETIME}'];
+        $this->addColumnIfMissing('message_jobs', 'scheduled_at', $datetime . ' NULL');
+        $this->addColumnIfMissing('message_jobs', 'cancelled_at', $datetime . ' NULL');
+        // 취소된 수신자 수. total = success + failure + cancelled + (대기·불명확) 이
+        // 맞아떨어져야 이력 한 줄이 스스로 모순되지 않는다 — 취소가 숫자에 전혀
+        // 나타나지 않던 판에서는 전원 취소된 작업이 "성공 502"로 보였다.
+        $this->addColumnIfMissing('message_jobs', 'cancelled', 'INTEGER NOT NULL DEFAULT 0');
+
+        foreach ($this->aligoStatements() as $sql) {
+            // 표가 이미 있으면 건너뛴다. 세 표가 한 번에 생기지 않은 설치도 있을 수 있다.
+            if (preg_match('/^CREATE TABLE (\w+)/', $sql, $m) === 1) {
+                if (!$this->tableExists($m[1])) {
+                    $this->db->execute($this->expand($sql));
+                }
+                continue;
+            }
+            // 인덱스는 표를 새로 만들며 이미 함께 생겼을 수 있으니, 있으면 조용히 건너뛴다.
+            preg_match('/^CREATE (?:UNIQUE )?INDEX (\w+)/', $sql, $m);
+            $this->createIndexIfMissing($m[1], $sql);
+        }
+        $this->addColumnIfMissing('users', 'phone', 'VARCHAR(20) NULL');
+    }
+
+    /** 쇼핑몰 결제(docs/payments.md). 설정과 원장은 PG별로 격리하고 암호화한다. 이전 표는 보관한다. */
+    private function paymentStatements(): array
+    {
+        return [
+            'CREATE TABLE pay_settings (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, PRIMARY KEY (provider, id)){SUFFIX}',
+            'CREATE TABLE pay_transactions (provider VARCHAR(32) NOT NULL, id VARCHAR(32) NOT NULL, payload {TEXT} NOT NULL, event_indexed SMALLINT NOT NULL DEFAULT 0, event_status VARCHAR(24) NOT NULL DEFAULT \'\', event_at BIGINT NOT NULL DEFAULT 0, environment VARCHAR(8) NOT NULL DEFAULT \'\', payment_method VARCHAR(24) NOT NULL DEFAULT \'\', amount BIGINT NOT NULL DEFAULT 0, failure_code VARCHAR(32) NOT NULL DEFAULT \'\', PRIMARY KEY (provider, id)){SUFFIX}',
+            'CREATE TABLE pay_inicis_settings (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
+            'CREATE TABLE pay_inicis_transactions (id VARCHAR(32) PRIMARY KEY, payload {TEXT} NOT NULL){SUFFIX}',
+        ];
+    }
+
+    /** 26판. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
+    public function migratePayments(): void
+    {
+        foreach ($this->paymentStatements() as $sql) {
+            preg_match('/^CREATE TABLE (\w+)/', $sql, $m);
+            if (!$this->tableExists($m[1])) $this->db->execute($this->expand($sql));
+        }
+        foreach ([
+            'event_indexed' => 'SMALLINT NOT NULL DEFAULT 0',
+            'event_status' => "VARCHAR(24) NOT NULL DEFAULT ''",
+            'event_at' => 'BIGINT NOT NULL DEFAULT 0',
+            'environment' => "VARCHAR(8) NOT NULL DEFAULT ''",
+            'payment_method' => "VARCHAR(24) NOT NULL DEFAULT ''",
+            'amount' => 'BIGINT NOT NULL DEFAULT 0',
+            'failure_code' => "VARCHAR(32) NOT NULL DEFAULT ''",
+        ] as $column => $definition) $this->addColumnIfMissing('pay_transactions', $column, $definition);
+        $this->createIndexIfMissing('ix_pay_transactions_event', 'CREATE INDEX ix_pay_transactions_event ON pay_transactions (provider, event_status, event_at)');
+        // 암호문을 그대로 옮겨 설정 판·콜백·미확정 승인/환불 기록을 보존한다.
+        // 재실행해도 공통 원장의 더 최신 상태를 덮어쓰지 않는다.
+        foreach (['settings', 'transactions'] as $kind) {
+            $source = $this->db->table('pay_inicis_' . $kind);
+            $target = $this->db->table('pay_' . $kind);
+            $this->db->execute("INSERT INTO $target (provider, id, payload) SELECT 'inicis', old.id, old.payload FROM $source old WHERE NOT EXISTS (SELECT 1 FROM $target current_row WHERE current_row.provider = 'inicis' AND current_row.id = old.id)");
+        }
+    }
+
+    /** 27판: 쇼핑몰 표, 28판: 편집기 사진을 소유자 폴더(categories/<id>, products/<id>)로 구분하고, 초안에 잠깐 있던 yc_categories.image_key 를 지운다. 29판: 분류를 부모 id 트리(slug·path·legacy_code)로. 30판: 분류 메뉴 숨김(yc_categories.menu_hidden). 31판: 진열 깃발 → 자동 묶음·숨김 분류. 모듈 시절(modules/youngcart)에 만든 표는 그대로 넘겨받고 확장 스키마 기록만 지운다. */
+    public function migrateShop(): void
+    {
+        \GnuCms\Shop\Schema::migrate($this->db);
+        if ($this->tableExists('extension_schemas')) {
+            $this->db->execute('DELETE FROM ' . $this->db->table('extension_schemas') . ' WHERE package_key = ?', ['modules/youngcart']);
+        }
+    }
+
+    private function aligoStatements(): array
+    {
+        return [
+            'CREATE TABLE message_jobs (
+                id           {AUTO_PK},
+                channel      VARCHAR(8)   NOT NULL,
+                tpl_code     VARCHAR(40)  NULL,
+                senderkey    VARCHAR(64)  NULL,
+                sender       VARCHAR(20)  NOT NULL,
+                title        VARCHAR(60)  NULL,
+                body         {TEXT}       NOT NULL,
+                failover     SMALLINT     NOT NULL DEFAULT 0,
+                event_key    VARCHAR(40)  NULL,
+                created_by   VARCHAR(64)  NULL,
+                total        INTEGER      NOT NULL DEFAULT 0,
+                success      INTEGER      NOT NULL DEFAULT 0,
+                failure      INTEGER      NOT NULL DEFAULT 0,
+                cancelled    INTEGER      NOT NULL DEFAULT 0,
+                status       VARCHAR(12)  NOT NULL,
+                test_mode    SMALLINT     NOT NULL DEFAULT 0,
+                scheduled_at {DATETIME}   NULL,
+                cancelled_at {DATETIME}   NULL,
+                created_at   {DATETIME}   NOT NULL,
+                finished_at  {DATETIME}   NULL
+            ){SUFFIX}',
+            'CREATE TABLE message_recipients (
+                id              {AUTO_PK},
+                job_id          BIGINT       NOT NULL,
+                mid             VARCHAR(32)  NULL,
+                msgid           VARCHAR(40)  NULL,
+                phone           VARCHAR(20)  NOT NULL,
+                name            VARCHAR(60)  NULL,
+                user_id         VARCHAR(64)  NULL,
+                body            {TEXT}       NOT NULL,
+                status          VARCHAR(12)  NOT NULL,
+                rslt            VARCHAR(8)   NULL,
+                rslt_message    VARCHAR(200) NULL,
+                fallback_body   {TEXT}       NULL,
+                smid            VARCHAR(32)  NULL,
+                fallback_status VARCHAR(12)  NULL,
+                requested_at    {DATETIME}   NULL,
+                sent_at         {DATETIME}   NULL,
+                result_at       {DATETIME}   NULL,
+                checked_at      {DATETIME}   NULL
+            ){SUFFIX}',
+            'CREATE TABLE alimtalk_templates (
+                id             {AUTO_PK},
+                tpl_code       VARCHAR(40)  NOT NULL,
+                senderkey      VARCHAR(64)  NOT NULL,
+                name           VARCHAR(200) NOT NULL,
+                content        {TEXT}       NOT NULL,
+                template_type  VARCHAR(4)   NULL,
+                emphasis_type  VARCHAR(8)   NULL,
+                status         VARCHAR(4)   NULL,
+                insp_status    VARCHAR(4)   NULL,
+                buttons        {TEXT}       NULL,
+                enabled        SMALLINT     NOT NULL DEFAULT 0,
+                fetched_at     {DATETIME}   NOT NULL
+            ){SUFFIX}',
+            'CREATE INDEX ix_message_jobs_created ON message_jobs (created_at, id)',
+            'CREATE INDEX ix_message_recipients_job ON message_recipients (job_id, id)',
+            'CREATE INDEX ix_message_recipients_mid ON message_recipients (mid, status)',
+            // 대체문자 결과 대기열. 이력 화면을 열 때마다 fallback_status 와 smid 로
+            // 훑으므로 알림톡 대기열(mid, status)과 똑같이 인덱스가 필요하다.
+            'CREATE INDEX ix_message_recipients_fallback ON message_recipients (fallback_status, smid)',
+            'CREATE UNIQUE INDEX ux_alimtalk_templates_code ON alimtalk_templates (tpl_code)',
+            // 예약 발송 조회용 인덱스. 채널을 끄거나 템플릿이 승인을 잃었을 때 그 채널·템플릿에
+            // 걸린 예약을 찾아 취소하고(AligoService::scheduledJobIdsWhere()), 아직 발송 시각이
+            // 안 된 예약을 결과 조회 대상에서 빼는 데(History::refreshPrimary()·refreshFallbacks())
+            // status·scheduled_at 을 함께 쓴다. 알리고가 예약 시각에 스스로 내보내므로, GNUCMS
+            // 쪽에는 그 시각을 기다렸다가 발송을 실행하는 것이 없다 — 이 인덱스는 그런 실행기가
+            // 아니라 위 두 조회를 위한 것이다.
+            'CREATE INDEX ix_message_jobs_scheduled ON message_jobs (scheduled_at, status)',
+        ];
+    }
+
     /** 알림함 표. 기존 설치에는 없으므로 업그레이드할 때 만든다. */
     public function migrateNotifications(): void
     {
@@ -308,7 +476,7 @@ final class Schema
         }
 
         try {
-            $this->db->selectOne('SELECT ' . $column . ' FROM ' . $this->db->table($table) . ' LIMIT 1');
+            $this->db->selectOne('SELECT ' . $this->db->q($column) . ' FROM ' . $this->db->table($table) . ' LIMIT 1');
         } catch (DomainError $e) {
             $this->db->execute('ALTER TABLE ' . $this->db->table($table)
                 . ' ADD COLUMN ' . $column . ' ' . $definition);
@@ -546,7 +714,8 @@ final class Schema
             $this->consentUseStatements(), $this->consentsGivenStatements(),
             $this->notificationStatements(),
             $this->passwordThrottleStatements(), $this->loginEventStatements(),
-            $this->writeRateLimitStatements(), $this->extensionSchemaStatements());
+            $this->writeRateLimitStatements(), $this->extensionSchemaStatements(), $this->paymentStatements(),
+            $this->aligoStatements());
     }
 
     private function accountStatements(): array
@@ -574,6 +743,7 @@ final class Schema
                 withdrawn_at   {DATETIME}   NULL,
                 avatar_file    VARCHAR(40)  NULL,
                 avatar_source  VARCHAR(10)  NULL,
+                phone          VARCHAR(20)  NULL,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL
             ){SUFFIX}';
@@ -658,15 +828,12 @@ final class Schema
             'ALTER TABLE ' . $this->db->table('pages') . ' RENAME TO ' . $this->db->table('contents')
         );
 
-        $mysql = $this->db->dialect()->name() === 'mysql';
         foreach ([
             ['ux_pages_slug', 'CREATE UNIQUE INDEX ux_contents_slug ON contents (slug)'],
             ['ix_pages_public', 'CREATE INDEX ix_contents_public ON contents (status, show_in_menu, sort_order, id)'],
         ] as [$oldIndex, $createSql]) {
             try {
-                $this->db->execute($mysql
-                    ? 'DROP INDEX ' . $this->db->index($oldIndex) . ' ON ' . $this->db->table('contents')
-                    : 'DROP INDEX ' . $this->db->index($oldIndex));
+                $this->db->execute('DROP INDEX ' . $this->db->index($oldIndex) . ' ON ' . $this->db->table('contents'));
             } catch (DomainError $e) {
                 // 옛 인덱스가 없으면 그대로 둔다
             }
@@ -800,9 +967,7 @@ final class Schema
             return false;
         }
         try {
-            // SQLite는 존재하지 않는 "column"을 문자열 리터럴로 받아들이는 호환 모드가
-            // 있어 여기서는 내부 상수로만 들어오는 인용 없는 이름을 쓴다.
-            $this->db->selectOne('SELECT ' . $column . ' FROM '
+            $this->db->selectOne('SELECT ' . $this->db->q($column) . ' FROM '
                 . $this->db->table($table) . ' LIMIT 1');
             return true;
         } catch (DomainError $e) {
@@ -822,9 +987,7 @@ final class Schema
     {
         try {
             $sql = 'DROP INDEX ' . $this->db->index($index);
-            if ($this->db->dialect()->name() === 'mysql') {
-                $sql .= ' ON ' . $this->db->table($table);
-            }
+            $sql .= ' ON ' . $this->db->table($table);
             $this->db->execute($sql);
         } catch (DomainError $e) {
             // 옛 판에 없거나 이미 정리됐으면 그대로 둔다.
@@ -1035,46 +1198,13 @@ final class Schema
             }
         }
 
-        $name = $this->db->dialect()->name();
-        if ($name === 'sqlite') {
-            $columns = $this->db->select('PRAGMA table_info(' . $this->db->table('users') . ')');
-            foreach ($columns as $column) {
-                if (($column['name'] ?? '') === 'password_hash' && (int) ($column['notnull'] ?? 0) === 1) {
-                    $this->rebuildSqliteUsers();
-                    break;
-                }
-            }
-        } elseif ($name === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' MODIFY password_hash VARCHAR(255) NULL');
-        }
+        $this->db->execute('ALTER TABLE ' . $this->db->table('users') . ' MODIFY password_hash VARCHAR(255) NULL');
     }
 
     private function renameUserDisplayNameColumn(): void
     {
-        if ($this->db->dialect()->name() === 'mysql') {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-                . ' CHANGE ' . $this->db->q('name') . ' ' . $this->db->q('display_name')
-                . ' VARCHAR(100) NOT NULL');
-            return;
-        }
         $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-            . ' RENAME COLUMN ' . $this->db->q('name') . ' TO ' . $this->db->q('display_name'));
-    }
-
-    private function rebuildSqliteUsers(): void
-    {
-        $this->db->transaction(function (): void {
-            $this->db->execute('ALTER TABLE ' . $this->db->table('users')
-                . ' RENAME TO ' . $this->db->table('users_before_oauth'));
-            $this->db->execute($this->expand($this->usersTableStatement()));
-            $columns = 'id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch, created_at, updated_at';
-            $this->db->execute('INSERT INTO ' . $this->db->table('users') . ' (' . $columns . ') SELECT '
-                . $columns . ' FROM ' . $this->db->table('users_before_oauth'));
-            $this->db->execute('DROP TABLE ' . $this->db->table('users_before_oauth'));
-            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_email')
-                . ' ON ' . $this->db->table('users') . ' (email)');
-            $this->db->execute('CREATE UNIQUE INDEX ' . $this->db->index('ux_users_display_name')
-                . ' ON ' . $this->db->table('users') . ' (display_name)');
-        });
+            . ' CHANGE ' . $this->db->q('name') . ' ' . $this->db->q('display_name')
+            . ' VARCHAR(100) NOT NULL');
     }
 }

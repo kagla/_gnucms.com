@@ -33,7 +33,11 @@ final class CmsImageController
             }
             $key = (string) ($request->getQueryParams()['image_key'] ?? '');
             $image = $this->app->contentImages()->upload($this->app->guestAcl(), $upload, $key);
-            $url = RouteContext::fromRequest($request)->getRouteParser()->urlFor('editor.owned_image', $image);
+            $parser = RouteContext::fromRequest($request)->getRouteParser();
+            // 소유자 폴더(categories/10, tmp/<키> …)는 종류와 식별자를 나눠 주소를 만든다.
+            $url = str_contains($image['key'], '/')
+                ? $parser->urlFor('editor.scoped_image', ['scope' => explode('/', $image['key'], 2)[0], 'owner' => explode('/', $image['key'], 2)[1], 'file' => $image['file']])
+                : $parser->urlFor('editor.owned_image', $image);
             return $this->json($response, [
                 'uploaded' => 1,
                 'fileName' => $image['file'],
@@ -92,6 +96,14 @@ final class CmsImageController
     {
         return $this->imageResponse($response, $this->app->contentImages()->ownedImage(
             (string) $args['key'], (string) $args['file']
+        ));
+    }
+
+    /** 소유자 폴더의 사진: /media/editor/{종류}/{식별자}/{파일}. */
+    public function showScoped(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        return $this->imageResponse($response, $this->app->contentImages()->ownedImage(
+            (string) $args['scope'] . '/' . (string) $args['owner'], (string) $args['file']
         ));
     }
 

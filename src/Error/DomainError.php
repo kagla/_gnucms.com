@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GnuCms\Error;
 
 use RuntimeException;
+use Throwable;
 
 /**
  * 사용자에게 그대로 보여줄 수 있는 오류. 이 예외가 아닌 모든 예외는
@@ -28,9 +29,9 @@ final class DomainError extends RuntimeException
     /** @var int|null */
     private $retryAfter;
 
-    public function __construct(string $code, string $message, int $status, array $details = [], ?int $retryAfter = null)
+    public function __construct(string $code, string $message, int $status, array $details = [], ?int $retryAfter = null, ?Throwable $previous = null)
     {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
         $this->errorCode = $code;
         $this->status = $status;
         $this->details = $details;
@@ -92,8 +93,8 @@ final class DomainError extends RuntimeException
         return new self('SERVICE_UNAVAILABLE', $message, 503);
     }
 
-    public static function internal(string $message): self
+    public static function internal(string $message, ?Throwable $previous = null): self
     {
-        return new self('INTERNAL', $message, 500);
+        return new self('INTERNAL', $message, 500, [], null, $previous);
     }
 }

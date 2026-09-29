@@ -13,6 +13,8 @@ use GnuCms\Web\Controller\AdminController;
 use GnuCms\Web\Controller\FileController;
 use GnuCms\Web\Controller\PostController;
 use GnuCms\Web\Controller\PageController;
+use GnuCms\Web\Controller\AdminAligoController;
+use GnuCms\Web\Controller\AdminMessageController;
 use GnuCms\Web\Controller\AdminCmsController;
 use GnuCms\Web\Controller\CmsImageController;
 use GnuCms\Web\Controller\CommentController;
@@ -101,20 +103,53 @@ final class Routes
         $backups = new BackupController($app);
         $slim->post('/admin/backups', [$backups, 'create'])->setName('admin.backups.create');
         $slim->post('/admin/backups/upload', [$backups, 'upload'])->setName('admin.backups.upload');
-        $slim->get('/admin/backups/{name:gnucms-(?:sqlite|mysql)-[0-9-]+\\.(?:zip|tar)}', [$backups, 'download'])
+        $slim->get('/admin/backups/{name:gnucms-mysql-[0-9-]+\\.(?:zip|tar)}', [$backups, 'download'])
             ->setName('admin.backups.download');
-        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql)-[0-9-]+\\.(?:zip|tar)}/verify', [$backups, 'verify'])
+        $slim->post('/admin/backups/{name:gnucms-mysql-[0-9-]+\\.(?:zip|tar)}/verify', [$backups, 'verify'])
             ->setName('admin.backups.verify');
-        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql)-[0-9-]+\\.(?:zip|tar)}/restore', [$backups, 'restore'])
+        $slim->post('/admin/backups/{name:gnucms-mysql-[0-9-]+\\.(?:zip|tar)}/restore', [$backups, 'restore'])
             ->setName('admin.backups.restore');
-        $slim->post('/admin/backups/{name:gnucms-(?:sqlite|mysql)-[0-9-]+\\.(?:zip|tar)}/delete', [$backups, 'delete'])
+        $slim->post('/admin/backups/{name:gnucms-mysql-[0-9-]+\\.(?:zip|tar)}/delete', [$backups, 'delete'])
             ->setName('admin.backups.delete');
-        $slim->post('/admin/schema-backups/{name:board-v[0-9A-Za-z]+-[0-9-]+\\.sqlite}/delete', [$backups, 'deleteAutomatic'])
-            ->setName('admin.schema-backups.delete');
+        $aligo = new AdminAligoController($app);
+        $slim->get('/admin/settings/messaging', [$aligo, 'messaging'])->setName('admin.settings.messaging');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
         $slim->post('/admin/mail/password', [$cms, 'mailPassword'])->setName('admin.mail.password');
         $slim->post('/admin/mail/test', [$cms, 'mailTest'])->setName('admin.mail.test');
+        $slim->get('/admin/aligo', [$aligo, 'form'])->setName('admin.aligo');
+        $slim->post('/admin/aligo', [$aligo, 'save']);
+        $slim->post('/admin/aligo/verify', [$aligo, 'verify'])->setName('admin.aligo.verify');
+        $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
+        $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
+        $slim->get('/admin/aligo/status', [$aligo, 'channelStatus'])->setName('admin.aligo.status');
+        $slim->post('/admin/aligo/key', [$aligo, 'apiKey'])->setName('admin.aligo.key');
+        $payment = new \GnuCms\Payment\SettingsController($app->paymentSettings());
+        $slim->get('/admin/settings/payment', [$payment, 'handle'])->setName('admin.settings.payment');
+        $slim->post('/admin/settings/payment', [$payment, 'handle']);
+        $slim->post('/admin/settings/payment/secret', [$payment, 'secret'])
+            ->setName('admin.settings.payment.secret');
+        $slim->get('/admin/settings/notifications', [$aligo, 'notifications'])
+            ->setName('admin.settings.notifications');
+        $slim->post('/admin/settings/notifications/save', [$aligo, 'saveNotifications'])
+            ->setName('admin.settings.notifications.save');
+        $msg = new AdminMessageController($app);
+        $slim->get('/admin/messages/templates', [$msg, 'templates'])->setName('admin.messages.templates');
+        $slim->post('/admin/messages/templates/fetch', [$msg, 'fetchTemplates'])
+            ->setName('admin.messages.templates.fetch');
+        $slim->post('/admin/messages/templates/toggle', [$msg, 'toggleTemplate'])
+            ->setName('admin.messages.templates.toggle');
+        $slim->get('/admin/messages/send', [$msg, 'send'])->setName('admin.messages.send');
+        $slim->post('/admin/messages/send/preview', [$msg, 'preview'])->setName('admin.messages.send.preview');
+        $slim->post('/admin/messages/send/dispatch', [$msg, 'dispatch'])->setName('admin.messages.send.dispatch');
+        $slim->get('/admin/messages/history', [$msg, 'history'])->setName('admin.messages.history');
+        // refresh 를 {id} 보다 먼저 등록한다 — 안 그러면 /history/refresh 가 {id} 에 잡힌다.
+        $slim->post('/admin/messages/history/refresh', [$msg, 'refresh'])
+            ->setName('admin.messages.history.refresh');
+        $slim->get('/admin/messages/history/{id:[0-9]+}', [$msg, 'historyDetail'])
+            ->setName('admin.messages.history.detail');
+        $slim->post('/admin/messages/history/{id:[0-9]+}/cancel', [$msg, 'cancel'])
+            ->setName('admin.messages.history.cancel');
         $slim->get('/admin/content', [$cms, 'pages'])->setName('admin.content');
         $slim->get('/admin/content/trash', [$cms, 'trash'])->setName('admin.content.trash');
         $slim->post('/admin/content/trash/{id:[0-9]+}/restore', [$cms, 'restore'])->setName('admin.content.restore');
@@ -178,6 +213,9 @@ final class Routes
         // 파일 이름 뒤의 -thumb / -view 는 줄여서 내보내는 크기다 (ContentImageService::VARIANTS).
         $slim->get('/media/editor/{key:[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'showOwned'])->setName('editor.owned_image');
+        // 소유자 폴더(categories/10, products/123, 첫 저장 전 tmp/<키>). 모양은 ContentImageService::assertKey() 와 같다.
+        $slim->get('/media/editor/{scope:[a-z]{1,20}}/{owner:[1-9][0-9]{0,18}|[a-f0-9]{32}}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
+            [$cmsImages, 'showScoped'])->setName('editor.scoped_image');
         $slim->get('/media/editor/{year:[0-9]+}/{month:[0-9]+}/{file:[a-f0-9]+(?:-thumb|-view)?\.(?:jpg|png|gif|webp)}',
             [$cmsImages, 'show'])->setName('editor.image');
         $slim->get('/page/{slug:[a-z0-9][a-z0-9_-]*}', static function (
@@ -272,6 +310,7 @@ final class Routes
             ]);
             return $response->withHeader('Location', $url)->withStatus(301);
         });
+        \GnuCms\Shop\Routes::register($slim, $app);
         // 코어 경로가 등록된 뒤 확장 기본 주소의 충돌을 검사한다.
         \GnuCms\Extension\AdminRoutes::register($slim, $app);
     }

@@ -265,10 +265,26 @@ final class AttachmentService
         return $this->resizer->ensure($original, $target, $width) ? $target : $original;
     }
 
-    /** @return array{items:list<array{path:string,relative_path:string,size:int,original_size:int,mtime:int,file_count:int,thumbnails:list<string>}>,files:int,bytes:int} */
-    public function garbageCandidates(Acl $acl): array
+    /**
+     * 페이지를 지정하면 전체 개수·용량은 세되 최신 $page × $perPage개만 보관한다.
+     * 페이지가 없으면 정리 실행을 위해 전체 목록을 돌려준다.
+     *
+     * @return array{items:list<array{path:string,relative_path:string,size:int,original_size:int,mtime:int,file_count:int,thumbnails:list<string>}>,files:int,bytes:int,total_items?:int,page?:int,total_pages?:int}
+     */
+    public function garbageCandidates(Acl $acl, ?int $page = null, int $perPage = 50): array
     {
         $acl->assertGlobalAdmin();
+        $paged = $page !== null;
+        $page = max(1, $page ?? 1);
+        $perPage = max(1, $perPage);
+        $limit = $paged
+            ? ($page > intdiv(PHP_INT_MAX, $perPage) ? PHP_INT_MAX : $page * $perPage)
+            : 0;
+        $queue = null;
+        if ($paged) {
+            $queue = new \SplPriorityQueue();
+            $queue->setExtractFlags(\SplPriorityQueue::EXTR_DATA);
+        }
         $referenced = [];
         foreach ($this->postRepo->allAttachmentPaths() as $path) {
             $referenced[$path] = true;
@@ -276,10 +292,12 @@ final class AttachmentService
 
         $root = rtrim((string) $this->config['dir'], '/');
         if (!is_dir($root)) {
-            return ['items' => [], 'files' => 0, 'bytes' => 0];
+            return ['items' => [], 'files' => 0, 'bytes' => 0]
+                + ($paged ? ['total_items' => 0, 'page' => 1, 'total_pages' => 1] : []);
         }
 
         $items = [];
+        $totalItems = 0;
         $files = 0;
         $bytes = 0;
         $iterator = new \RecursiveIteratorIterator(
@@ -313,7 +331,7 @@ final class AttachmentService
                 }
             }
             $fileCount = 1 + count($thumbnails);
-            $items[] = [
+            $candidate = [
                 'path' => $path,
                 'relative_path' => str_replace('\\', '/', substr($path, strlen($root) + 1)),
                 'size' => $size,
@@ -322,12 +340,36 @@ final class AttachmentService
                 'file_count' => $fileCount,
                 'thumbnails' => $thumbnails,
             ];
+            $totalItems++;
+            if ($queue !== null) {
+                // 큰 사이트에서도 화면 페이지 이전의 후보만 보관한다. 우선순위가 높은
+                // 쪽이 가장 오래됐고, 변경 시각이 같으면 경로가 뒤인 항목이다.
+                $queue->insert($candidate, [-(int) $candidate['mtime'], $candidate['relative_path']]);
+                if ($queue->count() > $limit) {
+                    $queue->extract();
+                }
+            } else {
+                $items[] = $candidate;
+            }
             $files += $fileCount;
             $bytes += $size;
         }
 
+        if ($queue !== null) {
+            while (!$queue->isEmpty()) {
+                $items[] = $queue->extract();
+            }
+        }
         usort($items, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']
             ?: strcmp($a['relative_path'], $b['relative_path']));
+
+        if ($paged) {
+            $totalPages = max(1, (int) ceil($totalItems / $perPage));
+            $page = min($page, $totalPages);
+            $items = array_slice($items, ($page - 1) * $perPage, $perPage);
+            return ['items' => $items, 'files' => $files, 'bytes' => $bytes,
+                'total_items' => $totalItems, 'page' => $page, 'total_pages' => $totalPages];
+        }
 
         return ['items' => $items, 'files' => $files, 'bytes' => $bytes];
     }

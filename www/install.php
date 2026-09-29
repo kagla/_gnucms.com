@@ -143,8 +143,7 @@ if ($step === 2) {
     $types = DbSetup::availableTypes();
     $saved = $session->get('db') ?? [];
     $values = array_merge([
-        'type' => in_array('sqlite', $types, true) ? 'sqlite' : (string) ($types[0] ?? ''),
-        'sqlite_path' => $storageDir . '/board.sqlite',
+        'type' => (string) ($types[0] ?? ''),
         'host' => 'localhost', 'port' => '', 'name' => '', 'user' => '', 'prefix' => '',
     ], (array) ($saved['input'] ?? []), $post);
     $probe = null;
@@ -172,10 +171,9 @@ if ($step === 2) {
             . ($values['type'] === $key ? ' checked' : '') . ($on ? '' : ' disabled') . '>' . h($label)
             . ($on ? '' : '<span class="hint">드라이버 없음</span>') . '</label>';
     }
-    $body = '<p class="intro">SQLite 는 파일 하나로 끝나고, MySQL/MariaDB는 DB 서버 접속 정보가 필요합니다.</p>'
+    $body = '<p class="intro">MySQL/MariaDB 서버의 접속 정보를 입력하세요.</p>'
         . (isset($errors['_']) ? '<p class="alert">' . h($errors['_']) . '</p>' : '')
         . '<form method="post"><div class="radios">' . $radios . '</div>' . err($errors, 'type')
-        . '<div id="sqlite">' . field('SQLite 파일 경로', 'sqlite_path', $values['sqlite_path'], $errors, 'text', '웹에서 접근할 수 없는 폴더의 절대 경로') . '</div>'
         . '<div id="server">'
         . field('호스트', 'host', $values['host'], $errors)
         . field('포트', 'port', $values['port'], $errors, 'text', '비우면 기본값 (MySQL/MariaDB 3306)', 'inputmode="numeric"')
@@ -189,8 +187,7 @@ if ($step === 2) {
         // h() 를 씌우면 두 번 이스케이프된다.
         $body .= '<div class="notice"><p>' . $errors['reuse'] . '</p><label style="margin:0;font-weight:600"><input type="checkbox" name="reuse" value="1" style="width:auto;margin-right:6px">기존 데이터베이스를 이어 씁니다 (표를 새로 만들지 않고 새 판으로 옮깁니다)</label></div>';
     }
-    $body .= '<div class="actions"><a href="?step=1">← 이전</a><button type="submit">접속 시험 후 다음</button></div></form>'
-        . '<script>function sw(){var t=document.querySelector("input[name=type]:checked");var s=t&&t.value==="sqlite";document.getElementById("sqlite").style.display=s?"":"none";document.getElementById("server").style.display=s?"none":""}document.querySelectorAll("input[name=type]").forEach(function(r){r.addEventListener("change",sw)});sw()</script>';
+    $body .= '<div class="actions"><a href="?step=1">← 이전</a><button type="submit">접속 시험 후 다음</button></div></form>';
     page(2, '데이터베이스', $body);
     exit;
 }

@@ -23,7 +23,7 @@ final class BackupPageTest extends WebTestCase
         foreach (['uploads', 'editor', 'avatars'] as $directory) {
             mkdir($this->root . '/' . $directory, 0775, true);
         }
-        $this->dbConfig = ['dsn' => 'sqlite:' . $this->root . '/board.sqlite'];
+        $this->dbConfig = \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig();
     }
 
     protected function tearDown(): void
@@ -41,7 +41,7 @@ final class BackupPageTest extends WebTestCase
         @rmdir($this->root);
     }
 
-    public function testAdminCreatesVerifiesDownloadsAndRestoresFullBackup(): void
+    public function testAdminCreatesVerifiesDownloadsAndRejectsAutomaticRestore(): void
     {
         $config = [
             'storage' => ['dir' => $this->root],
@@ -49,7 +49,7 @@ final class BackupPageTest extends WebTestCase
             'editor' => ['dir' => $this->root . '/editor'],
         ];
         $app = $this->makeApp($this->dbConfig, $config);
-        $app->cms()->saveSettings(['timezone' => 'Pacific/Honolulu']);
+        $this->saveSiteSettings($app, ['timezone' => 'Pacific/Honolulu']);
         $adminId = $app->users()->create(
             'admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true
         );
@@ -94,7 +94,7 @@ final class BackupPageTest extends WebTestCase
         self::assertSame(303, $created->getStatusCode(), $this->body($created));
         parse_str((string) parse_url($created->getHeaderLine('Location'), PHP_URL_QUERY), $query);
         $name = (string) ($query['backup_created'] ?? '');
-        self::assertSame('gnucms-sqlite-20260904-193045.tar', $name);
+        self::assertSame('gnucms-mysql-20260904-193045.tar', $name);
 
         $listed = $this->body($this->get($app, '/admin/settings/maintenance', ['backup_created' => $name]));
         self::assertStringContainsString($name, $listed);
@@ -103,8 +103,8 @@ final class BackupPageTest extends WebTestCase
         self::assertStringContainsString('class="backup-safe-actions"', $listed);
         self::assertStringContainsString('class="backup-danger-actions"', $listed);
         self::assertStringNotContainsString('btn btn-xs btn-error btn-outline join-item', $listed);
-        self::assertStringContainsString('계속하려면 아래 칸에 <strong>복원</strong>을 입력하세요.', $listed);
-        self::assertStringContainsString('placeholder="복원"', $listed);
+        self::assertStringContainsString('DB 복원 절차', $listed);
+        self::assertStringNotContainsString('placeholder="복원"', $listed);
 
         $download = $this->get($app, '/admin/backups/' . $name);
         self::assertSame(200, $download->getStatusCode());
@@ -124,7 +124,7 @@ final class BackupPageTest extends WebTestCase
 
         $invalidPath = $this->root . '/invalid-backup.tar';
         file_put_contents($invalidPath, 'not a GNUCMS backup');
-        $invalidName = 'gnucms-sqlite-20260901-000000.tar';
+        $invalidName = 'gnucms-mysql-20260901-000000.tar';
         $invalidUpload = $this->upload($app, $uploadUrl, [
             'backup_file' => new UploadedFile(
                 $invalidPath,
@@ -181,11 +181,11 @@ final class BackupPageTest extends WebTestCase
         $restored = $this->post($app, '/admin/backups/' . $name . '/restore', [
             'csrf_token' => $_SESSION['csrf_token'], 'confirmation' => '복원',
         ]);
-        self::assertSame(303, $restored->getStatusCode(), $this->body($restored));
-        self::assertStringContainsString('safety_backup=', $restored->getHeaderLine('Location'));
-        self::assertSame('before', file_get_contents($this->root . '/uploads/file'));
+        self::assertSame(422, $restored->getStatusCode(), $this->body($restored));
+        self::assertStringContainsString('자동 복원을 지원하지 않습니다', $this->body($restored));
+        self::assertSame('after', file_get_contents($this->root . '/uploads/file'));
         $fresh = Connection::create($this->dbConfig);
-        self::assertSame('before', $fresh->selectOne(
+        self::assertSame('after', $fresh->selectOne(
             'SELECT setting_value FROM site_settings WHERE setting_key = ?', ['web_backup_test']
         )['setting_value']);
 

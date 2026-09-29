@@ -60,6 +60,18 @@ final class ManagerTest extends TestCase
         self::assertFileExists($this->extensionRoot . '/plugins/one/bootstrap.php');
     }
 
+    /** 코어로 옮겨간 모듈 키는 오류 카드로 보이지 않고, 다음 저장 때 조용히 빠진다. */
+    public function testRetiredModuleKeyIsHiddenAndDroppedOnTheNextSave(): void
+    {
+        $this->package('plugins/one');
+        $this->state->update(static fn (array $enabled): array => [...$enabled, 'modules/youngcart']);
+        self::assertArrayNotHasKey('modules/youngcart', $this->manager->packages());
+        $first = array_key_first($this->manager->packages());
+        $this->manager->setEnabledMany([$first => true]);
+        self::assertNotContains('modules/youngcart', $this->state->read());
+        self::assertContains($first, $this->state->read());
+    }
+
     public function testPublicNavigationIncludesOnlyEnabledBootedRoutes(): void
     {
         $route = '<?php return static function ($context): void { $context->route("GET", "/catalog", static fn ($request, $response) => $response); };';
@@ -390,5 +402,41 @@ PHP);
             self::assertSame(503, $e->status());
             self::assertSame($invalid, file_get_contents($file));
         }
+    }
+
+    public function testAliasesOffRegistersOnlyPrefixedPaths(): void
+    {
+        $this->package('modules/store', ['route_prefix' => '/store', 'admin_route_prefix' => '/admin/store', 'aliases' => false], <<<'PHP'
+<?php
+return static function ($context): void {
+    $context->route('GET', '/', static function ($request, $response) { $response->getBody()->write('home'); return $response; });
+    $context->route('GET', '/products', static fn ($request, $response) => $response, admin: true);
+};
+PHP);
+        $this->manager->setEnabled('modules/store', true);
+        $slim = AppFactory::create();
+        $this->manager->boot(new App([]), $slim);
+        $patterns = array_map(static fn ($route) => $route->getPattern(), $slim->getRouteCollector()->getRoutes());
+        sort($patterns);
+        self::assertSame(['/admin/store/products', '/store', '/store/'], $patterns);
+        $factory = new ServerRequestFactory();
+        self::assertSame('home', (string) $slim->handle($factory->createServerRequest('GET', '/store'))->getBody());
+        try {
+            $slim->handle($factory->createServerRequest('GET', '/modules/store/'));
+            self::fail('Expected HttpNotFoundException for legacy alias path');
+        } catch (\Slim\Exception\HttpNotFoundException $e) {
+            self::assertSame('Not found.', $e->getMessage());
+        }
+    }
+
+    public function testAliasesRequiresRoutePrefixAndBoolean(): void
+    {
+        $this->package('modules/store', ['aliases' => false]);
+        self::assertStringContainsString('aliases', (string) $this->manager->packages()['modules/store']['error']);
+        $this->package('modules/store', ['route_prefix' => '/store', 'aliases' => 'no']);
+        self::assertStringContainsString('aliases', (string) $this->manager->packages()['modules/store']['error']);
+        $this->package('modules/store', ['route_prefix' => '/store']);
+        self::assertNull($this->manager->packages()['modules/store']['error']);
+        self::assertTrue($this->manager->packages()['modules/store']['aliases']);
     }
 }

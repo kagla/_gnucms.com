@@ -27,6 +27,22 @@
         <input class="input input-bordered input-block" type="text" name="display_name" minlength="2" pattern="[가-힣A-Za-z0-9]+" title="한글·영문·숫자만, 공백 없이" value="<?= $this->e($values['display_name'] ?? '') ?>" maxlength="100" required>
         <?php if (array_key_exists('display_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['display_name']) ?></p><?php endif ?>
       </fieldset>
+      <?php
+        // 배열(phone[]=x)이 넘어오면 (string) 캐스팅이 경고를 낸다 — 스칼라만 쓴다.
+        // 관리자 화면은 signup_phone 정책을 보지 않는다 — 그 정책은 가입 화면이
+        // 무엇을 물을지를 정할 뿐, 관리자가 무엇을 관리할 수 있는지는 정하지 않는다.
+        // 정책이 off 인 동안 번호를 지우고 싶은 회원은 관리자에게 요청할 수밖에
+        // 없으므로, 이 칸은 정책과 무관하게 항상 입력할 수 있어야 한다.
+        $phoneValue = is_scalar($values['phone'] ?? null) ? (string) $values['phone'] : '';
+      ?>
+      <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
+        <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">알림톡·문자 수신 번호</span></legend>
+        <input class="input input-bordered input-block" type="tel" name="phone" inputmode="numeric" autocomplete="tel"
+               value="<?= $this->e($phoneValue === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneValue)) ?>"
+               placeholder="010-1234-5678">
+        <p class="fieldset-label">비워 두고 저장하면 번호가 지워집니다.</p>
+        <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
+      </fieldset>
       <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
         <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">JPG, PNG, WebP · 2MB 이하</span></legend>
         <?php if (!empty($values['avatar_file'])): ?><div class="profile-image-preview"><img src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="<?= $this->e($values['display_name']) ?> 프로필 이미지"><label><input class="checkbox checkbox-sm" type="checkbox" name="remove_profile_image" value="1"> 현재 이미지 삭제</label></div><?php endif ?>

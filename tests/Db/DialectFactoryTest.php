@@ -10,9 +10,10 @@ use GnuCms\Error\DomainError;
 
 final class DialectFactoryTest extends TestCase
 {
-    public function testResolvesSqlite(): void
+    public function testRejectsSqlite(): void
     {
-        $this->assertSame('sqlite', DialectFactory::fromDsn('sqlite::memory:')->name());
+        $this->expectException(DomainError::class);
+        DialectFactory::fromDsn('sqlite::memory:');
     }
 
     public function testResolvesMysql(): void
@@ -26,15 +27,14 @@ final class DialectFactoryTest extends TestCase
         DialectFactory::fromDsn('oracle:host=localhost');
     }
 
-    public function testQuotingDiffersPerDialect(): void
+    public function testMysqlQuotesIdentifiers(): void
     {
-        $this->assertSame('"posts"', DialectFactory::fromDsn('sqlite::memory:')->quoteIdentifier('posts'));
         $this->assertSame('`posts`', DialectFactory::fromDsn('mysql:host=h')->quoteIdentifier('posts'));
     }
 
-    public function testEveryDialectDefinesAllTypePlaceholders(): void
+    public function testMysqlDefinesAllTypePlaceholders(): void
     {
-        foreach (['sqlite::memory:', 'mysql:host=h'] as $dsn) {
+        foreach (['mysql:host=h'] as $dsn) {
             $map = DialectFactory::fromDsn($dsn)->typeMap();
             $this->assertArrayHasKey('{AUTO_PK}', $map, $dsn);
             $this->assertArrayHasKey('{DATETIME}', $map, $dsn);

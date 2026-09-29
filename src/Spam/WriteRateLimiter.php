@@ -70,41 +70,22 @@ final class WriteRateLimiter
             'hits' => 1,
             'expired1' => $expired,
             'expired2' => $expired,
-            'expired3' => $expired,
             'now2' => $now,
             'limit1' => $limit,
         ];
 
-        if ($this->db->dialect()->name() === 'mysql') {
-            // MySQL은 충돌 UPDATE에 WHERE를 붙일 수 없어, 한도에 닿으면 같은 값을 대입해
-            // rowCount=0이 되게 한다. hit_count를 먼저 계산해야 만료 전 시작 시각을 볼 수 있다.
-            $changed = $this->db->execute(
-                'INSERT INTO ' . $table
-                . ' (action, actor_key, window_seconds, window_started_at, hit_count)'
-                . ' VALUES (:action, :actor, :seconds, :started, :hits)'
-                . ' ON DUPLICATE KEY UPDATE'
-                . ' hit_count = IF(window_started_at <= :expired1, 1,'
-                . ' IF(hit_count < :limit1, hit_count + 1, hit_count)),'
-                . ' window_started_at = IF(window_started_at <= :expired2, :now2, window_started_at)',
-                array_diff_key($params, ['expired3' => true])
-            );
-        } else {
-            // SQLite는 ON CONFLICT 문법을 지원한다. WHERE가 거짓이면
-            // 기존 행을 건드리지 않아 rowCount=0으로 정확히 거절할 수 있다.
-            $changed = $this->db->execute(
-                'INSERT INTO ' . $table
-                . ' (action, actor_key, window_seconds, window_started_at, hit_count)'
-                . ' VALUES (:action, :actor, :seconds, :started, :hits)'
-                . ' ON CONFLICT (action, actor_key, window_seconds) DO UPDATE SET'
-                . ' hit_count = CASE WHEN ' . $table . '.window_started_at <= :expired1'
-                . ' THEN 1 ELSE ' . $table . '.hit_count + 1 END,'
-                . ' window_started_at = CASE WHEN ' . $table . '.window_started_at <= :expired2'
-                . ' THEN :now2 ELSE ' . $table . '.window_started_at END'
-                . ' WHERE ' . $table . '.window_started_at <= :expired3'
-                . ' OR ' . $table . '.hit_count < :limit1',
-                $params
-            );
-        }
+        // MySQL은 충돌 UPDATE에 WHERE를 붙일 수 없어, 한도에 닿으면 같은 값을 대입해
+        // rowCount=0이 되게 한다. hit_count를 먼저 계산해야 만료 전 시작 시각을 볼 수 있다.
+        $changed = $this->db->execute(
+            'INSERT INTO ' . $table
+            . ' (action, actor_key, window_seconds, window_started_at, hit_count)'
+            . ' VALUES (:action, :actor, :seconds, :started, :hits)'
+            . ' ON DUPLICATE KEY UPDATE'
+            . ' hit_count = IF(window_started_at <= :expired1, 1,'
+            . ' IF(hit_count < :limit1, hit_count + 1, hit_count)),'
+            . ' window_started_at = IF(window_started_at <= :expired2, :now2, window_started_at)',
+            $params
+        );
 
         if ($changed !== 0) {
             return;

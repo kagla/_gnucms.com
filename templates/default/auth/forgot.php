@@ -11,12 +11,16 @@
       </div>
       <form method="post" action="<?= $this->url('auth.forgot') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-        <fieldset class="fieldset">
+        <fieldset class="fieldset<?php if (array_key_exists('email', $errors)): ?> is-invalid<?php endif ?>">
           <legend class="fieldset-legend">이메일</legend>
           <label class="input input-bordered input-block">
             <span class="input-icon" aria-hidden="true"><?= $this->icon('mail', 16) ?></span>
             <input type="email" name="email" value="<?= $this->e($values['email'] ?? '') ?>" autocomplete="email" placeholder="you@example.com" required>
           </label>
+          <?php // 이 칸에 붙는 문구는 "얼마나 자주 눌렀는가"만 말한다. 가입된 주소든 아니든
+                // 똑같이 세고 똑같이 나오므로 계정의 존재를 흘리지 않는다(AccountService
+                // ::requestPasswordReset). 로그인 화면과 같은 모양의 같은 자리다. ?>
+          <?php if (array_key_exists('email', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['email']) ?></p><?php endif ?>
         </fieldset>
         <?php $this->insert('_turnstile', ['action' => 'password_reset', 'errors' => $errors]) ?>
         <button class="btn btn-primary btn-block btn-lg" type="submit">재설정 링크 받기</button>

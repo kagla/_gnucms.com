@@ -16,6 +16,8 @@ final class InstallerTest extends TestCase
 
     protected function setUp(): void
     {
+        (new Schema(Connection::create($this->dbConfig())))->drop();
+        (new Schema(Connection::create(array_replace($this->dbConfig(), ['prefix' => 'community_']))))->drop();
         $this->workDir = sys_get_temp_dir() . '/' . GNUCMS_ID . '-install-' . bin2hex(random_bytes(4));
         mkdir($this->workDir . '/config', 0775, true);
         mkdir($this->workDir . '/storage', 0775, true);
@@ -26,10 +28,11 @@ final class InstallerTest extends TestCase
     protected function tearDown(): void
     {
         @chmod($this->workDir . '/config', 0775);
-        foreach (['config/config.php', 'storage/board.sqlite', 'www/install.php'] as $file) {
+        foreach (['config/config.php', 'www/install.php',
+            'storage/extensions/enabled.json', 'storage/extensions/state.lock'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
-        foreach (['config', 'storage/uploads', 'storage/editor', 'storage/logs', 'storage', 'public', ''] as $dir) {
+        foreach (['config', 'storage/uploads', 'storage/editor', 'storage/logs', 'storage/extensions', 'storage', 'public', ''] as $dir) {
             @rmdir(rtrim($this->workDir . '/' . $dir, '/'));
         }
     }
@@ -43,7 +46,7 @@ final class InstallerTest extends TestCase
     {
         $result = $this->installer()->finish($this->dbConfig(), $this->site(), $this->admin());
 
-        self::assertSame('sqlite', $result['dialect']);
+        self::assertSame('mysql', $result['dialect']);
         self::assertSame('owner@example.com', $result['admin_email']);
         self::assertTrue($result['self_deleted']);
         self::assertFileDoesNotExist($this->workDir . '/www/install.php');
@@ -106,7 +109,7 @@ final class InstallerTest extends TestCase
 
     public function testFinishStoresAndUsesTablePrefix(): void
     {
-        $dbConfig = $this->dbConfig() + ['prefix' => 'community_'];
+        $dbConfig = array_replace($this->dbConfig(), ['prefix' => 'community_']);
         $this->installer()->finish($dbConfig, $this->site(), $this->admin());
 
         $config = require $this->configPath();
@@ -232,7 +235,7 @@ final class InstallerTest extends TestCase
     /** @return array{dsn: string, username: ?string, password: ?string} */
     private function dbConfig(): array
     {
-        return ['dsn' => 'sqlite:' . $this->workDir . '/storage/board.sqlite', 'username' => null, 'password' => null];
+        return \GnuCms\Tests\Support\DatabaseTestCase::mysqlConfig();
     }
 
     private function site(): array

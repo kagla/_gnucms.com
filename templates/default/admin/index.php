@@ -13,7 +13,7 @@
   </div>
 </div>
 
-<?php if (!$mail_configured): ?><div class="alert alert-warning alert-soft mail-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><strong>메일 설정이 없습니다.</strong> 가입 인증·비밀번호 변경 알림이 서버 기본 메일로만 나가 도착하지 않을 수 있습니다.</span><a class="btn btn-sm btn-warning" href="<?= $this->url('admin.mail') ?>">메일 설정</a></div><?php endif ?>
+<?php if (!$mail_configured): ?><div class="alert alert-warning alert-soft mail-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><strong>서버 기본 메일을 사용 중입니다.</strong> 서버 메일 전송이 설정되지 않았다면 도착하지 않을 수 있습니다. SMTP를 설정하면 SMTP로 보냅니다.</span><a class="btn btn-sm btn-warning" href="<?= $this->url('admin.mail') ?>#mail">SMTP 설정</a></div><?php endif ?>
 <?php if (($query['saved'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>변경사항을 저장했습니다.</span></div><?php endif ?>
 <?php if (($query['deleted'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>게시판을 삭제했습니다.</span></div><?php endif ?>
 
