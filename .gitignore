@@ -10,9 +10,8 @@
 # 배포물에는 vendor/ 를 포함해 올리지만, 저장소에는 커밋하지 않는다
 /vendor/
 
-# 로컬 테스트 DB
-*.sqlite
-*.sqlite3
+# 이전 설치에서 남은 로컬 DB 파일
+/storage/board*
 
 # 스키마를 옮기기 전 백업과 진행 표식
 /storage/backups/

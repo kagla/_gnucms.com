@@ -878,7 +878,7 @@ final class BackupManager
 
     private function driver(): string
     {
-        return $this->db->dialect()->name();
+        return 'mysql';
     }
 
     /** @return array{uploads:string,editor:string,avatars:string} */

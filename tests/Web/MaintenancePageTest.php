@@ -24,7 +24,7 @@ final class MaintenancePageTest extends TestCase
     {
         $e = new MaintenanceRequired(
             MaintenanceRequired::FAILED,
-            '/srv/site/storage/backups/board-v9-20260830-010203.sqlite',
+            '/srv/site/storage/backups/board-v9-20260830-010203.sql',
             new RuntimeException('SQLSTATE[HY000] secret-detail')
         );
 
@@ -32,7 +32,7 @@ final class MaintenancePageTest extends TestCase
 
         self::assertStringContainsString('옮기지 못했습니다', $html);
         self::assertStringContainsString('storage/logs/error.log', $html);
-        self::assertStringContainsString('board-v9-20260830-010203.sqlite', $html);
+        self::assertStringContainsString('board-v9-20260830-010203.sql', $html);
         self::assertStringNotContainsString('secret-detail', $html);
     }
 

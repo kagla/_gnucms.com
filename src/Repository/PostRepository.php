@@ -201,7 +201,7 @@ final class PostRepository
             'SELECT ' . self::COLUMNS . ' FROM ' . $this->db->table('posts')
             . ' WHERE deleted_at IS NULL AND is_notice = 1'
             . ' AND (board_id = :board_id' . $globalClause . ')'
-            // 전체 공지를 먼저. 방언마다 불리언 정렬이 달라 CASE 로 적는다.
+            // 전체 공지를 먼저 정렬하도록 조건을 명시한다.
             . " ORDER BY CASE WHEN notice_scope = 'global' THEN 0 ELSE 1 END, id DESC",
             $params
         );
@@ -403,7 +403,7 @@ final class PostRepository
 
     public function adjustCommentCount(int $id, int $delta): void
     {
-        // 0 미만으로 내려가지 않도록 GREATEST 대신 CASE 를 쓴다. 지원 DB 공통 문법이다.
+        // 댓글 수가 0 미만으로 내려가지 않도록 한다.
         $this->db->execute(
             'UPDATE ' . $this->db->table('posts')
             . ' SET comment_count = CASE WHEN comment_count + ? < 0 THEN 0 ELSE comment_count + ? END'

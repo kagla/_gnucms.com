@@ -7,13 +7,8 @@ namespace GnuCms\Db\Dialect;
 use PDO;
 use GnuCms\Error\DomainError;
 
-final class MysqlDialect implements DialectInterface
+final class MysqlDialect
 {
-    public function name(): string
-    {
-        return 'mysql';
-    }
-
     public function quoteIdentifier(string $name): string
     {
         if (strpos($name, '`') !== false) {

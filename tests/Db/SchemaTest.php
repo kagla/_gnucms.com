@@ -207,11 +207,7 @@ final class SchemaTest extends WebTestCase
     public function testAccountMigrationRenamesLegacyNameWithoutLosingItsValue(array $config): void
     {
         $db = $this->freshDatabase($config);
-        if ($db->dialect()->name() === 'mysql') {
-            $db->execute('ALTER TABLE users CHANGE display_name name VARCHAR(100) NOT NULL');
-        } else {
-            $db->execute('ALTER TABLE users RENAME COLUMN display_name TO name');
-        }
+        $db->execute('ALTER TABLE users CHANGE display_name name VARCHAR(100) NOT NULL');
 
         $id = $db->insert('users', [
             'email' => 'legacy@example.com',
@@ -387,9 +383,7 @@ final class SchemaTest extends WebTestCase
     {
         $app = $this->makeApp($dbConfig);
         $db = $app->db();
-        $db->execute($db->dialect()->name() === 'mysql'
-            ? 'DROP INDEX ' . $db->q('ux_users_display_name') . ' ON ' . $db->q('users')
-            : 'DROP INDEX IF EXISTS ' . $db->q('ux_users_display_name'));
+        $db->execute('DROP INDEX ' . $db->q('ux_users_display_name') . ' ON ' . $db->q('users'));
         foreach (['a@example.com', 'b@example.com', 'c@example.com'] as $email) {
             $db->insert('users', [
                 'email' => $email, 'email_verified' => 1, 'password_hash' => 'x', 'display_name' => '홍길동',

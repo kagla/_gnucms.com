@@ -7,10 +7,7 @@ namespace GnuCms\Db;
 use GnuCms\Error\DomainError;
 use GnuCms\Support\Clock;
 
-/**
- * DDL 은 치환자 3개({AUTO_PK}, {DATETIME}, {TEXT})만 방언별로 바뀌고
- * 나머지는 지원 DB 공통 문법이다.
- */
+/** MySQL/MariaDB 스키마를 만들고 갱신한다. */
 final class Schema
 {
     public const TABLES = [

@@ -99,7 +99,7 @@ final class BackupManagerTest extends DatabaseTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testBacksUpSupportedDatabasesWithPrefixedTables(array $dbConfig): void
+    public function testBacksUpMysqlWithPrefixedTables(array $dbConfig): void
     {
         $dbConfig['prefix'] = 'backup_' . bin2hex(random_bytes(4)) . '_';
         $db = Connection::create($dbConfig);
@@ -118,25 +118,22 @@ final class BackupManagerTest extends DatabaseTestCase
                 ['backup_test', 'prefixed-backup-sentinel', '2026-09-04 00:00:00']
             );
             $result = $manager->create('manual', 'tar');
-            $driver = $db->dialect()->name();
             self::assertTrue($result['valid']);
-            self::assertSame($driver, $result['driver']);
+            self::assertSame('mysql', $result['driver']);
             $archive = $this->root . '/backups/manual/' . $result['name'];
             $manifest = json_decode($this->archiveContents($archive, 'manifest.json'), true);
             self::assertSame($dbConfig['prefix'], $manifest['database']['prefix']);
             $contents = $this->archiveContents($archive, $manifest['database']['path']);
             self::assertStringContainsString('prefixed-backup-sentinel', $contents);
 
-            if ($driver === 'mysql') {
-                self::assertSame('sql', $manifest['database']['format']);
-                self::assertSame('database/mysql.sql', $manifest['database']['path']);
-                self::assertStringContainsString('CREATE TABLE `' . $db->tableName('site_settings') . '`', $contents);
-                self::assertFalse($status['can_restore']);
-                self::assertStringContainsString('mysql --host=', implode("\n", $status['instructions']));
-                $this->expectException(RuntimeException::class);
-                $this->expectExceptionMessage('자동 복원을 지원하지 않습니다');
-                $manager->restore($result['name']);
-            }
+            self::assertSame('sql', $manifest['database']['format']);
+            self::assertSame('database/mysql.sql', $manifest['database']['path']);
+            self::assertStringContainsString('CREATE TABLE `' . $db->tableName('site_settings') . '`', $contents);
+            self::assertFalse($status['can_restore']);
+            self::assertStringContainsString('mysql --host=', implode("\n", $status['instructions']));
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('자동 복원을 지원하지 않습니다');
+            $manager->restore($result['name']);
         } finally {
             $schema->drop();
         }

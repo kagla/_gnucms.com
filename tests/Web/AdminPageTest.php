@@ -542,8 +542,8 @@ final class AdminPageTest extends WebTestCase
     {
         $tmp = sys_get_temp_dir() . '/' . GNUCMS_ID . '-settings-' . bin2hex(random_bytes(4));
         $backupsDir = $tmp . '/backups';
-        $older = $backupsDir . '/board-v8-20260101-000000.sqlite';
-        $newer = $backupsDir . '/board-v9-20260201-000000.sqlite';
+        $older = $backupsDir . '/board-v8-20260101-000000.sql';
+        $newer = $backupsDir . '/board-v9-20260201-000000.sql';
 
         try {
             mkdir($backupsDir, 0775, true);
@@ -557,7 +557,7 @@ final class AdminPageTest extends WebTestCase
             );
             $app->db()->execute(
                 'INSERT INTO site_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)',
-                ['system.schema_backup', '/x/storage/backups/board-v9-20260201-000000.sqlite', '2026-08-30 01:02:03']
+                ['system.schema_backup', '/x/storage/backups/board-v9-20260201-000000.sql', '2026-08-30 01:02:03']
             );
             $id = $app->users()->create('admin@example.com', password_hash('admin-password-123', PASSWORD_DEFAULT), '관리자', true);
             $app->users()->verifyEmail($id);
