@@ -3,10 +3,10 @@
 ## [0.7.0](https://github.com/kagla/gnucms/compare/v0.6.0...v0.7.0) (2026-09-29)
 
 
-### Features
+### 새로운 기능
 
-* add configurable mail delivery modes ([8fd96ee](https://github.com/kagla/gnucms/commit/8fd96ee1da0e8185bd0b88b82c0872c5a9425790))
-* 메일 발송 방식 3단계 설정 ([70adb36](https://github.com/kagla/gnucms/commit/70adb36a6db80e7675e00b8a4484311109b98372))
+* 메일 발송 방식을 이메일 미사용, 서버 기본 메일 사용, SMTP 사용으로 구분했습니다. ([8fd96ee](https://github.com/kagla/gnucms/commit/8fd96ee1da0e8185bd0b88b82c0872c5a9425790))
+* 이메일 미사용 상태에서는 모든 메일 알림을 건너뛰고 일반 회원가입을 이메일 인증 없이 완료합니다. ([70adb36](https://github.com/kagla/gnucms/commit/70adb36a6db80e7675e00b8a4484311109b98372))
 
 ## [0.6.0](https://github.com/kagla/gnucms/compare/v0.5.0...v0.6.0) (2026-09-29)
 
