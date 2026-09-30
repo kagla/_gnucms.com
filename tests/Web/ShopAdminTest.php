@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Payment\KcpConfig;
 use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Service;
 use GnuCms\Shop\Settings;
@@ -94,6 +95,35 @@ final class ShopAdminTest extends WebTestCase
         return $this->shop->payments->complete($order, ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'orderNumber' => $order['payment_id'],
             'idc_name' => 'stg', 'authToken' => bin2hex(random_bytes(32)), 'authUrl' => 'https://stgstdpay.inicis.com/api/payAuth',
             'netCancelUrl' => 'https://stgstdpay.inicis.com/api/netCancel']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testKcpRestCannotBeChosenForNewOrdersButOldSettingsCanBeReplaced(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringNotContainsString('<option value="kcp"', $page);
+        self::assertStringContainsString('<option value="kcp_legacy"', $page);
+
+        $rejected = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['payment_provider' => 'kcp'])));
+        self::assertSame(422, $rejected->getStatusCode());
+        self::assertSame('inicis', $this->shop->settings->all()['payment']['provider']);
+
+        $this->app->paymentSettings('kcp')->save('test', KcpConfig::testCredentials());
+        $settings = $this->shop->settings->all();
+        $settings['payment']['provider'] = 'kcp';
+        $settings['payment']['environment'] = 'test';
+        $this->app->db()->insert('yc_settings', ['id' => 'settings', 'payload' => json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
+        self::assertTrue($this->app->paymentSettings('kcp')->available('test'));
+        self::assertArrayNotHasKey('card', $this->shop->payments->methods());
+
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('<option value="" selected disabled>다른 결제사를 선택해 주세요</option>', $page);
+        self::assertStringNotContainsString('<option value="kcp"', $page);
+        $changed = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['payment_provider' => 'nicepay', 'payment_environment' => 'test'])));
+        self::assertSame(303, $changed->getStatusCode());
+        self::assertSame('nicepay', $this->shop->settings->all()['payment']['provider']);
     }
 
     #[DataProvider('connectionProvider')]
