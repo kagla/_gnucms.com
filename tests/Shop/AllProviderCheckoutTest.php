@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace GnuCms\Tests\Shop;
 
-use GnuCms\Payment\{KcpConfig, KcpLegacyConfig, NicepayProvider, ProviderConfig, TossProvider};
+use GnuCms\Payment\{KcpLegacyConfig, NicepayProvider, ProviderConfig, TossProvider};
 use PHPUnit\Framework\Attributes\DataProvider;
 
-/** Each real adapter must accept the same member order and prepare its own card window. */
+/** Each currently selectable adapter must accept the same member order and prepare its own card window. */
 final class AllProviderCheckoutTest extends ShopTestCase
 {
     #[DataProvider('connectionProvider')]
-    public function testMemberCanStartAndRetryCardCheckoutWithEveryProvider(array $config): void
+    public function testMemberCanStartAndRetryCardCheckoutWithEverySelectableProvider(array $config): void
     {
         $this->setupShop($config);
         $this->installLegacyModuleFixture();
@@ -24,14 +24,13 @@ final class AllProviderCheckoutTest extends ShopTestCase
         $owner = bin2hex(random_bytes(32));
         $userId = $this->memberId();
         $expected = ['inicis' => 'inicis-pro', 'kcp_legacy' => 'kcp-legacy',
-            'kcp' => 'kcp-web', 'toss' => 'toss', 'nicepay' => 'nicepay'];
+            'toss' => 'toss', 'nicepay' => 'nicepay'];
         $ids = [];
 
         foreach ($expected as $provider => $kind) {
             $this->app->paymentSettings($provider)->save('test', match ($provider) {
                 'inicis' => ProviderConfig::testCredentials(),
                 'kcp_legacy' => KcpLegacyConfig::testCredentials(),
-                'kcp' => KcpConfig::testCredentials(),
                 'toss' => TossProvider::testCredentials(),
                 'nicepay' => NicepayProvider::testCredentials(),
             });
@@ -56,12 +55,12 @@ final class AllProviderCheckoutTest extends ShopTestCase
                 \GnuCms\Shop\Commerce\CheckoutIntents::gatewayOrder($intent)), $provider);
             self::assertSame($payment['id'], match ($provider) {
                 'inicis' => $window['fields']['P_OID'],
-                'kcp_legacy', 'kcp' => $window['fields']['ordr_idxx'],
+                'kcp_legacy' => $window['fields']['ordr_idxx'],
                 'toss', 'nicepay' => $window['fields']['orderId'],
             }, $provider);
             self::assertSame(12000, (int) match ($provider) {
                 'inicis' => $window['fields']['P_AMT'],
-                'kcp_legacy', 'kcp' => $window['fields']['good_mny'],
+                'kcp_legacy' => $window['fields']['good_mny'],
                 'toss', 'nicepay' => $window['fields']['amount'],
             }, $provider);
             $ids[] = $payment['id'];
@@ -74,7 +73,7 @@ final class AllProviderCheckoutTest extends ShopTestCase
             self::assertSame($provider, $retry['payment']['provider']);
         }
 
-        self::assertCount(5, array_unique($ids));
+        self::assertCount(4, array_unique($ids));
         self::assertSame(0, (int) $this->app->db()->selectOne('SELECT COUNT(*) AS n FROM '
             . $this->app->db()->table('yc_orders'))['n'], 'An unpaid card window must not create an order.');
     }
