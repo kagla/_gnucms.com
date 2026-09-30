@@ -2,11 +2,15 @@
 
 ## [0.7.1](https://github.com/kagla/gnucms/compare/v0.7.0...v0.7.1) (2026-09-30)
 
+### 수정 사항
 
-### Bug Fixes
+* 쇼핑몰 설정에서 NHN KCP REST API를 신규 결제사 선택 목록에서 숨기고, 직접 보낸 선택 요청도 거절합니다. 기존에 선택된 상점에서도 새 카드 주문에 사용하지 않습니다. ([6053028](https://github.com/kagla/gnucms/commit/6053028a74da31ff97e16d82d06b9ae1868571f6))
+* 기존 KCP REST API 주문의 조회·환불에 필요한 설정과 결제 처리 코드는 유지합니다.
+* 쇼핑몰 설정의 SIR 배너 문구를 전자결제 서비스 안내로 바꿨습니다.
 
-* hide KCP REST from new shop payments ([6053028](https://github.com/kagla/gnucms/commit/6053028a74da31ff97e16d82d06b9ae1868571f6))
-* KCP REST API 신규 결제 선택 중단 ([2fd5e72](https://github.com/kagla/gnucms/commit/2fd5e72619c7bb5b7621784530889c4f4bed5e7f))
+### 업그레이드 안내
+
+* 현재 KCP REST API로 신규 주문을 받는 상점은 쇼핑몰 설정에서 다른 결제사를 선택하고 연동 정보를 확인해 주세요.
 
 ## [0.7.0](https://github.com/kagla/gnucms/compare/v0.6.0...v0.7.0) (2026-09-29)
 
