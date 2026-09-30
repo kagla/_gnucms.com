@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1](https://github.com/kagla/gnucms/compare/v0.7.0...v0.7.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* hide KCP REST from new shop payments ([6053028](https://github.com/kagla/gnucms/commit/6053028a74da31ff97e16d82d06b9ae1868571f6))
+* KCP REST API 신규 결제 선택 중단 ([2fd5e72](https://github.com/kagla/gnucms/commit/2fd5e72619c7bb5b7621784530889c4f4bed5e7f))
+
 ## [0.7.0](https://github.com/kagla/gnucms/compare/v0.6.0...v0.7.0) (2026-09-29)
 
 
