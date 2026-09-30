@@ -97,9 +97,10 @@ final class AdminController extends AdminBase
 
     private function settings(ServerRequestInterface $request, ResponseInterface $response, array $data): ResponseInterface
     {
-        $data['payment_providers'] = $this->service->app->paymentProviders()->labels();
+        $providers = $this->service->app->paymentProviders()->labels();
+        $data['payment_providers'] = array_diff_key($providers, ['kcp' => true]);
         $data['payment_manuals'] = [];
-        foreach (array_keys($data['payment_providers']) as $providerId) {
+        foreach (array_keys($providers) as $providerId) {
             $data['payment_manuals'][$providerId] = $this->service->app->paymentProviders()->get($providerId)->manual();
         }
         $inicisPayment = $this->service->app->paymentSettings('inicis');

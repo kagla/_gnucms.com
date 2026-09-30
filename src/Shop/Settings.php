@@ -215,6 +215,7 @@ final class Settings
         $payment = $previous['payment'];
         if (array_key_exists('payment_provider', $input)) {
             $provider = Input::text($input['payment_provider'], 'payment_provider', 32, false);
+            if ($provider === 'kcp') throw DomainError::validation(['payment_provider' => 'NHN KCP REST API 결제는 현재 신규 주문에 사용할 수 없습니다. 다른 결제사를 선택해 주세요.']);
             $this->providers->get($provider);
             $payment['provider'] = $provider;
         }

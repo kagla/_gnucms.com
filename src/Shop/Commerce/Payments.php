@@ -31,8 +31,9 @@ final class Payments
         $payment = $this->settings->all()['payment'];
         $methods = [];
         $provider = $this->app->paymentProviders()->get($payment['provider']);
-        $providerReady = $provider->id() !== 'kcp_legacy'
-            || \GnuCms\Payment\KcpLegacyGateway::moduleAvailable($this->app->storageDir());
+        $providerReady = $provider->id() !== 'kcp'
+            && ($provider->id() !== 'kcp_legacy'
+                || \GnuCms\Payment\KcpLegacyGateway::moduleAvailable($this->app->storageDir()));
         if ($providerReady && $this->app->paymentSettings($provider->id())->available($payment['environment'])) {
             foreach (array_intersect($provider->methods(), array_keys(array_filter($payment['methods'] ?? ['card' => true]))) as $method) {
                 if (isset(self::METHODS[$method])) $methods[$method] = self::METHODS[$method];
