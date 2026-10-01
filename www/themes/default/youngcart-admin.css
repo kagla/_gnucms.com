@@ -105,7 +105,11 @@
 .yc-admin-page .yc-cell-stack small{font-size:11.5px}
 .yc-admin-page .yc-edit-table .yc-cell-product .input{font-weight:650;width:80%;min-width:13.2rem}
 .yc-admin-page .yc-product-list input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
-.yc-admin-page .yc-product-list thead th{vertical-align:top}
+.yc-admin-page .yc-product-list-scroll{max-height:70vh;overflow-y:auto}
+.yc-admin-page .yc-product-list thead th{position:sticky;top:0;z-index:2;vertical-align:top;box-shadow:0 1px var(--yc-line)}
+.yc-admin-page .yc-product-list thead th:nth-child(2){left:0;z-index:4;box-shadow:1px 1px var(--yc-line)}
+.yc-admin-page .yc-product-list td.yc-cell-product{position:sticky;left:0;z-index:1;background:var(--yc-paper);box-shadow:1px 0 var(--yc-line)}
+@media(max-width:768px){.yc-admin-page .yc-product-list .yc-cell-product{min-width:11rem;width:11rem;max-width:11rem}.yc-admin-page .yc-edit-table .yc-cell-product .input{width:100%;min-width:0}.yc-admin-page .yc-product-list .yc-cell-meta{min-width:0}.yc-admin-page .yc-product-list .yc-product-code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.yc-admin-page .yc-product-list .yc-product-view{flex:none}}
 .yc-admin-page .yc-product-list .yc-cell-price{width:1%;white-space:nowrap}
 .yc-admin-page .yc-product-list .yc-cell-price .input{width:5.85rem;text-align:right;font-variant-numeric:tabular-nums;appearance:textfield}
 .yc-admin-page .yc-product-list .yc-cell-price .input::-webkit-inner-spin-button,

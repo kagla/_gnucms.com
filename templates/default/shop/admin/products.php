@@ -18,7 +18,7 @@ $shippingTypes = [0 => '상점 기본', 1 => '무료', 2 => '조건부 무료', 
 <?php else: ?>
 <form method="post" action="<?= $this->e($admin_url) ?>/products" id="yc-product-list">
   <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="action" value="bulk">
-  <div class="overflow-x-auto" tabindex="0" role="region" aria-label="상품 일괄 편집"><table class="table table-sm yc-edit-table yc-product-list"><thead><tr>
+  <div class="overflow-x-auto yc-product-list-scroll" tabindex="0" role="region" aria-label="상품 일괄 편집"><table class="table table-sm yc-edit-table yc-product-list"><thead><tr>
     <th><input class="checkbox checkbox-sm" type="checkbox" data-yc-check-all aria-label="현재 페이지 상품 전체 선택"></th>
     <th><?php $sort('name', '상품명'); $sort('code', '코드'); ?></th><th class="yc-cell-price"><?php $sort('price', '판매가'); ?></th><th class="yc-cell-price"><?php $sort('list_price', '시중가'); ?></th><th class="yc-cell-shipping"><?php $sort('shipping_type', '배송비유형'); ?></th><th class="yc-cell-flag"><?php $sort('tax_free', '면세'); ?></th><th class="yc-cell-flag"><?php $sort('active', '판매가능'); ?></th><th class="yc-cell-flag"><?php $sort('sold_out', '품절표시'); ?></th><th class="yc-cell-flag"><?php $sort('phone_inquiry', '전화문의'); ?></th><th class="yc-cell-category">분류</th><th class="yc-cell-order"><?php $sort('sort_order', '순서'); ?></th><th class="yc-cell-actions">관리</th>
   </tr></thead><tbody>
