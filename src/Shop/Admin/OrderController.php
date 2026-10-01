@@ -22,9 +22,45 @@ final class OrderController extends AdminBase
         $data['payment_methods'] = Payments::METHODS;
         $this->service->payments->expireOverdue();
         if ($page === 'orders') {
-            $data['status_filter'] = Input::text($data['input']['status'] ?? '', 'status', 20);
-            $data['q'] = Input::text($data['input']['q'] ?? '', 'q', 100);
-            $data['list'] = $this->service->orders->listing(null, $data['status_filter'], $this->page($data['input']['page'] ?? ''), true, $data['q']);
+            $data['status_filter'] = Input::text($data['input'][$request->getMethod() === 'POST' ? 'return_status' : 'status'] ?? '', 'status', 20);
+            if (!isset(Orders::STATUSES[$data['status_filter']])) $data['status_filter'] = '';
+            $data['q'] = Input::text($data['input'][$request->getMethod() === 'POST' ? 'return_q' : 'q'] ?? '', 'q', 100);
+            $data['page_number'] = $this->page($data['input'][$request->getMethod() === 'POST' ? 'return_page' : 'page'] ?? '');
+            if ($request->getMethod() === 'POST') {
+                try {
+                    $id = Input::id($data['input']['id'] ?? null);
+                    $action = Input::text($data['input']['action'] ?? '', 'action', 20);
+                    if ($action === 'confirm-deposit') {
+                        $this->service->orders->confirmDeposit($id, $data['actor']);
+                    } elseif ($action === 'transition') {
+                        $from = Input::text($data['input']['from'] ?? '', 'from', 20);
+                        $to = Input::text($data['input']['status'] ?? '', 'status', 20);
+                        if (!in_array($to, ['confirmed', 'shipped', 'completed', 'cancelled'], true)) {
+                            throw DomainError::validation(['status' => '목록에서 처리할 수 없는 상태입니다.']);
+                        }
+                        if ($to === 'cancelled' && $from === 'pending'
+                            && in_array($this->service->orders->get($id)['payment_method'], Orders::PG_METHODS, true)) {
+                            throw DomainError::validation(['status' => '결제 진행 중인 주문은 상세에서 확인해 주세요.']);
+                        }
+                        $this->transition($id, $data);
+                    } else {
+                        throw DomainError::validation(['action' => '작업을 확인해 주세요.']);
+                    }
+                    return $this->redirect($response, $data['admin_url'] . '/orders?' . http_build_query([
+                        'status' => $data['status_filter'], 'q' => $data['q'], 'page' => $data['page_number'], 'saved' => $action === 'confirm-deposit' ? 'deposit' : 'status',
+                    ]));
+                } catch (DomainError $e) {
+                    $data['errors'] = $e->details() ?: [$e->getMessage()];
+                    $response = $response->withStatus($e->status());
+                }
+            }
+            $data['list'] = $this->service->orders->listing(null, $data['status_filter'], $data['page_number'], true, $data['q']);
+            $data['cancel_reasons'] = CancellationReason::OPTIONS;
+            $data['carriers'] = Settings::carriers();
+            $data['default_carrier'] = $this->service->settings->all()['shipping']['default_carrier'];
+            $data['notice'] = match ($data['input']['saved'] ?? '') {
+                'status' => '주문 상태를 변경했습니다.', 'deposit' => '입금을 확인했습니다.', default => '',
+            };
             return $this->render($request, $response, 'orders', $data);
         }
         $id = Input::id($data['input']['id'] ?? null);
@@ -112,7 +148,7 @@ final class OrderController extends AdminBase
         $data['refund_key'] = bin2hex(random_bytes(16));
         $data['pending_refunds'] = $this->service->payments->pendingRefunds($data['order']);
         $data['notice'] = match ($data['input']['saved'] ?? '') {
-            '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 조회했습니다.', 'refund' => '환불을 처리했습니다.',
+            '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 확인하고 필요한 변경을 반영했습니다.', 'refund' => '환불을 처리했습니다.',
             'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.',
             'add-note' => '처리 메모를 추가했습니다.', 'edit-note' => '처리 메모를 수정했습니다.', 'delete-note' => '처리 메모를 삭제했습니다.',
             'undo-status' => '주문 상태를 직전 단계로 되돌렸습니다.', default => '',

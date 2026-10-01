@@ -7,7 +7,7 @@
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
 <div class="yc-order-banner"><div><span class="yc-status" data-status="<?= $this->e($order['status']) ?>"><?= $this->e($statuses[$order['status']]) ?></span><?php if ($order['payment_environment'] === 'test'): ?><span class="yc-test-badge">테스트 결제</span><?php endif ?><strong><?= $this->e($order['buyer_name']) ?> 님의 주문</strong></div><p>접수 <?= $this->e($weekdayDate((int) $order['created_at'])) ?></p></div>
-<div class="yc-admin yc-commerce-grid"><div class="yc-checkout-sections"><?php $this->insert('_order_detail') ?>
+<div class="yc-admin yc-commerce-grid"><div class="yc-checkout-sections"><?php $this->insert('_order_detail', ['product_view_url' => $public_url]) ?>
 <section class="yc-panel"><h2>처리 이력 <small>처리 메모는 관리자에게만 표시</small></h2>
 <?php if ($undo_history_id !== null): ?><p class="yc-help">상태는 최신 처리 이력부터 순서대로 되돌릴 수 있습니다.</p><?php endif ?>
 <ol class="yc-order-timeline yc-admin-order-timeline" id="yc-order-timeline">
@@ -80,7 +80,7 @@
 <?php if ($order['status'] === 'cancelled' && !$is_pg && (int) $order['paid_amount'] > (int) $order['refunded_amount']): ?><p class="alert alert-warning">취소된 주문의 입금액 반환 기록이 남아 있습니다. 실제 송금 반환 후 아래 환불에서 처리해 주세요.</p><?php endif ?>
 <?php if ($order['status'] === 'pending' && ($order['payment_method'] === '' || $order['payment_method'] === 'manual_transfer')): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="confirm-deposit"><button class="btn btn-primary btn-sm" type="submit">입금 확인</button></form><?php endif ?>
 <?php if ($escrow_payment): ?><p class="yc-help">에스크로 계좌이체입니다. 발송 후 <?= $this->e($payment_provider_label) ?> 상점관리자에 배송 정보를 등록해 주세요.</p><?php endif ?>
-<?php if ($is_pg): ?><?php if (!in_array($order['payment_provider'], ['toss', 'nicepay'], true) && in_array($order['payment_method'], ['virtual_account', 'mobile'], true) && (int) $order['paid_at'] > 0): ?><p class="yc-help">이 결제 수단의 환불은 이니시스 관리자에서 처리한 뒤 결제 조회로 결과를 반영합니다.</p><?php endif ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-outline btn-sm" type="submit">결제 조회</button></form><?php endif ?>
+<?php if ($is_pg): ?><?php if (!in_array($order['payment_provider'], ['toss', 'nicepay'], true) && in_array($order['payment_method'], ['virtual_account', 'mobile'], true) && (int) $order['paid_at'] > 0): ?><p class="yc-help">이 결제 수단의 환불은 이니시스 관리자에서 처리한 뒤 결제 상태 갱신으로 결과를 반영합니다.</p><?php endif ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-outline btn-sm" type="submit">결제 상태 갱신</button></form><?php endif ?>
 <?php $this->insert('admin/_refund_form') ?>
 </section>
 <?php if ($next !== []): ?><form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail" data-yc-order-status-form>

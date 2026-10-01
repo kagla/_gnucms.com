@@ -23,7 +23,7 @@ final class Orders
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
     public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
 
-    public function __construct(private Store $store, private Cart $cart, private Settings $settings) {}
+    public function __construct(private Store $store, private Cart $cart, private Settings $settings, private string $timezone = 'Asia/Seoul') {}
 
     /** 저장된 기본 배송지를 먼저 쓰고, 없으면 가장 최근 주문의 배송지를 사용한다. */
     public function defaultAddressFor(int $userId): ?array
@@ -87,9 +87,6 @@ final class Orders
                 if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
                 if (!hash_equals($quote['fingerprint'], $fingerprint)) throw DomainError::validation(['quote' => '주문 내용 또는 배송 조건이 변경되었습니다. 상품·옵션·수량·배송비와 안내를 다시 확인해 주세요.']);
                 $now = Clock::timestamp();
-                $prefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone('Asia/Seoul'))->format('ymd-His');
-                $start = random_int(0, 9999);
-                do { $step = random_int(1, 9999); } while ($step % 2 === 0 || $step % 5 === 0);
                 $saveDefault = ($input['save_default_address'] ?? '') === '1';
                 if ($saveDefault) {
                     // 같은 회원의 동시 주문이 둘 다 기본값이 되지 않도록 회원 행으로 직렬화한다.
@@ -109,9 +106,11 @@ final class Orders
                     'payment_detail' => $payment === [] ? '' : json_encode($payment['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     'created_at' => $now, 'updated_at' => $now];
                 $id = null;
-                // 난수에서 시작해 0000~9999를 중복 없이 순회한다. DB 고유 제약이 동시 주문도 보호한다.
-                for ($attempt = 0; $attempt < 10000; $attempt++) {
-                    $number = $prefix . sprintf('%04d', ($start + $attempt * $step) % 10000);
+                // 주문번호는 사이트 시간대의 주문일(yymmdd)과 무작위 숫자 7자리로 발급한다.
+                // DB 고유 제약이 동시 주문의 중복을 막으며 충돌하면 새 번호로 다시 시도한다.
+                $numberPrefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone($this->timezone))->format('ymd') . '-';
+                for ($attempt = 0; $attempt < 20; $attempt++) {
+                    $number = $numberPrefix . sprintf('%07d', random_int(0, 9999999));
                     try {
                         $id = $this->store->insert('yc_orders', $orderData + ['number' => $number]);
                         break;
@@ -284,6 +283,27 @@ final class Orders
             foreach ($items as &$order) {
                 $order['product_summary'] = $byOrder[(int) $order['id']] ?? [];
                 $order['product_count'] = count($order['product_summary']);
+            }
+            unset($order);
+        }
+        if ($admin && $items !== []) {
+            $ids = array_map(static fn (array $order): int => (int) $order['id'], $items);
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $lines = $this->store->select('SELECT order_id, product_id, product_name FROM '
+                . $this->store->table('yc_order_items') . " WHERE kind <> 'extra' AND order_id IN ({$marks}) ORDER BY id", $ids);
+            $productsByOrder = []; $seenProducts = [];
+            foreach ($lines as $line) {
+                $orderId = (int) $line['order_id'];
+                $productId = (int) $line['product_id'];
+                if (isset($seenProducts[$orderId][$productId])) continue;
+                $seenProducts[$orderId][$productId] = true;
+                if (!isset($productsByOrder[$orderId])) $productsByOrder[$orderId] = ['name' => (string) $line['product_name'], 'count' => 0];
+                ++$productsByOrder[$orderId]['count'];
+            }
+            foreach ($items as &$order) {
+                $summary = $productsByOrder[(int) $order['id']] ?? ['name' => '', 'count' => 0];
+                $order['representative_product'] = $summary['name'];
+                $order['product_count'] = $summary['count'];
             }
             unset($order);
         }

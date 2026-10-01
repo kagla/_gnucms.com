@@ -1,6 +1,6 @@
-<?php $name = $item['name'] ?? $item['product_name']; $label = $item['label'] ?? $item['option_label']; ?>
+<?php $name = $item['name'] ?? $item['product_name']; $label = $item['label'] ?? $item['option_label']; $code = $item['code'] ?? $item['product_code'] ?? ''; $viewUrl = !$extra && ($product_view_url ?? '') !== '' && $code !== '' ? $product_view_url . '/item?id=' . rawurlencode((string) $code) : ''; ?>
 <div class="yc-order-line"><div>
-  <strong><?= $this->e($extra ? $label : $name) ?></strong><?php if ($show_tax ?? false): ?> <small class="yc-tax-badge" data-tax-free="<?= (int) ($item['tax_free'] ?? 0) ?>"><?= (int) ($item['tax_free'] ?? 0) === 1 ? '면세' : '과세' ?></small><?php endif ?>
+  <?php if ($viewUrl !== ''): ?><a class="yc-order-product-link" href="<?= $this->e($viewUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= $this->e($name . ' 상품 보기, 새 창') ?>"><strong><?= $this->e($name) ?></strong><span aria-hidden="true"> ↗</span></a><?php else: ?><strong><?= $this->e($extra ? $label : $name) ?></strong><?php endif ?><?php if ($show_tax ?? false): ?> <small class="yc-tax-badge" data-tax-free="<?= (int) ($item['tax_free'] ?? 0) ?>"><?= (int) ($item['tax_free'] ?? 0) === 1 ? '면세' : '과세' ?></small><?php endif ?>
   <?php if (!$extra && $label !== ''): ?><p class="muted"><?= $this->e($label) ?></p><?php endif ?>
   <small class="muted"><?php if ($unit_prices): ?><?= number_format((int) $item['unit_price']) ?>원 · <?php endif ?><?= (int) $item['quantity'] ?>개</small>
 </div><strong><?= number_format((int) $item['total']) ?>원</strong></div>

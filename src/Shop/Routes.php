@@ -83,7 +83,9 @@ final class Routes
                 $map($method, '/' . $page, static fn ($request, $response) => $productForm->handle($page, $request, $response), true);
             }
         }
-        $map('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        foreach (['GET', 'POST'] as $method) {
+            $map($method, '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        }
         $map('GET', '/shipments', static fn ($request, $response) => $operations->shipments($request, $response), true);
         $map('POST', '/shipments/export', static fn ($request, $response) => $operations->shipmentExport($request, $response), true);
         $map('POST', '/shipments/print', static fn ($request, $response) => $operations->shipmentPrint($request, $response), true);
