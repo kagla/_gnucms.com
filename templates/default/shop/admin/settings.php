@@ -44,13 +44,13 @@ foreach (is_array($values['main_categories'] ?? null) ? $values['main_categories
     </fieldset>
     <label class="fieldset"><span class="fieldset-legend">주문 접수 안내</span><textarea class="textarea textarea-bordered textarea-block" name="order_notice" rows="4" maxlength="2000" required><?= $this->e((string) ($values['order_notice'] ?? '')) ?></textarea><span class="muted">주문서와 주문 완료 화면에 표시됩니다. 카드 결제와 무통장입금은 아래 결제 항목에서 설정합니다.</span></label>
   </div></section>
-  <a class="yc-sir-services-banner" href="https://sir.kr/services" target="_blank" rel="noopener noreferrer" aria-label="SIR 부가서비스 새 창에서 보기">
+  <a class="yc-sir-services-banner" href="https://sir.kr/services" target="_blank" rel="noopener noreferrer" aria-label="SIR 전자결제 서비스 새 창에서 보기">
     <span class="yc-sir-services-mark" aria-hidden="true"><?= $this->icon('shield', 28) ?></span>
-    <span class="yc-sir-services-copy"><small>SIR 부가서비스</small><strong>쇼핑몰 운영에 필요한 서비스를 한곳에서</strong><span>전자결제 · 본인인증 · 알림·메시징 서비스를 확인하고 신청하세요.</span></span>
-    <span class="yc-sir-services-action">부가서비스 보기 <?= $this->icon('external', 15) ?></span>
+    <span class="yc-sir-services-copy"><small>SIR 전자결제 서비스</small><strong>쇼핑몰 카드 결제를 준비하세요</strong><span>전자결제 서비스를 비교하고 신청 방법을 확인하세요.</span></span>
+    <span class="yc-sir-services-action">전자결제 서비스 보기 <?= $this->icon('external', 15) ?></span>
   </a>
   <section class="card" id="settings-payment"><div class="card-body"><h2 class="card-title">결제</h2><p class="muted">온라인 PG 결제는 에스크로 배송 절차가 필요 없는 신용카드만 사용합니다. 계좌이체·가상계좌·휴대폰 결제는 제공하지 않습니다. 무통장입금은 PG를 거치지 않고 아래 계좌를 안내하며 관리자가 입금을 확인합니다.</p>
-    <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider"><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">새 주문에 적용합니다. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
+    <fieldset class="fieldset"><legend class="fieldset-legend"><label for="payment-provider">온라인 결제사</label></legend><select class="select select-bordered" id="payment-provider" name="payment_provider" required><?php if (!isset($payment_providers[$values['payment_provider'] ?? 'inicis'])): ?><option value="" selected disabled>다른 결제사를 선택해 주세요</option><?php endif ?><?php foreach ($payment_providers as $id => $label): ?><option value="<?= $this->e($id) ?>"<?= ($values['payment_provider'] ?? 'inicis') === $id ? ' selected' : '' ?>><?= $this->e($label) ?></option><?php endforeach ?></select><p class="muted">NHN KCP REST API 결제는 당분간 신규 주문에 사용할 수 없습니다. 다른 결제사를 선택해 주세요. 기존 주문은 결제했던 PG로 조회·환불합니다.</p></fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend">결제 환경</legend>
       <?php foreach (['live' => '운영', 'test' => '테스트'] as $env => $label): ?><label class="label"><input class="radio radio-sm" type="radio" name="payment_environment" value="<?= $env ?>"<?= ($values['payment_environment'] ?? 'live') === $env ? ' checked' : '' ?>> <?= $label ?></label><?php endforeach ?>
       <span class="muted">선택한 환경과 신용카드 사용 여부가 새 주문에 적용됩니다.</span></fieldset>
