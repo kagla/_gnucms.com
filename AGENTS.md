@@ -61,6 +61,7 @@
 
 - 자동 테스트와 PHP 문법 검사 등 실행 검증은 사용자가 명시적으로 요청한 경우에만 수행한다. 코드 수정만 요청받았다면 실행하지 않는다.
 - 개발·CI 의존성 설치: `composer install`
+- 릴리스·커밋 요청만으로 테스트 요청을 추정하지 않는다. 릴리스 자동화는 테스트를 실행하지 않고, GitHub Tests 워크플로는 수동 실행만 허용한다. 사용자가 별도로 테스트나 릴리스 검증을 요청했을 때만 실행한다.
 - 테스트 요청을 받으면 전용 MySQL DB의 `TEST_MYSQL_DSN`, `TEST_MYSQL_USER`, `TEST_MYSQL_PASS`를 지정한다. 운영 DB는 절대 사용하지 않는다.
 - 관련 테스트: `./vendor/bin/phpunit tests/경로/관련테스트.php`
 - 전체 테스트: `./vendor/bin/phpunit`
@@ -76,6 +77,7 @@
 - 비즈뿌리오 플러그인 전체(설정·인증·발송·결과 수신)와 알림톡·문자 운영 모듈은 `feat/bizppurio-messaging` 브랜치에서 함께 관리한다. 사용자의 별도 요청 없이 일부 코드나 설정 화면도 `main`에 병합하거나 다시 포함하지 않는다.
 - 제품 버전은 SemVer(`MAJOR.MINOR.PATCH`)로 관리한다. 호환성 파괴는 MAJOR, 하위 호환 기능은 MINOR, 버그 수정은 PATCH를 올린다.
 - 제품 버전의 원본은 루트 `version.txt`다. 직접 수정하지 않고 Release Please가 릴리스 PR에서 갱신하게 한다.
+- 버그 수정 릴리스에서는 제품 버전의 마지막 숫자(PATCH)만 1 올리고 MAJOR와 MINOR는 유지한다(예: `0.7.0` → `0.7.1`).
 - 정식 릴리스는 Release Please가 만든 `vX.Y.Z` 태그로 표시한다. 같은 이름의 GitHub Release에는 사용자 관점의 변경사항과 업그레이드 주의를 기록한다.
 - Release Please가 만든 릴리스 PR을 병합하면 태그·GitHub Release·배포 ZIP이 생성된다. 자동화 파일을 수정할 때도 프로덕션 빌드를 요구하지 않는다.
 - 배포용 버전과 DB 스키마 판 번호를 맞추려 하지 않는다. 한 제품 릴리스에 여러 스키마 변경이 포함될 수 있고, 스키마 변경 없는 릴리스도 가능하다.
