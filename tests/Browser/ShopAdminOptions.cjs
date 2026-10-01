@@ -57,6 +57,7 @@ const fixture = (mode, base, input = '') => execFileSync('php', [path.join(__dir
         assert.equal(navigations, 1, 'generation must not navigate');
       };
       await page.setViewport({width: 1280, height: 960});
+      assert.equal(html.includes('Warning:'), false, 'product form fixture must render without PHP warnings');
       await page.goto(url);
       const viewLink = '.yc-save-bar a[target="_blank"]';
       assert.equal(await page.$$eval(viewLink, links => links.length), mode === 'edit' ? 1 : 0);

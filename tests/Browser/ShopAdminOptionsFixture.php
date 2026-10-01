@@ -27,10 +27,11 @@ if (($argv[1] ?? '') === 'combine') {
 
 $editing = ($argv[1] ?? '') === 'edit';
 echo $view->fetch('admin/product_form', [
-    'id' => $editing ? 10 : null, 'product' => $editing ? ['code' => 'BROWSER1'] : null,
+    'id' => $editing ? 10 : null, 'product' => $editing ? ['id' => 10, 'code' => 'BROWSER1', 'name' => '브라우저 테스트 상품'] : null,
+    'copy_source' => null,
     'page' => $editing ? 'products/edit' : 'products/new', 'admin_url' => $base . '/admin/shop', 'public_url' => $base . '/shop',
     'public_view_url' => $editing ? $base . '/shop/item?id=BROWSER1' : '',
     'values' => ['code' => 'BROWSER1', 'name' => '', 'price' => '', 'stock' => '4', 'stock_alert' => '2', 'version' => '0', 'image_key' => 'tmp/' . str_repeat('a', 32)],
-    'categories' => [1 => ['text' => '의류', 'title' => '의류']], 'images' => [], 'options_rows' => [], 'extras_rows' => [],
+    'categories' => [1 => ['text' => '의류', 'title' => '의류', 'slug' => 'clothing']], 'images' => [], 'options_rows' => [], 'extras_rows' => [],
     'errors' => [], 'notice' => '', 'info_groups' => ProductInfo::GROUPS,
 ]);
