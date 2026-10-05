@@ -112,7 +112,53 @@ final class AdminMessageController
     {
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        return $this->renderSend($request, $response, [], null, [], null);
+        $query = $request->getQueryParams();
+        $input = ['channel' => 'sms',
+            'var_문의처' => $this->app->cmsService()->notificationContact(
+                (string) $this->app->config('app.url', GNUCMS_URL)
+            )];
+        $member = is_string($query['member'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['member']) ? $query['member'] : '';
+        if ($member !== '') $input['members'] = [$member];
+        $preset = is_string($query['preset'] ?? null) ? $query['preset'] : '';
+        if (Events::phoneCapable($preset)) {
+            $values = $this->app->notifySettings()->formValues()[$preset];
+            $input['body'] = $values['sms_body_stored'] !== '' ? $values['sms_body_stored'] : Events::defaultSmsBody($preset);
+            $input['title'] = $values['sms_title_stored'];
+            $input['var_사이트명'] = (string) $this->app->cmsService()->settings()['site_name'];
+            $input['template_event'] = $preset;
+            // 재설정 링크 등 비밀이나 예시 데이터를 직접 발송 칸에 자동으로 넣지 않는다.
+        }
+        // 상세 화면의 링크는 수신 회원과 실제 업무 값을 서버에서 가져온다.
+        $orderId = is_string($query['order'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['order']) ? $query['order'] : '';
+        if ($orderId !== '') {
+            $order = $this->app->db()->selectOne('SELECT user_id, number, total, paid_amount, carrier, tracking_number FROM '
+                . $this->app->db()->table('yc_orders') . ' WHERE id = ?', [$orderId]);
+            if ($order !== null) {
+                $input['members'] = [(string) $order['user_id']];
+                $input['var_주문번호'] = (string) $order['number'];
+                $input['var_주문금액'] = number_format((int) $order['total']) . '원';
+                $input['var_결제금액'] = number_format((int) $order['paid_amount']) . '원';
+                $input['var_택배사'] = (string) $order['carrier'];
+                $input['var_운송장번호'] = (string) $order['tracking_number'];
+                $input['var_배송정보'] = trim((string) $order['carrier'] . ' / ' . (string) $order['tracking_number'], ' /');
+                $input['var_링크'] = rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/') . '/shop/order?number=' . rawurlencode((string) $order['number']);
+            }
+        }
+        $inquiryId = is_string($query['inquiry'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['inquiry']) ? $query['inquiry'] : '';
+        if ($inquiryId !== '' && $orderId === '') {
+            $inquiry = $this->app->db()->selectOne('SELECT f.user_id, p.name FROM ' . $this->app->db()->table('yc_product_feedback')
+                . ' f JOIN ' . $this->app->db()->table('yc_products') . " p ON p.id = f.product_id WHERE f.id = ? AND f.kind = 'inquiry'", [$inquiryId]);
+            if ($inquiry !== null) {
+                $input['members'] = [(string) $inquiry['user_id']];
+                $input['var_상품명'] = (string) $inquiry['name'];
+                $input['var_링크'] = rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/') . '/shop/inquiry/' . $inquiryId;
+            }
+        }
+        if (count($input['members'] ?? []) === 1) {
+            $user = $this->app->users()->findById((int) $input['members'][0]);
+            if ($user !== null && $user['status'] === 'active') $input['var_이름'] = (string) $user['display_name'];
+        }
+        return $this->renderSend($request, $response, $input, null, [], null);
     }
 
     /**
@@ -421,11 +467,22 @@ final class AdminMessageController
     {
         $vars = [];
         foreach ($input as $name => $value) {
-            if (str_starts_with((string) $name, 'var_')) {
+            if (str_starts_with((string) $name, 'var_') && is_scalar($value)) {
                 $vars[substr((string) $name, 4)] = (string) $value;
             }
         }
 
+        $isAlimtalk = ($input['channel'] ?? 'sms') === 'at';
+        $siteDefaults = $isAlimtalk ? $this->app->alimtalkMessageInfo()->resolved() : [
+            '사이트명' => (string) $this->app->cmsService()->settings()['site_name'],
+            '사이트주소' => rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/'),
+            '문의처' => $this->app->cmsService()->notificationContact((string) $this->app->config('app.url', GNUCMS_URL)),
+        ];
+        foreach ($this->variableNames($input) as $name) {
+            if (isset($siteDefaults[$name]) && ($isAlimtalk || trim($vars[$name] ?? '') === '')) {
+                $vars[$name] = $siteDefaults[$name];
+            }
+        }
         $recipients = [];
         $skipped = 0;
         $ineligible = 0;
@@ -471,6 +528,7 @@ final class AdminMessageController
                 'tpl_code' => (string) ($input['tpl_code'] ?? ''),
                 'failover' => ($input['failover'] ?? '') === '1',
                 'created_by' => $this->app->guestAcl()->identity()->displayName() ?? '',
+                'secret_vars' => Events::secretVars(is_string($input['template_event'] ?? null) ? $input['template_event'] : ''),
                 'recipients' => $recipients,
                 'scheduled_at' => $this->scheduledAtForRequest((string) ($input['scheduled_at'] ?? '')),
             ],
@@ -763,6 +821,18 @@ final class AdminMessageController
     private function renderSend(ServerRequestInterface $request, ResponseInterface $response, array $input,
         ?string $error, array $fieldErrors, ?array $preview): ResponseInterface
     {
+        $isAlimtalk = ($input['channel'] ?? 'sms') === 'at';
+        $siteDefaults = $isAlimtalk ? $this->app->alimtalkMessageInfo()->resolved() : [
+            '사이트명' => (string) $this->app->cmsService()->settings()['site_name'],
+            '사이트주소' => rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/'),
+            '문의처' => $this->app->cmsService()->notificationContact((string) $this->app->config('app.url', GNUCMS_URL)),
+        ];
+        foreach ($siteDefaults as $name => $value) {
+            $field = 'var_' . $name;
+            if ($isAlimtalk || !isset($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
+                $input[$field] = $value;
+            }
+        }
         $selectedIds = array_map('strval', (array) ($input['members'] ?? []));
         $query = $request->getQueryParams();
         $searchQuery = is_string($query['q'] ?? null) ? trim($query['q']) : '';

@@ -51,6 +51,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
     <?php endif ?>
 
     <form method="post" action="<?= $this->url('admin.messages.send.preview') ?>" id="send-form">
+      <input type="hidden" name="template_event" value="<?= $this->e($values['template_event'] ?? '') ?>">
       <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
 
       <div class="form-section">
@@ -112,11 +113,12 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
           <p class="card-sub">본문에 #{ } 로 표시한 변수가 없습니다.</p>
         <?php else: ?>
           <p class="card-sub"><strong>여기 입력한 값은 받는 사람 전원에게 똑같이 나갑니다.</strong> 아래 미리보기는 첫 번째 수신자 것만 보여주지만, 100명을 골랐다면 100명 모두에게 같은 값이 들어간 본문이 갑니다. 수신자마다 다른 값을 넣으려면 지금은 값별로 나눠 보내야 합니다.</p>
+          <?php if ($channel === 'at'): ?><p class="fieldset-label">사이트명·사이트주소·문의처는 <a href="<?= $this->url('admin.aligo') ?>#alimtalk-info">알림톡 발신 정보</a>에서 가져옵니다.</p><?php endif ?>
           <div class="grid-2">
           <?php foreach ($variable_names as $name): ?>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">#{<?= $this->e($name) ?>}</legend>
-              <input class="input input-bordered input-block" type="text" name="var_<?= $this->e($name) ?>" value="<?= $this->e($values['var_' . $name] ?? '') ?>">
+              <input class="input input-bordered input-block" type="text" name="var_<?= $this->e($name) ?>" value="<?= $this->e($values['var_' . $name] ?? '') ?>"<?= $channel === 'at' && in_array($name, ['사이트명', '사이트주소', '문의처'], true) ? ' readonly' : '' ?>>
             </fieldset>
           <?php endforeach ?>
           </div>

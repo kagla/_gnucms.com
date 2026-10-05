@@ -23,7 +23,13 @@ final class Orders
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
     public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
 
-    public function __construct(private Store $store, private Cart $cart, private Settings $settings, private string $timezone = 'Asia/Seoul') {}
+    private ?\Closure $notifyStatus;
+
+    public function __construct(private Store $store, private Cart $cart, private Settings $settings,
+        private string $timezone = 'Asia/Seoul', ?callable $notifyStatus = null)
+    {
+        $this->notifyStatus = $notifyStatus === null ? null : \Closure::fromCallable($notifyStatus);
+    }
 
     /** 저장된 기본 배송지를 먼저 쓰고, 없으면 가장 최근 주문의 배송지를 사용한다. */
     public function defaultAddressFor(int $userId): ?array
@@ -132,6 +138,7 @@ final class Orders
                     $this->store->logStock($item['product_id'], $optionId, -$item['quantity'], 'order', $number, 'user:' . $userId);
                 }
                 $this->history($id, 'pending', 'user:' . $userId, '주문을 접수했습니다.');
+                $this->notifyEvent($this->get($id), 'pending');
                 return $id;
             });
         } catch (DomainError $e) {
@@ -355,6 +362,8 @@ final class Orders
                 }
             }
             $this->history($id, $to, $actor, $note);
+            // 실제 변경 순간의 배송정보를 캡처한다. CSV 바깥 거래가 실패하면 알림도 취소된다.
+            $this->notifyEvent($this->get($id), $to);
         });
         return $this->get($id);
     }
@@ -485,6 +494,7 @@ final class Orders
                 ['paid', $paidAt, $amount, json_encode($detail + $order['payment'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id, 'pending']);
             if ($changed !== 1) throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
             $this->history($id, 'paid', $actor, $note);
+            $this->notifyEvent($this->get($id), 'paid');
         });
         return $this->get($id);
     }
@@ -574,6 +584,7 @@ final class Orders
             $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, payment_detail = ?, updated_at = ? WHERE id = ?',
                 [$amount, json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id]);
             $this->history($id, $order['status'], $actor, '환불 ' . number_format($amount) . '원: ' . $reason);
+            $this->notifyEvent($this->get($id), 'refunded', ['환불금액' => number_format($amount) . '원']);
         });
         return $this->get($id);
     }
@@ -605,6 +616,23 @@ final class Orders
             }
         }
         return $count;
+    }
+
+    /** 필수 알림함은 같은 거래에, 외부 알림은 최외곽 커밋 후에 기록한다. */
+    private function notifyEvent(array $order, string $status, array $extra = []): void
+    {
+        (new \GnuCms\Repository\NotificationRepository($this->store->db))->recordOrderStatus(
+            (int) $order['id'], (int) $order['user_id'], $status, (string) $order['number']);
+        if ($this->notifyStatus === null) return;
+        $carrier = trim((string) $order['carrier']);
+        $tracking = trim((string) $order['tracking_number']);
+        $vars = $extra + ['주문금액' => number_format((int) $order['total']) . '원',
+            '결제금액' => number_format((int) $order['paid_amount']) . '원',
+            '택배사' => $carrier !== '' ? $carrier : '주문 조회에서 확인',
+            '운송장번호' => $tracking !== '' ? $tracking : '주문 조회에서 확인',
+            '배송정보' => $carrier !== '' || $tracking !== '' ? trim($carrier . ' / ' . $tracking, ' /') : '주문 조회에서 확인'];
+        $this->store->db->afterCommit(fn () => ($this->notifyStatus)(
+            (int) $order['user_id'], (int) $order['id'], $status, (string) $order['number'], $vars));
     }
 
     private function history(int $id, string $status, string $actor, string $note): void

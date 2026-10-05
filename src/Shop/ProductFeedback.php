@@ -10,7 +10,12 @@ use PDOException;
 
 final class ProductFeedback
 {
-    public function __construct(private Store $store) {}
+    private ?\Closure $notifyReply;
+
+    public function __construct(private Store $store, ?callable $notifyReply = null)
+    {
+        $this->notifyReply = $notifyReply === null ? null : \Closure::fromCallable($notifyReply);
+    }
 
     public function page(int $productId, string $kind, int $page, ?int $viewerId, bool $admin = false): array
     {
@@ -89,12 +94,19 @@ final class ProductFeedback
 
     public function reply(int $id, mixed $reply, string $actor): void
     {
-        $row = $this->store->get('yc_product_feedback', $id);
-        if ($row['kind'] !== 'inquiry') throw DomainError::validation(['reply' => '상품문의에만 답변할 수 있습니다.']);
         $reply = Input::text($reply, 'reply', 3000);
-        $now = Clock::timestamp();
-        $this->store->update('yc_product_feedback', $id, ['reply' => $reply, 'reply_actor' => $reply === '' ? '' : mb_substr($actor, 0, 100),
-            'replied_at' => $reply === '' ? 0 : $now, 'updated_at' => $now]);
+        $this->store->transaction(function () use ($id, $reply, $actor): void {
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_product_feedback') . ' WHERE id = ? FOR UPDATE', [$id]);
+            $row = $this->store->get('yc_product_feedback', $id);
+            if ($row['kind'] !== 'inquiry') throw DomainError::validation(['reply' => '상품문의에만 답변할 수 있습니다.']);
+            if ((string) $row['reply'] === $reply) return;
+            $now = Clock::timestamp();
+            $this->store->update('yc_product_feedback', $id, ['reply' => $reply, 'reply_actor' => $reply === '' ? '' : mb_substr($actor, 0, 100),
+                'replied_at' => $reply === '' ? 0 : $now, 'updated_at' => $now]);
+            if ($reply !== '' && $this->notifyReply !== null) {
+                ($this->notifyReply)($row, $this->store->get('yc_products', (int) $row['product_id']));
+            }
+        });
     }
 
     public function delete(int $id): void

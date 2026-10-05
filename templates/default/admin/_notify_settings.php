@@ -14,7 +14,7 @@ $noTemplates = $templates === [];
 <section class="card settings-card">
   <div class="card-body">
     <h2 class="card-title"><?= $this->icon('bell', 19) ?> 알림별 발송 규칙</h2>
-    <p class="card-sub"><?= $mail_enabled ? '이메일은 모든 코어 알림에 사용합니다.' : '현재 메일 설정에서 이메일을 사용하지 않습니다.' ?> 알림톡을 켜면 먼저 보내고, 실패하거나 사용할 수 없을 때 문자가 켜져 있으면 문자로 보냅니다. 알림함도 별도로 설정할 수 있습니다. 알림을 선택해 설정하고 각각 저장할 수 있습니다.</p>
+    <p class="card-sub">사이트 내 알림은 항상 사용합니다. 이메일·알림톡·문자는 알림별로 선택합니다. 이메일 알림은 수신거부한 회원에게 보내지 않습니다. 알림톡을 켜면 먼저 보내고, 실패하거나 사용할 수 없을 때 문자가 켜져 있으면 문자로 보냅니다.</p>
 
     <?php if ($notice !== null): ?>
       <div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span><?= $this->e($notice) ?></span></div>
@@ -30,14 +30,14 @@ $noTemplates = $templates === [];
     <?php if (!$status['configured']): ?>
       <div class="alert alert-warning">
         <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
-        <span>알리고 계정이 연결되어 있지 않습니다. 아래에서 알림톡·문자를 켜 두어도 실제로는 나가지 않습니다 — <a href="<?= $this->url('admin.aligo') ?>#aligo">문자·알림톡 설정</a>에서 계정을 먼저 연결해 주세요. <?= $mail_enabled ? '이메일과 알림함은' : '알림함은' ?> 이 설정과 무관하게 그대로 나갑니다.</span>
+        <span>알리고 계정이 연결되어 있지 않습니다. 아래에서 알림톡·문자를 켜 두어도 실제로는 나가지 않습니다 — <a href="<?= $this->url('admin.aligo') ?>#aligo">문자·알림톡 설정</a>에서 계정을 먼저 연결해 주세요. 사이트 내 알림은 계속 기록하며, 이메일은 메일 설정과 아래 선택에 따릅니다.</span>
       </div>
     <?php else: ?>
       <div class="alert alert-warning" data-notify-channel-warning<?= ($status['alimtalk_enabled'] && $status['sms_enabled']) ? ' hidden' : '' ?>>
         <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
         <span>
           <span data-notify-channel-warning-text><?php if (!$status['alimtalk_enabled'] && !$status['sms_enabled']): ?>알림톡 발송과 문자 발송이 모두 꺼져 있습니다.<?php elseif (!$status['alimtalk_enabled']): ?>알림톡 발송이 꺼져 있습니다.<?php elseif (!$status['sms_enabled']): ?>문자 발송이 꺼져 있습니다.<?php endif ?></span>
-          아래에서 켜 두어도 그 채널로는 나가지 않습니다 — <a href="<?= $this->url('admin.aligo') ?>#aligo">문자·알림톡 설정</a>에서 "채널별 발송 허용"을 켜 주세요.
+          아래에서 켜 두어도 그 채널로는 나가지 않습니다 — <a href="<?= $this->url('admin.settings.messaging') ?>">알림·발송 설정</a>에서 해당 채널을 ON으로 바꿔 주세요.
         </span>
       </div>
     <?php endif ?>
@@ -51,6 +51,14 @@ $noTemplates = $templates === [];
       </div>
     <?php endif ?>
 
+    <div class="notify-editor-toolbar">
+      <label>알림 검색 <input class="input input-bordered" type="search" placeholder="회원, 비밀번호 찾기, 주문…" data-notify-search></label>
+      <label class="label toggle-row"><input type="checkbox" data-notify-phone-filter> 문자 편집 가능한 알림만</label>
+      <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.messages.send') ?>">직접 문자 보내기</a>
+    </div>
+    <p class="fieldset-label" data-notify-empty hidden>검색에 맞는 알림이 없습니다.</p>
+    <p class="fieldset-label">회원으로 가입·인증·비밀번호 관련 알림을 찾을 수 있습니다. 편집을 누르면 이메일 제목·본문과 문자 문구를 수정하고 수신 내용을 미리 볼 수 있습니다.</p>
+    <div class="notify-event-grid">
     <?php foreach ($events as $ev): ?>
       <?php
         $isOpen = $open === $ev['key'];
@@ -60,29 +68,44 @@ $noTemplates = $templates === [];
         // 않는다**: 잠그면 그 체크가 제출되지 않아, 관리자가 다른 칸만 고쳐 저장하는
         // 순간 켜 두었다는 사실이 조용히 지워진다. 그 경우엔 저장이 시끄럽게 거절한다.
         $alimtalkLocked = !$ev['phone'] || ($noTemplates && !$ev['on']['alimtalk']);
-        $onNow = array_values(array_filter(array_keys($channelLabels),
-            static fn (string $c): bool => $ev['on'][$c]));
+
       ?>
-      <details class="notify-event" data-notify-event<?= $isOpen ? ' open data-notify-reopen' : '' ?>>
-        <summary>
-          <span class="notify-event-name"><?= $this->e($ev['label']) ?></span>
-          <?php if ($onNow === []): ?>
-            <span class="badge badge-sm badge-ghost badge-soft">보내지 않음</span>
-          <?php else: foreach ($onNow as $c): ?>
-            <span class="badge badge-sm badge-success badge-soft"><?= $this->e($channelLabels[$c]) ?></span>
-          <?php endforeach; endif ?>
-          <?php if ($ev['alimtalk_notice'] !== null): ?><span class="badge badge-sm badge-warning badge-soft">알림톡이 나가지 않음</span><?php endif ?>
-          <span class="notify-event-action" aria-hidden="true">설정</span>
+      <details class="notify-event" data-notify-event data-notify-search-keywords="<?= $this->e($ev['search_keywords'] ?? '') ?>" data-phone="<?= $ev['phone'] ? '1' : '0' ?>"<?= $isOpen ? ' open data-notify-reopen' : '' ?>>
+        <summary aria-label="<?= $this->e($ev['label']) ?> 설정 열기">
+          <span class="notify-event-heading">
+            <span class="notify-event-name"><?= $this->e($ev['label']) ?></span>
+            <span class="notify-event-action" aria-hidden="true">편집 <?= $this->icon('chevron-right', 14) ?></span>
+          </span>
+          <span class="notify-event-message" data-notify-body-preview tabindex="0" role="region" aria-label="<?= $this->e($ev['label']) ?> <?= $ev['phone'] ? '문자' : '이메일' ?> 문구"><?php if ($ev['phone']): ?><?php if ($ev['sms_title'] !== ''): ?><span class="notify-event-message-title"><?= $this->e($ev['sms_title']) ?></span><?php endif ?><?= $this->e($ev['sms_body'] !== '' ? $ev['sms_body'] : '문자 문구가 없습니다.') ?><?php else: ?><span class="notify-event-message-title"><?= $this->e($ev['mail_subject']) ?></span><?= $this->e($ev['mail_body']) ?><?php endif ?></span>
+          <?php if ($ev['phone']): ?><span class="fieldset-label">이메일 제목: <?= $this->e($ev['mail_subject']) ?></span><?php endif ?>
+          <span class="notify-event-settings" aria-label="저장된 채널 설정">
+            <?php foreach ($channelLabels as $channel => $label): ?>
+              <?php if (($channel === 'inbox' && !$ev['inbox_capable']) || (in_array($channel, ['sms', 'alimtalk'], true) && !$ev['phone'])) continue; ?>
+              <span class="badge badge-sm <?= $ev['on'][$channel] ? 'badge-success' : 'badge-ghost' ?> badge-soft"><?= $this->e($label) ?> <?= $channel === 'inbox' ? '필수' : ($ev['on'][$channel] ? '사용' : '미사용') ?></span>
+            <?php endforeach ?>
+            <?php if ($ev['on']['mail'] && !$mail_enabled): ?><span class="badge badge-sm badge-warning badge-soft">메일 전역 꺼짐</span><?php endif ?>
+            <?php if ($ev['on']['sms'] && !$status['sms_enabled']): ?><span class="badge badge-sm badge-warning badge-soft">문자 전역 꺼짐</span><?php endif ?>
+            <?php if ($ev['alimtalk_notice'] !== null): ?><span class="badge badge-sm badge-warning badge-soft">알림톡 연결 확인</span><?php elseif ($ev['on']['alimtalk'] && !$status['alimtalk_enabled']): ?><span class="badge badge-sm badge-warning badge-soft">알림톡 전역 꺼짐</span><?php endif ?>
+            <?php if ($rowErrors !== []): ?><span class="badge badge-sm badge-error badge-soft">입력 확인</span><?php endif ?>
+          </span>
         </summary>
 
         <form method="post" action="<?= $this->url('admin.settings.notifications.save') ?>#events">
           <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
           <input type="hidden" name="event" value="<?= $this->e($ev['key']) ?>">
+          <div class="form-section notify-trigger">
+            <h2 class="form-section-title">발송 시점과 수신 대상</h2>
+            <dl><dt>발송 시점</dt><dd><?= $this->e($ev['guidance']['trigger']) ?></dd>
+              <dt>수신 대상</dt><dd><?= $this->e($ev['guidance']['target']) ?></dd></dl>
+            <?php if ($ev['phone']): ?><p class="fieldset-label">회원 연락처가 없으면 전화 채널은 건너뜁니다. 문자·알림톡은 회원별 수신거부 설정이 없습니다.</p><?php endif ?>
+            <a class="btn btn-ghost btn-sm" href="<?= $this->url('admin.messages.history') ?>?event=<?= $this->e(rawurlencode($ev['key'])) ?>">이 알림의 발송 이력</a>
+            <?php if ($ev['phone']): ?><a class="btn btn-ghost btn-sm" href="<?= $this->url('admin.messages.send') ?>?preset=<?= $this->e(rawurlencode($ev['key'])) ?>">저장된 문구로 직접 발송</a><?php endif ?>
+          </div>
 
           <?php if ($rowErrors !== []): ?>
             <div class="alert alert-error">
               <span aria-hidden="true"><?= $this->icon('warning', 18) ?></span>
-              <span>저장하지 못했습니다. 아래 표시한 곳을 고쳐 주세요.</span>
+              <span>입력 내용을 확인해 주세요. 아래 표시한 곳을 고쳐 주세요.</span>
             </div>
           <?php endif ?>
           <?php if (array_key_exists('event', $rowErrors)): ?>
@@ -98,12 +121,16 @@ $noTemplates = $templates === [];
 
           <div class="form-section">
             <h2 class="form-section-title">보낼 채널</h2>
-            <?php if ($mail_enabled): ?>
-              <p class="notify-fixed-channel"><span class="badge badge-sm badge-success badge-soft">메일</span> 항상 발송합니다.</p>
-            <?php else: ?>
-              <p class="notify-fixed-channel"><span class="badge badge-sm badge-ghost badge-soft">메일</span> <a href="<?= $this->url('admin.mail') ?>#mail">메일 설정</a>에서 이메일을 사용하지 않도록 설정했습니다.</p>
+            <?php if ($ev['inbox_capable']): ?>
+              <p class="notify-fixed-channel"><span class="badge badge-sm badge-success badge-soft">사이트 내 알림</span> 항상 기록하며 끌 수 없습니다.</p>
             <?php endif ?>
             <div class="toggle-list notify-channel-options">
+              <label class="label toggle-row">
+                <input type="checkbox" name="mail" value="1"<?= $ev['on']['mail'] ? ' checked' : '' ?>>
+                <span>이메일</span>
+              </label>
+              <p class="fieldset-label">관리자가 발송을 켠 경우에만 보냅니다. <?= $ev['mail_subscription'] ? '회원은 이메일 알림을 수신거부할 수 있습니다.' : '직접 요청한 인증·계정 복구 이메일은 이메일 알림 수신거부와 별도로 처리합니다.' ?></p>
+              <?php if (!$mail_enabled): ?><p class="fieldset-label"><a href="<?= $this->url('admin.settings.messaging') ?>#channel-mail">알림·발송 설정</a>에서 이메일이 꺼져 있어 현재 발송하지 않습니다. 선택은 저장됩니다.</p><?php endif ?>
               <?php if (array_key_exists('mail', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['mail']) ?></p><?php endif ?>
 
               <?php if ($ev['phone']): ?>
@@ -126,23 +153,62 @@ $noTemplates = $templates === [];
                 <?php if (array_key_exists('sms', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['sms']) ?></p><?php endif ?>
               <?php endif ?>
 
-              <?php if ($ev['inbox_capable']): ?>
-                <label class="label toggle-row">
-                  <input type="checkbox" name="inbox" value="1"<?= $ev['on']['inbox'] ? ' checked' : '' ?>>
-                  <span>사이트 내 알림함</span>
-                </label>
-              <?php elseif (array_key_exists('inbox', $rowErrors)): ?>
-                <p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['inbox']) ?></p>
-              <?php endif ?>
-            </div>
+              <?php if (array_key_exists('inbox', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['inbox']) ?></p><?php endif ?>
+          </div>
             <?php if ($ev['key'] === 'comment_new'): ?>
               <p class="fieldset-label">댓글 한 건당 최대 두 명에게 알립니다.</p>
             <?php endif ?>
           </div>
 
+          <div class="form-section" data-notify-mail-editor>
+            <h2 class="form-section-title">이메일 편집</h2>
+            <p class="fieldset-label">일반 텍스트 이메일입니다. 아래 제목·본문을 저장하면 다음 발송부터 적용됩니다. 이메일이 꺼져 있어도 문구를 편집·미리보기·저장할 수 있습니다.</p>
+            <fieldset class="fieldset<?= isset($rowErrors['mail_subject']) ? ' is-invalid' : '' ?>">
+              <legend class="fieldset-legend">이메일 제목</legend>
+              <input class="input input-bordered input-block" type="text" name="mail_subject" value="<?= $this->e($ev['mail_subject']) ?>" maxlength="<?= \GnuCms\Notify\MailEditor::SUBJECT_LIMIT ?>" data-notify-mail-subject>
+              <?php if (isset($rowErrors['mail_subject'])): ?><p class="validator-hint"><?= $this->e($rowErrors['mail_subject']) ?></p><?php endif ?>
+            </fieldset>
+            <fieldset class="fieldset<?= isset($rowErrors['mail_body']) ? ' is-invalid' : '' ?>">
+              <legend class="fieldset-legend">이메일 본문</legend>
+              <textarea class="textarea textarea-bordered input-block" name="mail_body" rows="10" maxlength="<?= \GnuCms\Notify\MailEditor::BODY_LIMIT ?>" data-notify-mail-body><?= $this->e($ev['mail_body']) ?></textarea>
+              <?php if (isset($rowErrors['mail_body'])): ?><p class="validator-hint"><?= $this->e($rowErrors['mail_body']) ?></p><?php endif ?>
+              <p class="fieldset-label">제목은 최대 <?= \GnuCms\Notify\MailEditor::SUBJECT_LIMIT ?>자, 본문은 최대 <?= number_format(\GnuCms\Notify\MailEditor::BODY_LIMIT) ?>자입니다. HTML 태그는 서식으로 처리하지 않습니다. 변수 버튼은 마지막으로 선택한 제목 또는 본문에 삽입합니다.</p>
+              <div class="notify-variable-buttons"><?php foreach ($ev['vars'] as $var): ?><button class="btn btn-outline btn-sm" type="button" data-notify-mail-insert="<?= $this->e($var) ?>">#{<?= $this->e($var) ?>}</button><?php endforeach ?></div>
+              <div class="notify-variable-buttons">
+                <button class="btn btn-ghost btn-sm" type="button" data-notify-mail-restore data-subject="<?= $this->e($ev['mail_defaults']['subject']) ?>" data-body="<?= $this->e($ev['mail_defaults']['body']) ?>">기본 이메일 문구 넣기</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-notify-mail-restore data-subject="<?= $this->e($ev['mail_subject_saved']) ?>" data-body="<?= $this->e($ev['mail_body_saved']) ?>">저장된 이메일 문구로 되돌리기</button>
+              </div>
+            </fieldset>
+            <p class="fieldset-label"><?= $ev['mail_subscription'] ? '수신거부 링크와 재수신 안내는 실제 발송 시 본문 끝에 자동으로 추가됩니다. 이 안내는 편집할 수 없습니다.' : '인증·계정 복구 이메일에는 수신거부 안내를 붙이지 않습니다. 인증·비밀번호 재설정 본문에는 #{링크}와 #{유효시간}을 유지해 주세요.' ?></p>
+            <details>
+              <summary>이메일 미리보기 예시 값</summary>
+              <div class="notify-sample-fields">
+                <?php foreach ($ev['mail_samples'] as $var => $sample): ?><label class="fieldset">#{<?= $this->e($var) ?>}
+                  <input class="input input-bordered input-block" type="text" name="mail_samples[<?= $this->e($var) ?>]" value="<?= $this->e($sample) ?>" maxlength="1000" data-notify-mail-sample>
+                </label><?php endforeach ?>
+              </div>
+            </details>
+            <p class="fieldset-label">미리보기는 예시 값을 넣은 제목·본문과 자동 수신거부 안내를 보여 줍니다. 실제 메일은 보내지 않고 문구도 저장하지 않습니다. 메일 앱에 따라 글꼴과 링크 표시는 달라질 수 있습니다.</p>
+            <button class="btn btn-outline" type="submit" formaction="<?= $this->url('admin.settings.notifications.mail_preview') ?>#events">이메일 수신 내용 미리보기</button>
+            <?php if (isset($rowErrors['mail_preview'])): ?><p class="validator-hint"><?= $this->e($rowErrors['mail_preview']) ?></p><?php endif ?>
+            <?php if ($ev['mail_preview'] !== null): ?>
+              <div class="notify-mail-preview" data-notify-mail-preview role="status" tabindex="-1">
+                <p class="fieldset-label">예시 수신 화면<?= $ev['mail_subscription'] ? ' · 수신거부 링크도 예시입니다.' : '' ?></p>
+                <h3>제목: <?= $this->e($ev['mail_preview']['subject']) ?></h3>
+                <pre><?= $this->e($ev['mail_preview']['body']) ?></pre>
+              </div>
+            <?php endif ?>
+          </div>
+
           <?php if ($ev['phone']): ?>
             <div class="form-section">
-              <h2 class="form-section-title">문자 본문</h2>
+              <h2 class="form-section-title">문자 편집</h2>
+              <fieldset class="fieldset<?= isset($rowErrors['sms_title']) ? ' is-invalid' : '' ?>">
+                <legend class="fieldset-legend">LMS 제목 (선택)</legend>
+                <input class="input input-bordered input-block" type="text" name="sms_title" value="<?= $this->e($ev['sms_title']) ?>" maxlength="44" data-notify-sms-title>
+                <p class="fieldset-label">고정 문구 44바이트 이내 (한글 22자). SMS에는 제목이 표시되지 않습니다. 알림톡 대체문자는 제목 없이 본문만 사용합니다.</p>
+                <?php if (isset($rowErrors['sms_title'])): ?><p class="validator-hint"><?= $this->e($rowErrors['sms_title']) ?></p><?php endif ?>
+              </fieldset>
               <?php if ($ev['sms_notice'] !== null): ?>
                 <p class="fieldset-label"><?= $this->e($ev['sms_notice']) ?></p>
               <?php endif ?>
@@ -154,15 +220,36 @@ $noTemplates = $templates === [];
                 <?php // maxlength 는 글자를 센다. 실제 한계는 EUC-KR 바이트라 한글은 한 자에
                   // 두 바이트다 — 그래서 이 속성은 한계가 아니라 붙여넣기 상한일 뿐이고,
                   // 진짜 판정은 저장할 때 MessageText 가 한다. 아래 줄이 그 숫자를 미리 보여준다. ?>
-                <textarea class="textarea textarea-bordered input-block" name="sms_body" rows="3" maxlength="2000" data-notify-sms-body><?= $this->e($ev['sms_body']) ?></textarea>
+                <textarea class="textarea textarea-bordered input-block" name="sms_body" rows="6" maxlength="2000" data-notify-sms-body><?= $this->e($ev['sms_body']) ?></textarea>
                 <?php if (array_key_exists('sms_body', $rowErrors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($rowErrors['sms_body']) ?></p><?php endif ?>
                 <?php // SMS·LMS 경계(90바이트)를 여기서 다시 세지 않는다 — 판정은 컨트롤러가
                   // MessageText::channelFor() 로 이미 해서 sms_kind 로 넘겨 준다. 여기서 숫자를
                   // 다시 비교하면 그 경계가 두 군데에 생긴다. 두 갈래 문장은 한쪽이 다른 쪽의
                   // 부분 문자열이 되지 않게 적는다: 그래야 "어느 갈래가 그려졌는가"를 물을 수 있다. ?>
-                <p class="fieldset-label" data-notify-sms-count>현재 <strong><span data-notify-sms-bytes><?= $this->e(number_format($ev['sms_bytes'])) ?></span>/<?= $this->e(number_format($ev['sms_limit'])) ?>바이트</strong> · <?= $this->e(number_format($ev['sms_boundary'])) ?>바이트 초과 시 LMS · 변수 치환 시 늘어날 수 있습니다.</p>
-                <p class="fieldset-label">쓸 수 있는 변수: <?php foreach ($ev['vars'] as $i => $var): ?><?= $i > 0 ? ', ' : '' ?><code>#{<?= $this->e($var) ?>}</code><?php endforeach ?>. 다른 이름을 쓰면 저장할 때 거절합니다.</p>
+                <p class="fieldset-label" data-notify-sms-count>현재 추정 <strong><span data-notify-sms-bytes><?= $this->e(number_format($ev['sms_bytes'])) ?></span>/<?= $this->e(number_format($ev['sms_limit'])) ?>바이트</strong> · <?= $this->e(number_format($ev['sms_boundary'])) ?>바이트 초과 시 LMS · 변수 치환 시 늘어날 수 있습니다.</p>
+                <p class="fieldset-label">변수 버튼을 누르면 본문의 커서 위치에 삽입합니다. 실제 발송 시 회원·주문 값으로 자동 치환됩니다.</p>
+                <div class="notify-variable-buttons"><?php foreach ($ev['vars'] as $var): ?><button class="btn btn-outline btn-sm" type="button" data-notify-insert="<?= $this->e($var) ?>">#{<?= $this->e($var) ?>}</button><?php endforeach ?></div>
+                <button class="btn btn-ghost btn-sm" type="button" data-notify-restore data-body="<?= $this->e($ev['sms_body_saved']) ?>" data-title="<?= $this->e($ev['sms_title_saved']) ?>">저장된 문구로 되돌리기</button>
               </fieldset>
+            </div>
+
+            <div class="form-section notify-sms-preview-section">
+              <h2 class="form-section-title">치환 미리보기</h2>
+              <p class="fieldset-label">아래 예시 값은 미리보기에만 사용합니다. 저장하거나 문자를 발송하지 않습니다. 서버가 실제 문자 인코딩과 같은 EUC-KR 바이트로 검사합니다.</p>
+              <div class="notify-sample-fields">
+                <?php foreach ($ev['samples'] as $var => $sample): ?><label class="fieldset">#{<?= $this->e($var) ?>}
+                  <input class="input input-bordered input-block" type="text" name="samples[<?= $this->e($var) ?>]" value="<?= $this->e($sample) ?>" maxlength="1000" data-notify-sample>
+                </label><?php endforeach ?>
+              </div>
+              <button class="btn btn-outline" type="submit" formaction="<?= $this->url('admin.settings.notifications.sms_preview') ?>#events">문자 미리보기·길이 확인</button>
+              <?php if (isset($rowErrors['sms_preview'])): ?><p class="validator-hint"><?= $this->e($rowErrors['sms_preview']) ?></p><?php endif ?>
+              <?php if ($ev['preview'] !== null): ?>
+                <div class="notify-sms-preview" data-notify-preview role="status">
+                  <p><strong><?= $ev['preview']['kind'] === 'lms' ? 'LMS' : 'SMS' ?></strong> · 치환 후 <?= (int) $ev['preview']['bytes'] ?>바이트 · 실제 발송 시 값에 따라 달라집니다.</p>
+                  <?php if ($ev['preview']['title'] !== ''): ?><h3><?= $this->e($ev['preview']['title']) ?></h3><?php endif ?>
+                  <pre><?= $this->e($ev['preview']['body']) ?></pre>
+                </div>
+              <?php endif ?>
             </div>
 
             <div class="form-section">
@@ -249,6 +336,7 @@ $noTemplates = $templates === [];
         </form>
       </details>
     <?php endforeach ?>
+    </div>
   </div>
 </section>
 <dialog class="modal notify-settings-modal" data-notify-modal aria-labelledby="notify-settings-modal-title">

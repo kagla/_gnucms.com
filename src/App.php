@@ -708,24 +708,37 @@ final class App
      * 가 먼저 끝나 메모이즈되므로 그 고리가 닫히지 않는다. postService() 의
      * setAttachmentResolver() 가 같은 이유로 쓰는 같은 해법이다.
      */
+    public function mailPreferences(): \GnuCms\Notify\MailPreferences
+    {
+        return new \GnuCms\Notify\MailPreferences($this->users(), (string) $this->config('auth.secret', ''),
+            (string) $this->config('app.url', GNUCMS_URL));
+    }
+
     public function notifier(): Notifier
     {
         if ($this->notifier === null) {
             $settings = $this->notifySettings();
             $this->notifier = new Notifier($settings, [
                 new MailChannel($this->mailer(),
-                    fn (): bool => $this->mailSettingsService()->enabled()),
+                    fn (): bool => $this->mailSettingsService()->enabled(),
+                    fn (string $event, \GnuCms\Notify\Recipient $to): bool => $this->mailPreferences()->accepts($event, $to),
+                    fn (string $event, \GnuCms\Notify\Recipient $to): string => $this->mailPreferences()->footer($event, $to), $settings),
                 new AlimtalkChannel($this->aligo(), $settings),
                 new SmsChannel($this->aligo(), $settings),
                 new InboxChannel(fn (): NotificationService => $this->notificationService()),
-            ]);
+            ], contact: fn (): string => $this->cmsService()->notificationContact(
+                (string) $this->config('app.url', GNUCMS_URL)
+            ), siteVariables: fn (): array => [
+                '사이트명' => (string) $this->cmsService()->settings()['site_name'],
+                '사이트주소' => rtrim((string) $this->config('app.url', GNUCMS_URL), '/'),
+            ], alimtalkVariables: fn (): array => $this->alimtalkMessageInfo()->resolved());
         }
 
         return $this->notifier;
     }
 
     /** @return string 실제 사용한 전송 방식(native|smtp) */
-    public function sendMailTest(string $to): string
+    public function sendMailTest(string $to, string $serverIp = ''): string
     {
         $to = strtolower(trim($to));
         if ($to === '' || strlen($to) > 254 || filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
@@ -741,12 +754,29 @@ final class App
             ]);
         }
         $settings = $mailSettings->runtime();
-        $siteName = (string) $this->cmsService()->settings()['site_name'];
+        $site = $this->cmsService()->settings();
+        $siteName = (string) $site['site_name'];
+        $domain = parse_url((string) $this->config('app.url', ''), PHP_URL_HOST);
+        $domain = is_string($domain) && $domain !== '' ? $domain : '확인할 수 없음';
+        $serverIp = trim($serverIp);
+        $serverIp = filter_var($serverIp, FILTER_VALIDATE_IP) !== false ? $serverIp : '확인할 수 없음';
+        $timezone = is_string($site['timezone'] ?? null) ? $site['timezone'] : 'Asia/Seoul';
+        $sentAt = (new \DateTimeImmutable('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s T');
+        $environment = "\n\n발송 환경\n"
+            . "발송 사이트 도메인: {$domain}\n"
+            . "웹서버 IP: {$serverIp}\n"
+            . "발송 시각: {$sentAt} ({$timezone})\n"
+            . '발송 방식: ' . ($settings === null ? '자체 서버' : 'SMTP');
+        if ($settings !== null) {
+            $environment .= "\nSMTP 서버: " . (string) $settings['host'];
+        }
+        $environment .= "\n\n웹서버 IP는 사이트가 실행되는 서버의 주소이며, SMTP 발송 서버의 IP와 다를 수 있습니다.";
         $this->mailer()->send(
             $to,
             '[' . $siteName . '] 테스트 메일',
             ($settings === null ? '서버 기본 메일 기능' : 'SMTP')
                 . "으로 보낸 테스트 메일입니다.\n\n이 메일이 도착했다면 {$siteName}의 메일 발송 기능이 작동하고 있습니다."
+                . $environment
         );
 
         return $mode;
@@ -761,6 +791,15 @@ final class App
             $this->adminService->setAligo($this->aligo());
         }
         return $this->adminService;
+    }
+
+    public function alimtalkMessageInfo(): \GnuCms\Aligo\MessageInfo
+    {
+        return new \GnuCms\Aligo\MessageInfo($this->cms(), fn (): array => [
+            '사이트명' => (string) $this->cmsService()->settings()['site_name'],
+            '사이트주소' => rtrim((string) $this->config('app.url', GNUCMS_URL), '/'),
+            '문의처' => $this->cmsService()->notificationContact((string) $this->config('app.url', GNUCMS_URL)),
+        ]);
     }
 
     public function cms(): CmsRepository

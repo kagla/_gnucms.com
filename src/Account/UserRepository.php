@@ -60,7 +60,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, email_notifications, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE id = ?',
             [$id]
         );
@@ -73,7 +73,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, email_notifications, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
@@ -379,6 +379,12 @@ final class UserRepository
      * 번호 저장이 그 판단에 끼어들면 상태를 안 바꿨는데도 세션이 끊기거나, 반대로
      * 번호 칸 하나 때문에 그 메서드의 이름과 책임이 흐려진다. 세션은 건드리지 않는다.
      */
+    public function updateEmailNotifications(int $id, bool $receive): void
+    {
+        $this->db->update('users', ['email_notifications' => $receive ? 1 : 0, 'updated_at' => Clock::now()],
+            'id = :id AND status = :status', ['id' => $id, 'status' => 'active']);
+    }
+
     public function updatePhone(int $id, ?string $phone): void
     {
         $this->db->update('users', [

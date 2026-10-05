@@ -23,6 +23,8 @@
             <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $row['id'] ?>"><input type="hidden" name="kind" value="<?= $this->e($kind) ?>"><input type="hidden" name="action" value="reply">
             <label for="yc-feedback-reply-<?= (int) $row['id'] ?>">답변</label><textarea id="yc-feedback-reply-<?= (int) $row['id'] ?>" name="reply" class="textarea textarea-bordered" maxlength="3000" rows="3"><?= $this->e($row['reply']) ?></textarea>
             <button class="btn btn-sm btn-primary" type="submit">답변 저장</button>
+            <a class="btn btn-outline btn-sm" href="<?= $this->url('admin.settings.notifications') ?>#events">답변 알림·문자 문구 설정</a>
+            <a class="btn btn-ghost btn-sm" href="<?= $this->url('admin.messages.send') ?>?inquiry=<?= (int) $row['id'] ?>&amp;preset=inquiry_replied">문의 회원에게 문자 보내기</a>
           </form>
         <?php endif ?>
         <form method="post" action="<?= $this->e($admin_url) ?>/feedback" class="yc-feedback-delete-form" onsubmit="return confirm('이 <?= $row['kind'] === 'review' ? '후기' : '문의' ?>를 삭제할까요?');">

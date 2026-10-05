@@ -208,51 +208,18 @@ final class AdminCmsController
 
     public function mailForm(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return $this->renderMailSettings($request, $response);
-    }
-
-    private function renderMailSettings(ServerRequestInterface $request, ResponseInterface $response,
-        array $overrides = []): ResponseInterface
-    {
         $this->app->guestAcl()->assertGlobalAdmin();
-        $values = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
         $query = $request->getQueryParams();
-        return View::fromRequest($request)->render($response, 'admin/mail', [
-            'values' => $overrides['values'] ?? $values,
-            'errors' => $overrides['errors'] ?? [],
-            'query' => [
-                'saved' => ($query['saved'] ?? '') === '1' ? '1' : '',
-                'tested' => ($query['tested'] ?? '') === '1' ? '1' : '',
-                'transport' => in_array(($query['transport'] ?? ''), ['native', 'smtp'], true)
-                    ? (string) $query['transport'] : '',
-            ],
-            'test_error' => $overrides['test_error'] ?? null,
-            'test_values' => $overrides['test_values'] ?? ['test_email' => ''],
-            'test_errors' => $overrides['test_errors'] ?? [],
-        ]);
+        $params = [];
+        if (($query['saved'] ?? '') === '1') $params['channel_mail_saved'] = '1';
+        if (($query['tested'] ?? '') === '1') $params['mail_tested'] = '1';
+        // Fragment를 지정하지 않아 기존 #mail-test 링크도 통합 화면에 이어진다.
+        return $this->redirect($request, $response, 'admin.settings.messaging', $params);
     }
 
     public function mail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $input = $this->input($request);
-        $this->assertCsrf($input);
-        try {
-            $this->app->mailSettingsService()->save($this->app->guestAcl(), $input);
-            $this->app->refreshMailSettings();
-        } catch (DomainError $e) {
-            if ($e->status() !== 422) {
-                throw $e;
-            }
-            $current = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
-            $input['password'] = '';
-            $input['password_set'] = $current['password_set'];
-            $input['mode'] = is_scalar($input['mode'] ?? null)
-                ? (string) $input['mode'] : $current['mode'];
-            return $this->renderMailSettings($request, $response->withStatus(422), [
-                'values' => $input, 'errors' => $e->details(),
-            ]);
-        }
-        return $this->redirect($request, $response, 'admin.mail', ['saved' => '1'], 'mail');
+        return (new AdminAligoController($this->app))->saveChannelMail($request, $response);
     }
 
     public function mailPassword(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -271,25 +238,7 @@ final class AdminCmsController
 
     public function mailTest(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $input = $this->input($request);
-        $this->assertCsrf($input);
-        $this->app->guestAcl()->assertGlobalAdmin();
-        $email = isset($input['test_email']) && is_scalar($input['test_email'])
-            ? (string) $input['test_email'] : '';
-        try {
-            $transport = $this->app->sendMailTest($email);
-        } catch (DomainError $e) {
-            return $this->renderMailSettings(
-                $request, $response->withStatus($e->status() === 422 ? 422 : 502), [
-                    'test_values' => ['test_email' => $email],
-                    'test_errors' => $e->details(),
-                    'test_error' => $e->status() === 422 ? null : $e->getMessage(),
-                ]
-            );
-        }
-        return $this->redirect($request, $response, 'admin.mail', [
-            'tested' => '1', 'transport' => $transport,
-        ], 'mail-test');
+        return (new AdminAligoController($this->app))->testChannelMail($request, $response);
     }
 
     public function pages(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

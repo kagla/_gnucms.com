@@ -3,9 +3,10 @@
   <a class="tab<?= $active === 'writing' ? ' tab-active' : '' ?>"<?= $active === 'writing' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.writing') ?>">회원·글쓰기</a>
   <a class="tab<?= $active === 'security' ? ' tab-active' : '' ?>"<?= $active === 'security' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.security') ?>">보안</a>
   <a class="tab<?= $active === 'oauth' ? ' tab-active' : '' ?>"<?= $active === 'oauth' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.oauth') ?>">소셜 로그인</a>
-  <a class="tab<?= $active === 'mail' ? ' tab-active' : '' ?>"<?= $active === 'mail' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.mail') ?>">메일</a>
-  <a class="tab<?= $active === 'aligo' ? ' tab-active' : '' ?>"<?= $active === 'aligo' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.aligo') ?>">문자·알림톡</a>
-  <a class="tab<?= $active === 'notify' ? ' tab-active' : '' ?>"<?= $active === 'notify' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.notifications') ?>">알림별 발송 규칙</a>
+  <a class="tab<?= in_array($active, ['messaging', 'mail', 'aligo', 'notify'], true) ? ' tab-active' : '' ?>"<?= in_array($active, ['messaging', 'mail', 'aligo', 'notify'], true) ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.messaging') ?>">알림·발송</a>
   <a class="tab<?= $active === 'payment' ? ' tab-active' : '' ?>"<?= $active === 'payment' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.payment') ?>">결제</a>
   <a class="tab<?= $active === 'maintenance' ? ' tab-active' : '' ?>"<?= $active === 'maintenance' ? ' aria-current="page"' : '' ?> href="<?= $this->url('admin.settings.maintenance') ?>">시스템·유지보수</a>
 </nav>
+<?php if (in_array($active, ['messaging', 'mail', 'aligo', 'notify'], true)): ?>
+<?php $this->insert('admin/_messaging_subnav', ['active' => $active]) ?>
+<?php endif ?>

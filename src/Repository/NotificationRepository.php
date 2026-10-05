@@ -9,7 +9,7 @@ use GnuCms\Support\Clock;
 
 final class NotificationRepository
 {
-    private const COLUMNS = 'id, user_id, kind, post_id, comment_id, actor_name, subject, is_read, created_at';
+    private const COLUMNS = 'id, user_id, kind, post_id, comment_id, order_id, feedback_id, actor_name, subject, is_read, created_at';
 
     /** @var Connection */
     private $db;
@@ -35,6 +35,49 @@ final class NotificationRepository
         );
 
         return $row === null ? null : $this->hydrate($row);
+    }
+
+    /** 주문 상태와 같은 트랜잭션에서 기록한다. 외부 발송 채널은 호출하지 않는다. */
+    public function recordOrderStatus(int $orderId, int $userId, string $status, string $number): void
+    {
+        if (!in_array($status, ['pending', 'paid', 'confirmed', 'shipped', 'completed', 'cancelled', 'refunded'], true)) {
+            return;
+        }
+        $user = $this->db->selectOne('SELECT id FROM ' . $this->db->table('users')
+            . ' WHERE id = ? AND status = ?', [$userId, 'active']);
+        if ($user === null) {
+            return;
+        }
+        $this->create([
+            'user_id' => (string) $userId, 'kind' => 'order_' . $status,
+            'post_id' => null, 'comment_id' => null, 'order_id' => $orderId,
+            'actor_name' => '', 'subject' => $number,
+        ]);
+    }
+
+    /** 알림과 주문 양쪽의 소유권을 확인하며, 주문번호는 본인에게만 돌려준다. */
+    public function ownedOrderNumber(int $orderId, string $userId): ?string
+    {
+        $row = $this->db->selectOne('SELECT number FROM ' . $this->db->table('yc_orders')
+            . ' WHERE id = ? AND user_id = ?', [$orderId, $userId]);
+        return $row === null ? null : (string) $row['number'];
+    }
+
+    /** 문의 소유권을 확인하고 현재 목록에서 그 문의가 있는 페이지를 계산한다. */
+    public function ownedInquiry(int $feedbackId, string $userId): ?array
+    {
+        $table = $this->db->table('yc_product_feedback');
+        $row = $this->db->selectOne('SELECT f.id, f.product_id, p.code FROM ' . $table . ' f JOIN '
+            . $this->db->table('yc_products') . " p ON p.id = f.product_id WHERE f.id = ? AND f.user_id = ? AND f.kind = 'inquiry'", [$feedbackId, $userId]);
+        if ($row === null) return null;
+        $newer = (int) $this->db->selectOne('SELECT COUNT(*) AS c FROM ' . $table
+            . " WHERE product_id = ? AND kind = 'inquiry' AND id > ?", [(int) $row['product_id'], $feedbackId])['c'];
+        return ['code' => (string) $row['code'], 'page' => intdiv($newer, 10) + 1, 'id' => $feedbackId];
+    }
+
+    public function afterCommit(callable $callback): void
+    {
+        $this->db->afterCommit($callback);
     }
 
     public function unreadCount(string $userId): int
@@ -84,8 +127,10 @@ final class NotificationRepository
     {
         $row['id'] = (int) $row['id'];
         $row['user_id'] = (string) $row['user_id'];
-        $row['post_id'] = (int) $row['post_id'];
+        $row['post_id'] = $row['post_id'] === null ? null : (int) $row['post_id'];
         $row['comment_id'] = $row['comment_id'] === null ? null : (int) $row['comment_id'];
+        $row['order_id'] = $row['order_id'] === null ? null : (int) $row['order_id'];
+        $row['feedback_id'] = $row['feedback_id'] === null ? null : (int) $row['feedback_id'];
         $row['is_read'] = (bool) $row['is_read'];
 
         return $row;

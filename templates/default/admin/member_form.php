@@ -6,6 +6,7 @@
 <section class="card">
   <div class="card-body">
     <h1 class="card-title">회원 수정</h1>
+    <?php if (($values['status'] ?? '') === 'active' && ($values['phone'] ?? '') !== ''): ?><p><a class="btn btn-outline btn-sm" href="<?= $this->url('admin.messages.send') ?>?member=<?= (int) $values['id'] ?>">이 회원에게 문자 보내기</a></p><?php endif ?>
     <p class="card-sub">로그인 이메일과 표시 이름, 프로필 이미지, 비밀번호, 이용 상태를 관리합니다. 관리자 자신의 비밀번호도 여기서 바꿉니다.</p>
     <?php if (($values['status'] ?? '') === 'withdrawn'): ?><div class="alert alert-info alert-soft"><span><?= $this->icon('info', 18) ?></span><span>탈퇴 처리된 회원입니다. 익명화된 정보와 보안 이력만 조회할 수 있습니다.</span></div><?php endif ?>
     <?php if (array_key_exists('member', $errors)): ?><div class="alert alert-error"><span><?= $this->icon('warning', 18) ?></span><span><?= $this->e($errors['member']) ?></span></div><?php endif ?>
