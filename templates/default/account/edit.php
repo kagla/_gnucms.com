@@ -14,6 +14,15 @@
       <?php if ($has_password && $password_notice === 'sent'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>비밀번호 변경 알림을 보냈습니다.</span></div><?php endif ?>
       <?php if ($has_password && $password_notice === 'off'): ?><div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림은 어디로도 가지 않았습니다. 이 사이트는 지금 이 알림을 보내지 않도록 설정돼 있습니다.</span></div><?php endif ?>
       <?php if ($has_password && $password_notice === 'failed'): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림을 보내지 못했습니다.</span></div><?php endif ?>
+      <section id="email-notifications" class="form-section">
+        <h2 class="form-section-title">이메일 알림</h2>
+        <form method="post" action="<?= $this->url('account.email_notifications') ?>">
+          <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+          <label class="label toggle-row"><input type="checkbox" name="email_notifications" value="1"<?= $email_notifications ? ' checked' : '' ?>><span>이메일 알림 받기</span></label>
+          <p class="fieldset-label">기본은 수신입니다. 체크를 끄면 댓글·주문 등의 이메일 알림을 받지 않습니다. 사이트 내 알림과 직접 요청한 인증·비밀번호 재설정 메일은 계속 받을 수 있습니다.</p>
+          <button class="btn btn-outline btn-sm" type="submit">이메일 알림 설정 저장</button>
+        </form>
+      </section>
       <form method="post" action="<?= $this->url('account.edit') ?>" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset">

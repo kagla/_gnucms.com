@@ -2,6 +2,7 @@
   <div class="card-body">
     <h2 class="card-title"><?= $this->icon('bell', 19) ?> 문자·알림톡 설정</h2>
     <p class="card-sub">카카오 알림톡과 문자(SMS·LMS)를 보낼 알리고(Aligo) 계정을 연결합니다. 알림톡과 문자는 알리고 안에서도 따로 신청하는 별개의 서비스라, 아래 칸을 어느 채널에 쓰이는지로 묶어 두었습니다.</p>
+    <div><a class="btn btn-outline btn-sm" href="https://smartsms.aligo.in/" target="_blank" rel="noopener noreferrer" aria-label="알리고 사이트로 이동 (새 창)">알리고 사이트로 이동 <?= $this->icon('external', 14) ?></a></div>
 
     <div class="status-badges">
       <span class="badge <?= $status['configured'] ? 'badge-success badge-soft' : 'badge-ghost' ?>"><?= $status['configured'] ? '계정 연결됨' : '계정 연결 안 됨' ?></span>
@@ -18,29 +19,8 @@
     </div>
 
     <div class="form-section">
-      <h2 class="form-section-title">채널별 발송 허용</h2>
-      <p class="card-sub">계정을 저장하기 전에는 켤 수 없습니다. 끄기는 계정 연결 상태와 관계없이 바로 적용됩니다. <a href="<?= $this->url('admin.settings.notifications') ?>">알림별 발송 규칙</a>에서 켜 둔 코어 알림(비밀번호 재설정·새 댓글 등)도 이 두 스위치를 함께 타므로, 여기서 끄면 그 알림의 알림톡·문자도 멈춥니다. 채널을 끄면 이미 걸린 예약도 함께 취소를 시도하며, 아래에서 사용자 ID나 API 키를 바꿔 저장해도 두 스위치가 함께 꺼지면서 같은 취소가 일어납니다.</p>
-      <div class="channel-switches">
-        <?php foreach ([['sms', '문자(SMS·LMS) 발송', $status['sms_switch_on']], ['at', '알림톡 발송', $status['alimtalk_switch_on']]] as [$channel, $label, $on]): ?>
-        <div class="toggle-row channel-switch">
-          <span class="channel-switch-name"><?= $label ?></span>
-          <form method="post" action="<?= $this->url('admin.aligo.toggle') ?>#aligo-result" data-channel-toggle>
-            <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-            <input type="hidden" name="channel" value="<?= $channel ?>">
-            <?php // join 안에는 버튼 둘만 둬야 양쪽 바깥 모서리가 둥글게 그려진다. ?>
-            <span class="join">
-            <?php foreach ([['enable', '켜기', $on], ['disable', '끄기', !$on]] as [$action, $caption, $current]): ?>
-            <?php if ($current): ?>
-            <button class="btn btn-sm join-item <?= $action === 'enable' ? 'btn-success' : 'btn-neutral' ?>" type="button" data-action="<?= $action ?>" aria-pressed="true"><?= $caption ?></button>
-            <?php else: ?>
-            <button class="btn btn-sm join-item btn-outline" type="submit" name="action" value="<?= $action ?>" data-action="<?= $action ?>" aria-pressed="false"<?= ($action === 'enable' && !$status['configured']) ? ' disabled' : '' ?>><?= $caption ?></button>
-            <?php endif ?>
-            <?php endforeach ?>
-            </span>
-          </form>
-        </div>
-        <?php endforeach ?>
-      </div>
+      <h2 class="form-section-title">전체 채널 사용 설정</h2>
+      <p class="card-sub">알림톡·문자 OFF·ON은 <a href="<?= $this->url('admin.settings.messaging') ?>">알림·발송 설정</a>에서 관리합니다. 이 화면은 알리고 계정과 발신번호·카카오채널을 연결하는 곳입니다. 사용자 ID나 API 키를 변경하면 두 채널이 함께 꺼지고 예약 발송 취소를 시도합니다.</p>
       <?php if (array_key_exists('channel', $errors) || array_key_exists('api_key', $errors)): ?>
         <p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['channel'] ?? $errors['api_key']) ?></p>
       <?php endif ?>
@@ -171,7 +151,7 @@
 
     <div class="form-section">
       <h2 class="form-section-title">문자 (SMS·LMS)</h2>
-      <p class="fieldset-label">문자는 위 "공통 · 알리고 계정"의 값만으로 나갑니다 — 여기서 따로 입력할 값은 없습니다. 발신번호와 API 키가 곧 문자 설정입니다. 실제로 보내려면 페이지 위의 "채널별 발송 허용"에서 문자 발송을 켜 주세요.</p>
+      <p class="fieldset-label">문자는 위 "공통 · 알리고 계정"의 값으로 보냅니다. 발신번호와 API 키를 저장한 뒤 <a href="<?= $this->url('admin.settings.messaging') ?>">알림·발송 설정</a>에서 문자를 ON으로 바꿔 주세요.</p>
     </div>
 
     <div class="form-section landing" id="aligo-verify">

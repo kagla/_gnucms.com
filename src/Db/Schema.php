@@ -62,7 +62,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '48';
+    public const VERSION = '51';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -227,6 +227,7 @@ final class Schema
         $this->addColumnIfMissing('users', 'withdrawn_at',
             $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
 
+        $this->addColumnIfMissing('users', 'email_notifications', 'SMALLINT NOT NULL DEFAULT 1');
         $this->migrateOauth();
     }
 
@@ -422,6 +423,15 @@ final class Schema
             foreach ($this->notificationStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
+        }
+        $this->addColumnIfMissing('notifications', 'order_id', 'BIGINT NULL');
+        $this->addColumnIfMissing('notifications', 'feedback_id', 'BIGINT NULL');
+        $column = $this->db->selectOne('SELECT IS_NULLABLE FROM information_schema.columns'
+            . ' WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [$this->db->tableName('notifications'), 'post_id']);
+        if ($column !== null && $column['IS_NULLABLE'] === 'NO') {
+            $this->db->execute('ALTER TABLE ' . $this->db->table('notifications')
+                . ' MODIFY COLUMN post_id BIGINT NULL');
         }
     }
 
@@ -741,6 +751,7 @@ final class Schema
                 avatar_file    VARCHAR(40)  NULL,
                 avatar_source  VARCHAR(10)  NULL,
                 phone          VARCHAR(20)  NULL,
+                email_notifications SMALLINT NOT NULL DEFAULT 1,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL
             ){SUFFIX}';
@@ -1037,8 +1048,10 @@ final class Schema
                 id          {AUTO_PK},
                 user_id     VARCHAR(64)  NOT NULL,
                 kind        VARCHAR(20)  NOT NULL,
-                post_id     BIGINT       NOT NULL,
+                post_id     BIGINT       NULL,
                 comment_id  BIGINT       NULL,
+                order_id    BIGINT       NULL,
+                feedback_id BIGINT       NULL,
                 actor_name  VARCHAR(100) NOT NULL,
                 subject     VARCHAR(200) NOT NULL,
                 is_read     SMALLINT     NOT NULL DEFAULT 0,

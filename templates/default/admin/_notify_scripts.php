@@ -41,6 +41,58 @@
     });
   });
 
+  document.querySelectorAll('[data-notify-insert]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var textarea=button.closest('form').querySelector('[data-notify-sms-body]');
+      if(!textarea){return;}
+      var start=textarea.selectionStart,end=textarea.selectionEnd,token='#{'+button.getAttribute('data-notify-insert')+'}';
+      if(textarea.value.length-(end-start)+token.length>textarea.maxLength){return;}
+      textarea.setRangeText(token,start,end,'end');
+      textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();
+    });
+  });
+  document.querySelectorAll('[data-notify-restore]').forEach(function(button){
+    button.addEventListener('click',function(){
+      var form=button.closest('form'),textarea=form.querySelector('[data-notify-sms-body]'),title=form.querySelector('[data-notify-sms-title]');
+      textarea.value=button.getAttribute('data-body')||'';title.value=button.getAttribute('data-title')||'';
+      textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();
+    });
+  });
+  document.querySelectorAll('[data-notify-sms-body],[data-notify-sms-title],[data-notify-sample]').forEach(function(field){
+    field.addEventListener('input',function(){var preview=field.closest('form').querySelector('[data-notify-preview]');if(preview){preview.hidden=true;}});
+  });
+  var search=document.querySelector('[data-notify-search]'),phoneFilter=document.querySelector('[data-notify-phone-filter]');
+  document.querySelectorAll('[data-notify-mail-editor]').forEach(function(editor){
+    var subject=editor.querySelector('[data-notify-mail-subject]'),body=editor.querySelector('[data-notify-mail-body]'),active=body;
+    editor.querySelectorAll('[data-notify-mail-subject],[data-notify-mail-body],[data-notify-mail-sample]').forEach(function(field){
+      field.addEventListener('input',function(){var preview=editor.querySelector('[data-notify-mail-preview]');if(preview){preview.hidden=true;}});
+      if(field===subject||field===body){field.addEventListener('focus',function(){active=field;});}
+    });
+    editor.querySelectorAll('[data-notify-mail-insert]').forEach(function(button){
+      button.addEventListener('click',function(){
+        var token='#{'+button.getAttribute('data-notify-mail-insert')+'}',start=active.selectionStart,end=active.selectionEnd;
+        if(active.value.length-(end-start)+token.length>active.maxLength){return;}
+        active.setRangeText(token,start,end,'end');active.dispatchEvent(new Event('input',{bubbles:true}));active.focus();
+      });
+    });
+    editor.querySelectorAll('[data-notify-mail-restore]').forEach(function(button){
+      button.addEventListener('click',function(){
+        subject.value=button.getAttribute('data-subject')||'';body.value=button.getAttribute('data-body')||'';
+        body.dispatchEvent(new Event('input',{bubbles:true}));body.focus();
+      });
+    });
+  });
+  function filterEvents(){
+    var terms=search.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),visible=0;
+    document.querySelectorAll('[data-notify-event]').forEach(function(item){
+      var text=(item.querySelector('summary').textContent+' '+(item.getAttribute('data-notify-search-keywords')||'')).toLocaleLowerCase().replace(/\s+/g,'');
+      item.hidden=(phoneFilter.checked&&item.getAttribute('data-phone')!=='1')||!terms.every(function(term){return text.includes(term);});
+      if(!item.hidden){visible++;}
+    });
+    document.querySelector('[data-notify-empty]').hidden=visible!==0;
+  }
+  if(search&&phoneFilter){search.addEventListener('input',filterEvents);phoneFilter.addEventListener('change',filterEvents);}
+
   // 폼을 옮겨 같은 입력과 검증 결과를 모달에서 보여 준다. dialog 를 지원하지 않거나
   // 자바스크립트가 꺼진 환경에서는 원래 details 안의 폼을 그대로 쓸 수 있다.
   var modal=document.querySelector('[data-notify-modal]');
@@ -61,11 +113,15 @@
     activeForm=form;
     modal.showModal();
     title.focus();
+    var mailPreview=form.querySelector('[data-notify-mail-preview]');
+    if(mailPreview&&!mailPreview.hidden){mailPreview.scrollIntoView({block:'nearest'});mailPreview.focus({preventScroll:true});}
   }
 
   document.querySelectorAll('[data-notify-event]').forEach(function(item){
     item.querySelector('summary').addEventListener('click',function(event){
       event.preventDefault();
+      // 문구 영역은 스크롤·선택·복사를 할 수 있도록 편집 창을 열지 않는다.
+      if(event.target.closest('[data-notify-body-preview]')){return;}
       openEvent(item);
     });
   });

@@ -11,7 +11,10 @@ use GnuCms\Aligo\TransportFailure;
 use GnuCms\Aligo\Variables;
 use GnuCms\Error\DomainError;
 use GnuCms\Notify\Events;
+use GnuCms\Notify\MailBodies;
+use GnuCms\Notify\MailEditor;
 use GnuCms\Notify\NotifySettings;
+use GnuCms\Notify\SmsEditor;
 use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -36,7 +39,7 @@ final class AdminAligoController
         return $this->renderSettings($request, $response);
     }
 
-    /** 이전 통합 주소의 저장 결과를 새 메뉴로 보낸다. */
+    /** 전체 채널 설정. 이전 통합 주소에 남은 저장 결과 링크도 유지한다. */
     public function messaging(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
@@ -54,14 +57,76 @@ final class AdminAligoController
             return $this->redirect($request, $response, 'admin.settings.notifications',
                 ['saved' => (string) $query['notify_saved']], 'events');
         }
-        if (($query['mail_tested'] ?? '') === '1') {
-            return $this->redirect($request, $response, 'admin.mail', ['tested' => '1'], 'mail');
-        }
-        if (($query['mail_saved'] ?? '') === '1') {
-            return $this->redirect($request, $response, 'admin.mail', ['saved' => '1'], 'mail');
-        }
 
-        return $this->redirect($request, $response, 'admin.mail');
+        return $this->renderChannelSettings($request, $response);
+    }
+
+    private function renderChannelSettings(ServerRequestInterface $request, ResponseInterface $response,
+        array $overrides = []): ResponseInterface
+    {
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $query = $request->getQueryParams();
+        $mailValues = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
+        return View::fromRequest($request)->render($response, 'admin/messaging', [
+            'values' => $overrides['values'] ?? $mailValues,
+            'errors' => $overrides['errors'] ?? [],
+            'channel_errors' => $overrides['channel_errors'] ?? [],
+            'status' => $this->app->aligo()->status(),
+            'mail_saved' => ($query['channel_mail_saved'] ?? '') === '1' || ($query['mail_saved'] ?? '') === '1',
+            'mail_tested' => ($query['mail_tested'] ?? '') === '1',
+            'test_mode' => $mailValues['mode'],
+            'test_error' => $overrides['test_error'] ?? null,
+            'test_values' => $overrides['test_values'] ?? ['test_email' => ''],
+            'test_errors' => $overrides['test_errors'] ?? [],
+            'notice' => ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null,
+        ]);
+    }
+
+    /** 메일 방식과 SMTP 입력은 기존 검증·암호화·저장 경로로 저장한다. */
+    public function saveChannelMail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        try {
+            $this->app->mailSettingsService()->save($this->app->guestAcl(), $input);
+            $this->app->refreshMailSettings();
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) throw $e;
+            $values = $this->app->mailSettingsService()->formValues($this->app->guestAcl());
+            foreach (['mode', 'provider', 'host', 'port', 'encryption', 'username', 'from_email', 'from_name'] as $key) {
+                if (is_scalar($input[$key] ?? null)) $values[$key] = (string) $input[$key];
+            }
+            return $this->renderChannelSettings($request, $response->withStatus(422), [
+                'values' => $values, 'errors' => $e->details(),
+            ]);
+        }
+        return $this->redirect($request, $response, 'admin.settings.messaging', ['channel_mail_saved' => '1'], 'channel-mail');
+    }
+
+    /** 저장된 메일 설정으로 테스트하고 결과를 전체 채널 화면에 표시한다. */
+    public function testChannelMail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $email = isset($input['test_email']) && is_scalar($input['test_email'])
+            ? (string) $input['test_email'] : '';
+        $server = $request->getServerParams();
+        $serverIp = is_string($server['SERVER_ADDR'] ?? null) ? $server['SERVER_ADDR'] : '';
+        try {
+            $this->app->sendMailTest($email, $serverIp);
+        } catch (DomainError $e) {
+            return $this->renderChannelSettings(
+                $request, $response->withStatus($e->status() === 422 ? 422 : 502), [
+                    'test_values' => ['test_email' => $email],
+                    'test_errors' => $e->details(),
+                    'test_error' => $e->status() === 422 ? null : $e->getMessage(),
+                ]
+            );
+        }
+        return $this->redirect($request, $response, 'admin.settings.messaging',
+            ['mail_tested' => '1'], 'mail-test');
     }
 
     /** 문자·알림톡 계정과 발송 허용만 표시한다. */
@@ -72,6 +137,7 @@ final class AdminAligoController
         $query = $request->getQueryParams();
         $aligoValues = $overrides['aligo_values'] ?? $this->app->aligo()->settings->formValues();
         $aligoValues['sender'] = PhoneNumber::format((string) ($aligoValues['sender'] ?? ''));
+        $messageInfo = $this->app->alimtalkMessageInfo();
 
         return View::fromRequest($request)->render($response, 'admin/aligo_settings', [
             'values' => $aligoValues,
@@ -82,7 +148,27 @@ final class AdminAligoController
             'notice' => ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null,
             'profiles' => $overrides['aligo_profiles'] ?? [],
             'verified' => $overrides['aligo_verified'] ?? null,
+            'info_values' => $overrides['info_values'] ?? $messageInfo->formValues(),
+            'info_defaults' => $messageInfo->defaults(),
+            'info_errors' => $overrides['info_errors'] ?? [],
+            'info_saved' => ($query['info_saved'] ?? '') === '1',
         ]);
+    }
+
+    public function saveMessageInfo(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        try {
+            $this->app->alimtalkMessageInfo()->save($this->app->guestAcl(), $input);
+        } catch (DomainError $error) {
+            if ($error->status() !== 422) throw $error;
+            return $this->renderSettings($request, $response->withStatus(422), [
+                'info_values' => $input, 'info_errors' => $error->details(),
+            ]);
+        }
+        return $this->redirect($request, $response, 'admin.aligo', ['info_saved' => '1'], 'alimtalk-info');
     }
 
     /**
@@ -176,6 +262,11 @@ final class AdminAligoController
                 throw $e;
             }
 
+            if (($input['return_to'] ?? '') === 'settings_messaging') {
+                return $this->renderChannelSettings($request, $response->withStatus(422), [
+                    'channel_errors' => $e->details(),
+                ]);
+            }
             return $this->renderSettings($request, $response->withStatus(422), [
                 'aligo_errors' => $e->details(),
             ]);
@@ -189,7 +280,8 @@ final class AdminAligoController
             ]);
         }
 
-        return $this->redirect($request, $response, 'admin.aligo',
+        return $this->redirect($request, $response,
+            ($input['return_to'] ?? '') === 'settings_messaging' ? 'admin.settings.messaging' : 'admin.aligo',
             self::savedQuery($result), 'aligo-result');
     }
 
@@ -270,10 +362,12 @@ final class AdminAligoController
     }
 
     private function renderNotifications(ServerRequestInterface $request, ResponseInterface $response,
-        ?array $posted = null, array $errors = []): ResponseInterface
+        ?array $posted = null, array $errors = [], ?array $preview = null, ?array $mailPreview = null): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
         $view = $this->notifyRows($posted);
+        if ($preview !== null && isset($view['rows'][$view['open']])) $view['rows'][$view['open']]['preview'] = $preview;
+        if ($mailPreview !== null && isset($view['rows'][$view['open']])) $view['rows'][$view['open']]['mail_preview'] = $mailPreview;
         $error = ($errors !== [] && !isset($view['rows'][$view['open']]))
             ? (string) reset($errors) : null;
 
@@ -287,6 +381,38 @@ final class AdminAligoController
             'status' => $this->app->aligo()->status(),
             'mail_enabled' => $this->app->mailSettingsService()->enabled(),
         ]);
+    }
+
+    /** 입력 예시로만 미리본다. 설정 저장·API 접수·과금은 하지 않는다. */
+    public function previewNotificationSms(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $event = is_string($input['event'] ?? null) ? $input['event'] : '';
+        try {
+            $preview = SmsEditor::preview($event, $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) throw $e;
+            return $this->renderNotifications($request, $response->withStatus(422), $input, $e->details());
+        }
+        return $this->renderNotifications($request, $response, $input, [], $preview);
+    }
+
+    /** 일반 텍스트 수신 화면을 예시 값으로 미리본다. 저장·발송·수신거부 토큰 발급은 하지 않는다. */
+    public function previewNotificationMail(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $input = $this->input($request);
+        $this->assertCsrf($input);
+        $this->app->guestAcl()->assertGlobalAdmin();
+        $event = is_string($input['event'] ?? null) ? $input['event'] : '';
+        try {
+            $preview = MailEditor::preview($event, $input);
+        } catch (DomainError $e) {
+            if ($e->status() !== 422) throw $e;
+            return $this->renderNotifications($request, $response->withStatus(422), $input, $e->details());
+        }
+        return $this->renderNotifications($request, $response, $input, [], null, $preview);
     }
 
     /**
@@ -363,10 +489,12 @@ final class AdminAligoController
             // 그 상태에서 체크를 꺼진 것으로 그려 두면 관리자가 다른 칸만 고쳐 저장했을 때
             // "켜 두었다"는 사실 자체가 조용히 지워진다. 체크는 관리자의 선택을 그대로
             // 두고, 지금 나가지 않는다는 사실은 아래 alimtalk_notice 가 말한다.
+            $on['mail'] = $value['mail_on'];
             $on['alimtalk'] = $on['alimtalk'] || ($value['alimtalk_on'] && $value['phone']);
             $row = [
                 'key' => $key,
                 'label' => $value['label'],
+                'search_keywords' => Events::searchKeywords($key),
                 'vars' => $value['vars'],
                 'phone' => $value['phone'],
                 'inbox_capable' => $value['inbox'],
@@ -380,6 +508,20 @@ final class AdminAligoController
                 'sms_body' => $storedSmsBody !== '' ? $storedSmsBody : $defaultSmsBody,
                 'sms_body_default' => $storedSmsBody === '' || $storedSmsBody === $defaultSmsBody,
                 'sms_body_template' => $defaultSmsBody,
+                'sms_body_saved' => $storedSmsBody !== '' ? $storedSmsBody : $defaultSmsBody,
+                'sms_title' => $value['sms_title_stored'],
+                'sms_title_saved' => $value['sms_title_stored'],
+                'mail_subject' => $value['mail_template']['subject'],
+                'mail_body' => $value['mail_template']['body'],
+                'mail_subject_saved' => $value['mail_template']['subject'],
+                'mail_body_saved' => $value['mail_template']['body'],
+                'mail_defaults' => MailBodies::defaults($key),
+                'mail_samples' => SmsEditor::samples($key),
+                'mail_subscription' => Events::subscriptionMail($key),
+                'mail_preview' => null,
+                'samples' => SmsEditor::samples($key),
+                'guidance' => Events::guidance($key),
+                'preview' => null,
                 // 아래 둘은 **저장된 것**을 말한다. 422 되보여주기에서 입력으로 덮이는
                 // tpl_code 와 달리, 관리자가 방금 무엇을 골랐든 저장소에 남아 있는 참조는
                 // 그대로다 — 그래서 입력 덮어쓰기와 섞지 않는다. 안내문 셋은 덮은 **뒤에**
@@ -508,7 +650,8 @@ final class AdminAligoController
     private static function withPostedInput(array $row, array $posted): array
     {
         foreach (NotifySettings::CHANNELS as $channel) {
-            $row['on'][$channel] = $channel === 'mail' || ($posted[$channel] ?? '') === '1';
+            $row['on'][$channel] = ($posted[$channel] ?? '') === '1'
+                || ($channel === 'inbox' && $row['inbox_capable']);
         }
         $row['tpl_code'] = is_scalar($posted['tpl_code'] ?? null) ? trim((string) $posted['tpl_code']) : '';
         $map = [];
@@ -519,6 +662,22 @@ final class AdminAligoController
         }
         $row['var_map'] = $map;
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
+        $row['sms_title'] = is_string($posted['sms_title'] ?? null) ? $posted['sms_title'] : '';
+        foreach (['mail_subject', 'mail_body'] as $field) {
+            if (array_key_exists($field, $posted)) {
+                $row[$field] = is_string($posted[$field]) ? $posted[$field] : '';
+            }
+        }
+        $mailSamples = is_array($posted['mail_samples'] ?? null) ? $posted['mail_samples'] : [];
+        foreach ($row['mail_samples'] as $name => &$sample) {
+            if (is_string($mailSamples[$name] ?? null)) $sample = mb_substr($mailSamples[$name], 0, 1000);
+        }
+        unset($sample);
+        $samples = is_array($posted['samples'] ?? null) ? $posted['samples'] : [];
+        foreach ($row['samples'] as $name => &$sample) {
+            if (is_string($samples[$name] ?? null)) $sample = mb_substr($samples[$name], 0, 1000);
+        }
+        unset($sample);
         $row['sms_body_default'] = trim($row['sms_body']) !== ''
             && trim($row['sms_body']) === Events::defaultSmsBody((string) $row['key']);
         // 이 칸이 빠지면, 「알림톡을 끄고 저장하세요」라는 422 의 지시를 그대로 따른

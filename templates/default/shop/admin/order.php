@@ -3,7 +3,7 @@
 <?php $this->start('admin_section') ?>shop<?php $this->stop() ?>
 <?php $this->start('extension_body') ?>
 <?php $weekdayNames = ['일', '월', '화', '수', '목', '금', '토']; $weekdayDate = fn (int $timestamp): string => $this->date($timestamp, 'y-m-d H:i:s') . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')'; ?>
-<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => '주문 상세', 'description' => $order['number'], 'actions' => [['url' => $admin_url . '/orders', 'label' => '주문 목록']]]) ?>
+<?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => '주문 상세', 'description' => $order['number'], 'actions' => [['url' => $admin_url . '/orders', 'label' => '주문 목록'], ['url' => $this->url('admin.messages.send') . '?order=' . (int) $order['id'] . '&preset=order_' . rawurlencode($order['status']), 'label' => '주문 회원에게 문자'], ['url' => $this->url('admin.settings.notifications') . '#events', 'label' => '자동 문자 설정']]]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>
 <div class="yc-order-banner"><div><span class="yc-status" data-status="<?= $this->e($order['status']) ?>"><?= $this->e($statuses[$order['status']]) ?></span><?php if ($order['payment_environment'] === 'test'): ?><span class="yc-test-badge">테스트 결제</span><?php endif ?><strong><?= $this->e($order['buyer_name']) ?> 님의 주문</strong></div><p>접수 <?= $this->e($weekdayDate((int) $order['created_at'])) ?></p></div>

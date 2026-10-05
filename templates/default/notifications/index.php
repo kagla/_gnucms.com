@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>알림</h1>
-    <p class="page-sub">내 글에 달린 댓글과 내 댓글에 달린 답글을 모아 보여 줍니다.</p>
+    <p class="page-sub">댓글·답글, 주문 진행과 계정 알림을 모아 보여 줍니다.</p>
   </div>
   <?php if ($unread_notifications > 0): ?>
     <form method="post" action="<?= $this->url('notifications.read_all') ?>">
@@ -18,7 +18,7 @@
   <div class="card empty-card">
     <div class="card-body">
       <h2 class="card-title"><?= $this->icon('bell-off', 22) ?> 아직 알림이 없습니다</h2>
-      <p>글을 쓰고 댓글이 달리면 이곳에 쌓입니다.</p>
+      <p>댓글·답글, 주문 진행과 계정 알림이 이곳에 쌓입니다.</p>
     </div>
   </div>
 <?php else: ?>
@@ -26,13 +26,32 @@
     <?php foreach ($notifications['items'] as $item): ?>
       <li class="list-row notice-row<?php if (!$item['is_read']): ?> is-unread<?php endif ?>">
         <a class="notice-link" href="<?= $this->url('notifications.open', ['id' => $item['id']]) ?>">
-          <span class="notice-ico" aria-hidden="true"><?= $this->icon('comment', 18) ?></span>
+          <span class="notice-ico" aria-hidden="true"><?= $this->icon($item['post_id'] === null ? 'bell' : 'comment', 18) ?></span>
           <span class="notice-body">
             <span class="notice-text">
-              <strong><?= $this->e($item['actor_name']) ?></strong>님이
-              <?php if ($item['kind'] === 'reply'): ?>내 댓글에 답글을 달았습니다.<?php else: ?>내 글에 댓글을 달았습니다.<?php endif ?>
+              <?php if ($item['kind'] === 'welcome'): ?>
+                가입이 완료되었습니다. 환영합니다.
+              <?php elseif ($item['kind'] === 'password_changed'): ?>
+                계정의 비밀번호가 변경되었습니다.
+              <?php elseif ($item['kind'] === 'inquiry_replied'): ?>
+                상품문의에 답변이 등록되었습니다.
+              <?php elseif ($item['order_id'] !== null): ?>
+                <?= $this->e(match ($item['kind']) {
+                    'order_pending' => '주문이 접수되었습니다.',
+                    'order_paid' => '결제가 확인되었습니다.',
+                    'order_cancelled' => '주문이 취소되었습니다.',
+                    'order_refunded' => '환불이 처리되었습니다.',
+                    'order_confirmed' => '주문하신 상품을 준비 중입니다.',
+                    'order_shipped' => '주문하신 상품이 배송 중입니다.',
+                    'order_completed' => '주문하신 상품의 배송이 완료되었습니다.',
+                    default => '주문 진행 상태가 변경되었습니다.',
+                }) ?>
+              <?php else: ?>
+                <strong><?= $this->e($item['actor_name']) ?></strong>님이
+                <?php if ($item['kind'] === 'reply'): ?>내 댓글에 답글을 달았습니다.<?php else: ?>내 글에 댓글을 달았습니다.<?php endif ?>
+              <?php endif ?>
             </span>
-            <span class="notice-subject"><?= $this->e($item['subject']) ?></span>
+            <span class="notice-subject"><?php if ($item['order_id'] !== null): ?>주문번호 <?php endif ?><?= $this->e($item['subject']) ?></span>
           </span>
           <time class="notice-time" datetime="<?= $this->e($item['created_at']) ?>"><?= $this->date($item['created_at'], 'Y.m.d H:i') ?></time>
         </a>

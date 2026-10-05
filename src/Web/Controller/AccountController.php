@@ -150,6 +150,7 @@ final class AccountController
             'values' => $values, 'errors' => $errors, 'saved' => $saved,
             'password_notice' => $passwordNotice,
             'has_password' => $hasPassword,
+            'email_notifications' => (int) ($this->app->users()->findById((int) $values['id'])['email_notifications'] ?? 1) === 1,
             'social_identities' => $identities,
             'withdraw_reauthenticated' => $this->socialReauthenticated((int) $values['id']),
         ]);

@@ -63,6 +63,7 @@ final class SmsChannel implements ChannelInterface
         $jobId = $this->aligo->send([
             'channel' => 'sms',
             'body' => $this->settings->smsBody($event),
+            'title' => $this->settings->smsTitle($event),
             'event_key' => $event,
             // 한 번 쓰는 비밀을 담은 변수는 발송 이력에 값을 남기지 않는다 —
             // 무엇이 그런 값인지는 Events 의 secret 주석에 있다.

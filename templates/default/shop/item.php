@@ -68,7 +68,7 @@
     <?php if (($query['saved'] ?? '') === 'inquiry'): ?><div class="alert alert-success" role="status">상품문의를 등록했습니다.</div><?php endif ?>
     <?php if ($inquiries['items'] === []): ?><div class="yc-feedback-empty">아직 등록된 상품문의가 없습니다.</div><?php endif ?>
     <div class="yc-feedback-list"><?php foreach ($inquiries['items'] as $row): ?>
-      <article class="yc-feedback-card"><div class="yc-feedback-card-head"><strong><?= $this->e($row['title']) ?><?php if ((int) $row['is_private'] === 1): ?> <span class="yc-feedback-private">비공개</span><?php endif ?></strong><time datetime="<?= date('c', (int) $row['created_at']) ?>"><?= date('Y.m.d', (int) $row['created_at']) ?></time></div>
+      <article class="yc-feedback-card" id="yc-inquiry-<?= (int) $row['id'] ?>"><div class="yc-feedback-card-head"><strong><?= $this->e($row['title']) ?><?php if ((int) $row['is_private'] === 1): ?> <span class="yc-feedback-private">비공개</span><?php endif ?></strong><time datetime="<?= date('c', (int) $row['created_at']) ?>"><?= date('Y.m.d', (int) $row['created_at']) ?></time></div>
         <?php if ($row['restricted']): ?><p class="yc-feedback-meta">작성자와 관리자만 볼 수 있습니다.</p><?php else: ?><p class="yc-feedback-meta"><?= $this->e($row['author']) ?> · <?= $row['reply'] === '' ? '답변 대기' : '답변 완료' ?></p><p class="yc-feedback-text"><?= nl2br($this->e($row['content'])) ?></p><?php if ($row['reply'] !== ''): ?><div class="yc-feedback-answer"><strong>판매자 답변</strong><p><?= nl2br($this->e($row['reply'])) ?></p></div><?php endif ?><?php endif ?>
       </article>
     <?php endforeach ?></div>

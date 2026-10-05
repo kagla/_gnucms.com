@@ -7,8 +7,8 @@ namespace GnuCms\Notify;
 use GnuCms\Error\DomainError;
 
 /**
- * 이벤트마다 메일 제목·본문을 만든다. 문자·알림톡과 달리 메일 문구는 관리자가 고치지
- * 않는다 — 지금 코어가 보내는 문구를 그대로 쓰는 것이 이 클래스의 목적이다.
+ * 이벤트마다 기본 메일 제목·본문을 만든다. 관리자 편집 전에는 기존 코어 문구를 쓰고,
+ * 편집 시에는 같은 문구의 변수 표기를 MailEditor에 제공한다.
  *
  * **다섯 통은 옮겨 온 것이다.** 이 브랜치 이전에 signup_attempt 는
  * AccountService::register() 가, password_reset 은 requestPasswordReset() 이,
@@ -41,6 +41,16 @@ use GnuCms\Error\DomainError;
  */
 final class MailBodies
 {
+    /** 기존 문구에 #{변수}를 채워 편집 화면의 기본 템플릿을 만든다. */
+    public static function defaults(string $event): array
+    {
+        $markers = [];
+        foreach (Events::variables($event) as $name) {
+            $markers[$name] = '#{' . $name . '}';
+        }
+        return self::render($event, $markers);
+    }
+
     /** 이 이벤트로 메일을 보낼 수 있는가. MailChannel::available() 이 먼저 묻는다. */
     public static function has(string $event): bool
     {
@@ -84,6 +94,38 @@ final class MailBodies
                 'body' => "회원님의 비밀번호가 방금 변경되었습니다.\n\n"
                     . "본인이 바꾼 것이 아니라면 아래에서 즉시 비밀번호를 다시 설정하세요.\n\n"
                     . "{$v['링크']}\n\n변경 시각: {$v['일시']}",
+            ],
+            'order_pending' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 주문 접수 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}가 접수되었습니다. 주문금액 {$v['주문금액']}\n\n{$v['링크']}",
+            ],
+            'order_paid' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 결제 확인 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}의 결제 {$v['결제금액']}이 확인되었습니다.\n\n{$v['링크']}",
+            ],
+            'order_cancelled' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 주문 취소 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}가 취소되었습니다. 환불 내역은 주문 조회에서 확인해 주세요.\n\n{$v['링크']}",
+            ],
+            'order_refunded' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 환불 처리 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}의 환불 {$v['환불금액']}이 처리되었습니다.\n\n{$v['링크']}",
+            ],
+            'inquiry_replied' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 상품문의 답변 안내',
+                'body' => "{$v['이름']}님, 「{$v['상품명']}」 상품문의에 답변이 등록되었습니다.\n\n{$v['링크']}",
+            ],
+            'order_confirmed' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 주문 상품 준비 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}의 상품을 준비 중입니다.\n\n{$v['링크']}",
+            ],
+            'order_shipped' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 주문 배송 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}의 상품이 배송 중입니다.\n\n{$v['링크']}",
+            ],
+            'order_completed' => static fn (array $v): array => [
+                'subject' => '[' . $v['사이트명'] . '] 주문 배송 완료 안내',
+                'body' => "{$v['이름']}님, 주문 {$v['주문번호']}의 배송이 완료되었습니다.\n\n{$v['링크']}",
             ],
             'email_verify' => static fn (array $v): array => [
                 'subject' => '[' . $v['사이트명'] . '] 이메일 인증',

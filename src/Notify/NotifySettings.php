@@ -53,11 +53,14 @@ final class NotifySettings
      *  남아 있든 걸러낸다. 알림함도 Events::inboxCapable() 로 똑같이 다룬다. */
     private const PHONE_CHANNELS = ['alimtalk', 'sms'];
 
-    /** 설치 직후에도 모든 코어 알림은 기본 메일로 보낸다. */
+    /** 기존 코어 이메일 기본값을 유지한다. 신규 주문 외부 채널은 관리자 선택 전에는 끈다. */
     private const DEFAULTS = [
-        'password_reset' => ['mail'], 'password_changed' => ['mail'], 'welcome' => ['mail'],
+        'password_reset' => ['mail'], 'password_changed' => ['mail', 'inbox'], 'welcome' => ['mail', 'inbox'],
         'comment_new' => ['mail', 'inbox'], 'email_verify' => ['mail'],
         'signup_attempt' => ['mail'], 'social_email_verify' => ['mail'],
+        'order_pending' => ['inbox'], 'order_paid' => ['inbox'], 'order_cancelled' => ['inbox'],
+        'order_refunded' => ['inbox'], 'inquiry_replied' => ['inbox'],
+        'order_confirmed' => ['inbox'], 'order_shipped' => ['inbox'], 'order_completed' => ['inbox'],
     ];
 
     private SettingsRepository $repository;
@@ -118,10 +121,13 @@ final class NotifySettings
      */
     private static function configured(string $event, array $stored): array
     {
-        return isset($stored[$event . '.configured'])
+        $on = isset($stored[$event . '.configured'])
             ? array_values(array_filter(self::CHANNELS,
                 static fn (string $channel): bool => ($stored[$event . '.' . $channel] ?? '0') === '1'))
             : (self::DEFAULTS[$event] ?? []);
+        // 기존 저장값이 꺼짐이어도 사이트 내 알림은 항상 사용한다.
+        if (Events::inboxCapable($event)) $on[] = 'inbox';
+        return array_values(array_unique($on));
     }
 
     /** @return list<string> */
@@ -150,11 +156,8 @@ final class NotifySettings
             $on = array_diff($on, ['alimtalk']);
         }
 
-        // 이벤트별 메일 값은 계속 고정으로 보관하되, 전역 메일 설정이 미사용이면 실제
-        // 발송 목록에서는 뺀다. 다시 메일을 켰을 때 모든 이벤트가 즉시 원래대로 돌아온다.
-        $on = ($this->mailEnabled)()
-            ? array_merge(['mail'], $on)
-            : array_diff($on, ['mail']);
+        // 전역 설정과 이벤트별 관리자 선택이 모두 켜져 있어야 이메일을 보낸다.
+        if (!($this->mailEnabled)()) $on = array_diff($on, ['mail']);
 
         return array_values(array_intersect(self::CHANNELS, $on));
     }
@@ -167,6 +170,12 @@ final class NotifySettings
     public function mailEnabled(): bool
     {
         return ($this->mailEnabled)();
+    }
+
+    /** 채널 선택은 발송기가 확인한다. 편집·미리보기에는 꺼져 있어도 저장 문구를 제공한다. */
+    public function mailTemplate(string $event): array
+    {
+        return MailEditor::template($event, $this->repository->all());
     }
 
     /**
@@ -231,6 +240,13 @@ final class NotifySettings
         return (string) ($this->repository->all()[$event . '.sms_body'] ?? '');
     }
 
+    /** LMS의 고정 제목. SMS에서는 사용하지 않는다. 꺼진 채널의 값은 보존한다. */
+    public function smsTitle(string $event): string
+    {
+        if (!Events::exists($event) || !$this->isOn($event, 'sms')) return '';
+        return (string) ($this->repository->all()[$event . '.sms_title'] ?? '');
+    }
+
     public function save(string $event, array $input): void
     {
         if (!Events::exists($event)) {
@@ -248,9 +264,9 @@ final class NotifySettings
             if ($on && $channel === 'inbox' && !Events::inboxCapable($event)) {
                 throw DomainError::validation([$channel =>
                     '이 알림은 사이트 내 알림함에 쌓을 수 없습니다. 알림함은 로그인한 회원이 읽는 곳이라'
-                    . ' 지금은 새 댓글·답글 알림만 받습니다.']);
+                    . ' 해당 이벤트는 알림함에 기록할 수 없습니다.']);
             }
-            $saved[$event . '.' . $channel] = ($channel === 'mail' || $on) ? '1' : '0';
+            $saved[$event . '.' . $channel] = ($on || ($channel === 'inbox' && Events::inboxCapable($event))) ? '1' : '0';
         }
 
         // **채널이 꺼져 있어도 들어온 내용은 저장한다.** 예전에는 채널이 켜져 있을
@@ -292,6 +308,15 @@ final class NotifySettings
         }
         if ($bodyGiven) {
             $saved[$event . '.sms_body'] = $body;
+        }
+        if (array_key_exists('sms_title', $input)) {
+            $title = $this->stringInput($input, 'sms_title');
+            SmsEditor::validate($event, $bodyGiven ? $body : (string) ($this->repository->all()[$event . '.sms_body'] ?? ''), $title);
+            $saved[$event . '.sms_title'] = $title;
+        }
+        // 본문만 바꾸는 요청도 저장된 제목과 함께 검사한다.
+        if ($bodyGiven && !array_key_exists('sms_title', $input)) {
+            SmsEditor::validate($event, $body, (string) ($this->repository->all()[$event . '.sms_title'] ?? ''));
         }
 
         // **tpl_code 는 일부러 다르게 다룬다 — 빈 값을 "지우라"로 읽지 않는다.** 본문
@@ -350,6 +375,15 @@ final class NotifySettings
         if ($clearApplies) {
             $saved[$event . '.tpl_code'] = '';
             $saved[$event . '.var_map'] = '[]';
+        }
+
+        if (array_key_exists('mail_subject', $input) || array_key_exists('mail_body', $input)) {
+            $mail = MailEditor::input($event, $input);
+            $default = MailBodies::defaults($event);
+            foreach (['subject', 'body'] as $field) {
+                // 기본 문구 복원은 별도 사본 대신 코어 기본값을 다시 사용하도록 저장한다.
+                $saved[$event . '.mail_' . $field] = $mail[$field] === $default[$field] ? '' : $mail[$field];
+            }
         }
 
         $this->repository->save($saved);
@@ -453,6 +487,7 @@ final class NotifySettings
                 // 칸을 멀쩡히 보여 주고 저장할 때만 거절하는 것은 같은 결함의 다른 모습이다.
                 'inbox' => $event['inbox'],
                 'channels' => $this->channelsFor($key),
+                'mail_on' => in_array('mail', self::configured($key, $stored), true),
                 'template' => $this->templateFor($key),
                 'sms_body' => $this->smsBody($key),
                 // 아래 넷은 **검증을 거치지 않은 저장 원본**이다. 위의 channels·
@@ -489,6 +524,8 @@ final class NotifySettings
                 'alimtalk_on' => ($stored[$key . '.alimtalk'] ?? '0') === '1',
                 'alimtalk_var_map' => self::storedMap($stored, $key),
                 'sms_body_stored' => (string) ($stored[$key . '.sms_body'] ?? ''),
+                'sms_title_stored' => (string) ($stored[$key . '.sms_title'] ?? ''),
+                'mail_template' => MailEditor::template($key, $stored),
             ];
         }
 
