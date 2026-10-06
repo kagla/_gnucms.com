@@ -344,11 +344,12 @@ final class Dispatch
             $n++;
             $fields['receiver_' . $n] = $one['phone'];
             $fields['message_' . $n] = $one['body'];
-            $fields['subject_' . $n] = mb_substr($one['body'], 0, 20);
+            $fields['subject_' . $n] = mb_substr(trim((string) preg_replace('/\s+/u', ' ', $one['body'])), 0, 20);
             if ($one['name'] !== null) {
                 $fields['recvname_' . $n] = $one['name'];
             }
             if (!empty($request['failover'])) {
+                $fields['fsubject_' . $n] = mb_substr(trim((string) preg_replace('/\s+/u', ' ', $one['fallback_body'])), 0, 20);
                 $fields['fmessage_' . $n] = $one['fallback_body'];
             }
         }

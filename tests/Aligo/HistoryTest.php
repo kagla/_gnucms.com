@@ -662,4 +662,36 @@ final class HistoryTest extends DatabaseTestCase
         self::assertSame('scheduled', $this->job($jobId)['status'],
             '예약 시각이 오기 전까지는 예약 상태를 그대로 유지한다');
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testNumericAlimtalkSuccessAndZeroFallbackIdAreRecordedCorrectly(array $config): void
+    {
+        $this->boot($config);
+        $id = $this->seed('at', 'ACTUAL_CODE', Clock::now());
+        $this->transport->queue(200, json_encode(['code' => 0, 'list' => [
+            ['msgid' => '123456', 'phone' => '01012345678', 'rslt' => '0', 'rslt_message' => '성공', 'smid' => '0'],
+        ]]));
+        $this->history->refresh();
+        $row = $this->db->selectOne('SELECT status,smid,fallback_status,rslt_message FROM ' . $this->db->table('message_recipients') . ' WHERE job_id=?', [$id]);
+        self::assertSame('sent', $row['status']);
+        self::assertNull($row['smid']);
+        self::assertNull($row['fallback_status']);
+        self::assertNull($row['rslt_message']);
+        self::assertSame('sent', $this->job($id)['status']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testEmptyOrQueuedAlimtalkResultDoesNotClaimDelivery(array $config): void
+    {
+        $this->boot($config);
+        $id = $this->seed('at', 'QUEUED_CODE', Clock::now(), ['01012345678','01098765432']);
+        $this->transport->queue(200, json_encode(['code' => 0, 'list' => [
+            ['msgid' => '123456', 'phone' => '01012345678', 'rslt' => '', 'smid' => '0'],
+            ['msgid' => 'Q123456', 'phone' => '01098765432', 'rslt' => '0', 'smid' => '0'],
+        ]]));
+        $this->history->refresh();
+        $rows = $this->db->select('SELECT status FROM ' . $this->db->table('message_recipients') . ' WHERE job_id=?', [$id]);
+        self::assertSame(['accepted','accepted'], array_column($rows,'status'));
+        self::assertSame('sending', $this->job($id)['status']);
+    }
 }

@@ -204,10 +204,13 @@ final class History
             }
             if ($isAlimtalk) {
                 $rslt = (string) ($item['rslt'] ?? '');
-                $ok = $rslt === 'S' || $rslt === '';
+                $msgid = (string) ($item['msgid'] ?? '');
+                if ($rslt === '' || str_starts_with($msgid, 'Q')) continue;
+                $ok = in_array($rslt, ['S', '0'], true);
                 $reason = $ok ? null : ResultCodes::deliveryReason($rslt, (string) ($item['rslt_message'] ?? ''));
                 $msgid = (string) ($item['msgid'] ?? '');
-                $smid = ($item['smid'] ?? '') !== '' ? (string) $item['smid'] : null;
+                $smidValue = trim((string) ($item['smid'] ?? ''));
+                $smid = !$ok && $smidValue !== '' && $smidValue !== '0' ? $smidValue : null;
             } else {
                 $smsStatus = SmsResult::status($item);
                 if ($smsStatus === 'accepted') continue;
