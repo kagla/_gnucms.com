@@ -219,6 +219,9 @@ final class NotifySettings
 
     private function stringInput(array $input, string $key): string
     {
+        if (isset($input[$key]) && !is_scalar($input[$key])) {
+            throw DomainError::validation([$key => '문자열을 입력해 주세요.']);
+        }
         return is_scalar($input[$key] ?? null) ? trim((string) $input[$key]) : '';
     }
 
