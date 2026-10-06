@@ -20,7 +20,7 @@
         {
           "type": "code",
           "language": "PHP — 실제 발송을 요청하는 예시",
-          "text": "$jobId = $app->aligo()->send([\n    'event' => 'my_module_notice',\n    'channel' => 'at',\n    'tpl_code' => '승인된_템플릿코드',\n    'recipients' => [\n        ['phone' => '01012345678', 'name' => '예시회원',\n         'vars' => ['이름' => '예시회원', '주문번호' => '예시번호']],\n    ],\n]); // message_jobs.id"
+          "text": "$jobId = $app->aligo()->send([\n    'event_key' => 'my_module_notice',\n    'channel' => 'at',\n    'tpl_code' => '승인된_템플릿코드',\n    'recipients' => [\n        ['phone' => '01012345678', 'name' => '예시회원',\n         'vars' => ['이름' => '예시회원', '주문번호' => '예시번호']],\n    ],\n]); // message_jobs.id"
         },
         {
           "type": "p",
@@ -54,6 +54,56 @@
             "비용은 API가 반환한 unit·total만 저장하고 임의 단가를 계산하지 않습니다.",
             "예시값 발송 허용은 명시적 관리자 직접 발송 경로만이며 일반·자동 발송의 빈 변수 거절을 유지합니다."
           ]
+        }
+      ]
+    },
+    {
+      "title": "요청 필드와 묶음",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": [
+            "필드",
+            "동작"
+          ],
+          "rows": [
+            [
+              "channel",
+              "at 또는 sms. lms는 치환 본문 길이로 자동 판정"
+            ],
+            [
+              "event_key",
+              "선택 이벤트 식별자. 이력 검색에 저장"
+            ],
+            [
+              "scheduled_at",
+              "선택 예약 시각. 형식과 허용 기간 검사 후 UTC 저장"
+            ],
+            [
+              "failover",
+              "알림톡 대체문자 사용 여부"
+            ],
+            [
+              "secret_vars",
+              "이력 사본에서 가릴 변수 이름. 실제 본문은 정상 치환"
+            ],
+            [
+              "created_by",
+              "요청한 관리자 표시명"
+            ],
+            [
+              "recipients",
+              "phone·name·user_id·vars와 선택 fallback_body/fallback_vars"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "한 작업은 하나의 문자 유형을 사용합니다. 수신자별 치환 본문 중 하나라도 90바이트를 넘으면 전체 작업을 LMS로 보냅니다. 대량 발송의 첫 수신자 미리보기만 보고 모든 수신자의 SMS 비용을 확정하지 않습니다."
+        },
+        {
+          "type": "p",
+          "text": "발송은 500명 단위로 분할합니다. 응답을 끝내 받지 못한 묶음의 전송 요청을 다시 보내지 않고 결과 조회를 통해 확인합니다. 반환된 정수는 job ID이며 접수 직후 상태가 sent라고 가정하지 않습니다."
         }
       ]
     }
