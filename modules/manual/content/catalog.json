@@ -393,8 +393,8 @@
     },
     {
       "slug": "development/environment",
-      "title": "개발 환경과 명시적 검사",
-      "summary": "PHP·MySQL 개발 환경, 전용 테스트 DB와 자동 검사 실행 규칙을 설명합니다.",
+      "title": "Composer 없이 시작하는 개발 환경",
+      "summary": "완성 배포 ZIP으로 설치하고 테마·확장을 수정하는 방법과 별도 자동 테스트 환경을 설명합니다.",
       "group": "development",
       "audience": "개발자",
       "file": "development-environment.json"
