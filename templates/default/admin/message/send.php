@@ -2,6 +2,7 @@
 <?php $this->start('title') ?>알림톡·문자 · 발송 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>messages<?php $this->stop() ?>
 <?php $this->start('body') ?>
+<link rel="stylesheet" href="<?= $this->asset('message-send.css') ?>">
 <?php
 // 라디오·체크박스는 재렌더링(미리보기·검증 실패) 때 방금 입력한 값을 그대로 유지한다.
 $channel = (string) ($values['channel'] ?? 'sms');
@@ -28,6 +29,9 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
     <form method="get" action="<?= $this->url('admin.messages.send') ?>" class="member-search-form">
       <fieldset class="fieldset">
         <legend class="fieldset-legend">회원 검색</legend>
+        <?php if ($channel === 'at' && $selectedTplCode !== ''): ?>
+          <input type="hidden" name="tpl_code" value="<?= $this->e($selectedTplCode) ?>">
+        <?php endif ?>
         <div class="row-actions">
           <input class="input input-bordered" type="search" name="q" value="<?= $this->e($search_query) ?>" placeholder="이름 또는 이메일" maxlength="100">
           <button class="btn btn-outline btn-sm" type="submit"><?= $this->icon('search', 15) ?> 검색</button>
@@ -82,9 +86,13 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
               <option value="<?= $this->e($tpl['tpl_code']) ?>"<?= $selectedTplCode === (string) $tpl['tpl_code'] ? ' selected' : '' ?>><?= $this->e($tpl['name']) ?> (<?= $this->e($tpl['tpl_code']) ?>)</option>
             <?php endforeach ?>
           </select>
-          <?php if ($templates === []): ?><p class="fieldset-label">사용 중인 승인 템플릿이 없습니다. 템플릿 탭에서 먼저 켜 주세요.</p><?php endif ?>
+          <?php if ($templates === []): ?><p class="fieldset-label">현재 채널의 승인된 템플릿이 없습니다. 템플릿 탭에서 가져오기 후 승인 상태를 확인해 주세요.</p><?php endif ?>
           <?php if (array_key_exists('tpl_code', $field_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($field_errors['tpl_code']) ?></p><?php endif ?>
         </fieldset>
+        <?php if ($template_content !== ''): ?>
+          <p class="fieldset-label">선택한 템플릿 본문</p>
+          <pre class="message-send-preview-content"><?= $this->e($template_content) ?></pre>
+        <?php endif ?>
         <label class="label toggle-row">
           <input type="checkbox" name="failover" value="1"<?= $failoverChecked ? ' checked' : '' ?>>
           <span>알림톡이 실패하면 문자로 대체발송</span>
@@ -101,7 +109,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
           <legend class="fieldset-legend">본문</legend>
           <textarea class="textarea textarea-bordered textarea-block" name="body" rows="5" maxlength="2000"><?= $this->e($values['body'] ?? '') ?></textarea>
           <?php if ($preview !== null && $preview['bytes'] !== null): ?>
-            <p class="fieldset-label">현재 <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?></p>
+            <p class="fieldset-label"><?= $preview['example_mode'] ? '예시 값 기준' : '현재' ?> <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?></p>
           <?php endif ?>
           <?php if (array_key_exists('body', $field_errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($field_errors['body']) ?></p><?php endif ?>
         </fieldset>
@@ -149,21 +157,23 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
       <?php if ($preview !== null): ?>
         <div class="form-section">
           <h2 class="form-section-title">미리보기</h2>
-          <div class="alert alert-info">
+          <div class="message-send-preview" role="region" aria-label="발송 미리보기">
             <p>
               <?php if ($preview['scheduled_at'] !== null): ?>
-                <span class="badge badge-info badge-soft"><?= $this->date($preview['scheduled_at']) ?>에 발송 예정</span>
+                <span class="message-send-preview-timing"><?= $this->date($preview['scheduled_at']) ?>에 발송 예정</span>
               <?php else: ?>
-                <span class="badge badge-ghost badge-soft">지금 바로 발송</span>
+                <span class="message-send-preview-timing">즉시 발송 설정</span>
               <?php endif ?>
+              <?php if ($preview['example_mode']): ?><span class="message-send-preview-timing">예시 미리보기</span><?php endif ?>
             </p>
             <p>받는 사람 <strong><?= $this->e($preview['count']) ?>명</strong><?php if ($preview['skipped'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['skipped']) ?>명은 번호가 없어 제외됩니다<?php endif ?><?php if ($preview['ineligible'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['ineligible']) ?>명은 탈퇴하거나 차단된 회원이라 제외됩니다<?php endif ?><?php if ($preview['missing'] > 0): ?> · 선택한 회원 중 <?= $this->e($preview['missing']) ?>명은 회원을 찾을 수 없어 제외됩니다<?php endif ?></p>
-            <?php if ($preview['sample'] !== null): ?>
-              <p class="card-sub">첫 번째 수신자에게 나갈 본문<?php if ($preview['bytes'] !== null): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?><?php if ($variable_names !== [] && $preview['count'] > 1): ?> — 나머지 <?= $this->e($preview['count'] - 1) ?>명에게도 같은 변수값이 들어간 본문이 갑니다<?php endif ?></p>
-              <pre class="tpl-detail-content"><?= $this->e($preview['sample']) ?></pre>
-            <?php else: ?>
-              <p class="card-sub">받는 사람이 없어 미리 볼 본문이 없습니다.</p>
+            <?php if ($preview['example_variables'] !== []): ?>
+              <p class="message-send-preview-description">빈 변수에 예시 값을 넣었습니다: <?= $this->e(implode(', ', $preview['example_variables'])) ?>. ‘예시 본문으로 발송’을 누르면 아래 예시 값으로 보냅니다.</p>
+            <?php elseif ($preview['count'] === 0): ?>
+              <p class="message-send-preview-description">받는 사람 없이 본문만 미리 봅니다.</p>
             <?php endif ?>
+            <p class="message-send-preview-description"><?= $preview['example_mode'] ? '예시 본문' : '첫 번째 수신자에게 나갈 본문' ?><?php if ($channel === 'sms'): ?> · <?= $this->e($preview['bytes']) ?>바이트 · <?= $preview['classify'] === 'lms' ? 'LMS' : 'SMS' ?><?php endif ?><?php if (!$preview['example_mode'] && $variable_names !== [] && $preview['count'] > 1): ?> — 나머지 <?= $this->e($preview['count'] - 1) ?>명에게도 같은 변수값이 들어갑니다<?php endif ?></p>
+            <pre class="message-send-preview-content"><?= $this->e($preview['sample']) ?></pre>
           </div>
         </div>
       <?php endif ?>
@@ -171,9 +181,18 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
       <div class="card-actions form-actions">
         <button class="btn btn-outline" type="submit"><?= $this->icon('eye', 15) ?> 미리보기</button>
         <?php if ($preview !== null): ?>
-          <button class="btn btn-primary" type="submit" formaction="<?= $this->url('admin.messages.send.dispatch') ?>" formnovalidate><?= $this->icon('mail', 15) ?> 발송</button>
+          <?php if ($preview['example_variables'] !== []): ?>
+            <button class="btn btn-primary" type="submit" name="send_example" value="1" formaction="<?= $this->url('admin.messages.send.dispatch') ?>" formnovalidate<?= $preview['count'] === 0 ? ' disabled aria-describedby="send-ready-help"' : '' ?>><?= $this->icon('mail', 15) ?> 예시 본문으로 발송</button>
+          <?php else: ?>
+            <button class="btn btn-primary" type="submit" formaction="<?= $this->url('admin.messages.send.dispatch') ?>" formnovalidate<?= !$preview['can_send'] ? ' disabled aria-describedby="send-ready-help"' : '' ?>><?= $this->icon('mail', 15) ?> 발송</button>
+          <?php endif ?>
+          <?php if ($preview['count'] === 0): ?>
+            <p class="card-sub" id="send-ready-help">받는 사람을 선택하거나 번호를 입력하고 다시 미리보기 하세요.</p>
+          <?php elseif ($preview['example_variables'] !== []): ?>
+            <p class="card-sub">선택한 수신자에게 빈 값을 예시로 채운 본문이 발송됩니다. 입력한 값은 그대로 사용합니다.</p>
+          <?php endif ?>
         <?php else: ?>
-          <p class="card-sub">먼저 "미리보기"로 받는 사람·본문·제외 인원을 확인한 뒤에만 발송할 수 있습니다.</p>
+          <p class="card-sub">빈 변수와 받는 사람 없이도 예시를 미리 볼 수 있습니다. 수신자를 선택하면 예시 본문으로도 발송할 수 있습니다.</p>
         <?php endif ?>
       </div>
     </form>

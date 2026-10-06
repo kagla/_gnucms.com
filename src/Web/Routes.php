@@ -156,8 +156,6 @@ final class Routes
         $slim->get('/admin/messages/templates', [$msg, 'templates'])->setName('admin.messages.templates');
         $slim->post('/admin/messages/templates/fetch', [$msg, 'fetchTemplates'])
             ->setName('admin.messages.templates.fetch');
-        $slim->post('/admin/messages/templates/toggle', [$msg, 'toggleTemplate'])
-            ->setName('admin.messages.templates.toggle');
         $slim->get('/admin/messages/send', [$msg, 'send'])->setName('admin.messages.send');
         $slim->post('/admin/messages/send/preview', [$msg, 'preview'])->setName('admin.messages.send.preview');
         $slim->post('/admin/messages/send/dispatch', [$msg, 'dispatch'])->setName('admin.messages.send.dispatch');

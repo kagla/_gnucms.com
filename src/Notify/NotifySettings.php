@@ -128,8 +128,7 @@ final class NotifySettings
         if (!Events::phoneCapable($event)) return null;
         $code = (string) ($stored[$event . '.tpl_code'] ?? '');
         $template = $code === '' ? null : $this->templates->find($code);
-        if ($template === null || (int) $template['enabled'] !== 1
-            || !Templates::approved((string) $template['status'], (string) $template['insp_status'])) return null;
+        if ($template === null || !$this->templates->canUse($template)) return null;
         $names = Variables::names((string) $template['content']);
         $map = self::variableMap($event, $names, self::storedMap($stored, $event));
         if (array_diff($names, array_keys($map)) !== []) return null;
@@ -184,9 +183,8 @@ final class NotifySettings
                 throw DomainError::validation(['tpl_code' => '이 알림은 알림톡으로 보낼 수 없습니다.']);
             }
             $template = $this->templates->find($code);
-            if ($template === null || (int) $template['enabled'] !== 1
-                || !Templates::approved((string) $template['status'], (string) $template['insp_status'])) {
-                throw DomainError::validation(['tpl_code' => '사용 중인 승인 템플릿을 골라 주세요.']);
+            if ($template === null || !$this->templates->canUse($template)) {
+                throw DomainError::validation(['tpl_code' => '현재 채널의 승인된 템플릿을 골라 주세요.']);
             }
             $rawMap = array_key_exists('var_map', $input)
                 ? (is_array($input['var_map']) ? $input['var_map'] : [])

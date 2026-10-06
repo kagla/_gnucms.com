@@ -11,7 +11,8 @@ use GnuCms\Error\DomainError;
 /** 문자 편집 검증·예시 치환. 계정·알리고 API를 호출하거나 발송하지 않는다. */
 final class SmsEditor
 {
-    public static function samples(string $event): array
+    /** 이벤트가 비어 있으면 관리자 직접 발송 미리보기용 전체 예시를 반환한다. */
+    public static function samples(string $event = ''): array
     {
         $values = ['사이트명' => '우리 쇼핑몰', '이름' => '홍길동', '링크' => 'https://example.com/notice',
             '유효시간' => '1시간', '일시' => '26-10-04 15:00:00', '글제목' => '상품 사용 안내',
@@ -20,7 +21,7 @@ final class SmsEditor
             '문의처' => '02-1234-5678 / support@example.com',
             '사이트주소' => 'https://example.com',
             '택배사' => 'CJ대한통운', '운송장번호' => '123456789012', '배송정보' => 'CJ대한통운 / 123456789012'];
-        return array_intersect_key($values, array_flip(Events::variables($event)));
+        return $event === '' ? $values : array_intersect_key($values, array_flip(Events::variables($event)));
     }
 
     public static function validate(string $event, string $body, string $title): void

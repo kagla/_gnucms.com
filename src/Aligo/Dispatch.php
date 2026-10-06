@@ -221,8 +221,8 @@ final class Dispatch
 
         $code = trim((string) ($request['tpl_code'] ?? ''));
         $template = $code === '' ? null : $this->templates->find($code);
-        if ($template === null || (int) $template['enabled'] !== 1) {
-            throw DomainError::validation(['tpl_code' => '사용 중인 승인 템플릿을 골라 주세요.']);
+        if ($template === null || !$this->templates->canUse($template)) {
+            throw DomainError::validation(['tpl_code' => '현재 채널의 승인된 템플릿을 골라 주세요.']);
         }
 
         return [(string) $template['content'], $code];
