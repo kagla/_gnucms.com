@@ -75,7 +75,6 @@ $__seo_type = trim($this->block('seo_type', 'website'));
     <header class="site-header">
       <div class="navbar wrap site-header-inner">
         <div class="navbar-start">
-          <label for="nav-drawer" class="site-icon-button drawer-button" role="button" tabindex="0" aria-label="메뉴 열기"><?= $this->icon('menu', 20) ?></label>
           <a class="brand site-brand" href="<?= $this->url('boards.index') ?>" aria-label="<?= $this->e($site['site_name']) ?> 홈">
             <?php $this->insert('_brand') ?>
           </a>
@@ -152,6 +151,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
               <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
               <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>
             </button>
+            <label for="nav-drawer" class="site-icon-button drawer-button" role="button" tabindex="0" aria-label="메뉴 열기"><?= $this->icon('menu', 20) ?></label>
           </div>
         </div>
       </div>
