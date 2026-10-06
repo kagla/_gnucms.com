@@ -4,4 +4,4 @@
 </dl>
 <?php if ($order['shipping'] !== []): ?><details class="yc-shipping-details"><summary>상품별 배송비 확인</summary><ul><?php foreach ($order['shipping'] as $delivery): ?><li><?= $this->e($delivery['name']) ?> · <?= $delivery['mode'] === 'cod' ? '착불' : '선불' ?> <?= number_format((int) $delivery['fee']) ?>원<?= $delivery['shared'] ? ' (기본배송 묶음)' : '' ?></li><?php endforeach ?></ul></details><?php endif ?>
 </section>
-<section class="yc-panel"><h2>주문자 정보</h2><dl class="yc-detail-list"><div><dt>주문자</dt><dd><?= $this->e($order['buyer_name']) ?></dd></div><div><dt>연락처</dt><dd><?= $this->e(\GnuCms\Aligo\PhoneNumber::format((string) $order['phone'])) ?></dd></div><div><dt>이메일</dt><dd><?= $this->e($order['email']) ?></dd></div></dl></section>
+<section class="yc-panel"><h2>주문자 정보</h2><dl class="yc-detail-list"><div><dt>주문자</dt><dd><?= $this->e($order['buyer_name']) ?></dd></div><div><dt>연락처</dt><dd><?= $this->e(\GnuCms\Aligo\PhoneNumber::format((string) $order['phone'])) ?></dd></div><?php if ($order['email'] !== ''): ?><div><dt>이메일</dt><dd><?= $this->e($order['email']) ?></dd></div><?php endif ?></dl></section>

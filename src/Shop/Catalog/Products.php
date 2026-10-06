@@ -124,7 +124,12 @@ final class Products
     {
         $row = ['name' => Input::text(strip_tags((string) ($input['name'] ?? '')), 'name', 250, false)];
         if ($existing === null) {
-            $row['code'] = Input::code($input['code'] ?? '', 'code', self::CODE_PATTERN, '상품 코드는 영문·숫자·-·_ 1~20자입니다.');
+            $code = $input['code'] ?? '';
+            if ($code === '') {
+                do { $code = 'P' . bin2hex(random_bytes(8)); }
+                while ($this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_products') . ' WHERE code = ?', [$code]) !== null);
+            }
+            $row['code'] = Input::code($code, 'code', self::CODE_PATTERN, '상품 코드는 영문·숫자·-·_ 1~20자입니다.');
             if ($this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_products') . ' WHERE code = ?', [$row['code']]) !== null) {
                 throw DomainError::validation(['code' => '이미 사용 중인 상품 코드입니다.']);
             }

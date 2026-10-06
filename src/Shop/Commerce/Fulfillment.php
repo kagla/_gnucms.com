@@ -18,7 +18,7 @@ final class Fulfillment
 
     public function ready(string $search, int $page): array
     {
-        $where = ['o.status = ?']; $params = ['confirmed'];
+        $where = ['o.status IN (?, ?)']; $params = ['paid', 'confirmed'];
         if ($search !== '') {
             $like = '%' . Products::like($search) . '%';
             $where[] = '(o.number LIKE ? ESCAPE \'!\' OR o.buyer_name LIKE ? ESCAPE \'!\' OR o.recipient LIKE ? ESCAPE \'!\''
@@ -56,8 +56,8 @@ final class Fulfillment
         foreach ($rows as $row) $byId[(int) $row['id']] = $row;
         $orders = [];
         foreach ($ids as $id) {
-            if (!isset($byId[$id]) || $byId[$id]['status'] !== 'confirmed') {
-                throw DomainError::validation(['orders' => '상품 준비 상태가 아닌 주문이 포함되어 있습니다. 목록을 새로고침해 주세요.']);
+            if (!isset($byId[$id]) || !in_array($byId[$id]['status'], ['paid', 'confirmed'], true)) {
+                throw DomainError::validation(['orders' => '결제 완료·상품 준비 상태가 아닌 주문이 포함되어 있습니다. 목록을 새로고침해 주세요.']);
             }
             $orders[] = $byId[$id];
         }
@@ -80,8 +80,8 @@ final class Fulfillment
             foreach ($rows as $row) {
                 $order = $this->store->selectOne('SELECT id, status FROM ' . $this->store->table('yc_orders') . ' WHERE number = ? FOR UPDATE', [$row['number']]);
                 if ($order === null) throw DomainError::validation(['file' => $row['number'] . ' 주문을 찾을 수 없습니다.']);
-                if ($order['status'] !== 'confirmed') throw DomainError::validation(['file' => $row['number'] . ' 주문은 상품 준비 상태가 아닙니다.']);
-                $this->orders->transition((int) $order['id'], 'confirmed', 'shipped', $actor, [
+                if (!in_array($order['status'], ['paid', 'confirmed'], true)) throw DomainError::validation(['file' => $row['number'] . ' 주문은 발송할 수 있는 상태가 아닙니다.']);
+                $this->orders->transition((int) $order['id'], $order['status'], 'shipped', $actor, [
                     'carrier' => $row['carrier'], 'tracking_number' => $row['tracking_number'],
                     'note' => $this->adapter->label() . '로 배송 처리',
                 ]);

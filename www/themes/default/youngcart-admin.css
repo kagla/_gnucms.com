@@ -438,3 +438,18 @@
   .yc-admin-page .yc-packing-sheet{border-color:#777;page-break-inside:avoid}
   .yc-admin-page .yc-packing-sheet .table th,.yc-admin-page .yc-packing-sheet .table td{color:#000;background:#fff;border-color:#aaa}
 }
+
+/* Daily work for one operator: quantity entry and direct shipment. */
+.yc-admin-page .yc-stock-modes{margin-bottom:1rem;flex-wrap:wrap}
+.yc-admin-page .yc-restock-table{width:100%;table-layout:fixed;white-space:normal}
+.yc-admin-page .yc-restock-table td,.yc-admin-page .yc-restock-table th{white-space:normal;overflow-wrap:anywhere}
+.yc-admin-page .yc-restock-table th:first-child{width:55%}
+.yc-admin-page .yc-restock-table input{width:100%;max-width:9rem;min-width:0}
+.yc-admin-page .yc-stock-history{margin-top:1rem}
+.yc-admin-page .yc-stock-history th:first-child{width:25%}
+.yc-admin-page .yc-stock-history small{display:block;color:var(--yc-muted)}
+.yc-admin-page .yc-direct-ship{display:grid;gap:.4rem;min-width:9rem}
+.yc-admin-page .yc-direct-ship :is(input,select){width:100%;min-width:0}
+.yc-admin-page .yc-description-extra{margin-top:1rem}
+.yc-admin-page .yc-description-extra summary{cursor:pointer;color:var(--yc-muted)}
+.yc-admin-page .yc-product-form>.yc-advanced{margin-bottom:1.2rem}

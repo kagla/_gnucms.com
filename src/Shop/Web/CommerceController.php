@@ -283,6 +283,10 @@ final class CommerceController
         foreach ($buyerProfile as $field => $value) {
             if ($value !== '' || !$post) $input[$field] = $value;
         }
+        $input['email'] = $buyerProfile['email'];
+        if ($post && ($input['recipient_same'] ?? '') === '1') {
+            $input['recipient'] = $input['buyer_name']; $input['recipient_phone'] = $input['phone'];
+        }
         $input['save_buyer_profile'] = ($buyerMissing['buyer_name'] || $buyerMissing['phone']) ? '1' : '0';
         $choices = $post ? ($input['shipping'] ?? []) : ($_SESSION['yc_shipping_' . $flow] ?? []);
         if (!is_array($choices)) throw DomainError::validation(['shipping' => '배송 방식을 확인해 주세요.']);

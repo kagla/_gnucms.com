@@ -18,6 +18,7 @@ final class ProductController extends AdminBase
         $input = $data['input'];
         $products = $this->service->products;
         $post = $request->getMethod() === 'POST';
+        $stockOperations = new \GnuCms\Shop\Catalog\Replenishment($this->service->store);
         $rows = is_array($input['rows'] ?? null) ? $input['rows'] : [];
         try {
             if ($post) {
@@ -49,11 +50,19 @@ final class ProductController extends AdminBase
                             'target_ca' => $filters['ca'], 'scope' => $scope, 'copied' => '1', 'changed' => $changed,
                         ]));
                     case 'products/stock':
-                        $products->updateStock($rows, $data['actor']);
-                        return $this->redirect($response, $data['admin_url'] . '/products/stock?saved=1');
+                        if (($input['action'] ?? '') === 'restock') {
+                            $stockOperations->add($rows, false, $data['actor'], Input::text($input['restock_token'] ?? '', 'restock_token', 32, false));
+                        } else {
+                            $products->updateStock($rows, $data['actor']);
+                        }
+                        return $this->redirect($response, $data['admin_url'] . '/products/stock?' . http_build_query(['saved' => '1', 'q' => is_string($input['q'] ?? null) ? $input['q'] : '', 'mode' => ($input['action'] ?? '') === 'restock' ? '' : 'adjust']));
                     case 'products/option-stock':
-                        $this->service->options->updateStock($rows, $data['actor']);
-                        return $this->redirect($response, $data['admin_url'] . '/products/option-stock?saved=1');
+                        if (($input['action'] ?? '') === 'restock') {
+                            $stockOperations->add($rows, true, $data['actor'], Input::text($input['restock_token'] ?? '', 'restock_token', 32, false));
+                        } else {
+                            $this->service->options->updateStock($rows, $data['actor']);
+                        }
+                        return $this->redirect($response, $data['admin_url'] . '/products/option-stock?' . http_build_query(['saved' => '1', 'q' => is_string($input['q'] ?? null) ? $input['q'] : '', 'mode' => ($input['action'] ?? '') === 'restock' ? '' : 'adjust']));
                 }
                 throw DomainError::notFound('페이지를 찾을 수 없습니다.');
             }
@@ -69,6 +78,10 @@ final class ProductController extends AdminBase
             $changed = (int) ($input['changed'] ?? 0); $skipped = (int) ($input['skipped'] ?? 0);
             $data['notice'] = $changed . '개 상품을 분류에' . ($input['op'] === 'add' ? ' 넣었습니다.' : '서 뺐습니다.')
                 . ($skipped > 0 ? ' ' . $skipped . '개는 ' . ($input['op'] === 'add' ? '이미 있어' : '대표 분류이거나 없어') . ' 건너뛰었습니다.' : '');
+        }
+        if (in_array($page, ['products/stock', 'products/option-stock'], true)) {
+            $data['stock_mode'] = ($input['mode'] ?? '') === 'adjust' || ($post && ($input['action'] ?? '') !== 'restock') ? 'adjust' : 'restock';
+            $data['restock_token'] = $post && is_string($input['restock_token'] ?? null) && preg_match('/^[a-f0-9]{32}$/D', $input['restock_token']) ? $input['restock_token'] : bin2hex(random_bytes(16));
         }
         $q = is_string($input['q'] ?? null) ? mb_substr(trim($input['q']), 0, 100, 'UTF-8') : '';
         switch ($page) {
@@ -114,10 +127,12 @@ final class ProductController extends AdminBase
             case 'products/stock':
                 $data['q'] = $q;
                 $data['list'] = $products->stockList($q, $this->page($input['page'] ?? ''), 30);
+                $data['stock_history'] = $stockOperations->recent($q, false);
                 return $this->render($request, $response, 'product_stock', $data);
             case 'products/option-stock':
                 $data['q'] = $q;
                 $data['list'] = $this->service->options->stockList($q, $this->page($input['page'] ?? ''), 30);
+                $data['stock_history'] = $stockOperations->recent($q, true);
                 return $this->render($request, $response, 'option_stock', $data);
         }
         throw DomainError::notFound('페이지를 찾을 수 없습니다.');

@@ -22,7 +22,7 @@ use PDOException;
 final class Orders
 {
     public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
-    public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
+    public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['shipped', 'confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
     public const PREVIOUS = ['paid' => 'pending', 'confirmed' => 'paid', 'shipped' => 'confirmed', 'completed' => 'shipped'];
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
     public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
@@ -417,6 +417,15 @@ final class Orders
         if ($status === 'paid' && ((string) ($order['payment_id'] ?? '') !== ''
             || in_array($order['payment_method'] ?? '', self::PG_METHODS, true)
             || (int) ($order['refunded_amount'] ?? 0) > 0)) return null;
+        if ($status === 'shipped') {
+            $shipFrom = null; $last = null;
+            foreach ($order['history'] ?? [] as $event) {
+                if ($event['status'] === $last) continue;
+                if ($event['status'] === 'shipped' && in_array($last, ['paid', 'confirmed'], true)) $shipFrom = $last;
+                $last = $event['status'];
+            }
+            if (in_array($shipFrom, ['paid', 'confirmed'], true)) return $shipFrom;
+        }
         return self::PREVIOUS[$status] ?? null;
     }
 
@@ -651,7 +660,7 @@ final class Orders
     public function validateCheckout(array $input): array
     {
         $row = []; $errors = [];
-        $fields = ['buyer_name' => ['주문자 이름', 100, false], 'email' => ['이메일', 191, false], 'phone' => ['연락처', 30, false],
+        $fields = ['buyer_name' => ['주문자 이름', 100, false], 'email' => ['이메일', 191, true], 'phone' => ['연락처', 30, false],
             'recipient' => ['받는 분', 100, false], 'recipient_phone' => ['받는 분 연락처', 30, false], 'postcode' => ['우편번호', 10, false],
             'address' => ['주소', 250, false], 'address_detail' => ['상세주소', 250, true], 'delivery_note' => ['배송 요청', 500, true]];
         foreach ($fields as $key => [$label, $max, $optional]) {
@@ -664,7 +673,7 @@ final class Orders
             try { $row['phone'] = PhoneNumber::normalize($row['phone'] ?? ''); }
             catch (DomainError $e) { $errors += $e->details(); }
         }
-        if (isset($row['email']) && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = '이메일 주소를 확인해 주세요.';
+        if (isset($row['email']) && $row['email'] !== '' && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = '이메일 주소를 확인해 주세요.';
         foreach (['phone', 'recipient_phone'] as $key) {
             if (isset($row[$key]) && (!preg_match('/^[0-9+() -]+$/D', $row[$key]) || strlen(preg_replace('/\D/', '', $row[$key])) < 8)) $errors[$key] = '연락처를 확인해 주세요.';
         }

@@ -13,8 +13,8 @@
 <section class="card yc-order-flow"><div class="card-body">
   <div class="yc-panel-heading"><div><h2 class="card-title">주문 처리 현황</h2><p class="muted">전체 기간 · 현재 주문 상태 기준</p></div><a class="yc-admin-link" href="<?= $this->e($admin_url) ?>/orders">전체 주문 <?= $this->icon('arrow-right', 16) ?></a></div>
   <ol class="yc-workflow">
-    <?php foreach (['pending' => ['주문 접수', '확인할 주문'], 'confirmed' => ['상품 준비', '배송을 준비할 주문'], 'shipped' => ['배송 중', '배송을 확인할 주문'], 'completed' => ['배송 완료', '처리가 끝난 주문']] as $key => [$label, $hint]): ?>
-      <li><a href="<?= $this->e($admin_url) ?>/orders?status=<?= $key ?>"<?= $key === 'pending' ? ' class="yc-workflow-priority"' : '' ?>><span><?= $label ?></span><strong><?= number_format((int) ($order_stats[$key] ?? 0)) ?><small>건</small></strong><small><?= $hint ?></small></a></li>
+    <?php foreach (['pending' => ['주문 접수', '확인할 주문'], 'paid' => ['발송 대기', '운송장을 등록할 주문'], 'shipped' => ['배송 중', '배송을 확인할 주문'], 'completed' => ['배송 완료', '처리가 끝난 주문']] as $key => [$label, $hint]): ?>
+      <li><a href="<?= $this->e($admin_url . ($key === 'paid' ? '/shipments' : '/orders?status=' . $key)) ?>"<?= $key === 'pending' ? ' class="yc-workflow-priority"' : '' ?>><span><?= $label ?></span><strong><?= number_format((int) ($order_stats[$key] ?? 0) + ($key === 'paid' ? (int) ($order_stats['confirmed'] ?? 0) : 0)) ?><small>건</small></strong><small><?= $hint ?></small></a></li>
     <?php endforeach ?>
   </ol>
   <div class="yc-panel-foot"><span class="muted">주문 상태는 결제 완료를 의미하지 않습니다.</span><a href="<?= $this->e($admin_url) ?>/orders?status=cancelled">취소 <?= (int) ($order_stats['cancelled'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a></div>

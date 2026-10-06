@@ -1,0 +1,5 @@
+/* Optional checkout details keep the main order form compact. */
+.yc-checkout-shipping-detail>summary,.yc-depositor-extra>summary{cursor:pointer;font-weight:650}
+.yc-checkout-shipping-detail>summary{font-size:1.1rem}
+.yc-checkout-shipping-detail[open]>summary{margin-bottom:1rem}
+.yc-depositor-extra .yc-field{margin-top:.7rem}

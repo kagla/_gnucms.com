@@ -39,6 +39,7 @@ final class TossGateway extends DirectGateway
             'customerName' => mb_substr($customer['name'], 0, 100, 'UTF-8'),
             'customerEmail' => mb_substr($customer['email'], 0, 100, 'UTF-8')]
             + TaxAdapter::checkoutFields($this->id(), $order);
+        if ($customer['email'] === '') unset($fields['customerEmail']);
         if ($order['method'] === 'bank_transfer') {
             $fields['useEscrow'] = ($config['mode'] ?? 'general') === 'escrow';
             if ($fields['useEscrow']) {

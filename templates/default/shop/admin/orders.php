@@ -32,7 +32,7 @@ $current = (string) $order['status'];
 $method = (string) $order['payment_method'];
 $next = match ($current) { 'paid' => 'confirmed', 'shipped' => 'completed', default => '' };
 $canDeposit = $current === 'pending' && ($method === '' || $method === 'manual_transfer');
-$canShip = $current === 'confirmed';
+$canShip = in_array($current, ['paid', 'confirmed'], true);
 $canCancel = in_array($current, ['pending', 'paid', 'confirmed'], true)
     && (!in_array($method, \GnuCms\Shop\Commerce\Orders::PG_METHODS, true)
         || ($current !== 'pending' && (int) $order['paid_amount'] > 0 && (int) $order['refunded_amount'] >= (int) $order['paid_amount']));
@@ -52,9 +52,9 @@ $trackingUrl = $showShipping ? \GnuCms\Shop\Settings::trackingUrl($carrier, $tra
 <?php if ($next !== ''): ?><form method="post" action="<?= $this->e($admin_url) ?>/orders">
 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="transition"><input type="hidden" name="from" value="<?= $this->e($current) ?>"><input type="hidden" name="status" value="<?= $this->e($next) ?>">
 <?php foreach ($returnFields as $name => $value): ?><input type="hidden" name="<?= $name ?>" value="<?= $this->e($value) ?>"><?php endforeach ?>
-<button class="btn btn-primary btn-sm" type="submit"<?= $next === 'completed' ? ' data-yc-confirm-complete="' . $this->e($order['number']) . '"' : '' ?>><?= $this->e($statuses[$next]) ?></button></form><?php endif ?>
+<button class="btn<?= $next === 'confirmed' ? ' btn-outline' : ' btn-primary' ?> btn-sm" type="submit"<?= $next === 'completed' ? ' data-yc-confirm-complete="' . $this->e($order['number']) . '"' : '' ?>><?= $this->e($statuses[$next]) ?></button></form><?php endif ?>
 <?php if ($canDeposit): ?><button class="btn btn-outline btn-sm yc-order-list-trigger" type="button" data-yc-quick-action="deposit" data-yc-order-id="<?= (int) $order['id'] ?>" data-yc-order-from="<?= $this->e($current) ?>" data-yc-order-number="<?= $this->e($order['number']) ?>">입금 확인</button><?php endif ?>
-<?php if ($canShip): ?><button class="btn btn-primary btn-sm yc-order-list-trigger" type="button" data-yc-quick-action="shipped" data-yc-order-id="<?= (int) $order['id'] ?>" data-yc-order-from="<?= $this->e($current) ?>" data-yc-order-number="<?= $this->e($order['number']) ?>">배송 중</button><?php endif ?>
+<?php if ($canShip): ?><button class="btn btn-primary btn-sm yc-order-list-trigger" type="button" data-yc-quick-action="shipped" data-yc-order-id="<?= (int) $order['id'] ?>" data-yc-order-from="<?= $this->e($current) ?>" data-yc-order-number="<?= $this->e($order['number']) ?>">발송 처리</button><?php endif ?>
 <?php if ($canCancel): ?><button class="btn btn-outline btn-sm yc-order-list-trigger" type="button" data-yc-quick-action="cancelled" data-yc-order-id="<?= (int) $order['id'] ?>" data-yc-order-from="<?= $this->e($current) ?>" data-yc-order-number="<?= $this->e($order['number']) ?>" data-yc-needs-return="<?= $current !== 'pending' && !in_array($method, \GnuCms\Shop\Commerce\Orders::PG_METHODS, true) && (int) $order['paid_amount'] > (int) $order['refunded_amount'] ? '1' : '0' ?>">주문 취소</button><?php endif ?>
 </div><?php endif ?></div></td></tr>
 <?php endforeach ?>
