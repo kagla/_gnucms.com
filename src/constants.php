@@ -7,7 +7,7 @@ declare(strict_types=1);
  * 그 뒤로는 관리자가 고친 site_name 이 앞선다. 설정을 읽을 수 없는 자리
  * (설치 화면, 기본값, 스키마 씨앗)에서만 이 상수를 그대로 쓴다.
  */
-const GNUCMS = 'gnucms.com';
+const GNUCMS = 'GNUCMS';
 
 /**
  * app.url 을 설정하지 않은 설치에서 쓰는 기본 주소. 메일 링크와 소셜 로그인
