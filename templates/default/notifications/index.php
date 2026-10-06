@@ -53,7 +53,7 @@
             </span>
             <span class="notice-subject"><?php if ($item['order_id'] !== null): ?>주문번호 <?php endif ?><?= $this->e($item['subject']) ?></span>
           </span>
-          <time class="notice-time" datetime="<?= $this->e($item['created_at']) ?>"><?= $this->date($item['created_at'], 'Y.m.d H:i') ?></time>
+          <time class="notice-time" datetime="<?= $this->e($item['created_at']) ?>"><?= $this->date($item['created_at']) ?></time>
         </a>
       </li>
     <?php endforeach ?>

@@ -139,7 +139,9 @@ final class AdminService
         // PhoneNumber::normalize() 는 Validator 가 아니라 DomainError 를 직접 던진다.
         // AccountService::updateProfile() 과 같은 이유로 $v->check() 뒤에 본다.
         $phone = $this->phoneFromAdminInput($input, isset($user['phone']) ? (string) $user['phone'] : null);
+        $buyerName = array_key_exists('buyer_name', $input) ? BuyerProfile::name($input['buyer_name']) : null;
         $this->users->updateForAdmin($id, $email, $displayName, $status);
+        if (array_key_exists('buyer_name', $input)) $this->users->updateBuyerName($id, $buyerName);
         if ($status === 'blocked' && $user['status'] !== 'blocked') {
             // 막 차단된 사람이다. 걸려 있던 예약을 멈춘다 — 차단은 번호를 지우지
             // 않으므로 그대로 두면 며칠 뒤에 그 번호로 나간다. 상태가 바뀔 때만
@@ -191,8 +193,8 @@ final class AdminService
      * 관리자 회원 수정은 signup_phone 정책을 보지 않는다 — 그 정책은 "가입 화면이
      * 무엇을 물을지"를 정하는 것이지 "관리자가 무엇을 관리할 수 있는지"를 정하는
      * 것이 아니다. 정책이 off 여도(심지어 required 여도) 관리자는 항상 번호를
-     * 넣고 지울 수 있어야 한다 — off 인 동안 번호를 지우고 싶은 회원은 관리자에게
-     * 요청할 수밖에 없는데, 이 메서드가 정책을 따르면 그 관리자조차 못 지운다.
+     * 넣고 지울 수 있어야 한다. 회원정보 화면도 번호를 입력할 수 있지만, 필수 정책의
+     * 삭제 제한을 관리자는 적용받지 않는다.
      * 그래서 여기는 AccountService::phoneForEdit() 의 세 값 분기를 쓰지 않는다 —
      * "입력이 있으면 정규화, 없으면 null" 뿐이다. 이건 세 값 분기를 복사한 게
      * 아니라 그 분기가 아예 없는 쪽이다.

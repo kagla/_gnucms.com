@@ -19,7 +19,7 @@ final class StreamTransport implements Transport
         $body = $this->encode($fields);
         $context = stream_context_create(['http' => [
             'method' => 'POST',
-            'header' => "Content-Type: application/x-www-form-urlencoded\r\n"
+            'header' => "Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n"
                 . 'Content-Length: ' . strlen($body) . "\r\n",
             'content' => $body,
             'timeout' => $timeout,

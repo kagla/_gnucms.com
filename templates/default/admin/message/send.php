@@ -152,7 +152,7 @@ $selectedTplCode = (string) ($values['tpl_code'] ?? '');
           <div class="alert alert-info">
             <p>
               <?php if ($preview['scheduled_at'] !== null): ?>
-                <span class="badge badge-info badge-soft"><?= $this->date($preview['scheduled_at'], 'Y-m-d H:i') ?>에 발송 예정</span>
+                <span class="badge badge-info badge-soft"><?= $this->date($preview['scheduled_at']) ?>에 발송 예정</span>
               <?php else: ?>
                 <span class="badge badge-ghost badge-soft">지금 바로 발송</span>
               <?php endif ?>

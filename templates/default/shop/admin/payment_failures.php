@@ -20,7 +20,7 @@
   <?php if ($list['items'] === []): ?><div class="yc-admin-empty"><?= $this->icon('check-circle', 30) ?><strong>표시할 결제 오류가 없습니다</strong><p>PG에서 거절되었거나 결과 확인이 필요한 결제가 이곳에 표시됩니다.</p></div>
   <?php else: ?><div class="overflow-x-auto"><table class="table yc-orders-table"><thead><tr><th>발생 시각</th><th>상태</th><th>환경·수단</th><th>금액</th><th>PG 응답</th><th>결제 참조번호</th><th>처리</th></tr></thead><tbody>
     <?php foreach ($list['items'] as $item): $review = $item['status'] !== 'declined'; ?>
-    <tr><td data-label="발생 시각"><?= $item['created_at'] > 0 ? $this->e(date('Y.m.d H:i', $item['created_at'])) : '—' ?></td>
+    <tr><td data-label="발생 시각"><?= $item['created_at'] > 0 ? $this->e($this->date($item['created_at'])) : '—' ?></td>
       <td data-label="상태"><span class="yc-status" data-status="<?= $review ? 'pending' : 'cancelled' ?>"><?= $review ? '결과 확인 필요' : '결제 거절' ?></span></td>
       <td data-label="환경·수단"><?= $item['environment'] === 'test' ? '테스트' : '운영' ?> · <?= $this->e($payment_methods[$item['method']] ?? $item['method']) ?></td>
       <td data-label="금액"><?= number_format($item['amount']) ?>원</td>

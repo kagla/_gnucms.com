@@ -18,7 +18,7 @@
 .yc-admin-page .btn-primary:hover{background:#9e352d;border-color:#9e352d}
 .yc-admin-page .yc-admin-toolbar{gap:1rem;flex-wrap:nowrap;margin-bottom:1.5rem;padding:.4rem;background:var(--yc-paper);border:1px solid var(--yc-line);border-radius:12px}
 .yc-admin-page :is(.yc-admin-nav,.yc-subtabs,.yc-form-nav,.yc-status-filters){height:auto;flex:none}
-.yc-admin-page .yc-admin-nav{display:flex;flex-wrap:nowrap;gap:.35rem;min-width:0;overflow:auto;scrollbar-width:thin}
+.yc-admin-page .yc-admin-nav{display:flex;flex:1 1 auto;flex-wrap:wrap;gap:.35rem;min-width:0;max-width:100%;overflow:visible}
 .yc-admin-page .yc-admin-nav .tab{display:flex;flex-wrap:nowrap;align-items:center;gap:.55rem;height:44px;min-height:44px;padding:0 1.1rem;border-radius:8px;color:var(--yc-muted);font-size:14px;white-space:nowrap;border:0}
 .yc-admin-page .yc-admin-nav .tab:before,.yc-admin-page .yc-admin-nav .tab:after{display:none}
 .yc-admin-page .yc-admin-nav .tab-active{color:var(--yc-accent);background:var(--yc-tint);font-weight:750}
@@ -371,7 +371,7 @@
   .yc-admin-page .yc-admin-heading h1{font-size:22px}
   .yc-admin-page .yc-admin-heading p{font-size:13px}
   .yc-admin-page .yc-admin-nav{gap:.2rem;justify-content:space-between}
-  .yc-admin-page .yc-admin-nav .tab{flex:1;flex-direction:column;gap:.3rem;padding:.55rem .4rem;height:58px;font-size:12px}
+  .yc-admin-page .yc-admin-nav .tab{flex:1 0 4.25rem;flex-direction:column;gap:.3rem;padding:.55rem .4rem;height:58px;font-size:12px}
   .yc-admin-page .yc-admin-nav .tab svg{width:18px;height:18px}
   .yc-admin-page .yc-admin-toolbar{margin-bottom:1.1rem}
   .yc-admin-page .yc-admin-toolbar>.row-actions{padding:.1rem .3rem}

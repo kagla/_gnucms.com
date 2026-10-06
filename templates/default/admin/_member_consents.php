@@ -16,10 +16,10 @@
             <td data-label="항목"><span class="cell-title"><?= $this->e($this->def($row['content_title'] ?? null, $row['consent_type'])) ?></span></td>
             <td data-label="자리"><code class="kbd kbd-sm"><?= $this->e($row['scope']) ?></code></td>
             <td data-label="동의"><span class="badge badge-sm badge-soft <?= $row['agreed'] ? 'badge-success' : 'badge-ghost' ?>"><?= $row['agreed'] ? '동의' : '안 함' ?></span></td>
-            <td data-label="동의 시각"><?= $this->date($row['agreed_at'], 'Y.m.d H:i') ?></td>
+            <td data-label="동의 시각"><?= $this->date($row['agreed_at']) ?></td>
             <td data-label="그때 본 문서">
               <?php if ($row['content_slug']): ?>
-                <a class="link" href="<?= $this->url('terms.show', ['slug' => $row['content_slug']]) ?>" target="_blank" rel="noopener"><?= $this->date($row['content_updated_at'], 'Y.m.d H:i') ?> 판</a>
+                <a class="link" href="<?= $this->url('terms.show', ['slug' => $row['content_slug']]) ?>" target="_blank" rel="noopener"><?= $this->date($row['content_updated_at']) ?> 판</a>
                 <?php if ($row['content_current_updated_at'] > $row['content_updated_at']): ?>
                   <span class="badge badge-warning badge-soft badge-xs">그 뒤 바뀜</span>
                 <?php endif ?>

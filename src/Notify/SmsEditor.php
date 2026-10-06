@@ -14,7 +14,7 @@ final class SmsEditor
     public static function samples(string $event): array
     {
         $values = ['사이트명' => '우리 쇼핑몰', '이름' => '홍길동', '링크' => 'https://example.com/notice',
-            '유효시간' => '1시간', '일시' => '2026-10-04 15:00', '글제목' => '상품 사용 안내',
+            '유효시간' => '1시간', '일시' => '26-10-04 15:00:00', '글제목' => '상품 사용 안내',
             '작성자' => '김회원', '주문번호' => '261004-1234567', '주문금액' => '35,000원',
             '결제금액' => '35,000원', '환불금액' => '10,000원', '상품명' => '예시 상품',
             '문의처' => '02-1234-5678 / support@example.com',
@@ -49,7 +49,7 @@ final class SmsEditor
         $title = is_string($input['sms_title'] ?? null) ? trim($input['sms_title']) : '';
         if ($body === '') throw DomainError::validation(['sms_body' => '미리 볼 본문을 입력해 주세요.']);
         self::validate($event, $body, $title);
-        $samples = self::samples($event);
+        $samples = SmsLinks::forBody($event, self::samples($event), 'https://example.com');
         $posted = is_array($input['samples'] ?? null) ? $input['samples'] : [];
         foreach ($samples as $name => &$value) {
             if (array_key_exists($name, $posted)) {

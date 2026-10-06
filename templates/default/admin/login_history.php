@@ -73,7 +73,7 @@ $page_url = function (int $page) use ($filter): string {
         <tr class="table-empty"><td colspan="6"><?= $filter['member'] !== null || $filter['ip'] !== null || $filter['q'] !== '' ? '조건에 맞는 로그인 기록이 없습니다.' : '아직 기록된 로그인 기록이 없습니다.' ?></td></tr>
       <?php else: foreach ($list['data'] as $event): ?>
         <tr>
-          <td data-label="일시"><time datetime="<?= $this->e($event['created_at']) ?>"><?= $this->date($event['created_at'], 'Y.m.d H:i:s') ?></time></td>
+          <td data-label="일시"><time datetime="<?= $this->e($event['created_at']) ?>"><?= $this->date($event['created_at']) ?></time></td>
           <td data-label="회원">
             <?php if ($event['user_id'] !== null && $event['display_name'] !== null): ?>
               <a class="link" href="<?= $this->url('admin.login_history', [], ['member' => $event['user_id'], 'q' => $event['display_name']]) ?>" title="이 회원의 기록만 보기"><?= $this->e($event['display_name']) ?></a>

@@ -284,6 +284,21 @@ final class AligoService
         }
     }
 
+    /** 공통 전화 발송 모드를 저장하고 꺼지는 채널의 예약을 취소한다. */
+    public function setPhoneMode(string $mode): array
+    {
+        $off = $this->settings->setPhoneMode($mode);
+        try {
+            $ids = [];
+            foreach ($off as $channel) {
+                array_push($ids, ...$this->scheduledJobIdsForChannel($channel));
+            }
+            return $this->cancelJobs(array_values(array_unique($ids)));
+        } catch (\Throwable) {
+            return ['cancelled' => 0, 'failed' => 0, 'reasons' => [], 'cancel_unverified' => true];
+        }
+    }
+
     /**
      * 알리고에서 템플릿을 다시 가져온다. 승인·정상을 잃거나 목록에서 사라져 자동으로
      * 꺼진 사본이 있으면, 그 템플릿으로 걸린 예약도 함께 취소 요청한다 — 더는 승인
@@ -376,6 +391,34 @@ final class AligoService
         return $this->alimtalkApi->profiles();
     }
 
+    /** 채널별 전체 템플릿을 확인한다. 사본 저장·사용 설정·예약에는 영향을 주지 않는다. */
+    public function profilesWithTemplates(): array
+    {
+        $profiles = [];
+        foreach ($this->profiles() as $profile) {
+            if (!is_array($profile)) continue;
+            $profile['templates'] = [];
+            $profile['templates_error'] = null;
+            $senderKey = (string) ($profile['senderKey'] ?? '');
+            if ($senderKey === '') {
+                $profile['templates_error'] = '발신프로필키가 없어 템플릿을 조회하지 못했습니다.';
+            } else {
+                try {
+                    $profile['templates'] = array_values(array_filter(
+                        $this->alimtalkApi->templates($senderKey),
+                        static fn (mixed $item): bool => is_array($item)
+                    ));
+                } catch (DomainError | TransportFailure $error) {
+                    // 한 채널의 조회 실패로 이미 조회한 다른 채널 목록까지 잃지 않는다.
+                    $profile['templates_error'] = $error->getMessage();
+                }
+            }
+            $profiles[] = $profile;
+        }
+
+        return $profiles;
+    }
+
     /** 스위치 저장 직후에도 안전하게 읽을 수 있는 계정·채널 상태. */
     public function channelStatus(): array
     {
@@ -392,6 +435,7 @@ final class AligoService
             'configured' => $configured,
             'sms_switch_on' => $values['sms_enabled'],
             'alimtalk_switch_on' => $values['alimtalk_enabled'],
+            'phone_mode' => Settings::phoneMode($values['alimtalk_enabled'], $values['sms_enabled']),
             'sms_enabled' => $configured && $values['sms_enabled'],
             'alimtalk_enabled' => $configured && $values['alimtalk_enabled'],
             'test_mode' => $configured && $values['test_mode'],

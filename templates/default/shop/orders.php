@@ -6,7 +6,7 @@
 <?php $this->start('body') ?>
 <?php
 $weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
-$weekdayDate = fn (int $timestamp): string => $this->date($timestamp, 'Y.m.d H:i:s') . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')';
+$weekdayDate = fn (int $timestamp): string => $this->date($timestamp) . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')';
 ?>
 <div class="yc-shop">
 <?php $this->insert('_header') ?>

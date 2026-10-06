@@ -41,7 +41,7 @@ final class SmsApiTest extends DatabaseTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testConvertsBodyAndTitleToEucKr(array $config): void
+    public function testKeepsBodyAndTitleInUtf8(array $config): void
     {
         $api = $this->api($config);
         $this->transport->queue(200, '{"result_code":1,"msg_id":"7788","success_cnt":1,"error_cnt":0}');
@@ -52,8 +52,8 @@ final class SmsApiTest extends DatabaseTestCase
         self::assertSame('7788', $result['mid']);
         self::assertSame(1, $result['scnt']);
         $fields = $this->transport->requests[0]['fields'];
-        self::assertSame(mb_convert_encoding('안녕하세요', 'EUC-KR', 'UTF-8'), $fields['msg_1']);
-        self::assertSame(mb_convert_encoding('안내', 'EUC-KR', 'UTF-8'), $fields['title']);
+        self::assertSame('안녕하세요', $fields['msg_1']);
+        self::assertSame('안내', $fields['title']);
         self::assertSame('01012345678', $fields['rec_1']);
     }
 
@@ -127,7 +127,7 @@ final class SmsApiTest extends DatabaseTestCase
     }
 
     /**
-     * 문자 API 는 EUC-KR 서비스다. 응답의 message 칸이 EUC-KR 한글로 오면 예전 코드는
+     * 과거 EUC-KR 응답과도 호환한다. 응답의 message 칸이 EUC-KR 한글로 오면 예전 코드는
      * json_decode() 가 null 을 돌려줘 "응답을 읽지 못했습니다" 예외를 냈다 — 알리고는
      * 이미 받아들여 전화기가 울린 뒤인데도 Dispatch 는 그 묶음을 통째로 'failed' 로
      * 적고, 그걸 본 관리자가 다시 보내면 중복 발송·이중 과금이 된다.
@@ -178,8 +178,8 @@ final class SmsApiTest extends DatabaseTestCase
         $fields = $this->transport->requests[0]['fields'];
         // msg_type should arrive unchanged (UTF-8), not converted to EUC-KR
         self::assertSame('알림', $fields['msg_type']);
-        // msg_1 should be converted to EUC-KR
-        self::assertSame(mb_convert_encoding('알림', 'EUC-KR', 'UTF-8'), $fields['msg_1']);
+        // Message text also stays UTF-8 in the HTTP request.
+        self::assertSame('알림', $fields['msg_1']);
     }
 
     #[DataProvider('connectionProvider')]

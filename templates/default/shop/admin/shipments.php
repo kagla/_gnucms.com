@@ -18,7 +18,7 @@
       <div class="overflow-x-auto"><table class="table yc-fulfillment-table"><thead><tr><th><input class="checkbox checkbox-sm" type="checkbox" data-yc-check-all aria-label="현재 페이지 전체 선택"></th><th>주문번호 / 결제일</th><th>받는 분</th><th>상품</th><th>배송지</th><th>금액</th></tr></thead><tbody>
       <?php foreach ($list['items'] as $order): ?><tr>
         <td><input class="checkbox checkbox-sm" type="checkbox" name="ids[]" value="<?= (int) $order['id'] ?>" aria-label="<?= $this->e($order['number']) ?> 선택"></td>
-        <td><a href="<?= $this->e($admin_url) ?>/orders/detail?id=<?= (int) $order['id'] ?>"><strong><?= $this->e($order['number']) ?></strong></a><br><small class="muted"><?= $this->date((int) $order['paid_at'], 'Y.m.d H:i') ?></small></td>
+        <td><a href="<?= $this->e($admin_url) ?>/orders/detail?id=<?= (int) $order['id'] ?>"><strong><?= $this->e($order['number']) ?></strong></a><br><small class="muted"><?= $this->date((int) $order['paid_at']) ?></small></td>
         <td><strong><?= $this->e($order['recipient']) ?></strong><br><small class="muted"><?= $this->e($order['recipient_phone']) ?></small></td>
         <td><?php foreach ($order['item_summary'] as $summary): ?><div><?= $this->e($summary) ?></div><?php endforeach ?></td>
         <td><small>[<?= $this->e($order['postcode']) ?>] <?= $this->e($order['address'] . ' ' . $order['address_detail']) ?></small></td>

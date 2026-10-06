@@ -1,5 +1,23 @@
 <script>
 (function(){
+  var modal=document.getElementById('aligo-profile-template-modal');
+  if(!modal||typeof modal.showModal!=='function'){return}
+  var title=document.getElementById('aligo-profile-template-title');
+  var content=modal.querySelector('[data-aligo-template-content]');
+  document.addEventListener('click',function(event){
+    if(!(event.target instanceof Element)){return}
+    var button=event.target.closest('[data-aligo-template-detail]');
+    if(!button){return}
+    var detail=document.getElementById(button.dataset.aligoTemplateDetail);
+    if(!detail||detail.tagName!=='TEMPLATE'){return}
+    title.textContent=button.dataset.templateTitle||'알림톡 템플릿';
+    content.replaceChildren(detail.content.cloneNode(true));
+    modal.showModal();
+  });
+})();
+</script>
+<script>
+(function(){
   var radios=document.querySelectorAll('[data-senderkey]');
   var senderkey=document.getElementById('aligo-senderkey'),channelName=document.getElementById('aligo-channel-name');
   if(!radios.length||!senderkey){return}

@@ -172,6 +172,7 @@ final class AdminController
             // 에 얹고, 템플릿의 (string) 캐스팅이 경고를 낸다 — 늘 스칼라만 되돌린다.
             $values = array_merge($member, $input);
             $values['phone'] = isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '';
+            $values['buyer_name'] = is_string($input['buyer_name'] ?? null) ? $input['buyer_name'] : ($member['buyer_name'] ?? '');
             return $this->renderMemberForm($request, $response->withStatus(422), $values, $e->details());
         } catch (\Throwable $e) {
             $this->app->avatars()->delete($newAvatar);

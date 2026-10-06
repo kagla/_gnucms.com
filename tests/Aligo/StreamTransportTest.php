@@ -17,6 +17,15 @@ final class StreamTransportTest extends TestCase
         self::assertSame('key=a+b&user_id=%ED%99%8D', $transport->encode(['key' => 'a b', 'user_id' => '홍']));
     }
 
+    public function testKoreanMessageAndTitleRoundTripAsUtf8(): void
+    {
+        $fields = ['title' => '한글 안내', 'msg_1' => '회원가입 주문 배송 취소 가나다', 'rec_1' => '01012345678'];
+        parse_str((new StreamTransport())->encode($fields), $decoded);
+        self::assertSame($fields, $decoded);
+        self::assertTrue(mb_check_encoding($decoded['msg_1'], 'UTF-8'));
+        self::assertStringNotContainsString('?', $decoded['msg_1']);
+    }
+
     public function testDroppedFieldsWithNullValueAreNotSent(): void
     {
         $transport = new StreamTransport();

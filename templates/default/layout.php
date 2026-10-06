@@ -38,6 +38,7 @@
       // 시스템 한글 글꼴만 쓰면 캐시와 무관하게 언제나 같은 화면이고, 받을 것도 없다.
       // Pretendard 가 기기에 설치돼 있으면 --font 의 맨 앞이라 그대로 쓰인다. ?>
 <link rel="stylesheet" href="<?= $this->asset('theme.css') ?>">
+<link rel="stylesheet" href="<?= $this->asset('datetime.css') ?>">
 </head>
 <body class="<?php $this->start('body_class') ?><?php $this->stop() ?>" data-section="<?php $this->start('nav_section') ?><?php $this->stop() ?>">
 <a class="skip-link btn btn-primary btn-sm" href="#main">본문 바로가기</a>

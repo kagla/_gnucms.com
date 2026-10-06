@@ -14,7 +14,7 @@
   <div class="yc-feedback-admin-list">
     <?php foreach ($list['items'] as $row): ?>
       <article class="yc-feedback-card" id="yc-feedback-<?= (int) $row['id'] ?>">
-        <div class="yc-feedback-card-head"><div><span class="yc-feedback-kind"><?= $row['kind'] === 'review' ? '사용후기' : '상품문의' ?></span> <a href="<?= $this->e($public_url) ?>/item?id=<?= $this->e(rawurlencode($row['product_code'])) ?>#<?= $row['kind'] === 'review' ? 'yc-reviews' : 'yc-inquiries' ?>"><?= $this->e($row['product_name']) ?></a></div><time datetime="<?= date('c', (int) $row['created_at']) ?>"><?= date('Y.m.d H:i', (int) $row['created_at']) ?></time></div>
+        <div class="yc-feedback-card-head"><div><span class="yc-feedback-kind"><?= $row['kind'] === 'review' ? '사용후기' : '상품문의' ?></span> <a href="<?= $this->e($public_url) ?>/item?id=<?= $this->e(rawurlencode($row['product_code'])) ?>#<?= $row['kind'] === 'review' ? 'yc-reviews' : 'yc-inquiries' ?>"><?= $this->e($row['product_name']) ?></a></div><time datetime="<?= date('c', (int) $row['created_at']) ?>"><?= $this->date((int) $row['created_at']) ?></time></div>
         <h3><?= $this->e($row['title']) ?><?php if ((int) $row['is_private'] === 1): ?> <span class="yc-feedback-private">비공개</span><?php endif ?></h3>
         <p class="yc-feedback-meta"><?= $this->e($row['author']) ?><?php if ($row['kind'] === 'review'): ?> · 평점 <?= (int) $row['rating'] ?>/5<?php endif ?></p>
         <p class="yc-feedback-text"><?= nl2br($this->e($row['content'])) ?></p>

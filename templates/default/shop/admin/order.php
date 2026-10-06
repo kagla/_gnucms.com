@@ -2,7 +2,7 @@
 <?php $this->start('title') ?>주문 상세 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>shop<?php $this->stop() ?>
 <?php $this->start('extension_body') ?>
-<?php $weekdayNames = ['일', '월', '화', '수', '목', '금', '토']; $weekdayDate = fn (int $timestamp): string => $this->date($timestamp, 'y-m-d H:i:s') . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')'; ?>
+<?php $weekdayNames = ['일', '월', '화', '수', '목', '금', '토']; $weekdayDate = fn (int $timestamp): string => $this->date($timestamp) . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')'; ?>
 <?php $this->insert('admin/_extension_header', ['section' => 'shop', 'heading' => '주문 상세', 'description' => $order['number'], 'actions' => [['url' => $admin_url . '/orders', 'label' => '주문 목록'], ['url' => $this->url('admin.messages.send') . '?order=' . (int) $order['id'] . '&preset=order_' . rawurlencode($order['status']), 'label' => '주문 회원에게 문자'], ['url' => $this->url('admin.settings.notifications') . '#events', 'label' => '자동 문자 설정']]]) ?>
 <?php $this->insert('admin/_nav') ?>
 <?php $this->insert('admin/_errors') ?>

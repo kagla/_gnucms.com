@@ -1,7 +1,9 @@
 <?php $this->layout('admin/layout') ?>
 <?php $this->start('title') ?>알림톡·문자 · 이력 · <?= $this->e($site['site_name']) ?><?php $this->stop() ?>
 <?php $this->start('admin_section') ?>messages<?php $this->stop() ?>
+<?php $this->start('admin_body_class') ?>message-history-body<?php $this->stop() ?>
 <?php $this->start('body') ?>
+<link rel="stylesheet" href="<?= $this->asset('message-history.css') ?>">
 <?php
 // 알리고는 결과 웹훅이 없다 — 관리자가 이 화면을 열 때마다 컨트롤러가 조금씩 결과를
 // 물어 채운다. 그래서 "sending" 은 "전송 중"이 아니라 "결과를 기다리는 중"이라고
@@ -23,7 +25,7 @@ $jobStatusLabels = [
     // 관리자가 멈춘 예약. 실패가 아니다 — 나가지 않도록 의도적으로 멈춘 것이다.
     'cancelled' => ['label' => '취소됨', 'class' => 'badge-ghost'],
 ];
-$channelLabels = ['at' => '알림톡', 'sms' => '문자'];
+$channelLabels = ['at' => '알림톡', 'sms' => '문자(SMS)', 'lms' => '장문(LMS)'];
 // 어느 알림이 이 작업을 만들었는가. 관리자가 발송 화면에서 손으로 보낸 것은 event_key
 // 가 비어 있다(설계 문서: 관리자 수동 발송이면 NULL). 카탈로그에서 빠진 옛 키는 라벨을
 // 찾을 수 없으므로 키를 그대로 보여준다 — "-" 로 뭉개면 수동 발송과 구별되지 않는다.
@@ -75,39 +77,51 @@ $pageUrl = function (int $p) use ($filterQuery) {
       // 것은 열거값 하나뿐이고(빈 값·manual·이벤트 키), 그 밖의 값은 거르지 않은 것으로
       // 본다 — 컨트롤러가 그렇게 받는다. ?>
     <form class="post-filter" method="get" action="<?= $this->url('admin.messages.history') ?>">
-      <select class="select select-bordered" name="event" aria-label="어느 알림이 만든 작업인지로 거르기">
+      <select class="select select-bordered" name="event" aria-label="알림 유형으로 검색">
         <option value=""<?= $event_filter === '' ? ' selected' : '' ?>>전체</option>
         <option value="manual"<?= $event_filter === 'manual' ? ' selected' : '' ?>>관리자 수동 발송</option>
         <?php foreach ($event_labels as $key => $label): ?>
           <option value="<?= $this->e($key) ?>"<?= $event_filter === $key ? ' selected' : '' ?>><?= $this->e($label) ?></option>
         <?php endforeach ?>
       </select>
-      <button class="btn btn-outline" type="submit"><?= $this->icon('search', 15) ?> 거르기</button>
+      <button class="btn btn-outline" type="submit"><?= $this->icon('search', 15) ?> 검색</button>
     </form>
 
-    <div class="table-wrap">
-      <table class="table table-zebra">
-        <thead><tr><th>요청 시각</th><th>발송 예정</th><th>채널</th><th>알림</th><th>템플릿</th><th class="right">총</th><th class="right">성공</th><th class="right">실패</th><th class="right">취소</th><th>상태</th><th>테스트</th><th class="right">관리</th></tr></thead>
+    <div class="message-history-surface">
+      <table class="table table-zebra message-history-table">
+        <colgroup><col class="history-col-time"><col class="history-col-event"><col class="history-col-delivery"><col class="history-col-counts"><col class="history-col-status"><col class="history-col-manage"></colgroup>
+        <thead><tr><th>요청·예약 시각</th><th>알림</th><th>발송 정보</th><th>발송 건수</th><th>상태</th><th>관리</th></tr></thead>
         <tbody>
         <?php if ($listing['items'] === []): ?>
-          <tr class="table-empty"><td colspan="12"><?= $event_filter === '' ? '아직 보낸 작업이 없습니다.' : '거른 조건에 맞는 작업이 없습니다.' ?></td></tr>
+          <tr class="table-empty"><td colspan="6"><?= $event_filter === '' ? '아직 보낸 작업이 없습니다.' : '검색 조건에 맞는 발송 이력이 없습니다.' ?></td></tr>
         <?php else: foreach ($listing['items'] as $row): ?>
-          <?php $statusInfo = $jobStatusLabels[$row['status']] ?? ['label' => (string) $row['status'], 'class' => 'badge-ghost']; ?>
+          <?php $statusInfo = $jobStatusLabels[$row['status']] ?? ['label' => (string) $row['status'], 'class' => 'badge-ghost']; $event = $eventLabel($row['event_key'] ?? null); ?>
           <tr>
-            <td data-label="요청 시각"><time datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at'], 'Y.m.d H:i') ?></time></td>
-            <td data-label="발송 예정"><?php if ($row['scheduled_at'] !== null): ?><time datetime="<?= $this->e($row['scheduled_at']) ?>"><?= $this->date($row['scheduled_at'], 'Y.m.d H:i') ?></time><?php else: ?>-<?php endif ?></td>
-            <td data-label="채널"><?= $this->e($channelLabels[$row['channel']] ?? $row['channel']) ?></td>
-            <?php $event = $eventLabel($row['event_key'] ?? null); ?>
-            <td data-label="알림"><span class="badge badge-sm <?= $this->e($event['class']) ?> badge-soft"><?= $this->e($event['label']) ?></span></td>
-            <td data-label="템플릿"><?= $row['template_label'] !== null ? $this->e($row['template_label']) : '-' ?></td>
-            <td data-label="총" class="right"><?= $this->e($row['total']) ?></td>
-            <td data-label="성공" class="right"><?= $this->e($row['success']) ?></td>
-            <td data-label="실패" class="right"><?= $this->e($row['failure']) ?></td>
-            <?php // 관리자가 멈춰 아무에게도 가지 않은 수신자 수. 총 = 성공 + 실패 + 취소 + 대기·불명확. ?>
-            <td data-label="취소" class="right"><?= $this->e($row['cancelled']) ?></td>
-            <td data-label="상태"><span class="badge badge-sm <?= $this->e($statusInfo['class']) ?> badge-soft"><?= $this->e($statusInfo['label']) ?></span></td>
-            <td data-label="테스트"><?php if ((int) $row['test_mode'] === 1): ?><span class="badge badge-sm badge-warning badge-soft">테스트</span><?php else: ?>-<?php endif ?></td>
-            <td data-label="관리" class="right"><a class="btn btn-outline btn-sm" href="<?= $this->url('admin.messages.history.detail', ['id' => $row['id']]) ?>">상세</a></td>
+            <td data-label="요청·예약 시각" class="message-history-time">
+              <time datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at']) ?></time>
+              <?php if ($row['scheduled_at'] !== null): ?><small>예약 <time datetime="<?= $this->e($row['scheduled_at']) ?>"><?= $this->date($row['scheduled_at']) ?></time></small><?php else: ?><small>즉시 발송</small><?php endif ?>
+            </td>
+            <td data-label="알림" class="message-history-event"><span class="badge badge-sm <?= $this->e($event['class']) ?> badge-soft"><?= $this->e($event['label']) ?></span></td>
+            <td data-label="발송 정보" class="message-history-delivery">
+              <strong><?= $this->e($channelLabels[$row['channel']] ?? $row['channel']) ?></strong>
+              <?php if ($row['template_label'] !== null): ?><small>템플릿 <?= $this->e($row['template_label']) ?></small><?php endif ?>
+              <?php if (($row['provider_cost'] ?? null) !== null): ?>
+                <small title="알리고 발송 응답 금액입니다. 환불·취소·대체발송을 반영한 정산 확정액은 아닙니다.">알리고 반환 비용<br><strong><?= $this->e($row['provider_cost']['amount']) ?></strong><?= $row['provider_cost']['missing'] > 0 ? ' (일부 응답)' : '' ?></small>
+              <?php endif ?>
+            </td>
+            <td data-label="발송 건수" class="message-history-counts">
+              <div class="message-history-stats">
+                <span><span>총</span><strong><?= $this->e($row['total']) ?></strong></span>
+                <span><span>성공</span><strong><?= $this->e($row['success']) ?></strong></span>
+                <span><span>실패</span><strong><?= $this->e($row['failure']) ?></strong></span>
+                <span><span>취소</span><strong><?= $this->e($row['cancelled'] ?? 0) ?></strong></span>
+              </div>
+            </td>
+            <td data-label="상태" class="message-history-status">
+              <span class="badge badge-sm <?= $this->e($statusInfo['class']) ?> badge-soft"><?= $this->e($statusInfo['label']) ?></span>
+              <?php if ($row['test_mode']): ?><small>테스트</small><?php endif ?>
+            </td>
+            <td data-label="관리" class="message-history-manage"><a class="btn btn-outline btn-sm" href="<?= $this->url('admin.messages.history.detail', ['id' => $row['id']]) ?>">상세</a></td>
           </tr>
         <?php endforeach; endif ?>
         </tbody>

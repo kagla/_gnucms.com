@@ -3,6 +3,7 @@
 <?php $this->start('admin_section') ?>site<?php $this->stop() ?>
 <?php $this->start('body') ?>
 <?php $mailMode = in_array(($values['mode'] ?? ''), ['disabled', 'native', 'smtp'], true) ? (string) $values['mode'] : 'native'; ?>
+<?php $phoneMode = $status['phone_mode'] ?? \GnuCms\Aligo\Settings::phoneMode((bool) $status['alimtalk_switch_on'], (bool) $status['sms_switch_on']); ?>
 <div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li><a href="<?= $this->url('admin.settings') ?>">설정</a></li><li aria-current="page">알림·발송</li></ul></div>
 <?php $this->insert('admin/_settings_tabs', ['active' => 'messaging']) ?>
 <section class="card settings-card"><div class="card-body">
@@ -47,28 +48,27 @@
       </div>
     </div>
 
-    <?php foreach ([['at', '카카오 알림톡', $status['alimtalk_switch_on']], ['sms', '문자', $status['sms_switch_on']]] as [$channel, $label, $on]): ?>
-      <div class="notification-channel-row">
-        <div><h2 class="notification-channel-name"><?= $label ?></h2></div>
-        <div class="notification-channel-controls">
-          <form method="post" action="<?= $this->url('admin.aligo.toggle') ?>#aligo-result" data-channel-toggle aria-label="<?= $label ?> 발송 설정">
-            <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-            <input type="hidden" name="channel" value="<?= $channel ?>">
-            <input type="hidden" name="return_to" value="settings_messaging">
-            <span class="join" role="group" aria-label="<?= $label ?> OFF 또는 ON">
-              <?php foreach ([['disable', 'OFF', !$on], ['enable', 'ON', $on]] as [$action, $caption, $current]): ?>
-                <button class="btn btn-sm join-item <?= $current ? ($action === 'enable' ? 'btn-success' : 'btn-neutral') : 'btn-outline' ?>" type="<?= $current ? 'button' : 'submit' ?>" name="action" value="<?= $action ?>" data-action="<?= $action ?>" aria-pressed="<?= $current ? 'true' : 'false' ?>"<?= !$current && $action === 'enable' && !$status['configured'] ? ' disabled' : '' ?>><?= $caption ?></button>
-              <?php endforeach ?>
-            </span>
-          </form>
-        </div>
+    <form class="notification-channel-row" method="post" action="<?= $this->url('admin.aligo.toggle') ?>#aligo-result" data-phone-mode-form>
+      <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+      <input type="hidden" name="return_to" value="settings_messaging">
+      <div><h2 class="notification-channel-name">알림톡·문자</h2><p class="fieldset-label">휴대폰 알림 발송 방식</p></div>
+      <div class="notification-channel-main">
+        <fieldset class="fieldset">
+          <legend class="sr-only">알림톡·문자 사용 방식</legend>
+          <div class="notification-mail-methods">
+            <?php foreach (\GnuCms\Aligo\Settings::PHONE_MODE_LABELS as $mode => $label): ?>
+              <label class="notification-mail-method"><input class="radio radio-sm" type="radio" name="phone_mode" value="<?= $this->e($mode) ?>"<?= $phoneMode === $mode ? ' checked' : '' ?><?= $mode !== 'disabled' && !$status['configured'] ? ' disabled' : '' ?>> <?= $this->e($label) ?></label>
+            <?php endforeach ?>
+          </div>
+        </fieldset>
+        <div class="notification-channel-controls"><button class="btn btn-primary btn-sm" type="submit">발송 방식 저장</button></div>
       </div>
-    <?php endforeach ?>
+    </form>
   </div>
 
   <div class="notification-channel-guidance">
-    <p data-notification-phone-mode role="status" aria-live="polite"><?php if ($status['alimtalk_switch_on']): ?><?= $status['sms_switch_on'] ? '알림톡을 먼저 보내고, 실패하면 문자로 보냅니다.' : '알림톡만 보냅니다. 실패해도 문자는 보내지 않습니다.' ?><?php else: ?><?= $status['sms_switch_on'] ? '문자만 보냅니다.' : '알림톡과 문자를 보내지 않습니다.' ?><?php endif ?></p>
-    <p class="fieldset-label">알림톡·문자 OFF·ON은 즉시 저장됩니다. 알림 종류별 채널 선택에 따라 실제 발송합니다.</p>
+    <p data-notification-phone-mode role="status" aria-live="polite"><?php if ($status['alimtalk_switch_on']): ?><?= $status['sms_switch_on'] ? '알림톡을 먼저 보내고, 실패하거나 사용할 수 없으면 문자로 보냅니다.' : '알림톡만 보냅니다. 실패해도 문자는 보내지 않습니다.' ?><?php else: ?><?= $status['sms_switch_on'] ? '문자만 보냅니다.' : '알림톡과 문자를 보내지 않습니다.' ?><?php endif ?></p>
+    <p class="fieldset-label">옵션을 선택하면 즉시 저장되며, 지원하는 모든 알림에 적용됩니다.</p>
     <?php if (!$status['configured']): ?><p class="fieldset-label">알림톡·문자를 켜려면 먼저 알리고 계정을 연결해 주세요.</p><?php endif ?>
     <?php if ($status['test_mode']): ?><p class="fieldset-label">알리고 테스트 모드입니다. 현재 알림톡·문자는 실제로 발송되지 않습니다.</p><?php endif ?>
   </div>
@@ -77,4 +77,5 @@
 <?php $this->start('scripts') ?>
 <?php $this->insert('admin/_mail_scripts') ?>
 <?php $this->insert('admin/_aligo_scripts') ?>
+<?php $this->insert('admin/_phone_mode_scripts') ?>
 <?php $this->stop() ?>

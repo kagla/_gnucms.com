@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace GnuCms\Shop\Commerce;
 
 use DateTimeImmutable;
+use GnuCms\Account\BuyerProfile;
+use GnuCms\Account\UserRepository;
+use GnuCms\Aligo\PhoneNumber;
 use DateTimeZone;
 use GnuCms\Error\DomainError;
 use GnuCms\Payment\TaxAmounts;
@@ -13,6 +16,7 @@ use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
 use GnuCms\Support\Clock;
+use GnuCms\Support\DateTimeDisplay;
 use PDOException;
 
 final class Orders
@@ -68,7 +72,7 @@ final class Orders
         $items = $this->store->select('SELECT o.id, o.buyer_name, o.phone, o.email, o.recipient, o.recipient_phone, o.postcode, o.address, o.address_detail, o.delivery_note, o.default_address, o.created_at'
             . $join . $where . ' ORDER BY (a.default_order_id > 0) DESC, a.latest_order_id DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset,
             [$userId, ...$filterParams]);
-        foreach ($items as &$item) $item['created_label'] = date('Y.m.d', (int) $item['created_at']);
+        foreach ($items as &$item) $item['created_label'] = DateTimeDisplay::format((int) $item['created_at'], $this->timezone);
         unset($item);
         return ['items' => $items, 'total' => $count, 'page' => $page, 'total_pages' => $totalPages];
     }
@@ -98,6 +102,9 @@ final class Orders
                     // 같은 회원의 동시 주문이 둘 다 기본값이 되지 않도록 회원 행으로 직렬화한다.
                     $this->store->selectOne('SELECT id FROM ' . $this->store->table('users') . ' WHERE id = ? FOR UPDATE', [$userId]);
                     $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET default_address = 0 WHERE user_id = ? AND default_address = 1', [$userId]);
+                }
+                if (($input['save_buyer_profile'] ?? '') === '1') {
+                    (new UserRepository($this->store->db))->completeBuyerProfile($userId, $buyer['buyer_name'], $buyer['phone']);
                 }
                 $orderData = $buyer + ['checkout_key' => $key, 'owner_key' => $owner,
                     'user_id' => $userId, 'default_address' => $saveDefault ? 1 : 0, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
@@ -650,6 +657,12 @@ final class Orders
         foreach ($fields as $key => [$label, $max, $optional]) {
             try { $row[$key] = Input::text($input[$key] ?? '', $key, $max, $optional); }
             catch (DomainError $e) { $errors[$key] = $label . ': ' . implode(' ', $e->details()); }
+        }
+        if (($input['save_buyer_profile'] ?? '') === '1') {
+            try { $row['buyer_name'] = BuyerProfile::name($row['buyer_name'] ?? '') ?? ''; }
+            catch (DomainError $e) { $errors += $e->details(); }
+            try { $row['phone'] = PhoneNumber::normalize($row['phone'] ?? ''); }
+            catch (DomainError $e) { $errors += $e->details(); }
         }
         if (isset($row['email']) && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = '이메일 주소를 확인해 주세요.';
         foreach (['phone', 'recipient_phone'] as $key) {

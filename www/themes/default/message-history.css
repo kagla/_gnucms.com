@@ -1,0 +1,40 @@
+/* 발송 이력만 화면 폭에 맞춘다. 다른 관리자 표의 스크롤 규칙은 변경하지 않는다. */
+.message-history-body .settings-card,.message-history-body .card-body{min-width:0}
+.message-history-body .post-filter{flex-wrap:wrap;min-width:0}
+.message-history-body .post-filter .select{max-width:100%;min-width:0}
+.message-history-surface{container-type:inline-size;min-width:0;width:100%}
+.message-history-table{width:100%;min-width:0;table-layout:fixed}
+.message-history-table .history-col-time{width:17%}
+.message-history-table .history-col-event{width:23%}
+.message-history-table .history-col-delivery{width:17%}
+.message-history-table .history-col-counts{width:21%}
+.message-history-table .history-col-status{width:14%}
+.message-history-table .history-col-manage{width:8%}
+.message-history-table.table th,.message-history-table.table td{padding:.875rem .625rem;white-space:normal;overflow-wrap:anywhere;word-break:normal;vertical-align:middle}
+.message-history-table.table th{font-size:.75rem}
+.message-history-table small{display:block;margin-top:.3rem;font-size:.75rem;color:var(--bc-mid);line-height:1.5}
+.message-history-table .badge{max-width:100%;height:auto;min-height:1.5rem;padding:.25rem .5rem;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;text-align:left;line-height:1.45}
+.message-history-table .message-history-time{font-size:.8125rem;line-height:1.5;font-variant-numeric:tabular-nums}
+.message-history-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem .75rem;font-size:.75rem}
+.message-history-stats>span{display:flex;align-items:baseline;justify-content:space-between;gap:.375rem;min-width:0}
+.message-history-stats>span>span{color:var(--bc-mid);white-space:nowrap}
+.message-history-stats strong{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.message-history-table .message-history-manage .btn{max-width:100%;padding-inline:.5rem;white-space:normal;font-size:.75rem}
+@container(max-width:760px){
+  .message-history-table,.message-history-table tbody{display:block}
+  .message-history-table colgroup,.message-history-table thead{display:none}
+  .message-history-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 1rem;padding:1rem;border-bottom:var(--border) solid var(--bc-10)}
+  .message-history-table.table tbody tr>td{display:block;min-width:0;padding:0;border:0;text-align:left}
+  .message-history-table tbody td::before{content:attr(data-label);display:block;width:auto;margin-bottom:.25rem;font-size:.75rem;color:var(--bc-mid);font-weight:700;line-height:1.5}
+  .message-history-table .message-history-event,.message-history-table .message-history-counts{grid-column:1/-1}
+  .message-history-table .message-history-event .badge{font-size:.875rem}
+  .message-history-table .message-history-time>time br{display:none}
+  .message-history-table .message-history-time>time{white-space:pre-wrap}
+  .message-history-table .message-history-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem 1rem}
+  .message-history-table .table-empty td{grid-column:1/-1;padding:2rem 0;text-align:center}
+  .message-history-table .table-empty td::before{display:none}
+}
+@container(max-width:430px){
+  .message-history-table .message-history-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .message-history-table .message-history-time,.message-history-table .message-history-delivery{grid-column:1/-1}
+}

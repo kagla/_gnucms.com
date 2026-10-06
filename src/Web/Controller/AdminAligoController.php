@@ -147,6 +147,7 @@ final class AdminAligoController
             'error_at' => $overrides['aligo_error_at'] ?? null,
             'notice' => ($query['saved'] ?? '') === '1' ? $this->savedNotice($query) : null,
             'profiles' => $overrides['aligo_profiles'] ?? [],
+            'profiles_loaded' => $overrides['aligo_profiles_loaded'] ?? false,
             'verified' => $overrides['aligo_verified'] ?? null,
             'info_values' => $overrides['info_values'] ?? $messageInfo->formValues(),
             'info_defaults' => $messageInfo->defaults(),
@@ -218,14 +219,16 @@ final class AdminAligoController
         $this->assertCsrf($this->input($request));
         $this->app->guestAcl()->assertGlobalAdmin();
         try {
-            $profiles = $this->app->aligo()->profiles();
+            $profiles = $this->app->aligo()->profilesWithTemplates();
         } catch (DomainError | TransportFailure $e) {
             return $this->renderSettings($request, $response->withStatus(502), [
                 'aligo_error' => $e->getMessage(), 'aligo_error_at' => 'profiles',
             ]);
         }
 
-        return $this->renderSettings($request, $response, ['aligo_profiles' => $profiles]);
+        return $this->renderSettings($request, $response, [
+            'aligo_profiles' => $profiles, 'aligo_profiles_loaded' => true,
+        ]);
     }
 
     /**
@@ -241,14 +244,18 @@ final class AdminAligoController
         try {
             $this->assertCsrf($input);
             $this->app->guestAcl()->assertGlobalAdmin();
-            $channel = is_scalar($input['channel'] ?? null) ? (string) $input['channel'] : '';
-            $action = is_scalar($input['action'] ?? null) ? (string) $input['action'] : '';
-            if (!in_array($action, ['enable', 'disable'], true)) {
-                throw DomainError::validation(['action' => '켜기 또는 끄기를 선택해 주세요.']);
+            if (array_key_exists('phone_mode', $input)) {
+                $mode = is_string($input['phone_mode']) ? $input['phone_mode'] : '';
+                $result = $this->app->aligo()->setPhoneMode($mode);
+            } else {
+                // 이전 개별 스위치 요청도 같은 저장·예약 취소 경로로 처리한다.
+                $channel = is_scalar($input['channel'] ?? null) ? (string) $input['channel'] : '';
+                $action = is_scalar($input['action'] ?? null) ? (string) $input['action'] : '';
+                if (!in_array($action, ['enable', 'disable'], true)) {
+                    throw DomainError::validation(['action' => '켜기 또는 끄기를 선택해 주세요.']);
+                }
+                $result = $this->app->aligo()->setChannelEnabled($channel, $action === 'enable');
             }
-            $result = $this->app->aligo()->setChannelEnabled(
-                $channel, $action === 'enable'
-            );
         } catch (DomainError $e) {
             if ($ajax) {
                 $details = $e->details();
@@ -467,6 +474,9 @@ final class AdminAligoController
     private function notifyRows(?array $posted): array
     {
         $values = $this->app->notifySettings()->formValues();
+        $globalPhone = $this->app->aligo()->channelStatus();
+        $globalChannels = ['mail' => $this->app->notifySettings()->mailEnabled(),
+            'alimtalk' => $globalPhone['alimtalk_enabled'], 'sms' => $globalPhone['sms_enabled']];
         // 화면은 템플릿마다 "이 템플릿의 변수 목록"을 함께 필요로 한다 — 그 변수 하나하나에
         // 코어 변수를 이어 줘야 알림톡을 켤 수 있기 때문이다(NotifySettings::save()).
         // 본문을 뷰로 내려보내 거기서 파싱하게 하지 않는다: 판단은 컨트롤러가 한다.
@@ -499,6 +509,10 @@ final class AdminAligoController
                 'phone' => $value['phone'],
                 'inbox_capable' => $value['inbox'],
                 'on' => $on,
+                'selection' => $value['selection'],
+                'editor_channel' => $value['selection']['mail'] || !$value['phone'] ? 'mail' : 'phone',
+                'global_channels' => $globalChannels,
+                'alimtalk_mode' => in_array($globalPhone['phone_mode'], ['alimtalk_sms', 'alimtalk'], true),
                 'tpl_code' => $value['alimtalk_tpl_code'],
                 // 꺼져 있어도 저장된 값을 그대로 보여준다 — 다시 켤 때 다시 만들지
                 // 않아도 되는 것이 save() 가 이 값을 지우지 않는 이유다.
@@ -519,7 +533,7 @@ final class AdminAligoController
                 'mail_samples' => SmsEditor::samples($key),
                 'mail_subscription' => Events::subscriptionMail($key),
                 'mail_preview' => null,
-                'samples' => SmsEditor::samples($key),
+                'samples' => \GnuCms\Notify\SmsLinks::forBody($key, SmsEditor::samples($key), 'https://example.com'),
                 'guidance' => Events::guidance($key),
                 'preview' => null,
                 // 아래 둘은 **저장된 것**을 말한다. 422 되보여주기에서 입력으로 덮이는
@@ -548,7 +562,20 @@ final class AdminAligoController
             $rows[$key] = $row;
         }
 
-        return ['rows' => $rows, 'templates' => $usable, 'open' => $postedEvent];
+        // 화면에서는 회원가입·계정 관리부터 주문 진행 순으로 보여 준다.
+        // 이벤트 키를 유지해 저장 오류·미리보기의 해당 알림 참조도 그대로 작동한다.
+        $displayOrder = [
+            'welcome', 'email_verify', 'signup_attempt', 'social_email_verify',
+            'password_reset', 'password_changed', 'comment_new',
+            'order_pending', 'order_paid', 'order_confirmed', 'order_shipped',
+            'order_completed', 'order_cancelled', 'order_refunded', 'inquiry_replied',
+        ];
+        $orderedRows = [];
+        foreach ($displayOrder as $key) {
+            if (isset($rows[$key])) $orderedRows[$key] = $rows[$key];
+        }
+        // 새 이벤트는 명시적인 표시 순서를 정하기 전에도 목록에서 빠지지 않는다.
+        return ['rows' => $orderedRows + $rows, 'templates' => $usable, 'open' => $postedEvent];
     }
 
     /**
@@ -588,7 +615,7 @@ final class AdminAligoController
      */
     private static function alimtalkNotice(array $row): ?string
     {
-        if (!$row['phone']) {
+        if (!$row['phone'] || !$row['alimtalk_mode']) {
             return null;
         }
         if (!$row['tpl_dead']) {
@@ -598,15 +625,15 @@ final class AdminAligoController
             // 없습니다」를 적게 된다(아직 저장되지 않았을 뿐이다). 아래 죽은 참조 문장이
             // 저장소를 보는 것은 반대 이유다: 그것은 저장된 참조에 대한 사실이다.
             return ($row['on']['alimtalk'] && $row['tpl_code'] === '')
-                ? '알림톡을 켜려면 승인 템플릿과 변수 연결을 선택해 주세요.'
+                ? '알림톡 템플릿이 미연결입니다. 승인 템플릿만 골라 주세요. 문자가 켜져 있으면 문자로 보냅니다.'
                 : null;
         }
 
         return sprintf(
             '%s 저장된 템플릿(%s)을 사용할 수 없습니다. 템플릿을 다시 가져오거나 다른 템플릿을 고르세요.',
             $row['on']['alimtalk']
-                ? '알림톡을 켜 두었지만 지금은 나가지 않습니다.'
-                : '알림톡은 꺼져 있고, 지금 이대로는 켤 수도 없습니다.',
+                ? '공통 설정은 알림톡 사용이지만 이 템플릿으로는 보내지 않습니다.'
+                : '이 알림의 알림톡 발송은 꺼져 있고, 템플릿 연결도 확인이 필요합니다.',
             $row['stored_tpl_code']
         );
     }
@@ -635,7 +662,7 @@ final class AdminAligoController
      */
     private static function alimtalkOffNotice(array $row): ?string
     {
-        if ($row['on']['alimtalk'] || $row['stored_tpl_code'] === '' || $row['tpl_dead']) {
+        if (!$row['alimtalk_mode'] || $row['on']['alimtalk'] || $row['stored_tpl_code'] === '' || $row['tpl_dead']) {
             return null;
         }
 
@@ -649,18 +676,29 @@ final class AdminAligoController
      */
     private static function withPostedInput(array $row, array $posted): array
     {
-        foreach (NotifySettings::CHANNELS as $channel) {
-            $row['on'][$channel] = ($posted[$channel] ?? '') === '1'
-                || ($channel === 'inbox' && $row['inbox_capable']);
+        if (in_array($posted['editor_channel'] ?? null, ['mail', 'phone'], true)) {
+            $row['editor_channel'] = $posted['editor_channel'] === 'phone' && $row['phone'] ? 'phone' : 'mail';
         }
-        $row['tpl_code'] = is_scalar($posted['tpl_code'] ?? null) ? trim((string) $posted['tpl_code']) : '';
-        $map = [];
-        foreach (is_array($posted['var_map'] ?? null) ? $posted['var_map'] : [] as $name => $core) {
-            if (is_scalar($core)) {
-                $map[(string) $name] = trim((string) $core);
+        if (($posted['delivery_choice'] ?? '') === '1') {
+            $row['selection']['mail'] = ($posted['mail'] ?? '') === '1';
+            $row['selection']['phone'] = $row['phone'] && ($posted['phone'] ?? '') === '1';
+            $row['on']['mail'] = $row['selection']['mail'] && $row['global_channels']['mail'];
+            foreach (['alimtalk', 'sms'] as $channel) {
+                $row['on'][$channel] = $row['selection']['phone'] && $row['global_channels'][$channel];
             }
         }
-        $row['var_map'] = $map;
+        // 문자만·사용 안 함 모드에서는 템플릿 입력란을 제출하지 않는다.
+        // 미리보기·오류 화면에서도 저장된 연결을 보존한다.
+        if (array_key_exists('tpl_code', $posted)) {
+            $row['tpl_code'] = is_scalar($posted['tpl_code']) ? trim((string) $posted['tpl_code']) : '';
+            $map = [];
+            foreach (is_array($posted['var_map'] ?? null) ? $posted['var_map'] : [] as $name => $core) {
+                if (is_scalar($core)) {
+                    $map[(string) $name] = trim((string) $core);
+                }
+            }
+            $row['var_map'] = $map;
+        }
         $row['sms_body'] = is_scalar($posted['sms_body'] ?? null) ? (string) $posted['sms_body'] : '';
         $row['sms_title'] = is_string($posted['sms_title'] ?? null) ? $posted['sms_title'] : '';
         foreach (['mail_subject', 'mail_body'] as $field) {

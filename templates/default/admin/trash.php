@@ -20,7 +20,7 @@
         <tr>
           <td data-label="제목"><span class="cell-title"><?= $this->e($page['title']) ?></span></td>
           <td data-label="주소"><code class="kbd kbd-sm">/content/<?= $this->e($page['slug']) ?></code></td>
-          <td data-label="삭제일"><?= $this->date($page['deleted_at'], 'Y.m.d H:i') ?></td>
+          <td data-label="삭제일"><?= $this->date($page['deleted_at']) ?></td>
           <td data-label="관리" class="right">
             <div class="row-actions">
               <form method="post" action="<?= $this->url('admin.content.restore', ['id' => $page['id']]) ?>">

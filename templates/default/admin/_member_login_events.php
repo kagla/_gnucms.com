@@ -9,7 +9,7 @@
       <div class="overflow-x-auto"><table class="table table-sm login-events-table">
         <thead><tr><th>시각</th><th>방식</th><th>결과</th><th>IP</th><th>환경</th></tr></thead>
         <tbody><?php foreach ($member_login_events as $event): ?><tr>
-          <td><?= $this->date($event['created_at'], 'Y.m.d H:i:s') ?></td>
+          <td><?= $this->date($event['created_at']) ?></td>
           <td><?= $this->e($method_labels[$event['auth_method']] ?? $event['auth_method']) ?></td>
           <td class="login-event-result"><span class="badge <?= $event['result'] === 'success' ? 'badge-success' : 'badge-error' ?> badge-soft"><?= $event['result'] === 'success' ? '성공' : '실패' ?></span></td>
           <td><code><?= $this->e($event['client_ip'] ?? '알 수 없음') ?></code></td>

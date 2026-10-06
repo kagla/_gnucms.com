@@ -55,7 +55,7 @@ $columns = 4 + ($show_board ? 1 : 0) + ($show_category ? 1 : 0);
             </div>
           </td>
           <td data-label="글쓴이" class="cell-author post-col-author"><?php $this->insert('posts/_author', ['post' => $post, 'compact' => $compact]) ?></td>
-          <td data-label="날짜" class="post-col-date"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time></td>
+          <td data-label="날짜" class="post-col-date"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time></td>
           <td data-label="조회" class="post-col-views right"><?= $this->e($post['view_count']) ?></td>
         </tr>
       <?php endforeach; endif ?>

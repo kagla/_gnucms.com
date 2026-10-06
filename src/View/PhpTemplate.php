@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\View;
 
-use GnuCms\Support\Clock;
-use DateTimeImmutable;
-use DateTimeZone;
+use GnuCms\Support\DateTimeDisplay;
 use RuntimeException;
 use Throwable;
 
@@ -193,43 +191,20 @@ final class PhpTemplate
             . '</svg>';
     }
 
-    public function date(mixed $v, string $format): string
+    /** 사이트 설정 시간대에서 공통 날짜·시간 형식을 표시한다. */
+    public function date(mixed $v, string $format = DateTimeDisplay::FORMAT): string
     {
-        $date = $this->displayDate($v);
-        return $date === null ? '' : $date->format($format);
+        $site = $this->vars['site'] ?? null;
+        $timezone = is_array($site) && is_string($site['timezone'] ?? null)
+            ? $site['timezone'] : date_default_timezone_get();
+
+        return DateTimeDisplay::format($v, $timezone, $format);
     }
 
+    /** 기존 테마 호환용. 생략 없이 공통 날짜·시간 형식을 표시한다. */
     public function compactDate(mixed $v): string
     {
-        $date = $this->displayDate($v);
-        if ($date === null) {
-            return '';
-        }
-        $now = (new DateTimeImmutable('@' . Clock::timestamp()))->setTimezone($date->getTimezone());
-
-        return $date->format('Y-m-d') === $now->format('Y-m-d')
-            ? $date->format('H:i')
-            : $date->format('m-d');
-    }
-
-    /** DB 날짜 문자열은 UTC로 읽고 사이트 설정 시간대로 바꾼다. */
-    private function displayDate(mixed $value): ?DateTimeImmutable
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        try {
-            $date = is_int($value)
-                ? new DateTimeImmutable('@' . $value)
-                : new DateTimeImmutable((string) $value, new DateTimeZone('UTC'));
-            $site = $this->vars['site'] ?? null;
-            $timezone = is_array($site) && is_string($site['timezone'] ?? null)
-                ? $site['timezone'] : date_default_timezone_get();
-
-            return $date->setTimezone(new DateTimeZone($timezone));
-        } catch (Throwable $e) {
-            return null;
-        }
+        return $this->date($v);
     }
 
     public function truncate(mixed $v, int $length): string

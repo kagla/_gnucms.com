@@ -121,7 +121,7 @@
 
         <div class="profile-lookup landing" id="aligo-profiles">
           <button class="btn btn-outline" type="submit" form="aligo-profile-lookup"><?= $this->icon('search', 15) ?> 채널 불러오기</button>
-          <p class="fieldset-label">알리고에 등록된 카카오채널 목록을 불러와 발신프로필키를 고를 수 있습니다.</p>
+          <p class="fieldset-label">알리고에 등록된 카카오채널과 각 채널의 전체 템플릿을 불러옵니다. 채널을 고르고 템플릿의 검수 상태·본문·버튼을 확인할 수 있습니다.</p>
           <?php if ($error !== null && $error_at === 'profiles'): ?><div class="alert alert-error"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><?= $this->e($error) ?></span></div><?php endif ?>
 
           <?php if ($profiles !== []): ?>
@@ -140,6 +140,13 @@
             <?php endforeach ?>
             <p class="fieldset-label">고르면 위 "발신프로필키"·"카카오채널명" 칸에 채워집니다. 저장하려면 "알림톡 설정 저장"을 눌러 주세요.</p>
           </fieldset>
+          <?php endif ?>
+          <?php if ($profiles_loaded ?? false): ?>
+            <?php if ($profiles === []): ?>
+              <p class="fieldset-label">알리고에 등록된 카카오채널이 없습니다.</p>
+            <?php else: ?>
+              <?php $this->insert('admin/_aligo_profile_templates', ['profiles' => $profiles]) ?>
+            <?php endif ?>
           <?php endif ?>
         </div>
       </div>

@@ -6,6 +6,7 @@ namespace GnuCms\Account;
 
 use GnuCms\Aligo\PhoneNumber;
 use GnuCms\Db\Connection;
+use GnuCms\Error\DomainError;
 use GnuCms\Support\Clock;
 use GnuCms\Support\IpAddress;
 
@@ -60,7 +61,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, email_notifications, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, buyer_name, email_notifications, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE id = ?',
             [$id]
         );
@@ -73,7 +74,7 @@ final class UserRepository
     {
         return $this->db->selectOne(
             'SELECT id, email, email_verified, password_hash, display_name, is_admin, status, session_epoch,'
-            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, email_notifications, created_at, updated_at'
+            . ' registered_ip, withdrawn_ip, withdrawn_at, avatar_file, avatar_source, phone, buyer_name, email_notifications, created_at, updated_at'
             . ' FROM ' . $this->db->table('users') . ' WHERE email = ?',
             [$email]
         );
@@ -261,6 +262,7 @@ final class UserRepository
                 // 들고 있고, 발송 화면·수신자 확인은 모두 활성 회원만 보므로
                 // 지워도 잃는 것이 없다.
                 'phone' => null,
+                'buyer_name' => null,
                 'withdrawn_ip' => IpAddress::normalize($clientIp),
                 'withdrawn_at' => $now,
                 'updated_at' => $now,
@@ -383,6 +385,32 @@ final class UserRepository
     {
         $this->db->update('users', ['email_notifications' => $receive ? 1 : 0, 'updated_at' => Clock::now()],
             'id = :id AND status = :status', ['id' => $id, 'status' => 'active']);
+    }
+
+    public function updateBuyerName(int $id, ?string $name): void
+    {
+        $this->db->update('users', ['buyer_name' => $name, 'updated_at' => Clock::now()],
+            'id = :id', ['id' => $id]);
+    }
+
+    /** 주문 저장과 같은 트랜잭션에서 미등록 주문자 정보만 채운다. */
+    public function completeBuyerProfile(int $id, string $name, string $phone): void
+    {
+        $name = BuyerProfile::name($name);
+        if ($name === null) throw DomainError::validation(['buyer_name' => '주문자명을 입력해 주세요.']);
+        $phone = PhoneNumber::normalize($phone);
+        $this->db->transaction(function () use ($id, $name, $phone): void {
+            $member = $this->db->selectOne('SELECT buyer_name, phone, status FROM '
+                . $this->db->table('users') . ' WHERE id = ? FOR UPDATE', [$id]);
+            if ($member === null || $member['status'] !== 'active') {
+                throw DomainError::forbidden('회원정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
+            }
+            $fields = [];
+            if (trim((string) ($member['buyer_name'] ?? '')) === '') $fields['buyer_name'] = $name;
+            if (!PhoneNumber::isMobile((string) ($member['phone'] ?? ''))) $fields['phone'] = $phone;
+            if ($fields !== []) $this->db->update('users', $fields + ['updated_at' => Clock::now()],
+                'id = :id', ['id' => $id]);
+        });
     }
 
     public function updatePhone(int $id, ?string $phone): void

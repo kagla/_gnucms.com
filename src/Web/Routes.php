@@ -37,6 +37,14 @@ final class Routes
         $slim->get('/sitemap.xml', [$seo, 'sitemap'])->setName('seo.sitemap');
         $slim->get('/robots.txt', [$seo, 'robots'])->setName('seo.robots');
         $slim->get('/rss.xml', [$seo, 'siteRss'])->setName('seo.rss');
+        // 문자용 짧은 조회 주소. 목적지는 고정하며 로그인·소유권 검사는 기존 화면이 수행한다.
+        foreach (\GnuCms\Notify\SmsLinks::PATHS as $key => $path) {
+            $slim->get('/s/' . $key, static function (ServerRequestInterface $request, ResponseInterface $response) use ($path): ResponseInterface {
+                $base = RouteContext::fromRequest($request)->getBasePath();
+                return $response->withStatus(302)->withHeader('Location', $base . $path)
+                    ->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
+            })->setName('sms.short.' . $key);
+        }
         $slim->get('/content/rss.xml', [$seo, 'contentRss'])->setName('seo.content_rss');
         $slim->get('/boards/{key}/rss.xml', [$seo, 'boardRss'])->setName('seo.board_rss');
 

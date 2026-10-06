@@ -63,6 +63,13 @@ final class NotificationRepository
         return $row === null ? null : (string) $row['number'];
     }
 
+    /** 주문자 연락처는 주문 소유권을 확인한 사본에서만 읽는다. 배송지 번호는 반환하지 않는다. */
+    public function ownedOrderContact(int $orderId, string $userId): ?array
+    {
+        return $this->db->selectOne('SELECT number, buyer_name, phone FROM ' . $this->db->table('yc_orders')
+            . ' WHERE id = ? AND user_id = ?', [$orderId, $userId]);
+    }
+
     /** 문의 소유권을 확인하고 현재 목록에서 그 문의가 있는 페이지를 계산한다. */
     public function ownedInquiry(int $feedbackId, string $userId): ?array
     {

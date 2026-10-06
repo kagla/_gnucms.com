@@ -210,7 +210,7 @@
 .yc-order-extras .yc-order-line:last-child{border-bottom:0;padding-bottom:0}
 .yc-order-extras .yc-order-line>div>strong{font-weight:500}
 @media(max-width:768px){.yc-cart-select-toolbar{padding:.8rem 0}.yc-cart-product-heading{gap:.7rem}.yc-cart-checkbox input{width:30px;height:30px}.yc-cart-product-heading .yc-cart-image{width:75px;height:75px}.yc-cart-options,.yc-cart-extras{margin-left:0}.yc-cart-extra .yc-cart-item-bottom{gap:.5rem}.yc-order-extras{padding:.8rem}}
-.yc-save-address{padding-bottom:0;margin-bottom:0}.yc-delivery-contact{margin-top:1.1rem}
+.yc-save-address{padding-bottom:0;margin-bottom:0;align-items:center}.yc-save-address input{margin:0}.yc-delivery-contact{margin-top:1.1rem}
 [data-yc-admin-cancel-fields][hidden],[data-yc-shipping-fields][hidden],[data-yc-carrier-other][hidden]{display:none}
 .yc-test-badge{display:inline-flex;align-items:center;vertical-align:middle;width:max-content;padding:.18rem .48rem;border:1px solid color-mix(in srgb,var(--yc-accent) 35%,var(--yc-line));border-radius:5px;background:var(--yc-tint);color:var(--yc-accent);font-size:.7rem;font-weight:700;line-height:1.35;white-space:nowrap}.yc-choice .yc-test-badge{margin-left:.25rem}.yc-order-list-row .yc-test-badge{margin-top:.3rem}.yc-order-success>.yc-test-badge{font-size:.7rem}
 .yc-order-notice-payment{border:1px solid color-mix(in srgb,var(--yc-accent) 32%,var(--yc-line));background:var(--yc-tint)}.yc-order-notice-payment>strong{color:var(--yc-accent);font-size:.88rem}.yc-order-payment-facts{display:grid;gap:.45rem;margin:.7rem 0 0}.yc-order-payment-facts>div{display:flex;align-items:baseline;justify-content:space-between;gap:.7rem;padding:.5rem .7rem;border-radius:6px;background:var(--yc-paper)}.yc-order-payment-facts dt{flex:none;color:var(--yc-muted);font-size:.73rem}.yc-order-payment-facts dd{margin:0;text-align:right;font-weight:700;overflow-wrap:anywhere}.yc-order-payment-amount dd{color:var(--yc-accent);font-size:1.05rem;font-weight:800}
@@ -271,3 +271,11 @@
 @media(max-width:768px){.yc-shipping-charge{width:100%}.yc-shipping-totals{grid-template-columns:1fr}}
 .yc-tax-badge{display:inline-flex;align-items:center;margin-left:.35rem;padding:.1rem .35rem;border:1px solid var(--yc-line);border-radius:4px;color:var(--yc-muted);font-size:.65rem;font-weight:650;vertical-align:.08rem}.yc-tax-badge[data-tax-free="1"]{border-color:color-mix(in srgb,#628ab5 35%,var(--yc-line));color:color-mix(in srgb,#4779ac 82%,var(--yc-ink));background:color-mix(in srgb,#628ab5 8%,var(--yc-paper))}
 .yc-totals .yc-tax-total{padding:.28rem 0;font-size:.76rem}.yc-totals>div:not(.yc-tax-total)+.yc-tax-total{margin-top:.35rem;padding-top:.65rem;border-top:1px dashed var(--yc-line)}.yc-totals .yc-tax-total dd{font-weight:550}
+
+/* 저장된 주문자 정보는 입력칸 대신 요약으로 표시한다. */
+.yc-buyer-summary{display:grid;gap:.65rem;margin:0 0 1rem}
+.yc-buyer-summary:empty{display:none}
+.yc-buyer-summary>div{display:flex;flex-wrap:wrap;gap:.3rem 1rem;align-items:baseline}
+.yc-buyer-summary dt{flex:0 0 5.5rem;color:var(--bc-soft);font-size:.8rem}
+.yc-buyer-summary dd{margin:0;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.yc-checkout-heading-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}

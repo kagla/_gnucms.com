@@ -4,7 +4,7 @@
 <?php $this->start('extension_body') ?>
 <?php
 $weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
-$weekdayDate = fn (int $timestamp): string => $this->date($timestamp, 'y.m.d H:i:s') . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')';
+$weekdayDate = fn (int $timestamp): string => $this->date($timestamp) . ' (' . $weekdayNames[(int) $this->date($timestamp, 'w')] . ')';
 $returnFields = ['return_status' => $status_filter, 'return_q' => $q, 'return_page' => (string) $page_number];
 $failedId = $errors !== [] && is_scalar($input['id'] ?? null) ? (int) $input['id'] : 0;
 $failedStatus = $errors !== [] && is_string($input['status'] ?? null) ? $input['status'] : '';

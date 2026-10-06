@@ -12,6 +12,20 @@ final class Settings
 {
     public const CHANNELS = ['at', 'sms'];
 
+    public const PHONE_MODE_LABELS = [
+        'disabled' => '사용 안 함', 'sms' => '문자만',
+        'alimtalk_sms' => '알림톡 후 문자', 'alimtalk' => '알림톡만',
+    ];
+    private const PHONE_MODES = [
+        'disabled' => [false, false], 'sms' => [false, true],
+        'alimtalk_sms' => [true, true], 'alimtalk' => [true, false],
+    ];
+
+    public static function phoneMode(bool $alimtalk, bool $sms): string
+    {
+        return $alimtalk ? ($sms ? 'alimtalk_sms' : 'alimtalk') : ($sms ? 'sms' : 'disabled');
+    }
+
     private SettingsRepository $repository;
     private SecretCipher $cipher;
 
@@ -166,5 +180,23 @@ final class Settings
             throw DomainError::validation(['api_key' => '계정을 먼저 저장해 주세요.']);
         }
         $this->repository->save([self::enabledKey($channel) => $on ? '1' : '0']);
+    }
+
+    /** 두 스위치를 같은 트랜잭션에서 저장하고 취소할 채널을 돌려준다. */
+    public function setPhoneMode(string $mode): array
+    {
+        if (!isset(self::PHONE_MODES[$mode])) {
+            throw DomainError::validation(['phone_mode' => '알림톡·문자 발송 방식을 선택해 주세요.']);
+        }
+        [$alimtalk, $sms] = self::PHONE_MODES[$mode];
+        if (($alimtalk || $sms) && $this->runtime() === null) {
+            throw DomainError::validation(['api_key' => '알리고 계정을 먼저 저장해 주세요.']);
+        }
+        // 사용 안 함은 계정이 없어도 저장한다. 기존 두 키를 사용해 별도 DB 변경은 없다.
+        $this->repository->save([
+            'alimtalk_enabled' => $alimtalk ? '1' : '0', 'sms_enabled' => $sms ? '1' : '0',
+        ]);
+        return array_values(array_filter(self::CHANNELS,
+            static fn (string $channel): bool => $channel === 'at' ? !$alimtalk : !$sms));
     }
 }

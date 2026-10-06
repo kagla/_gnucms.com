@@ -690,7 +690,8 @@ final class App
             $this->notifySettings = new NotifySettings(
                 new NotifySettingsRepository($this->db()),
                 $this->aligo()->templates,
-                fn (): bool => $this->mailSettingsService()->enabled()
+                fn (): bool => $this->mailSettingsService()->enabled(),
+                fn (): array => $this->aligo()->channelStatus()
             );
         }
 
@@ -723,8 +724,8 @@ final class App
                     fn (): bool => $this->mailSettingsService()->enabled(),
                     fn (string $event, \GnuCms\Notify\Recipient $to): bool => $this->mailPreferences()->accepts($event, $to),
                     fn (string $event, \GnuCms\Notify\Recipient $to): string => $this->mailPreferences()->footer($event, $to), $settings),
-                new AlimtalkChannel($this->aligo(), $settings),
-                new SmsChannel($this->aligo(), $settings),
+                new AlimtalkChannel($this->aligo(), $settings, (string) $this->config('app.url', GNUCMS_URL)),
+                new SmsChannel($this->aligo(), $settings, (string) $this->config('app.url', GNUCMS_URL)),
                 new InboxChannel(fn (): NotificationService => $this->notificationService()),
             ], contact: fn (): string => $this->cmsService()->notificationContact(
                 (string) $this->config('app.url', GNUCMS_URL)
@@ -761,7 +762,7 @@ final class App
         $serverIp = trim($serverIp);
         $serverIp = filter_var($serverIp, FILTER_VALIDATE_IP) !== false ? $serverIp : '확인할 수 없음';
         $timezone = is_string($site['timezone'] ?? null) ? $site['timezone'] : 'Asia/Seoul';
-        $sentAt = (new \DateTimeImmutable('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s T');
+        $sentAt = \GnuCms\Support\DateTimeDisplay::format(\GnuCms\Support\Clock::timestamp(), $timezone);
         $environment = "\n\n발송 환경\n"
             . "발송 사이트 도메인: {$domain}\n"
             . "웹서버 IP: {$serverIp}\n"

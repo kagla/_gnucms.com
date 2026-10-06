@@ -6,8 +6,9 @@
 <?php $this->insert('admin/_settings_tabs', ['active' => 'aligo']) ?>
 <?php $this->insert('admin/_alimtalk_info', ['info_values' => $info_values ?? [], 'info_defaults' => $info_defaults ?? [], 'info_errors' => $info_errors ?? [], 'info_saved' => $info_saved ?? false]) ?>
 <div class="messaging-section landing" id="aligo">
-<?php $this->insert('admin/_aligo_settings', ['values' => $values, 'status' => $status, 'errors' => $errors, 'error' => $error, 'error_at' => $error_at, 'notice' => $notice, 'profiles' => $profiles, 'verified' => $verified]) ?>
+<?php $this->insert('admin/_aligo_settings', ['values' => $values, 'status' => $status, 'errors' => $errors, 'error' => $error, 'error_at' => $error_at, 'notice' => $notice, 'profiles' => $profiles, 'profiles_loaded' => $profiles_loaded ?? false, 'verified' => $verified]) ?>
 </div>
+<?php if ($profiles !== []): ?><?php $this->insert('admin/_aligo_profile_template_modal') ?><?php endif ?>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?>
 <?php $this->insert('admin/_aligo_scripts') ?>

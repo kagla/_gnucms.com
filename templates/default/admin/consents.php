@@ -25,8 +25,8 @@
               </td>
               <td data-label="자리"><code class="kbd kbd-sm"><?= $this->e($row['scope']) ?></code></td>
               <td data-label="동의"><span class="badge badge-sm badge-soft <?= $row['agreed'] ? 'badge-success' : 'badge-ghost' ?>"><?= $row['agreed'] ? '동의' : '안 함' ?></span></td>
-              <td data-label="시각"><?= $this->date($row['agreed_at'], 'Y.m.d H:i') ?></td>
-              <td data-label="그때 본 판"><?= $this->date($row['content_updated_at'], 'Y.m.d H:i') ?>
+              <td data-label="시각"><?= $this->date($row['agreed_at']) ?></td>
+              <td data-label="그때 본 판"><?= $this->date($row['content_updated_at']) ?>
                 <?php if ($page['updated_at'] > $row['content_updated_at']): ?><span class="badge badge-warning badge-soft badge-xs">그 뒤 바뀜</span><?php endif ?></td>
               <td data-label="증적"><span class="cell-sub"><?= $this->e($this->def($row['agreed_ip'] ?? null, '-')) ?></span></td>
             </tr>

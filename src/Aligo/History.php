@@ -209,7 +209,9 @@ final class History
                 $msgid = (string) ($item['msgid'] ?? '');
                 $smid = ($item['smid'] ?? '') !== '' ? (string) $item['smid'] : null;
             } else {
-                $ok = self::smsSucceeded($item);
+                $smsStatus = SmsResult::status($item);
+                if ($smsStatus === 'accepted') continue;
+                $ok = $smsStatus === 'sent';
                 $rslt = $ok ? 'S' : 'F';
                 $state = (string) ($item['sms_state'] ?? '');
                 $reason = $ok ? null : ($state !== '' ? $state : '전송에 실패했습니다.');
@@ -242,8 +244,10 @@ final class History
             if ($phone === '') {
                 continue;
             }
+            $smsStatus = SmsResult::status($item);
+            if ($smsStatus === 'accepted') continue;
             $this->db->update('message_recipients', [
-                'fallback_status' => self::smsSucceeded($item) ? 'sent' : 'failed',
+                'fallback_status' => $smsStatus,
             ], 'smid = :smid AND phone = :phone', ['smid' => $smid, 'phone' => $phone]);
         }
         $this->recomputeJobs('smid', $smid);
@@ -353,17 +357,6 @@ final class History
     }
 
     /**
-     * 문자 조회 응답 한 건이 성공인지 판단한다. 알림톡 대체문자와 순수 문자 발송이 함께 쓴다.
-     * 비교 대상인 '성공'은 UTF-8 문자열이다 — 문자 API 응답은 EUC-KR 로 올 수 있으므로
-     * SmsApi::call() 이 디코딩 전에 UTF-8 로 맞춰 준다. 그 정규화를 거치지 않은 본문과
-     * 비교하면 실제로 성공한 건이 전부 실패로 기록된다.
-     */
-    private static function smsSucceeded(array $item): bool
-    {
-        return str_contains((string) ($item['sms_state'] ?? ''), '성공');
-    }
-
-    /**
      * 오래된 건은 조회를 멈춘다. 무한히 묻지 않는다. 포기한 뒤에는 그 작업의 집계를
      * 다시 센다 — 포기한 건은 결과 조회를 더 타지 않으므로 여기서 정리하지 않으면
      * 작업이 영원히 "결과를 기다리는 중"으로 남는다.
@@ -465,6 +458,11 @@ final class History
         $items = $this->db->select('SELECT * FROM ' . $this->db->table('message_jobs') . $where
             . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage), $params);
 
+        foreach ($items as &$item) {
+            $item['provider_cost'] = ProviderCost::summary($item['provider_costs'] ?? null);
+        }
+        unset($item);
+
         return ['items' => $items, 'total' => $total, 'page' => $page, 'per_page' => $perPage,
             'event' => $event];
     }
@@ -496,6 +494,8 @@ final class History
         }
         $job['recipients'] = $this->db->select('SELECT * FROM ' . $this->db->table('message_recipients')
             . ' WHERE job_id = ? ORDER BY id', [$id]);
+
+        $job['provider_cost'] = ProviderCost::summary($job['provider_costs'] ?? null);
 
         return $job;
     }

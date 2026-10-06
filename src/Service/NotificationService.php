@@ -132,6 +132,13 @@ final class NotificationService
         if (!\GnuCms\Notify\Events::exists('order_' . $status)) return;
         $user = $this->users->findById($userId);
         if ($user === null || $user['status'] !== 'active') return;
+        $contact = $this->notifications->ownedOrderContact($orderId, (string) $userId);
+        if ($contact === null || (string) $contact['number'] !== $number) return;
+        // 회원가입 알림은 회원 번호, 주문 알림은 주문서의 주문자 번호를 사용한다.
+        // 없는/유효하지 않은 주문자 번호를 회원 번호나 배송지 수령인 번호로 대신하지 않는다.
+        $phone = \GnuCms\Aligo\PhoneNumber::digits((string) $contact['phone']);
+        $user['phone'] = \GnuCms\Aligo\PhoneNumber::isMobile($phone) ? $phone : null;
+        $user['display_name'] = (string) $contact['buyer_name'];
         $this->sendExternal('order_' . $status, $user, [
             '사이트명' => (string) $this->cms->settings()['site_name'],
             '이름' => (string) $user['display_name'], '주문번호' => $number,
