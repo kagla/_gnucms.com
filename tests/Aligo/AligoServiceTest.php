@@ -481,7 +481,7 @@ final class AligoServiceTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '본문',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $service->templates->fetch();
-        $service->templates->setEnabled('T1', true);
+
 
         $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, '{"result_code":1,"msg_id":"M1","success_cnt":1,"error_cnt":0}');
@@ -612,8 +612,8 @@ final class AligoServiceTest extends DatabaseTestCase
                 'status' => 'A', 'inspStatus' => 'APR'],
         ]]));
         $service->templates->fetch();
-        $service->templates->setEnabled('T1', true);
-        $service->templates->setEnabled('T2', true);
+
+
 
         $at = gmdate('Y-m-d\TH:i', Clock::timestamp() + 3600) . 'Z';
         $transport->queue(200, (string) json_encode(['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));

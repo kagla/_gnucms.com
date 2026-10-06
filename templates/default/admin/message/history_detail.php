@@ -32,7 +32,7 @@ $recipientStatusLabels = [
 $channelLabels = ['at' => '알림톡', 'sms' => '문자'];
 $jobStatus = $jobStatusLabels[$job['status']] ?? ['label' => (string) $job['status'], 'class' => 'badge-ghost'];
 $fmtDate = function ($v) {
-    return $v !== null ? $this->date($v, 'Y.m.d H:i') : '-';
+    return $v !== null ? $this->date($v) : '-';
 };
 ?>
 <div class="breadcrumbs"><ul><li><a href="<?= $this->url('admin.index') ?>">사이트 관리</a></li><li aria-current="page">알림톡·문자</li></ul></div>
@@ -84,6 +84,21 @@ $fmtDate = function ($v) {
       <div><dt>총 · 성공 · 실패 · 취소</dt><dd><?= $this->e($job['total']) ?> · <?= $this->e($job['success']) ?> · <?= $this->e($job['failure']) ?> · <?= $this->e($job['cancelled']) ?></dd></div>
       <?php if ((string) $job['created_by'] !== ''): ?><div><dt>보낸 사람</dt><dd><?= $this->e($job['created_by']) ?></dd></div><?php endif ?>
     </dl>
+
+    <?php if (($job['provider_cost'] ?? null) !== null): ?>
+      <section class="form-section" aria-label="알리고 반환 비용">
+        <h2 class="form-section-title">알리고 반환 비용 <?= $this->e($job['provider_cost']['amount']) ?><?= $job['provider_cost']['missing'] > 0 ? ' (일부 응답)' : '' ?></h2>
+        <p class="card-sub">발송 접수 응답의 총금액을 그대로 기록합니다. 환불·취소·대체발송을 반영한 정산 확정액은 아닙니다.</p>
+        <?php foreach ($job['provider_cost']['receipts'] as $receipt): ?>
+          <dl class="schema-facts">
+            <div><dt>알리고 발송 ID</dt><dd><?= $this->e($receipt['mid']) ?></dd></div>
+            <?php if ($receipt['unit'] !== null): ?><div><dt>반환 단가</dt><dd><?= $this->e($receipt['unit']) ?></dd></div><?php endif ?>
+            <div><dt>반환 총금액</dt><dd><?= $this->e($receipt['amount']) ?></dd></div>
+            <div><dt>기록 시각</dt><dd><?= $this->date($receipt['recorded_at']) ?></dd></div>
+          </dl>
+        <?php endforeach ?>
+      </section>
+    <?php endif ?>
 
     <p class="card-sub">본문</p>
     <pre class="tpl-detail-content"><?= $this->e($job['body']) ?></pre>

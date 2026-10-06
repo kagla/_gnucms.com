@@ -10,10 +10,13 @@ use PHPUnit\Framework\TestCase;
 
 final class EventsTest extends TestCase
 {
-    public function testCarriesTheSevenCoreEvents(): void
+    public function testCarriesAccountShopAndReturnEvents(): void
     {
         self::assertSame([
             'password_reset', 'password_changed', 'welcome', 'comment_new',
+            'order_pending', 'order_paid', 'order_cancelled', 'order_refunded', 'inquiry_replied',
+            'order_confirmed', 'order_shipped', 'order_completed',
+            'order_returning', 'order_returned', 'order_return_closed',
             'email_verify', 'signup_attempt', 'social_email_verify',
         ], array_keys(Events::ALL));
     }
@@ -33,10 +36,12 @@ final class EventsTest extends TestCase
      * 소셜 확인·가입 시도)은 영영 여기 들어와서는 안 되고, 로그인할 수 있는 사람에게 가는
      * 둘(welcome·password_changed)도 InboxChannel 이 적을 줄 알기 전까지는 아니다.
      */
-    public function testOnlyCommentsCanGoToTheInbox(): void
+    public function testAccountAndOrderEventsCanGoToTheInbox(): void
     {
-        self::assertTrue(Events::inboxCapable('comment_new'));
-        foreach (['password_reset', 'password_changed', 'welcome', 'email_verify',
+        foreach (['comment_new', 'welcome', 'password_changed', 'order_paid', 'order_returning', 'order_returned'] as $event) {
+            self::assertTrue(Events::inboxCapable($event));
+        }
+        foreach (['password_reset', 'email_verify',
             'signup_attempt', 'social_email_verify'] as $key) {
             self::assertFalse(Events::inboxCapable($key), $key);
         }

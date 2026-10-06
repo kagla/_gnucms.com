@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace GnuCms\Shop\Commerce;
 
 use DateTimeImmutable;
+use GnuCms\Account\BuyerProfile;
+use GnuCms\Account\UserRepository;
+use GnuCms\Aligo\PhoneNumber;
 use DateTimeZone;
 use GnuCms\Error\DomainError;
 use GnuCms\Payment\TaxAmounts;
@@ -13,17 +16,24 @@ use GnuCms\Shop\Input;
 use GnuCms\Shop\Settings;
 use GnuCms\Shop\Store;
 use GnuCms\Support\Clock;
+use GnuCms\Support\DateTimeDisplay;
 use PDOException;
 
 final class Orders
 {
-    public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'cancelled' => '주문 취소'];
-    public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'cancelled' => []];
+    public const STATUSES = ['pending' => '주문 접수', 'paid' => '결제 완료', 'confirmed' => '상품 준비', 'shipped' => '배송 중', 'completed' => '배송 완료', 'returning' => '반품 요청', 'returned' => '반품 완료', 'cancelled' => '주문 취소'];
+    public const NEXT = ['pending' => ['paid', 'cancelled'], 'paid' => ['shipped', 'confirmed', 'cancelled'], 'confirmed' => ['shipped', 'cancelled'], 'shipped' => ['completed'], 'completed' => [], 'returning' => [], 'returned' => [], 'cancelled' => []];
     public const PREVIOUS = ['paid' => 'pending', 'confirmed' => 'paid', 'shipped' => 'confirmed', 'completed' => 'shipped'];
     /** 결제사(이니시스)를 거치는 수단. 무통장은 관리자가 입금을 확인한다. */
     public const PG_METHODS = ['card', 'easy_pay', 'bank_transfer', 'virtual_account', 'mobile'];
 
-    public function __construct(private Store $store, private Cart $cart, private Settings $settings) {}
+    private ?\Closure $notifyStatus;
+
+    public function __construct(private Store $store, private Cart $cart, private Settings $settings,
+        private string $timezone = 'Asia/Seoul', ?callable $notifyStatus = null)
+    {
+        $this->notifyStatus = $notifyStatus === null ? null : \Closure::fromCallable($notifyStatus);
+    }
 
     /** 저장된 기본 배송지를 먼저 쓰고, 없으면 가장 최근 주문의 배송지를 사용한다. */
     public function defaultAddressFor(int $userId): ?array
@@ -62,7 +72,7 @@ final class Orders
         $items = $this->store->select('SELECT o.id, o.buyer_name, o.phone, o.email, o.recipient, o.recipient_phone, o.postcode, o.address, o.address_detail, o.delivery_note, o.default_address, o.created_at'
             . $join . $where . ' ORDER BY (a.default_order_id > 0) DESC, a.latest_order_id DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset,
             [$userId, ...$filterParams]);
-        foreach ($items as &$item) $item['created_label'] = date('Y.m.d', (int) $item['created_at']);
+        foreach ($items as &$item) $item['created_label'] = DateTimeDisplay::format((int) $item['created_at'], $this->timezone);
         unset($item);
         return ['items' => $items, 'total' => $count, 'page' => $page, 'total_pages' => $totalPages];
     }
@@ -87,14 +97,14 @@ final class Orders
                 if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
                 if (!hash_equals($quote['fingerprint'], $fingerprint)) throw DomainError::validation(['quote' => '주문 내용 또는 배송 조건이 변경되었습니다. 상품·옵션·수량·배송비와 안내를 다시 확인해 주세요.']);
                 $now = Clock::timestamp();
-                $prefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone('Asia/Seoul'))->format('ymd-His');
-                $start = random_int(0, 9999);
-                do { $step = random_int(1, 9999); } while ($step % 2 === 0 || $step % 5 === 0);
                 $saveDefault = ($input['save_default_address'] ?? '') === '1';
                 if ($saveDefault) {
                     // 같은 회원의 동시 주문이 둘 다 기본값이 되지 않도록 회원 행으로 직렬화한다.
                     $this->store->selectOne('SELECT id FROM ' . $this->store->table('users') . ' WHERE id = ? FOR UPDATE', [$userId]);
                     $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET default_address = 0 WHERE user_id = ? AND default_address = 1', [$userId]);
+                }
+                if (($input['save_buyer_profile'] ?? '') === '1') {
+                    (new UserRepository($this->store->db))->completeBuyerProfile($userId, $buyer['buyer_name'], $buyer['phone']);
                 }
                 $orderData = $buyer + ['checkout_key' => $key, 'owner_key' => $owner,
                     'user_id' => $userId, 'default_address' => $saveDefault ? 1 : 0, 'status' => 'pending', 'subtotal' => $quote['subtotal'], 'shipping_fee' => $quote['shipping_fee'],
@@ -109,9 +119,11 @@ final class Orders
                     'payment_detail' => $payment === [] ? '' : json_encode($payment['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     'created_at' => $now, 'updated_at' => $now];
                 $id = null;
-                // 난수에서 시작해 0000~9999를 중복 없이 순회한다. DB 고유 제약이 동시 주문도 보호한다.
-                for ($attempt = 0; $attempt < 10000; $attempt++) {
-                    $number = $prefix . sprintf('%04d', ($start + $attempt * $step) % 10000);
+                // 주문번호는 사이트 시간대의 주문일(yymmdd)과 무작위 숫자 7자리로 발급한다.
+                // DB 고유 제약이 동시 주문의 중복을 막으며 충돌하면 새 번호로 다시 시도한다.
+                $numberPrefix = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone($this->timezone))->format('ymd') . '-';
+                for ($attempt = 0; $attempt < 20; $attempt++) {
+                    $number = $numberPrefix . sprintf('%07d', random_int(0, 9999999));
                     try {
                         $id = $this->store->insert('yc_orders', $orderData + ['number' => $number]);
                         break;
@@ -133,6 +145,7 @@ final class Orders
                     $this->store->logStock($item['product_id'], $optionId, -$item['quantity'], 'order', $number, 'user:' . $userId);
                 }
                 $this->history($id, 'pending', 'user:' . $userId, '주문을 접수했습니다.');
+                $this->notifyEvent($this->get($id), 'pending');
                 return $id;
             });
         } catch (DomainError $e) {
@@ -287,6 +300,27 @@ final class Orders
             }
             unset($order);
         }
+        if ($admin && $items !== []) {
+            $ids = array_map(static fn (array $order): int => (int) $order['id'], $items);
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $lines = $this->store->select('SELECT order_id, product_id, product_name FROM '
+                . $this->store->table('yc_order_items') . " WHERE kind <> 'extra' AND order_id IN ({$marks}) ORDER BY id", $ids);
+            $productsByOrder = []; $seenProducts = [];
+            foreach ($lines as $line) {
+                $orderId = (int) $line['order_id'];
+                $productId = (int) $line['product_id'];
+                if (isset($seenProducts[$orderId][$productId])) continue;
+                $seenProducts[$orderId][$productId] = true;
+                if (!isset($productsByOrder[$orderId])) $productsByOrder[$orderId] = ['name' => (string) $line['product_name'], 'count' => 0];
+                ++$productsByOrder[$orderId]['count'];
+            }
+            foreach ($items as &$order) {
+                $summary = $productsByOrder[(int) $order['id']] ?? ['name' => '', 'count' => 0];
+                $order['representative_product'] = $summary['name'];
+                $order['product_count'] = $summary['count'];
+            }
+            unset($order);
+        }
         return ['items' => $items, 'total' => $total, 'page' => $page, 'total_pages' => max(1, (int) ceil($total / 20))];
     }
 
@@ -335,6 +369,8 @@ final class Orders
                 }
             }
             $this->history($id, $to, $actor, $note);
+            // 실제 변경 순간의 배송정보를 캡처한다. CSV 바깥 거래가 실패하면 알림도 취소된다.
+            $this->notifyEvent($this->get($id), $to);
         });
         return $this->get($id);
     }
@@ -381,6 +417,15 @@ final class Orders
         if ($status === 'paid' && ((string) ($order['payment_id'] ?? '') !== ''
             || in_array($order['payment_method'] ?? '', self::PG_METHODS, true)
             || (int) ($order['refunded_amount'] ?? 0) > 0)) return null;
+        if ($status === 'shipped') {
+            $shipFrom = null; $last = null;
+            foreach ($order['history'] ?? [] as $event) {
+                if ($event['status'] === $last) continue;
+                if ($event['status'] === 'shipped' && in_array($last, ['paid', 'confirmed'], true)) $shipFrom = $last;
+                $last = $event['status'];
+            }
+            if (in_array($shipFrom, ['paid', 'confirmed'], true)) return $shipFrom;
+        }
         return self::PREVIOUS[$status] ?? null;
     }
 
@@ -443,6 +488,145 @@ final class Orders
         return $this->get($id);
     }
 
+    /** 주문 전체 반품. 고객 정보는 새로 받지 않는다. */
+    public function requestReturn(int $id, string $actor, array $input, ?int $userId = null): array
+    {
+        $note = ReturnReason::note($input);
+        $this->store->transaction(function () use ($id, $actor, $note, $userId): void {
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
+            $order = $this->get($id);
+            if ($userId !== null && (int) $order['user_id'] !== $userId) throw DomainError::notFound('주문을 찾을 수 없습니다.');
+            if ($order['status'] === 'returning') return;
+            if (!in_array($order['status'], ['shipped', 'completed'], true)) {
+                throw DomainError::validation(['status' => '배송이 시작된 주문만 반품을 요청할 수 있습니다.']);
+            }
+            $detail = $order['payment'];
+            $detail['return'] = ['from' => $order['status'], 'reason' => $note,
+                'refunded_before' => (int) $order['refunded_amount'], 'key' => 'return-' . $id . '-' . bin2hex(random_bytes(12)),
+                'requested_at' => Clock::timestamp()];
+            $this->store->update('yc_orders', $id, ['status' => 'returning',
+                'payment_detail' => json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'updated_at' => Clock::timestamp()]);
+            $this->history($id, 'returning', $actor, $note);
+            $this->notifyEvent($this->get($id), 'returning', ['사유' => $note]);
+        });
+        return $this->get($id);
+    }
+
+    /** 환불이 시작된 요청은 원래 배송 상태로 되돌릴 수 없다. */
+    public function closeReturn(int $id, string $actor, string $reason, Payments $payments, ?int $userId = null): array
+    {
+        $reason = Input::text($reason, 'reason', 400, false);
+        $this->store->transaction(function () use ($id, $actor, $reason, $payments, $userId): void {
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
+            $order = $this->get($id);
+            if ($userId !== null && (int) $order['user_id'] !== $userId) throw DomainError::notFound('주문을 찾을 수 없습니다.');
+            $context = $order['payment']['return'] ?? [];
+            $from = $context['from'] ?? '';
+            if ($order['status'] !== 'returning' || !in_array($from, ['shipped', 'completed'], true)) {
+                throw DomainError::validation(['status' => '처리 중인 반품 요청이 없습니다.']);
+            }
+            if (!empty($context['processing']) || (int) $order['refunded_amount'] !== (int) ($context['refunded_before'] ?? -1)
+                || $payments->pendingRefunds($order) !== []) {
+                throw DomainError::validation(['refund' => '환불이 처리되거나 확인 중인 요청은 반품 완료로 처리해 주세요.']);
+            }
+            $detail = $order['payment'];
+            $detail['return']['closed_at'] = Clock::timestamp();
+            $this->store->update('yc_orders', $id, ['status' => $from,
+                'payment_detail' => json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'updated_at' => Clock::timestamp()]);
+            $this->history($id, $from, $actor, '반품 요청 종료: ' . $reason);
+            $this->notifyEvent($this->get($id), 'return_closed', ['사유' => $reason]);
+        });
+        return $this->get($id);
+    }
+
+    /** PG 원장은 주문 트랜잭션 밖에서 확정해 응답 유실 시에도 재전송을 막는다. */
+    public function completeReturn(int $id, string $actor, array $input, Payments $payments): array
+    {
+        if ($this->store->db->pdo()->inTransaction()) throw DomainError::validation(['refund' => '반품 완료는 별도 거래로 처리해 주세요.']);
+        $work = $this->store->transaction(function () use ($id, $input, $payments): ?array {
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
+            $order = $this->get($id);
+            if ($order['status'] === 'returned') return null;
+            $work = $this->prepareReturnCompletion($order, $input, $payments);
+            $detail = $order['payment'];
+            $detail['return']['processing'] = true;
+            $this->store->update('yc_orders', $id, ['payment_detail' => json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'updated_at' => Clock::timestamp()]);
+            return $work + ['order' => $this->get($id)];
+        });
+        if ($work === null) return $this->get($id);
+        if ($work['remaining'] > 0) $payments->refund($work['order'], $work['remaining'], (string) $work['context']['reason'], (string) $work['context']['key'], $actor, false);
+        $this->store->transaction(function () use ($id, $actor, $input, $payments): void {
+            $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
+            $order = $this->get($id);
+            if ($order['status'] === 'returned') return;
+            ['context' => $context, 'restock' => $restock, 'productIds' => $productIds, 'sold' => $sold, 'items' => $items, 'remaining' => $remaining] = $this->prepareReturnCompletion($order, $input, $payments);
+            if ($remaining > 0) throw DomainError::validation(['refund' => '환불 결과를 확인한 뒤 반품을 완료해 주세요.']);
+            foreach ($productIds as $productId) {
+                $quantity = $context['from'] === 'completed' ? ($sold[$productId] ?? 0) : 0;
+                $this->store->execute('UPDATE ' . $this->store->table('yc_products') . ' SET sold_qty = sold_qty - ?, version = version + 1 WHERE id = ?', [$quantity, $productId]);
+            }
+            if ($restock) foreach ($items as $item) {
+                $cell = Stock::cellOfItem($item);
+                $this->store->execute('UPDATE ' . $this->store->table($cell['table']) . ' SET stock = stock + ? WHERE id = ?', [(int) $item['quantity'], $cell['id']]);
+                $this->store->logStock((int) $item['product_id'], $item['option_id'] === null ? null : (int) $item['option_id'], (int) $item['quantity'], 'return', $order['number'], $actor);
+            }
+            $detail = $order['payment'];
+            $detail['return']['completed_at'] = Clock::timestamp();
+            $detail['return']['restocked'] = $restock;
+            $detail['return']['processing'] = false;
+            $this->store->update('yc_orders', $id, ['status' => 'returned',
+                'payment_detail' => json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'updated_at' => Clock::timestamp()]);
+            $amount = max(0, (int) $order['refunded_amount'] - (int) $context['refunded_before']);
+            $this->history($id, 'returned', $actor, '반품 완료 · 환불 ' . number_format($amount) . '원 · ' . ($restock ? '재고 복원' : '재고 미복원'));
+            $this->notifyEvent($this->get($id), 'returned', ['환불금액' => number_format($amount) . '원']);
+        });
+        return $this->get($id);
+    }
+
+    /** 환불 전에 검사하고, 환불 후 재고 반영 직전에 다시 잠가 검증한다. */
+    private function prepareReturnCompletion(array $order, array $input, Payments $payments): array
+    {
+        $context = $order['payment']['return'] ?? [];
+        if ($order['status'] !== 'returning' || !in_array($context['from'] ?? '', ['shipped', 'completed'], true)) {
+            throw DomainError::validation(['status' => '반품 요청 상태의 주문만 완료할 수 있습니다.']);
+        }
+        if (($input['return_received'] ?? '') !== '1') throw DomainError::validation(['return_received' => '반품 상품 회수를 확인해 주세요.']);
+        $remaining = (int) $order['paid_amount'] - (int) $order['refunded_amount'];
+        if ($remaining > 0 && !$payments->isPgOrder($order) && ($input['manual_refund_confirmed'] ?? '') !== '1') {
+            throw DomainError::validation(['manual_refund_confirmed' => '실제 입금액 반환을 마친 뒤 환불 완료를 확인해 주세요.']);
+        }
+        $restock = ($input['return_restock'] ?? '') === '1';
+        $sold = [];
+        foreach ($order['items'] as $item) {
+            if ($item['kind'] !== 'extra') $sold[(int) $item['product_id']] = ($sold[(int) $item['product_id']] ?? 0) + (int) $item['quantity'];
+        }
+        $productIds = array_values(array_unique(array_map('intval', array_column($order['items'], 'product_id'))));
+        sort($productIds, SORT_NUMERIC);
+        // 결제사 환불 전에 재고·판매수량 대상을 잠그고 확인한다.
+        foreach ($productIds as $productId) {
+            $product = $this->store->selectOne('SELECT id, sold_qty FROM ' . $this->store->table('yc_products') . ' WHERE id = ? FOR UPDATE', [$productId]);
+            if ($context['from'] === 'completed' && $product !== null && (int) $product['sold_qty'] < ($sold[$productId] ?? 0)) {
+                throw DomainError::validation(['stock' => '판매수량을 조정할 수 없습니다. 상품 상태를 확인해 주세요.']);
+            }
+        }
+        $items = $order['items'];
+        usort($items, static fn (array $a, array $b): int => [(int) $a['product_id'], (int) $a['option_id']] <=> [(int) $b['product_id'], (int) $b['option_id']]);
+        $cells = [];
+        foreach ($items as $item) {
+            $cell = Stock::cellOfItem($item);
+            $key = $cell['table'] . ':' . $cell['id'];
+            $cells[$key] ??= $cell + ['quantity' => 0];
+            $cells[$key]['quantity'] += (int) $item['quantity'];
+        }
+        if ($restock) foreach ($cells as $cell) {
+            $row = $this->store->selectOne('SELECT stock FROM ' . $this->store->table($cell['table']) . ' WHERE id = ? FOR UPDATE', [$cell['id']]);
+            if ($row === null || (int) $row['stock'] + $cell['quantity'] > 1000000) {
+                throw DomainError::validation(['stock' => '재고 복원 대상이 없거나 수량 한도를 넘습니다. 복원 여부를 확인해 주세요.']);
+            }
+        }
+        return compact('context', 'remaining', 'restock', 'sold', 'productIds', 'items');
+    }
+
     public function byPaymentId(string $paymentId): ?array
     {
         if (!preg_match('/^[a-f0-9]{32}$/D', $paymentId)) return null;
@@ -465,6 +649,7 @@ final class Orders
                 ['paid', $paidAt, $amount, json_encode($detail + $order['payment'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id, 'pending']);
             if ($changed !== 1) throw DomainError::validation(['status' => '주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요.']);
             $this->history($id, 'paid', $actor, $note);
+            $this->notifyEvent($this->get($id), 'paid');
         });
         return $this->get($id);
     }
@@ -516,9 +701,9 @@ final class Orders
      * 계층도 같은 키의 재요청을 캐시된 결과로 돌려주므로(PG 를 다시 부르지 않는다) 여기서
      * 세지 않으면 한 번의 환불이 두 번 빠진다.
      */
-    public function recordRefund(int $id, int $amount, string $actor, string $reason, string $key, array $result = []): array
+    public function recordRefund(int $id, int $amount, string $actor, string $reason, string $key, array $result = [], bool $sendExternal = true): array
     {
-        $this->store->transaction(function () use ($id, $amount, $actor, $reason, $key, $result): void {
+        $this->store->transaction(function () use ($id, $amount, $actor, $reason, $key, $result, $sendExternal): void {
             if (!preg_match('/^[A-Za-z0-9_-]{3,100}$/D', $key)) throw DomainError::validation(['refund' => '환불 요청 키를 확인해 주세요.']);
             $this->store->selectOne('SELECT id FROM ' . $this->store->table('yc_orders') . ' WHERE id = ? FOR UPDATE', [$id]);
             $order = $this->get($id);
@@ -554,6 +739,7 @@ final class Orders
             $this->store->execute('UPDATE ' . $this->store->table('yc_orders') . ' SET refunded_amount = refunded_amount + ?, payment_detail = ?, updated_at = ? WHERE id = ?',
                 [$amount, json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), Clock::timestamp(), $id]);
             $this->history($id, $order['status'], $actor, '환불 ' . number_format($amount) . '원: ' . $reason);
+            $this->notifyEvent($this->get($id), 'refunded', ['환불금액' => number_format($amount) . '원'], $sendExternal);
         });
         return $this->get($id);
     }
@@ -587,6 +773,23 @@ final class Orders
         return $count;
     }
 
+    /** 필수 알림함은 같은 거래에, 외부 알림은 최외곽 커밋 후에 기록한다. */
+    private function notifyEvent(array $order, string $status, array $extra = [], bool $sendExternal = true): void
+    {
+        (new \GnuCms\Repository\NotificationRepository($this->store->db))->recordOrderStatus(
+            (int) $order['id'], (int) $order['user_id'], $status, (string) $order['number']);
+        if ($this->notifyStatus === null || !$sendExternal) return;
+        $carrier = trim((string) $order['carrier']);
+        $tracking = trim((string) $order['tracking_number']);
+        $vars = $extra + ['주문금액' => number_format((int) $order['total']) . '원',
+            '결제금액' => number_format((int) $order['paid_amount']) . '원',
+            '택배사' => $carrier !== '' ? $carrier : '주문 조회에서 확인',
+            '운송장번호' => $tracking !== '' ? $tracking : '주문 조회에서 확인',
+            '배송정보' => $carrier !== '' || $tracking !== '' ? trim($carrier . ' / ' . $tracking, ' /') : '주문 조회에서 확인'];
+        $this->store->db->afterCommit(fn () => ($this->notifyStatus)(
+            (int) $order['user_id'], (int) $order['id'], $status, (string) $order['number'], $vars));
+    }
+
     private function history(int $id, string $status, string $actor, string $note): void
     {
         $this->store->insert('yc_order_history', ['order_id' => $id, 'status' => $status, 'actor' => mb_substr($actor, 0, 100), 'note' => $note, 'created_at' => Clock::timestamp()]);
@@ -596,14 +799,20 @@ final class Orders
     public function validateCheckout(array $input): array
     {
         $row = []; $errors = [];
-        $fields = ['buyer_name' => ['주문자 이름', 100, false], 'email' => ['이메일', 191, false], 'phone' => ['연락처', 30, false],
+        $fields = ['buyer_name' => ['주문자 이름', 100, false], 'email' => ['이메일', 191, true], 'phone' => ['연락처', 30, false],
             'recipient' => ['받는 분', 100, false], 'recipient_phone' => ['받는 분 연락처', 30, false], 'postcode' => ['우편번호', 10, false],
             'address' => ['주소', 250, false], 'address_detail' => ['상세주소', 250, true], 'delivery_note' => ['배송 요청', 500, true]];
         foreach ($fields as $key => [$label, $max, $optional]) {
             try { $row[$key] = Input::text($input[$key] ?? '', $key, $max, $optional); }
             catch (DomainError $e) { $errors[$key] = $label . ': ' . implode(' ', $e->details()); }
         }
-        if (isset($row['email']) && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = '이메일 주소를 확인해 주세요.';
+        if (($input['save_buyer_profile'] ?? '') === '1') {
+            try { $row['buyer_name'] = BuyerProfile::name($row['buyer_name'] ?? '') ?? ''; }
+            catch (DomainError $e) { $errors += $e->details(); }
+            try { $row['phone'] = PhoneNumber::normalize($row['phone'] ?? ''); }
+            catch (DomainError $e) { $errors += $e->details(); }
+        }
+        if (isset($row['email']) && $row['email'] !== '' && !filter_var($row['email'], FILTER_VALIDATE_EMAIL)) $errors['email'] = '이메일 주소를 확인해 주세요.';
         foreach (['phone', 'recipient_phone'] as $key) {
             if (isset($row[$key]) && (!preg_match('/^[0-9+() -]+$/D', $row[$key]) || strlen(preg_replace('/\D/', '', $row[$key])) < 8)) $errors[$key] = '연락처를 확인해 주세요.';
         }

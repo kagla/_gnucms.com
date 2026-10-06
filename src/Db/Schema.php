@@ -62,7 +62,7 @@ final class Schema
      * 코드가 요구하는 스키마 판. 컬럼을 늘릴 때마다 하나씩 올린다.
      * DB 에 적힌 값이 이 값보다 낮으면 ensureCurrent() 가 마이그레이션을 돌린다.
      */
-    public const VERSION = '48';
+    public const VERSION = '53';
 
     /**
      * DB 에 적어 두는 도장. 판 번호 뒤에 마이그레이션 코드의 내용 해시를 붙인다.
@@ -227,6 +227,9 @@ final class Schema
         $this->addColumnIfMissing('users', 'withdrawn_at',
             $this->db->dialect()->typeMap()['{DATETIME}'] . ' NULL');
 
+        $this->addColumnIfMissing('users', 'email_notifications', 'SMALLINT NOT NULL DEFAULT 1');
+        // 53판: 공개 닉네임과 별도로 보관하는 주문자명. 기존 회원은 최초 주문 때 입력한다.
+        $this->addColumnIfMissing('users', 'buyer_name', 'VARCHAR(100) NULL');
         $this->migrateOauth();
     }
 
@@ -275,6 +278,9 @@ final class Schema
         // 맞아떨어져야 이력 한 줄이 스스로 모순되지 않는다 — 취소가 숫자에 전혀
         // 나타나지 않던 판에서는 전원 취소된 작업이 "성공 502"로 보였다.
         $this->addColumnIfMissing('message_jobs', 'cancelled', 'INTEGER NOT NULL DEFAULT 0');
+        // 52판: 발송 API가 반환한 묶음별 접수 비용. 기존 이력은 NULL로 보존한다.
+        $text = $this->db->dialect()->typeMap()['{TEXT}'];
+        $this->addColumnIfMissing('message_jobs', 'provider_costs', $text . ' NULL');
 
         foreach ($this->aligoStatements() as $sql) {
             // 표가 이미 있으면 건너뛴다. 세 표가 한 번에 생기지 않은 설치도 있을 수 있다.
@@ -349,6 +355,7 @@ final class Schema
                 title        VARCHAR(60)  NULL,
                 body         {TEXT}       NOT NULL,
                 failover     SMALLINT     NOT NULL DEFAULT 0,
+                provider_costs {TEXT}     NULL,
                 event_key    VARCHAR(40)  NULL,
                 created_by   VARCHAR(64)  NULL,
                 total        INTEGER      NOT NULL DEFAULT 0,
@@ -422,6 +429,15 @@ final class Schema
             foreach ($this->notificationStatements() as $sql) {
                 $this->db->execute($this->expand($sql));
             }
+        }
+        $this->addColumnIfMissing('notifications', 'order_id', 'BIGINT NULL');
+        $this->addColumnIfMissing('notifications', 'feedback_id', 'BIGINT NULL');
+        $column = $this->db->selectOne('SELECT IS_NULLABLE FROM information_schema.columns'
+            . ' WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [$this->db->tableName('notifications'), 'post_id']);
+        if ($column !== null && $column['IS_NULLABLE'] === 'NO') {
+            $this->db->execute('ALTER TABLE ' . $this->db->table('notifications')
+                . ' MODIFY COLUMN post_id BIGINT NULL');
         }
     }
 
@@ -732,6 +748,7 @@ final class Schema
                 email_verified SMALLINT     NOT NULL DEFAULT 0,
                 password_hash  VARCHAR(255) NULL,
                 display_name   VARCHAR(100) NOT NULL,
+                buyer_name     VARCHAR(100) NULL,
                 is_admin       SMALLINT     NOT NULL DEFAULT 0,
                 status         VARCHAR(10)  NOT NULL DEFAULT \'active\',
                 session_epoch  INTEGER      NOT NULL DEFAULT 0,
@@ -741,6 +758,7 @@ final class Schema
                 avatar_file    VARCHAR(40)  NULL,
                 avatar_source  VARCHAR(10)  NULL,
                 phone          VARCHAR(20)  NULL,
+                email_notifications SMALLINT NOT NULL DEFAULT 1,
                 created_at     {DATETIME}   NOT NULL,
                 updated_at     {DATETIME}   NOT NULL
             ){SUFFIX}';
@@ -1037,8 +1055,10 @@ final class Schema
                 id          {AUTO_PK},
                 user_id     VARCHAR(64)  NOT NULL,
                 kind        VARCHAR(20)  NOT NULL,
-                post_id     BIGINT       NOT NULL,
+                post_id     BIGINT       NULL,
                 comment_id  BIGINT       NULL,
+                order_id    BIGINT       NULL,
+                feedback_id BIGINT       NULL,
                 actor_name  VARCHAR(100) NOT NULL,
                 subject     VARCHAR(200) NOT NULL,
                 is_read     SMALLINT     NOT NULL DEFAULT 0,

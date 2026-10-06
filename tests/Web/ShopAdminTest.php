@@ -6,6 +6,7 @@ namespace GnuCms\Tests\Web;
 
 use GnuCms\App;
 use GnuCms\Payment\InicisGateway;
+use GnuCms\Payment\KcpConfig;
 use GnuCms\Shop\Catalog\Categories;
 use GnuCms\Shop\Service;
 use GnuCms\Shop\Settings;
@@ -94,6 +95,35 @@ final class ShopAdminTest extends WebTestCase
         return $this->shop->payments->complete($order, ['resultCode' => '0000', 'mid' => $this->payConfig['merchant_id'], 'orderNumber' => $order['payment_id'],
             'idc_name' => 'stg', 'authToken' => bin2hex(random_bytes(32)), 'authUrl' => 'https://stgstdpay.inicis.com/api/payAuth',
             'netCancelUrl' => 'https://stgstdpay.inicis.com/api/netCancel']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testKcpRestCannotBeChosenForNewOrdersButOldSettingsCanBeReplaced(array $config): void
+    {
+        $this->setupShop($config);
+        $this->signIn(true);
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringNotContainsString('<option value="kcp"', $page);
+        self::assertStringContainsString('<option value="kcp_legacy"', $page);
+
+        $rejected = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['payment_provider' => 'kcp'])));
+        self::assertSame(422, $rejected->getStatusCode());
+        self::assertSame('inicis', $this->shop->settings->all()['payment']['provider']);
+
+        $this->app->paymentSettings('kcp')->save('test', KcpConfig::testCredentials());
+        $settings = $this->shop->settings->all();
+        $settings['payment']['provider'] = 'kcp';
+        $settings['payment']['environment'] = 'test';
+        $this->app->db()->insert('yc_settings', ['id' => 'settings', 'payload' => json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
+        self::assertTrue($this->app->paymentSettings('kcp')->available('test'));
+        self::assertArrayNotHasKey('card', $this->shop->payments->methods());
+
+        $page = $this->body($this->get($this->app, '/admin/shop/settings'));
+        self::assertStringContainsString('<option value="" selected disabled>다른 결제사를 선택해 주세요</option>', $page);
+        self::assertStringNotContainsString('<option value="kcp"', $page);
+        $changed = $this->post($this->app, '/admin/shop/settings', $this->csrf($this->settingsForm(['payment_provider' => 'nicepay', 'payment_environment' => 'test'])));
+        self::assertSame(303, $changed->getStatusCode());
+        self::assertSame('nicepay', $this->shop->settings->all()['payment']['provider']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -641,10 +671,10 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringNotContainsString('진열 유형', $list);
         self::assertStringNotContainsString('/products/types', $list);
         // 상품 재고 화면은 선택옵션이 없는 상품만 — 옵션 상품(a)의 재고는 조합 행에 있다.
-        $stock = $this->body($this->get($this->app, '/admin/shop/products/stock'));
+        $stock = $this->body($this->get($this->app, '/admin/shop/products/stock', ['mode' => 'adjust']));
         self::assertStringContainsString('name="rows[' . $seed['b'] . '][stock]"', $stock);
         self::assertStringNotContainsString('name="rows[' . $seed['a'] . '][stock]"', $stock);
-        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['rows' => [$seed['b'] => ['original_stock' => (string) $this->shop->products->find($seed['b'])['stock'], 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0']]]));
+        $this->post($this->app, '/admin/shop/products/stock', $this->csrf(['mode' => 'adjust', 'rows' => [$seed['b'] => ['original_stock' => (string) $this->shop->products->find($seed['b'])['stock'], 'stock' => '9', 'stock_alert' => '1', 'active' => '1', 'sold_out' => '0']]]));
         self::assertSame(9, (int) $this->shop->products->find($seed['b'])['stock']);
         // 상품 목록은 재고를 수정하지 않고 면세·전화 문의를 바꾸며, 폼은 옵션 상품의 상품 재고 칸을 잠근다.
         $list = $this->body($this->get($this->app, '/admin/shop/products'));
@@ -655,13 +685,13 @@ final class ShopAdminTest extends WebTestCase
         self::assertStringNotContainsString('name="rows[' . $seed['b'] . '][stock_alert]"', $list);
         $edit = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['a']]));
         self::assertMatchesRegularExpression('/name="stock"[^>]* readonly/', $edit);
-        self::assertStringContainsString('조합별 재고를 씁니다', $edit);
+        self::assertStringContainsString('옵션별 수량', $edit);
         self::assertStringContainsString('data-yc-option-stock-note>', $edit);
         $editPlain = $this->body($this->get($this->app, '/admin/shop/products/edit', ['id' => (string) $seed['b']]));
         self::assertDoesNotMatchRegularExpression('/name="stock"[^>]* readonly/', $editPlain);
         self::assertStringContainsString('data-yc-option-stock-note hidden>', $editPlain);
         $optionId = (int) $this->shop->products->get($seed['a'])['options']['select'][0]['id'];
-        $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock'));
+        $optionStock = $this->body($this->get($this->app, '/admin/shop/products/option-stock', ['mode' => 'adjust']));
         self::assertStringContainsString('name="rows[' . $optionId . '][stock]"', $optionStock);
         self::assertStringContainsString('빨강', $optionStock);
         $this->post($this->app, '/admin/shop/products/option-stock', $this->csrf(['rows' => [$optionId => ['original_stock' => '1', 'stock' => '4', 'stock_alert' => '0', 'active' => '1']]]));
@@ -713,7 +743,7 @@ final class ShopAdminTest extends WebTestCase
         $this->signIn(true);
         $form = $this->body($this->get($this->app, '/admin/shop/products/new'));
         self::assertStringContainsString('상품 정보와 판매 조건을 입력해 새 상품을 등록하세요.', $form);
-        self::assertMatchesRegularExpression('/name="code" value="[0-9]{10}"/', $form);
+        self::assertMatchesRegularExpression('/name="code" value=""/', $form);
         self::assertStringContainsString('의류', $form); self::assertStringContainsString('data-yc-info-groups', $form); self::assertStringContainsString('data-cms-editor', $form);
         self::assertStringNotContainsString('name="seller_email"', $form);
         self::assertStringNotContainsString('id="section-html"', $form);
@@ -767,7 +797,7 @@ final class ShopAdminTest extends WebTestCase
         self::assertSame(1, preg_match('/<div class="yc-save-bar">(.*?)<\/form>/s', $edit, $saveBar));
         self::assertStringContainsString('href="/shop/item?id=' . rawurlencode($product['code']) . '" target="_blank" rel="noopener"', $saveBar[1]);
         self::assertStringContainsString('상품 보기', $saveBar[1]);
-        self::assertStringContainsString('value="F1"', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
+        self::assertStringContainsString('상품 코드 F1', $edit); self::assertStringContainsString('name="version" value="0"', $edit);
         self::assertCount(2, $product['options']['extra']);
         self::assertStringContainsString('name="extras[0][value2]" value="선물 포장"', $edit);
         self::assertStringContainsString('name="extras[1][value2]" value="기본 포장"', $edit);
@@ -850,7 +880,7 @@ final class ShopAdminTest extends WebTestCase
         $body = $this->body($response);
         self::assertStringContainsString('name="options[0][value1]" value="빨강"', $body);
         self::assertStringContainsString('href="/shop/item?id=A1"', $body);
-        self::assertStringContainsString('value="A1" readonly', $body);
+        self::assertStringContainsString('상품 코드 A1', $body);
         self::assertStringContainsString('name="options[0][price]" value="500"', $body);
         self::assertStringContainsString('name="options[0][stock]" value="7"', $body);
         self::assertStringContainsString('name="options[1][value1]" value="파랑"', $body);

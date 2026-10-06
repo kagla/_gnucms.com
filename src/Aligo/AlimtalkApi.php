@@ -47,11 +47,15 @@ final class AlimtalkApi
     {
         $info = $this->call('/akv10/alimtalk/send/', $fields)['info'] ?? [];
 
-        return [
+        $result = [
             'mid' => (string) ($info['mid'] ?? ''),
             'scnt' => (int) ($info['scnt'] ?? 0),
             'fcnt' => (int) ($info['fcnt'] ?? 0),
         ];
+        $cost = ProviderCost::fromInfo(is_array($info) ? $info : []);
+        if ($cost !== null) $result['cost'] = $cost;
+
+        return $result;
     }
 
     public function detail(string $mid): array

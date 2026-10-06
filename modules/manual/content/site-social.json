@@ -1,0 +1,76 @@
+{
+  "screen": "/admin/settings/social",
+  "sections": [
+    {
+      "title": "연결 전 준비",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "사용할 제공자의 개발자 콘솔에서 사이트의 앱을 등록합니다. 관리 화면에 표시되는 콜백 주소를 복사해 해당 제공자의 설정에 등록합니다. 제공자의 앱 검수·서비스 공개 여부와 개인정보 접근 권한은 해당 계정에서 관리합니다."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "제공자",
+            "콜백 경로"
+          ],
+          "rows": [
+            [
+              "Google",
+              "/auth/google/callback"
+            ],
+            [
+              "네이버",
+              "/auth/naver/callback"
+            ],
+            [
+              "카카오",
+              "/auth/kakao/callback"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "설정 순서",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "설정 → 소셜 로그인(/admin/settings/social)에서 제공자를 선택합니다.",
+            "Client ID와 Client Secret을 입력하고 콜백 전체 HTTPS 주소를 개발자 콘솔에 등록합니다.",
+            "저장한 후 기본·홈의 소셜 로그인 허용과 신규 소셜 가입 허용을 목적에 맞게 선택합니다.",
+            "일반 사용자 창에서 버튼이 나타나는지 확인합니다. 연결을 확인하려면 관리자가 사용하는 계정과 별도 계정을 사용합니다."
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Secret은 암호화해 저장합니다. 키를 잊었다고 config의 auth.secret을 새 값으로 바꾸면 기존 암호화 설정을 읽지 못할 수 있습니다."
+        }
+      ]
+    },
+    {
+      "title": "오류 확인",
+      "blocks": [
+        {
+          "type": "list",
+          "items": [
+            "redirect_uri 또는 콜백 오류: http/https, www 유무, 도메인과 하위 설치 폴더를 정확히 비교합니다.",
+            "버튼이 없음: 제공자 키와 전역 소셜 로그인·가입 정책을 함께 확인합니다.",
+            "이메일을 받지 못함: 제공자 앱의 이메일 권한과 GNUCMS의 이메일 보완 절차를 확인합니다.",
+            "도메인 이전: 기존 콜백만 남겨 두지 말고 새 도메인을 등록합니다."
+          ]
+        }
+      ]
+    }
+  ],
+  "related": [
+    "site/settings",
+    "site/auth",
+    "site/security"
+  ],
+  "sources": [
+    "src/Web/Controller/OauthController.php",
+    "config/config.sample.php"
+  ]
+}

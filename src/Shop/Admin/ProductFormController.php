@@ -31,7 +31,7 @@ final class ProductFormController extends AdminBase
             if (($input['saved'] ?? '') === '1') $data['notice'] = '상품을 저장했습니다.';
             if ($copySource !== null) {
                 $values = $this->values($copySource);
-                $values['code'] = is_string($input['code'] ?? null) ? mb_substr($input['code'], 0, 20, 'UTF-8') : (string) time();
+                $values['code'] = is_string($input['code'] ?? null) ? mb_substr($input['code'], 0, 20, 'UTF-8') : '';
                 $values['copy_source_id'] = (string) $copySourceId;
                 $values['version'] = '0';
                 return $this->form($request, $response, $data, $values, null, $copySource);
@@ -76,7 +76,7 @@ final class ProductFormController extends AdminBase
     private function defaults(ServerRequestInterface $request): array
     {
         $cookies = $request->getCookieParams();
-        $values = ['code' => (string) time(), 'name' => '', 'category_id' => '', 'extra_category_ids' => [],
+        $values = ['code' => '', 'name' => '', 'category_id' => '', 'extra_category_ids' => [],
             'summary' => '', 'description' => '', 'list_price' => '0', 'price' => '', 'tax_free' => '0',
             'active' => '1', 'sold_out' => '0', 'stock' => '0', 'stock_alert' => '0', 'buy_min' => '0', 'buy_max' => '0', 'phone_inquiry' => '0',
             'shipping_type' => '0', 'shipping_method' => '0', 'shipping_fee' => '0', 'shipping_free_minimum' => '0', 'shipping_per_qty' => '0',
@@ -121,6 +121,7 @@ final class ProductFormController extends AdminBase
         $data['images'] = $product['images'] ?? $copySource['images'] ?? [];
         $data['image_owner_id'] = (int) ($product['id'] ?? $copySource['id'] ?? 0);
         $data['categories'] = $this->service->categories->optionDetails();
+        if (($data['values']['category_id'] ?? '') === '' && count($data['categories']) === 1) $data['values']['category_id'] = (string) array_key_first($data['categories']);
         $data['info_groups'] = ProductInfo::GROUPS;
         $data['shop_shipping'] = $this->service->settings->all()['shipping'];
         // 편집기 사진 폴더 키. 저장된 상품은 제 폴더(products/<id>), 새 상품은 저장 때 옮길 임시 폴더다(입력 오류로 다시 그릴 때는 폼이 보낸 것을 지킨다).

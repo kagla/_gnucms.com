@@ -18,16 +18,18 @@ use PHPUnit\Framework\Attributes\DataProvider;
 
 final class NotifySettingsTest extends DatabaseTestCase
 {
+    private string $phoneMode = "off";
     private function boot(array $config): NotifySettings
     {
         $db = $this->freshDatabase($config);
         $aligo = new AligoSettings(new AligoSettingsRepository($db), new SecretCipher('s'));
+        $aligo->save(['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678', 'senderkey' => 'SK1']);
         $templates = new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo);
         $db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1', 'name' => '재설정',
             'content' => '#{고객명}님 #{주소} 에서 재설정하세요', 'status' => 'A', 'insp_status' => 'APR',
             'enabled' => 1, 'fetched_at' => '2026-09-17 10:00:00']);
 
-        return new NotifySettings(new SettingsRepository($db), $templates);
+        return new NotifySettings(new SettingsRepository($db), $templates, null, fn (): array => $this->phoneStatus());
     }
 
     /** repository 를 직접 써서, NotifySettings::save() 검증을 거치지 않은(=업그레이드 전
@@ -36,11 +38,12 @@ final class NotifySettingsTest extends DatabaseTestCase
     {
         $db = $this->freshDatabase($config);
         $aligo = new AligoSettings(new AligoSettingsRepository($db), new SecretCipher('s'));
+        $aligo->save(['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678', 'senderkey' => 'SK1']);
         $templates = new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo);
         $repository = new SettingsRepository($db);
         $repository->save($rawNotifySettings);
 
-        return new NotifySettings($repository, $templates);
+        return new NotifySettings($repository, $templates, null, fn (): array => $this->phoneStatus());
     }
 
     /** boot() 과 같지만 alimtalk_templates 를 직접 건드릴 수 있게 Connection·Templates 도
@@ -50,17 +53,25 @@ final class NotifySettingsTest extends DatabaseTestCase
     {
         $db = $this->freshDatabase($config);
         $aligo = new AligoSettings(new AligoSettingsRepository($db), new SecretCipher('s'));
+        $aligo->save(['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678', 'senderkey' => 'SK1']);
         $templates = new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo);
         $db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1', 'name' => '재설정',
             'content' => '#{고객명}님 #{주소} 에서 재설정하세요', 'status' => 'A', 'insp_status' => 'APR',
             'enabled' => 1, 'fetched_at' => '2026-09-17 10:00:00']);
 
-        return [new NotifySettings(new SettingsRepository($db), $templates), $db, $templates];
+        return [new NotifySettings(new SettingsRepository($db), $templates, null, fn (): array => $this->phoneStatus()), $db, $templates];
+    }
+
+    private function phoneStatus(): array
+    {
+        return ['sms_enabled' => in_array($this->phoneMode, ['sms', 'both'], true),
+            'alimtalk_enabled' => in_array($this->phoneMode, ['at', 'both'], true)];
     }
 
     #[DataProvider('connectionProvider')]
     public function testMailIsTheOnlyChannelOnByDefault(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->boot($config);
         self::assertSame(['mail'], $settings->channelsFor('password_reset'));
         self::assertSame(['mail', 'inbox'], $settings->channelsFor('comment_new'));
@@ -69,9 +80,9 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTextBodyIsStoredAndRead(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['mail' => '1', 'sms' => '1',
-            'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
 
         self::assertSame(['mail', 'sms'], $settings->channelsFor('password_reset'));
         self::assertSame('#{이름}님 #{링크} 에서 재설정하세요', $settings->smsBody('password_reset'));
@@ -80,10 +91,11 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTextBodyMayOnlyUseVariablesTheEventProvides(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
 
         try {
-            $settings->save('password_reset', ['sms' => '1', 'sms_body' => '#{주문번호} 안내']);
+            $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{주문번호} 안내']);
             self::fail('없는 변수는 거절해야 한다');
         } catch (DomainError $e) {
             self::assertStringContainsString('주문번호', $e->details()['sms_body']);
@@ -93,17 +105,18 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testAlimtalkCannotBeTurnedOnUntilEveryVariableIsMapped(array $config): void
     {
+        $this->phoneMode = "at";
         $settings = $this->boot($config);
 
         try {
-            $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
                 'var_map' => ['고객명' => '이름']]);
             self::fail('매핑이 빠지면 거절해야 한다');
         } catch (DomainError $e) {
             self::assertStringContainsString('주소', $e->details()['var_map']);
         }
 
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
         self::assertContains('alimtalk', $settings->channelsFor('password_reset'));
@@ -114,30 +127,26 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testEventsThatCannotUseAPhoneRefuseThoseChannels(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
 
         $this->expectException(DomainError::class);
-        $settings->save('email_verify', ['sms' => '1', 'sms_body' => '#{링크}']);
+        $settings->save('email_verify', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{링크}']);
     }
 
-    /** 켤 수 없는 칸은 저장 때 거절한다 — 전화 채널과 같은 자리, 같은 모양이다. */
     #[DataProvider('connectionProvider')]
-    public function testEventsThatCannotUseTheInboxRefuseThatChannel(array $config): void
+    public function testInboxIsMandatoryOnlyForCapableEvents(array $config): void
     {
+        $this->phoneMode = 'off';
         $settings = $this->boot($config);
-
-        foreach (['password_reset', 'password_changed', 'welcome', 'email_verify',
-            'signup_attempt', 'social_email_verify'] as $event) {
-            try {
-                $settings->save($event, ['inbox' => '1']);
-                self::fail($event . ' 는 알림함에 쌓을 수 없어야 한다');
-            } catch (DomainError $e) {
-                self::assertArrayHasKey('inbox', $e->details(), $event);
-            }
+        foreach (['password_reset', 'email_verify', 'signup_attempt', 'social_email_verify'] as $event) {
+            $settings->save($event, ['inbox' => '1']);
+            self::assertFalse($settings->isOn($event, 'inbox'));
         }
-
-        $settings->save('comment_new', ['inbox' => '1']);
-        self::assertSame(['mail', 'inbox'], $settings->channelsFor('comment_new'));
+        foreach (['welcome', 'password_changed', 'comment_new', 'order_paid'] as $event) {
+            $settings->save($event, ['delivery_choice' => '1', 'inbox' => '0']);
+            self::assertSame(['inbox'], $settings->channelsFor($event));
+        }
     }
 
     /**
@@ -148,6 +157,7 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testAStoredInboxRowIsIgnoredWhereTheInboxCannotBeUsed(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->bootWithRawStorage($config, [
             'email_verify.configured' => '1', 'email_verify.mail' => '0',
             'email_verify.inbox' => '1', 'email_verify.sms' => '0', 'email_verify.alimtalk' => '0',
@@ -162,11 +172,12 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testFormValuesSayWhichEventsCanUseTheInbox(array $config): void
     {
+        $this->phoneMode = "off";
         $values = $this->boot($config)->formValues();
 
         self::assertTrue($values['comment_new']['inbox']);
         self::assertFalse($values['email_verify']['inbox']);
-        self::assertFalse($values['welcome']['inbox']);
+        self::assertTrue($values['welcome']['inbox']);
     }
 
     /**
@@ -176,10 +187,11 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testMappingToAVariableTheEventDoesNotHaveCountsAsIncomplete(array $config): void
     {
+        $this->phoneMode = "at";
         $settings = $this->boot($config);
 
         try {
-            $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+            $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
                 'var_map' => ['고객명' => '이름', '주소' => '주문번호']]);
             self::fail('없는 코어 변수로의 매핑은 거절해야 한다');
         } catch (DomainError $e) {
@@ -192,12 +204,13 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testSavingAgainReplacesTheWholeChannelSetForThatEvent(array $config): void
     {
+        $this->phoneMode = "both";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['mail' => '1', 'sms' => '1',
-            'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
         self::assertSame(['mail', 'sms'], $settings->channelsFor('password_reset'));
 
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = 'at';
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
         self::assertSame(['mail', 'alimtalk'], $settings->channelsFor('password_reset'));
@@ -211,6 +224,7 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testUnknownEventKeyIsSafeEverywhere(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->boot($config);
 
         self::assertSame([], $settings->channelsFor('promotional_sms'));
@@ -228,6 +242,7 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testUnknownEventKeyIsIgnoredEvenWhenRawDataIsStored(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->bootWithRawStorage($config, [
             'promotional_sms.configured' => '1',
             'promotional_sms.mail' => '1',
@@ -249,6 +264,7 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testChannelsForNeverReturnsAPhoneChannelTheEventCannotUse(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->bootWithRawStorage($config, [
             'email_verify.configured' => '1',
             'email_verify.mail' => '1',
@@ -265,25 +281,31 @@ final class NotifySettingsTest extends DatabaseTestCase
     /** 배열처럼 스칼라가 아닌 입력이 들어와도 캐스팅 경고 없이 거절해야 한다 —
      *  이 분기의 Recipient 가 이미 겪은 것과 같은 모양의 입력이다. */
     #[DataProvider('connectionProvider')]
-    public function testNonScalarSmsBodyIsRejectedNotCastToAWarning(array $config): void
+    public function testNonScalarTextFieldsAreRejectedWithoutWarnings(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
 
-        try {
-            $settings->save('password_reset', ['sms' => '1', 'sms_body' => ['안 됨']]);
-            self::fail('배열 본문은 거절해야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('sms_body', $e->details());
+        foreach (['sms_body', 'sms_title', 'tpl_code'] as $field) {
+            foreach ([['안 됨'], new \stdClass()] as $bad) {
+                try {
+                    $settings->save('password_reset', [$field => $bad]);
+                    self::fail('배열·객체 입력은 거절해야 한다');
+                } catch (DomainError $e) {
+                    self::assertArrayHasKey($field, $e->details());
+                }
+            }
         }
     }
 
     #[DataProvider('connectionProvider')]
     public function testSaveRejectsAnUnknownEvent(array $config): void
     {
+        $this->phoneMode = "off";
         $settings = $this->boot($config);
 
         try {
-            $settings->save('promotional_sms', ['mail' => '1']);
+            $settings->save('promotional_sms', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
             self::fail('알 수 없는 이벤트는 거절해야 한다');
         } catch (DomainError $e) {
             self::assertArrayHasKey('event', $e->details());
@@ -293,14 +315,18 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testFormValuesBundlesEveryKnownEventForTheScreen(array $config): void
     {
+        $this->phoneMode = "at";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
         $values = $settings->formValues();
 
         self::assertSame([
             'password_reset', 'password_changed', 'welcome', 'comment_new',
+            'order_pending', 'order_paid', 'order_cancelled', 'order_refunded', 'inquiry_replied',
+            'order_confirmed', 'order_shipped', 'order_completed',
+            'order_returning', 'order_returned', 'order_return_closed',
             'email_verify', 'signup_attempt', 'social_email_verify',
         ], array_keys($values));
 
@@ -323,12 +349,13 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testChannelsForDropsAlimtalkWhenItsTemplateIsDisabledLater(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
         self::assertContains('alimtalk', $settings->channelsFor('password_reset'));
 
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
         self::assertNotContains('alimtalk', $settings->channelsFor('password_reset'));
         self::assertFalse($settings->isOn('password_reset', 'alimtalk'));
@@ -340,8 +367,9 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testChannelsForDropsAlimtalkWhenItsTemplateRowIsGone(array $config): void
     {
+        $this->phoneMode = "at";
         [$settings, $db] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
         $db->delete('alimtalk_templates', 'tpl_code = :code', ['code' => 'T1']);
@@ -359,13 +387,14 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testChannelsForDropsAlimtalkWhenTemplateContentGainsAnUnmappedVariable(array $config): void
     {
+        $this->phoneMode = "at";
         [$settings, $db] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
         self::assertContains('alimtalk', $settings->channelsFor('password_reset'));
 
         $db->update('alimtalk_templates',
-            ['content' => '#{고객명}님 #{주소} #{유효시간} 뒤 만료, 재설정하세요'],
+            ['content' => '#{고객명}님 #{주소} #{비고} 뒤 만료, 재설정하세요'],
             'tpl_code = :code', ['code' => 'T1']);
 
         self::assertNotContains('alimtalk', $settings->channelsFor('password_reset'));
@@ -378,11 +407,12 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testFormValuesKeepsTheDeadTemplateCodeForTheScreenToExplain(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
         $values = $settings->formValues();
 
         self::assertNotContains('alimtalk', $values['password_reset']['channels']);
@@ -399,12 +429,12 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testFormValuesAlsoCarriesTheRawStoredSettingsSoTheScreenCanExplainItself(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'sms' => '1',
-            'sms_body' => '#{사이트명} 링크는 #{링크}', 'tpl_code' => 'T1',
+        $this->phoneMode = "both";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{사이트명} 링크는 #{링크}', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
         $dead = $settings->formValues()['password_reset'];
         self::assertNull($dead['template']);
         // 켜 두었다는 사실은 남는다 — 이것이 "템플릿이 죽었다"와 "그냥 껐다"를 가른다.
@@ -412,7 +442,7 @@ final class NotifySettingsTest extends DatabaseTestCase
         self::assertSame(['고객명' => '이름', '주소' => '링크'], $dead['alimtalk_var_map']);
 
         // 채널을 모두 끈다. 저장소의 본문과 매핑은 save() 가 지우지 않는다.
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
         $off = $settings->formValues()['password_reset'];
         self::assertFalse($off['alimtalk_on']);
         self::assertSame('', $off['sms_body']);
@@ -425,8 +455,9 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testRawVarMapSurvivesBrokenStoredValues(array $config): void
     {
+        $this->phoneMode = "off";
         [$settings, $db] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
         $db->insert('site_settings', ['setting_key' => 'notify.password_reset.var_map',
             'setting_value' => '{"고객명": ["배열"], "주소": "링크"}', 'updated_at' => '2026-09-17 10:00:00']);
 
@@ -444,14 +475,15 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTemplateForIsNullWhenAlimtalkIsOffEvenThoughTheMappingRemainsStored(array $config): void
     {
+        $this->phoneMode = "at";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
         self::assertNotNull($settings->templateFor('password_reset'));
 
         // 알림톡만 끄고 저장한다 — 입력에 tpl_code·var_map 이 없어도 SettingsRepository
         // 는 기존 값을 지우지 않으므로 T1 매핑은 그대로 DB 에 남는다.
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
 
         self::assertSame(['mail'], $settings->channelsFor('password_reset'));
         self::assertFalse($settings->isOn('password_reset', 'alimtalk'));
@@ -466,34 +498,29 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testAnEmptySubmittedBodyDeletesWhileAnAbsentOneKeeps(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{이름}님 #{링크}']);
 
         // 키를 아예 안 보낸다 — 채널만 끄는 저장. 본문은 그대로 남아야 한다.
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
         self::assertSame('#{이름}님 #{링크}',
             $settings->formValues()['password_reset']['sms_body_stored']);
 
         // 빈 값으로 보낸다 — 관리자가 칸을 비우고 저장한 것이다. 지워져야 한다.
-        $settings->save('password_reset', ['mail' => '1', 'sms_body' => '']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', 'sms_body' => '']);
         self::assertSame('', $settings->formValues()['password_reset']['sms_body_stored']);
     }
 
-    /** 문자를 켠 채로는 빈 본문을 받지 않는다 — 켜졌다고 답하면서 보낼 것이 없는 상태는
-     *  만들지 않는다. 지우려면 채널을 끄고 비우면 된다. */
     #[DataProvider('connectionProvider')]
-    public function testAnEmptyBodyIsStillRefusedWhileSmsIsOn(array $config): void
+    public function testAnEmptyBodyRestoresTheDefaultWhileSmsIsOn(array $config): void
     {
+        $this->phoneMode = 'sms';
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['sms' => '1', 'sms_body' => '#{링크}']);
-
-        try {
-            $settings->save('password_reset', ['sms' => '1', 'sms_body' => '']);
-            self::fail('문자를 켠 채 빈 본문은 거절해야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('sms_body', $e->details());
-        }
-        self::assertSame('#{링크}', $settings->formValues()['password_reset']['sms_body_stored']);
+        $settings->save('password_reset', ['sms_body' => '#{링크}']);
+        $settings->save('password_reset', ['sms_body' => '']);
+        self::assertSame('', $settings->formValues()['password_reset']['sms_body_stored']);
+        self::assertSame(\GnuCms\Notify\Events::defaultSmsBody('password_reset'), $settings->smsBody('password_reset'));
     }
 
     /**
@@ -505,13 +532,14 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testAnEmptyTemplateCodeDoesNotEraseTheStoredOne(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
         // 죽은 템플릿 때문에 빈 값이 나가는 저장. 다른 칸만 고쳤을 뿐이다.
-        $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'sms_body' => '#{링크}']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', 'tpl_code' => '', 'sms_body' => '#{링크}']);
 
         $values = $settings->formValues()['password_reset'];
         self::assertSame('T1', $values['alimtalk_tpl_code']);
@@ -526,34 +554,29 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTplClearDropsADeadTemplateReference(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
-        $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', 'tpl_code' => '', 'tpl_clear' => '1']);
 
         $values = $settings->formValues()['password_reset'];
         self::assertSame('', $values['alimtalk_tpl_code']);
         self::assertSame([], $values['alimtalk_var_map']);
     }
 
-    /** 켠 채로 지우기는 앞뒤가 맞지 않는다 — 조용히 한쪽을 고르지 않고 이유를 말하며 거절한다. */
     #[DataProvider('connectionProvider')]
-    public function testTplClearIsRefusedWhileAlimtalkIsOn(array $config): void
+    public function testDeadTemplateCanBeClearedWithPhoneSelected(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
-            'var_map' => ['고객명' => '이름', '주소' => '링크']]);
-        $templates->setEnabled('T1', false);
-
-        try {
-            $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
-            self::fail('알림톡을 켠 채로 지우기는 거절해야 한다');
-        } catch (DomainError $e) {
-            self::assertArrayHasKey('tpl_clear', $e->details());
-        }
-        self::assertSame('T1', $settings->formValues()['password_reset']['alimtalk_tpl_code']);
+        $this->phoneMode = 'both';
+        [$settings, $db] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['tpl_code' => 'T1', 'var_map' => ['주소' => '링크']]);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'phone' => '1', 'tpl_clear' => '1']);
+        self::assertSame('', $settings->formValues()['password_reset']['alimtalk_tpl_code']);
+        self::assertSame(['sms'], $settings->channelsFor('password_reset'));
     }
 
     /**
@@ -565,18 +588,19 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTemplateUsabilityIsReportedRegardlessOfTheChannelSwitch(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
 
         // 알림톡을 꺼도 템플릿 자체는 멀쩡하다.
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
         $off = $settings->formValues()['password_reset'];
         self::assertNull($off['template']);
         self::assertTrue($off['alimtalk_template_usable']);
 
         // 승인이 풀리면 꺼져 있어도 "못 쓴다"가 되어야 한다.
-        $templates->setEnabled('T1', false);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
         self::assertFalse(
             $settings->formValues()['password_reset']['alimtalk_template_usable']);
     }
@@ -590,16 +614,17 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testTplClearIsRefusedWhenTheTemplateCameBackToLife(array $config): void
     {
-        [$settings, , $templates] = $this->bootWithTemplateAccess($config);
-        $settings->save('password_reset', ['alimtalk' => '1', 'tpl_code' => 'T1',
+        $this->phoneMode = "at";
+        [$settings, $db, $templates] = $this->bootWithTemplateAccess($config);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'tpl_code' => 'T1',
             'var_map' => ['고객명' => '이름', '주소' => '링크']]);
-        $templates->setEnabled('T1', false);
-        $settings->save('password_reset', ['mail' => '1']);
+        $db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
         // 화면을 열어 둔 사이 승인이 돌아왔다.
-        $templates->setEnabled('T1', true);
+        $db->update('alimtalk_templates', ['status' => 'A'], 'tpl_code = :code', ['code' => 'T1']);
 
         try {
-            $settings->save('password_reset', ['mail' => '1', 'tpl_code' => '', 'tpl_clear' => '1']);
+            $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', 'tpl_code' => '', 'tpl_clear' => '1']);
             self::fail('되살아난 템플릿을 낡은 체크로 지워서는 안 된다');
         } catch (DomainError $e) {
             self::assertArrayHasKey('tpl_clear', $e->details());
@@ -615,12 +640,12 @@ final class NotifySettingsTest extends DatabaseTestCase
     #[DataProvider('connectionProvider')]
     public function testSmsBodyIsEmptyWhenSmsIsOffEvenThoughTheBodyRemainsStored(array $config): void
     {
+        $this->phoneMode = "sms";
         $settings = $this->boot($config);
-        $settings->save('password_reset', ['sms' => '1',
-            'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '1', 'sms_body' => '#{이름}님 #{링크} 에서 재설정하세요']);
         self::assertNotSame('', $settings->smsBody('password_reset'));
 
-        $settings->save('password_reset', ['mail' => '1']);
+        $settings->save('password_reset', ['delivery_choice' => '1', 'mail' => '1', 'phone' => '0', ]);
 
         self::assertSame(['mail'], $settings->channelsFor('password_reset'));
         self::assertFalse($settings->isOn('password_reset', 'sms'));

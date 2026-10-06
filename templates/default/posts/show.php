@@ -51,7 +51,7 @@ $below_view_list = $below_view_list ?? null;
         <strong><?= $this->e($post['author_name']) ?></strong>
       </div>
       <span class="article-writer-meta">
-        <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'y-m-d H:i:s') ?></time>
+        <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time>
         <?php if (!empty($post['author_ip_masked'])): ?><span class="author-ip"><?= $this->e($post['author_ip_masked']) ?></span><?php endif ?>
         <span class="stat-inline"><?= $this->icon('eye', 14) ?> 조회 <?= $this->e($post['view_count']) ?></span>
         <a class="stat-inline stat-inline-link" href="#comments"><?= $this->icon('comment', 14) ?> 댓글 <?= $this->e($post['comment_count']) ?></a>

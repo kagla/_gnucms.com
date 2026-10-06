@@ -13,17 +13,17 @@
 <section class="card yc-order-flow"><div class="card-body">
   <div class="yc-panel-heading"><div><h2 class="card-title">주문 처리 현황</h2><p class="muted">전체 기간 · 현재 주문 상태 기준</p></div><a class="yc-admin-link" href="<?= $this->e($admin_url) ?>/orders">전체 주문 <?= $this->icon('arrow-right', 16) ?></a></div>
   <ol class="yc-workflow">
-    <?php foreach (['pending' => ['주문 접수', '확인할 주문'], 'confirmed' => ['상품 준비', '배송을 준비할 주문'], 'shipped' => ['배송 중', '배송을 확인할 주문'], 'completed' => ['배송 완료', '처리가 끝난 주문']] as $key => [$label, $hint]): ?>
-      <li><a href="<?= $this->e($admin_url) ?>/orders?status=<?= $key ?>"<?= $key === 'pending' ? ' class="yc-workflow-priority"' : '' ?>><span><?= $label ?></span><strong><?= number_format((int) ($order_stats[$key] ?? 0)) ?><small>건</small></strong><small><?= $hint ?></small></a></li>
+    <?php foreach (['pending' => ['주문 접수', '확인할 주문'], 'paid' => ['발송 대기', '운송장을 등록할 주문'], 'shipped' => ['배송 중', '배송을 확인할 주문'], 'completed' => ['배송 완료', '처리가 끝난 주문']] as $key => [$label, $hint]): ?>
+      <li><a href="<?= $this->e($admin_url . ($key === 'paid' ? '/shipments' : '/orders?status=' . $key)) ?>"<?= $key === 'pending' ? ' class="yc-workflow-priority"' : '' ?>><span><?= $label ?></span><strong><?= number_format((int) ($order_stats[$key] ?? 0) + ($key === 'paid' ? (int) ($order_stats['confirmed'] ?? 0) : 0)) ?><small>건</small></strong><small><?= $hint ?></small></a></li>
     <?php endforeach ?>
   </ol>
-  <div class="yc-panel-foot"><span class="muted">주문 상태는 결제 완료를 의미하지 않습니다.</span><a href="<?= $this->e($admin_url) ?>/orders?status=cancelled">취소 <?= (int) ($order_stats['cancelled'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a></div>
+  <div class="yc-panel-foot"><span class="muted">주문 상태는 결제 완료를 의미하지 않습니다.</span><a href="<?= $this->e($admin_url) ?>/orders?status=cancelled">취소 <?= (int) ($order_stats['cancelled'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a> <a href="<?= $this->e($admin_url) ?>/orders?status=returning">반품 요청 <?= (int) ($order_stats['returning'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a></div>
 </div></section>
 <div class="yc-dashboard-grid">
   <section class="card"><div class="card-body">
     <div class="yc-panel-heading"><div><h2 class="card-title">최근 접수 주문</h2><p class="muted">최근 접수순으로 최대 5건 표시</p></div><a class="yc-admin-link" href="<?= $this->e($admin_url) ?>/orders">더 보기 <?= $this->icon('chevron-right', 15) ?></a></div>
     <?php if ($recent_orders === []): ?><div class="yc-admin-empty"><?= $this->icon('document', 30) ?><strong>아직 접수된 주문이 없습니다</strong><p>새 주문이 접수되면 이곳에서 확인할 수 있습니다.</p></div><?php else: ?>
-      <ul class="yc-recent-orders"><?php foreach ($recent_orders as $order): ?><li><a href="<?= $this->e($admin_url) ?>/orders/detail?id=<?= (int) $order['id'] ?>"><div><span class="yc-status" data-status="<?= $this->e($order['status']) ?>"><?= $this->e($statuses[$order['status']]) ?></span><strong><?= $this->e($order['buyer_name']) ?></strong><small><?= $this->e($order['number']) ?> · <?= date('m.d H:i', (int) $order['created_at']) ?></small></div><b><?= number_format((int) $order['total']) ?><small>원</small></b><?= $this->icon('chevron-right', 16) ?></a></li><?php endforeach ?></ul>
+      <ul class="yc-recent-orders"><?php foreach ($recent_orders as $order): ?><li><a href="<?= $this->e($admin_url) ?>/orders/detail?id=<?= (int) $order['id'] ?>"><div><span class="yc-status" data-status="<?= $this->e($order['status']) ?>"><?= $this->e($statuses[$order['status']]) ?></span><strong><?= $this->e($order['buyer_name']) ?></strong><small><?= $this->e($order['number']) ?> · <?= $this->date((int) $order['created_at']) ?></small></div><b><?= number_format((int) $order['total']) ?><small>원</small></b><?= $this->icon('chevron-right', 16) ?></a></li><?php endforeach ?></ul>
     <?php endif ?>
   </div></section>
   <section class="card"><div class="card-body">

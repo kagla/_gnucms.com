@@ -1,0 +1,65 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "DB 계약",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "코어·알리고·쇼핑몰은 MySQL 전용입니다. MariaDB는 mysql PDO 드라이버를 사용합니다. utf8mb4를 사용하고 접두어가 있는 설치도 지원합니다. 테이블 이름을 SQL에 고정하기 전에 Connection의 접두어 처리 규칙을 확인합니다."
+        },
+        {
+          "type": "p",
+          "text": "config의 접두어를 설치 후 바꾸면 기존 테이블을 찾지 못합니다. 접두어 변경은 설정 변경 한 줄이 아니라 명시적인 데이터 이전입니다."
+        }
+      ]
+    },
+    {
+      "title": "구조를 바꿀 때",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "실제 필요한 테이블·컬럼 변경인지 먼저 확인합니다. 기존 site_settings로 가능한 설정은 불필요한 테이블을 추가하지 않습니다.",
+            "src/Db/Schema.php의 신규 설치 DDL과 기존 설치용 마이그레이션을 함께 수정합니다.",
+            "실제 구조 변경이 있을 때만 Schema::VERSION을 올립니다. 제품 version.txt는 건드리지 않습니다.",
+            "기존 값·NULL·인덱스·접두어와 부분 실패 후 재실행을 고려합니다.",
+            "명시적 검사 요청이 있으면 전용 MySQL DB에서 새 설치·업그레이드·재실행과 데이터 보존을 확인합니다."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "트랜잭션",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "주문 생성·재고·회원 최초 주문자 저장처럼 함께 성공해야 하는 값은 같은 트랜잭션에서 처리합니다. 외부 발송은 최외곽 커밋 이후 시작합니다. PG 승인·취소는 외부 거래이므로 DB 롤백만으로 되돌아가지 않습니다."
+        },
+        {
+          "type": "p",
+          "text": "수량 변경·반품 완료는 잠금과 중복 방지 규칙을 따라 서비스에서 처리합니다. 관리 UI에서 SQL로 상태 한 칸만 바꾸면 환불·판매량·알림 원장이 맞지 않을 수 있습니다."
+        }
+      ]
+    },
+    {
+      "title": "운영 업데이트",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "SchemaUpgrader는 설치된 구조의 도장을 보고 필요한 업그레이드를 수행합니다. DB 구조 판과 제품 릴리스는 별개입니다. 예전 코드로 돌아갈 때 새 DB 구조가 그대로 남아 있음을 고려해 소스와 백업을 함께 복원합니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/extension-data",
+    "upgrade",
+    "development/notifications"
+  ],
+  "sources": [
+    "src/Db/Schema.php",
+    "src/Db/Connection.php",
+    "src/Db/SchemaUpgrader.php"
+  ]
+}

@@ -94,8 +94,8 @@ final class Dispatch
                 MessageText::assertFits($one['body'], $title);
             }
         } elseif ($failover) {
-            // 알림톡 본문 자체는 UTF-8 그대로 나가 EUC-KR 제약을 받지 않지만, 실패했을 때
-            // 대신 나가는 대체문자(fmessage_N)는 문자 API와 똑같이 EUC-KR 로 나간다. 여기서
+            // 알림톡과 대체문자 API 요청은 모두 UTF-8이다. 대체문자(fmessage_N)는
+            // 단말기의 EUC-KR 문자 범위·길이 제한을 별도로 확인한다. 여기서
             // 걸러 두지 않으면 이모지 같은 글자가 깨진 채로 대체문자에 실려 나간다. 템플릿
             // 원문이 아니라 변수 치환이 끝난 수신자별 본문을 검사한다 — 실제로 나갈 글자는
             // 변수값에 들어 있을 수 있고 원문에는 없을 수 있기 때문이다. 제목은 대체문자에
@@ -141,6 +141,7 @@ final class Dispatch
         $success = 0;
         $failure = 0;
         $pending = 0;
+        $providerCosts = [];
         foreach (array_chunk($prepared, self::CHUNK) as $chunk) {
             try {
                 $result = $channel === 'at'
@@ -161,6 +162,18 @@ final class Dispatch
             // 발송 실패와 섞이지 않게 한다. 기록 자체가 실패하면 여기서 그대로 올려보낸다 —
             // 작업이 'sending' 상태로 남는 편이 "결과를 모른다"는 정직한 표시다.
             $this->markChunk($chunk, 'accepted', $result['mid'], null);
+            if ($channel === 'at') {
+                // API가 반환한 비용만 접수 시점에 보존한다. 이력 조회에는 이 정보가 없다.
+                // 결과 실패·예약 취소·대체문자 비용을 이 값에서 임의로 빼거나 더하지 않는다.
+                $providerCosts[] = [
+                    'mid' => $result['mid'], 'source' => 'aligo.alimtalk.send',
+                    'scnt' => $result['scnt'], 'fcnt' => $result['fcnt'],
+                    'recorded_at' => Clock::now(), 'cost' => $result['cost'] ?? null,
+                ];
+                $this->db->update('message_jobs', [
+                    'provider_costs' => json_encode($providerCosts, JSON_THROW_ON_ERROR),
+                ], 'id = :id', ['id' => $jobId]);
+            }
             // 묶음 크기가 아니라 알리고가 돌려준 접수 건수를 쓴다. 500명을 보냈는데
             // scnt 498·fcnt 2 로 답했다면 2명은 접수조차 되지 않은 것이고, 그걸
             // count($chunk) 로 세면 이력이 500건 성공이라고 거짓말한다. 어느 2명인지는
@@ -208,8 +221,8 @@ final class Dispatch
 
         $code = trim((string) ($request['tpl_code'] ?? ''));
         $template = $code === '' ? null : $this->templates->find($code);
-        if ($template === null || (int) $template['enabled'] !== 1) {
-            throw DomainError::validation(['tpl_code' => '사용 중인 승인 템플릿을 골라 주세요.']);
+        if ($template === null || !$this->templates->canUse($template)) {
+            throw DomainError::validation(['tpl_code' => '현재 채널의 승인된 템플릿을 골라 주세요.']);
         }
 
         return [(string) $template['content'], $code];
@@ -331,11 +344,12 @@ final class Dispatch
             $n++;
             $fields['receiver_' . $n] = $one['phone'];
             $fields['message_' . $n] = $one['body'];
-            $fields['subject_' . $n] = mb_substr($one['body'], 0, 20);
+            $fields['subject_' . $n] = mb_substr(trim((string) preg_replace('/\s+/u', ' ', $one['body'])), 0, 20);
             if ($one['name'] !== null) {
                 $fields['recvname_' . $n] = $one['name'];
             }
             if (!empty($request['failover'])) {
+                $fields['fsubject_' . $n] = mb_substr(trim((string) preg_replace('/\s+/u', ' ', $one['fallback_body'])), 0, 20);
                 $fields['fmessage_' . $n] = $one['fallback_body'];
             }
         }

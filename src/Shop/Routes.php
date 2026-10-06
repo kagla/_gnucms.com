@@ -58,8 +58,8 @@ final class Routes
         }
         $map('POST', '/checkout/previous-addresses', static fn ($request, $response) => $commerce->handle('checkout/previous-addresses', $request, $response));
         $map('GET', '/orders', static fn ($request, $response) => $commerce->handle('orders', $request, $response));
-        $map('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response));
-        foreach (['cart/add', 'order/cancel'] as $page) {
+        $map('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response))->setName('shop.order');
+        foreach (['cart/add', 'order/cancel', 'order/return'] as $page) {
             $map('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }
         $map('GET', '/pay', static fn ($request, $response) => $pay->show($request, $response));
@@ -83,8 +83,11 @@ final class Routes
                 $map($method, '/' . $page, static fn ($request, $response) => $productForm->handle($page, $request, $response), true);
             }
         }
-        $map('GET', '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        foreach (['GET', 'POST'] as $method) {
+            $map($method, '/orders', static fn ($request, $response) => $orders->handle('orders', $request, $response), true);
+        }
         $map('GET', '/shipments', static fn ($request, $response) => $operations->shipments($request, $response), true);
+        $map('POST', '/shipments', static fn ($request, $response) => $operations->shipments($request, $response), true);
         $map('POST', '/shipments/export', static fn ($request, $response) => $operations->shipmentExport($request, $response), true);
         $map('POST', '/shipments/print', static fn ($request, $response) => $operations->shipmentPrint($request, $response), true);
         $map('POST', '/shipments/import', static fn ($request, $response) => $operations->shipmentImport($request, $response), true);

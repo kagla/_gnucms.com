@@ -41,6 +41,7 @@ final class AccountService
     private string $appUrl;
     private CmsService $cms;
     private ConsentRepository $consents;
+    private bool $emailVerificationRequired;
 
     private ?PasswordThrottle $throttle = null;
     private ?Notifier $notifier = null;
@@ -134,7 +135,7 @@ final class AccountService
     }
 
     public function __construct(UserRepository $users, TokenService $tokens, MailerInterface $mailer, string $appUrl,
-        CmsService $cms, ConsentRepository $consents)
+        CmsService $cms, ConsentRepository $consents, bool $emailVerificationRequired = true)
     {
         $this->users = $users;
         $this->tokens = $tokens;
@@ -142,6 +143,7 @@ final class AccountService
         $this->appUrl = rtrim($appUrl, '/');
         $this->cms = $cms;
         $this->consents = $consents;
+        $this->emailVerificationRequired = $emailVerificationRequired;
     }
 
     public function register(array $input, ?ConsentTrace $trace = null): array
@@ -194,7 +196,8 @@ final class AccountService
         //
         // 첫 사람은 빼놓는다. 그 사람은 인증 없이 만들어지므로(createRegistered) 링크를
         // 기다리지 않고, 여기서 막으면 알림 설정을 고칠 관리자 자체가 생기지 못한다.
-        if ($existingUsers > 0 && !$this->canSendVerificationLink($email, $phone)) {
+        if ($this->emailVerificationRequired && $existingUsers > 0
+            && !$this->canSendVerificationLink($email, $phone)) {
             throw DomainError::serviceUnavailable(
                 '지금은 회원가입을 받을 수 없습니다. 인증 링크를 보낼 수 없어 가입을 끝낼 수 없습니다.'
                 . ' 사이트 관리자에게 문의해 주세요.');
@@ -202,9 +205,9 @@ final class AccountService
 
         $existing = $this->users->findByEmail($email);
         if ($existing !== null) {
-            if (!(bool) $existing['email_verified']) {
+            if (!(bool) $existing['email_verified'] && $this->emailVerificationRequired) {
                 $this->sendVerification($existing);
-            } else {
+            } elseif ((bool) $existing['email_verified']) {
                 // 나갔는지는 화면에 옮기지 않는다 — 이 분기의 화면은 진짜 가입과 한
                 // 글자도 달라서는 안 된다(달라지면 "이 주소가 가입돼 있는가"를 묻는
                 // 도구가 된다). 이 알림이 못 나가도 그 사람은 이미 로그인할 수 있다.
@@ -230,6 +233,12 @@ final class AccountService
                 $agreed = (int) $doc['required'] === 1 || $v->bool('agree_' . $doc['id'], false);
                 $this->consents->record('user', $id, 'signup', $doc, $agreed, $trace);
             }
+        }
+        // 메일을 쓰지 않는 사이트는 일반 가입을 이메일 소유 확인 없이 완료한다.
+        // DB 값도 인증 완료로 맞춰 두어 나중에 메일을 다시 켜도 이 회원이 막히지 않는다.
+        if (!$this->emailVerificationRequired && !(bool) $user['email_verified']) {
+            $this->users->verifyEmail($id);
+            $user = $this->users->findById($id);
         }
         if (!(bool) $user['email_verified']) {
             $this->sendVerification($user);
@@ -274,6 +283,10 @@ final class AccountService
             // 비밀번호까지 맞은 사람이다(미인증 분기 포함). 이전 실패는 잊는다.
             $this->throttle->clear('login:' . $email);
         }
+        if (!(bool) $user['email_verified'] && !$this->emailVerificationRequired) {
+            $this->users->verifyEmail((int) $user['id']);
+            $user = $this->users->findById((int) $user['id']);
+        }
         if (!(bool) $user['email_verified']) {
             // 비밀번호까지 맞은 사람이다. 화면이 '다시 보내기' 를 내줄 수 있게 따로 표시한다.
             throw DomainError::validation([
@@ -315,6 +328,9 @@ final class AccountService
 
     public function resendVerification(string $email): void
     {
+        if (!$this->emailVerificationRequired) {
+            return;
+        }
         $user = $this->users->findByEmail(strtolower(trim($email)));
         if ($user !== null && !(bool) $user['email_verified']) {
             // 조용히. 이 화면은 없는 주소에도 같은 답을 내야 한다(notifyQuietly 주석).
@@ -341,7 +357,8 @@ final class AccountService
         $email = strtolower(trim($email));
         $this->countResetRequest($email);
         $user = $this->users->findByEmail($email);
-        if ($user === null || !(bool) $user['email_verified'] || $user['status'] !== 'active') {
+        if ($user === null || ($this->emailVerificationRequired && !(bool) $user['email_verified'])
+            || $user['status'] !== 'active') {
             return;
         }
         $token = $this->tokens->issue((int) $user['id'], TokenService::RESET_PASSWORD);
@@ -461,7 +478,9 @@ final class AccountService
         // register() 와 같은 이유로 $v->check() 뒤에 본다 — 표시 이름·비밀번호 오류가
         // 함께 있을 때 번호 오류만 보이고 나머지가 다음 제출까지 묻히지 않게 한다.
         $phone = $this->phoneForEdit($input, isset($user['phone']) ? (string) $user['phone'] : null);
+        $buyerName = array_key_exists('buyer_name', $input) ? BuyerProfile::name($input['buyer_name']) : null;
         $this->users->updateDisplayName($userId, $displayName);
+        if (array_key_exists('buyer_name', $input)) $this->users->updateBuyerName($userId, $buyerName);
         if ($phone['write']) {
             $this->users->updatePhone($userId, $phone['phone']);
         }
@@ -557,7 +576,7 @@ final class AccountService
                 '이름' => (string) $user['display_name'],
                 // 시간대 표기를 본문이 아니라 값이 들고 간다 — 같은 값이 문자·알림톡으로
                 // 나갈 때 시각만 덩그러니 남으면 어느 시간대인지 알 수 없다.
-                '일시' => Clock::now() . ' (UTC)',
+                '일시' => \GnuCms\Support\DateTimeDisplay::format(Clock::timestamp(), 'UTC') . ' (UTC)',
                 '링크' => $this->appUrl . '/forgot-password',
             ]) ? self::NOTICE_SENT : self::NOTICE_OFF;
         } catch (\Throwable $e) {
@@ -697,40 +716,14 @@ final class AccountService
     }
 
     /**
-     * 회원정보 수정 화면 전용. 관리자 회원 수정은 정책을 아예 보지 않으므로 이 메서드를
-     * 쓰지 않는다(AdminService::phoneFromAdminInput() 의 설명 참고).
-     *
-     * 가입용 phoneFromInput() 과 세 값은 같지만 off 와 required 의 뜻이 다르다.
-     *
-     * off — 가입은 아직 아무 것도 저장돼 있지 않으니 null 을 돌려줘도 안전하지만,
-     * 수정 화면에서 그 null 을 그대로 썼다가는 관리자가 설정을 끄는 순간 모든 회원의
-     * 저장된 번호가 다음 프로필 저장마다 조용히 지워진다. 그래서 "쓸지 여부" 자체를
-     * false 로 돌려 칸을 아예 건드리지 않는다 — 이미 있는 번호는 화면에서 고칠 수
-     * 없을 뿐, 지워지지 않고 알림톡·문자 발송에 계속 쓰인다.
-     *
-     * required — 가입 화면에서는 빈 값을 거절하는 것이 곧 정책이지만, 수정 화면에서
-     * 그렇게 하면 번호가 없는 회원(정책을 켜기 전에 가입한 회원, 번호를 받지 않는
-     * 소셜 가입)이 이름·프로필 이미지는 물론 비밀번호까지 바꿀 수 없게 된다. 라디오
-     * 하나로 기존 회원 전체가 회원정보 수정에서 잠기는 셈이다. signup_phone 은
-     * "가입 화면이 무엇을 물을지"를 정하는 설정이지 "이 사이트가 번호를 다루는가"가
-     * 아니므로, 수정 화면에서 required 는 "저장된 번호를 지울 수는 없다"는 뜻으로만
-     * 받는다: 저장된 번호가 있는데 빈 값을 보내면 거절하고, 저장된 번호가 아예 없으면
-     * 칸을 건드리지 않고 넘어간다.
-     *
+     * 회원정보의 휴대폰은 가입 수집 설정과 무관하게 주문·알림용으로 입력할 수 있다.
+     * required 정책에서 이미 저장한 번호를 지울 수 없는 기존 규칙은 유지한다.
      * @return array{write: bool, phone: ?string}
      */
     private function phoneForEdit(array $input, ?string $stored): array
     {
         $policy = $this->signupPhonePolicy();
-        if ($policy === 'off') {
-            return ['write' => false, 'phone' => null];
-        }
-        // "빈 칸을 보냈다"(지우라는 뜻)와 "칸 자체를 안 보냈다"는 다르다. 이 화면에는
-        // 실제로 칸이 빠지는 경로가 있다: 정책이 off 인 동안 번호 칸은 disabled 로
-        // 그려지고(저장된 번호를 보여 주되 고칠 수는 없게), 브라우저는 disabled 인
-        // 칸을 POST 에 싣지 않는다. 그 화면을 열어 둔 회원이 있는 사이 관리자가
-        // 정책을 선택으로 바꾸면, 이름만 고친 저장 한 번이 번호를 조용히 지운다.
-        // 안 보낸 칸은 건드리지 않는다 — AdminService::phoneFromAdminInput() 과 같다.
+        // 칸을 제출하지 않은 이전 폼은 저장된 번호를 변경하지 않는다.
         if (!array_key_exists('phone', $input)) {
             return ['write' => false, 'phone' => null];
         }

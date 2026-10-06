@@ -1,0 +1,63 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "API 2를 사용할 때",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "외부 콜백·패키지 DB 기반을 쓰는 확장은 manifest api:2를 선언합니다. 기본 API 1의 route·서비스 연결을 유지하면서 별도의 외부 POST와 패키지 데이터 계약을 사용합니다. 실제 메서드와 manifest 스키마는 src/Extension 및 docs/extensions.md를 함께 확인합니다."
+        }
+      ]
+    },
+    {
+      "title": "외부 콜백",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "Context::externalPost(path, authenticate, handler, maxBytes, contentType)로 세션과 독립적인 콜백을 등록합니다. 기본 JSON, PG 인증 폼은 application/x-www-form-urlencoded를 명시합니다. 인증 콜백과 본문 크기 제한을 반드시 둡니다."
+        },
+        {
+          "type": "p",
+          "text": "서명·거래 키·상점·금액·환경을 확인하고 중복 요청을 같은 결과로 처리합니다. 임의 요청값으로 파일 경로·SQL 테이블명·외부 목적지를 만들지 않습니다. 외부 호출을 인증하지 않은 GET으로 상태 변경하지 않습니다."
+        }
+      ]
+    },
+    {
+      "title": "DB와 등록 레지스트리",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "패키지 테이블은 API 2의 스키마 계약에 따라 등록하고 새 설치·기존 설치를 멱등하게 처리합니다. 코어 테이블을 직접 변경해 확장의 비활성화·삭제가 코어 기능을 망가뜨리지 않게 합니다. 접두어와 설치 레지스트리에 등록되는 백업 대상을 확인합니다."
+        },
+        {
+          "type": "p",
+          "text": "확장 등록 시 실제 업무 데이터를 초기화하거나 과거 기록을 삭제하지 않습니다. 비활성화는 실행 여부를 바꾸며 기록의 삭제는 별도 승인된 작업입니다."
+        }
+      ]
+    },
+    {
+      "title": "상태와 백업",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "영속 사용 상태는 storage/extensions의 잠금·원자적 교체 방식으로 관리합니다. enabled.json을 직접 덮어써 다른 확장의 상태를 지우지 않습니다. 런타임 캐시·외부 실행 허용값은 storage/extensions-runtime과 구분합니다."
+        },
+        {
+          "type": "p",
+          "text": "수동 백업 v2는 등록된 확장 테이블과 영속 상태를 포함합니다. 패키지 PHP 소스·임시 잠금·런타임 토큰은 별도입니다. 복원 뒤에는 외부 실행 허용값을 폐기하고 계정·미완료 작업을 확인한 후 다시 허용합니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/extensions",
+    "development/database",
+    "backup"
+  ],
+  "sources": [
+    "docs/extensions.md",
+    "src/Extension/Context.php",
+    "src/Extension/StateStore.php"
+  ]
+}

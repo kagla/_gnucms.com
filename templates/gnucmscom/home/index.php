@@ -11,7 +11,7 @@
   'operatingSystem' => 'Web server with PHP 8.2 or later',
   'description' => '게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림 기능을 제공하는 오픈소스 PHP CMS',
   'url' => 'https://gnucms.com/',
-  'downloadUrl' => 'https://github.com/kagla/gnucms/archive/refs/heads/main.zip',
+  'downloadUrl' => 'https://github.com/kagla/gnucms/releases/latest',
   'softwareRequirements' => 'PHP 8.2+, PDO MySQL, MySQL or MariaDB',
   'license' => 'https://opensource.org/license/mit',
   'codeRepository' => 'https://github.com/kagla/gnucms',
@@ -64,7 +64,7 @@ $freshAfter = time() - 86400;
       <div class="product-hero-summary">
         <p class="product-lead">MySQL/MariaDB 기반의 게시판, 회원, 쇼핑몰과 결제 기능을 일반 웹호스팅에서 바로 운영합니다.</p>
         <div class="product-actions">
-          <a class="product-button product-button-primary" href="https://github.com/kagla/gnucms#readme" target="_blank" rel="noopener">README 보기</a>
+          <a class="product-button product-button-primary" href="<?= $this->e($this->base . '/manual') ?>">매뉴얼 보기</a>
           <a class="product-button product-button-secondary" href="https://github.com/kagla/gnucms" target="_blank" rel="noopener">GitHub 저장소</a>
           <a class="product-button product-button-tertiary" href="https://kagla10.mycafe24.com" target="_blank" rel="noopener">카페24 절약형 호스팅 데모</a>
         </div>

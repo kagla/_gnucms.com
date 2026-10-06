@@ -30,6 +30,7 @@ final class AccountController
         return $this->render($request, $response, [
             'id' => $user['id'], 'display_name' => $user['display_name'], 'email' => $user['email'],
             'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
+            'buyer_name' => $user['buyer_name'] ?? null,
             'phone_stored' => $user['phone'] ?? null,
         ], [], ($request->getQueryParams()['saved'] ?? '') === '1',
             AccountService::noticeOrNull($request->getQueryParams()['notice'] ?? null),
@@ -59,6 +60,7 @@ final class AccountController
                 'email' => $user['email'], 'avatar_file' => $user['avatar_file'] ?? null,
                 // phone[]=x 처럼 배열로 오면 (string) 캐스팅이 경고를 낸다 — 늘 스칼라만 되돌린다.
                 'phone' => isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '',
+                'buyer_name' => is_string($input['buyer_name'] ?? null) ? $input['buyer_name'] : ($user['buyer_name'] ?? ''),
                 // 화면은 "무엇을 제출했나"와 "무엇이 저장돼 있나"를 둘 다 알아야 한다 —
                 // required 에서 번호를 지울 수 없다는 표시는 저장된 번호를 보고 정한다.
                 'phone_stored' => $user['phone'] ?? null,
@@ -109,6 +111,7 @@ final class AccountController
             return $this->render($request, $response->withStatus(422), [
                 'id' => $id, 'display_name' => $user['display_name'], 'email' => $user['email'],
                 'avatar_file' => $user['avatar_file'] ?? null, 'phone' => $user['phone'] ?? null,
+                'buyer_name' => $user['buyer_name'] ?? null,
                 'phone_stored' => $user['phone'] ?? null,
             ], $e->details(), false, null, $user['password_hash'] !== null);
         }
@@ -150,6 +153,7 @@ final class AccountController
             'values' => $values, 'errors' => $errors, 'saved' => $saved,
             'password_notice' => $passwordNotice,
             'has_password' => $hasPassword,
+            'email_notifications' => (int) ($this->app->users()->findById((int) $values['id'])['email_notifications'] ?? 1) === 1,
             'social_identities' => $identities,
             'withdraw_reauthenticated' => $this->socialReauthenticated((int) $values['id']),
         ]);

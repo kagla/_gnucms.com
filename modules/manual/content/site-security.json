@@ -1,0 +1,75 @@
+{
+  "screen": "/admin/settings/security",
+  "sections": [
+    {
+      "title": "운영 기본",
+      "blocks": [
+        {
+          "type": "list",
+          "items": [
+            "HTTPS를 사용하고 운영 debug는 false로 유지합니다.",
+            "전체 관리자 계정은 필요한 사람에게만 부여하고 일반 운영 조회용 계정과 구분합니다.",
+            "config/config.php와 storage를 웹 문서 루트 밖에 둡니다.",
+            "SMTP·OAuth·알리고·PG 비밀키를 캡처·공개 코드·게시글에 넣지 않습니다.",
+            "소스와 라이브러리를 완성 배포본으로 관리하고 업그레이드 전에 백업합니다."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Turnstile 연결",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "Cloudflare에서 실제 사이트 호스트에 사용할 Turnstile 위젯을 만듭니다.",
+            "설정 → 보안에서 Site Key와 Secret Key, 호스트 이름을 입력합니다.",
+            "사용을 켜고 저장합니다.",
+            "가입·비밀번호 찾기·인증 메일 재발송과 비회원 작성 화면에서 표시 조건을 확인합니다."
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Cloudflare DNS나 CDN을 사용하지 않아도 Turnstile만 연결할 수 있습니다. 공개 Site Key와 서버 Secret Key를 구분합니다. Secret은 auth.secret으로 암호화해 저장합니다."
+        }
+      ]
+    },
+    {
+      "title": "로그인 제한과 기록",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "같은 이메일과 IP의 반복 실패는 로그인 제한을 적용합니다. Turnstile 사용 여부에 따라 추가 확인과 잠금 정책이 달라집니다. 보안 기능을 우회하려고 다른 사람의 계정으로 반복 시도하지 않습니다."
+        },
+        {
+          "type": "steps",
+          "items": [
+            "로그인 기록(/admin/login-history)에서 성공·실패, 이메일·소셜 방식, IP·브라우저·시각을 확인합니다.",
+            "회원·IP·검색어로 필요한 범위를 좁힙니다.",
+            "보관 정책에 따라 오래된 기록만 지정해 삭제합니다.",
+            "회원도 자기 계정의 최근 로그인 기록을 확인할 수 있습니다."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "키 교체와 도메인 이전",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "개별 API 키 교체는 해당 서비스 설정에서 진행합니다. 전체 auth.secret 교체는 기존 암호화 설정을 읽지 못하게 할 수 있어 별도 이전 계획이 필요합니다. 도메인 이전 시 OAuth·Turnstile·PG·알리고 허용 IP와 링크 주소를 함께 확인합니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "site/privacy",
+    "site/social",
+    "backup",
+    "messages/account"
+  ],
+  "sources": [
+    "templates/default/admin/security_settings.php",
+    "docs/member-withdrawal-and-login-history.md"
+  ]
+}

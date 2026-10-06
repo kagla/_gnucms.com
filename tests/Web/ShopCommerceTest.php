@@ -700,7 +700,7 @@ final class ShopCommerceTest extends WebTestCase
                     $this->assertCheckoutValues($body, ['email' => '', 'recipient' => '', 'recipient_phone' => '', 'postcode' => '', 'address' => '']);
                 } else {
                     $phone = $userId === $first ? '01011112222' : '01033334444';
-                    $this->assertCheckoutValues($body, ['buyer_name' => $name, 'email' => $email, 'recipient' => $name,
+                    $this->assertCheckoutValues($body, ['buyer_name' => '', 'recipient' => '',
                         'phone' => $phone, 'recipient_phone' => $phone, 'postcode' => '', 'address' => '']);
                 }
             }
@@ -709,7 +709,7 @@ final class ShopCommerceTest extends WebTestCase
             $userId = $this->app->users()->create($email, '', '소셜회원' . $index);
             session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
             $this->assertCheckoutValues($this->body($this->get($this->app, '/shop/checkout')), [
-                'buyer_name' => '소셜회원' . $index, 'recipient' => '소셜회원' . $index, 'email' => '',
+                'buyer_name' => '', 'recipient' => '',
             ]);
         }
     }
@@ -740,35 +740,37 @@ final class ShopCommerceTest extends WebTestCase
         self::assertStringContainsString('202호', $order);
         $placed = $this->shop->orders->listing(null, '', 1, true)['items'][0];
         self::assertSame($input['buyer_name'], $placed['buyer_name']);
-        self::assertSame($input['phone'], $placed['phone']);
+        self::assertSame(preg_replace('/\D/', '', $input['phone']), $placed['phone']);
     }
 
     #[DataProvider('connectionProvider')]
-    public function testCheckoutKeepsOrderIdentityEditsWithoutChangingTheMemberProfile(array $config): void
+    public function testCheckoutUsesMemberContactAndSavesOnlyMissingBuyerName(array $config): void
     {
         $this->setupShop($config); $this->add();
         $userId = $this->app->users()->create('member@example.test', '', '가입한이름');
         $this->app->users()->updatePhone($userId, '01012345678');
         session_start(); $_SESSION['user_id'] = $userId; $_SESSION['session_epoch'] = 0; session_write_close();
-        $input = $this->checkout(['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test',
+        $page = $this->body($this->get($this->app, '/shop/checkout'));
+        self::assertMatchesRegularExpression('/<input[^>]*type="hidden"[^>]*name="email"[^>]*value="member@example\.test"/', $page);
+        self::assertDoesNotMatchRegularExpression('/<input(?![^>]*type="hidden")[^>]*name="email"/', $page);
+        $this->assertCheckoutValues($page, ['buyer_name' => '', 'phone' => '01012345678']);
+        $input = $this->checkout(['buyer_name' => '실제 주문자', 'email' => 'forged@example.test',
             'phone' => '01099998888', 'recipient' => '', 'agree' => '0']);
         unset($input['password']);
         $invalid = $this->post($this->app, '/shop/checkout', $input);
         self::assertSame(422, $invalid->getStatusCode());
-        $this->assertCheckoutValues($this->body($invalid), ['buyer_name' => '다른 주문자', 'email' => 'delivery@example.test', 'phone' => '01099998888', 'recipient' => '']);
-        $refresh = $this->post($this->app, '/shop/checkout', array_replace($input, ['action' => 'refresh', 'buyer_name' => '', 'email' => '']));
-        self::assertSame(200, $refresh->getStatusCode());
-        $this->assertCheckoutValues($this->body($refresh), ['buyer_name' => '', 'email' => '', 'recipient' => '', 'phone' => '01099998888', 'address' => $input['address']]);
+        $this->assertCheckoutValues($this->body($invalid), ['buyer_name' => '실제 주문자', 'phone' => '01012345678']);
+        self::assertEmpty($this->app->users()->findById($userId)['buyer_name']);
         $order = $this->post($this->app, '/shop/checkout', array_replace($input, ['recipient' => '선물 수령인', 'agree' => '1']));
         self::assertSame(303, $order->getStatusCode());
-        $body = $this->body($this->get($this->app, $order->getHeaderLine('Location')));
-        self::assertStringContainsString('다른 주문자', $body);
-        self::assertStringContainsString('delivery@example.test', $body);
-        self::assertStringNotContainsString('member@example.test', $body);
-        self::assertStringContainsString('선물 수령인', $body);
+        $placed = $this->shop->orders->listing($userId)['items'][0];
+        self::assertSame('실제 주문자', $placed['buyer_name']);
+        self::assertSame('member@example.test', $placed['email']);
+        self::assertSame('01012345678', $placed['phone']);
         $user = $this->app->users()->findById($userId);
         self::assertSame('가입한이름', $user['display_name']);
-        self::assertSame('member@example.test', $user['email']);
+        self::assertSame('실제 주문자', $user['buyer_name']);
+        self::assertSame('01012345678', $user['phone']);
     }
 
     #[DataProvider('connectionProvider')]
@@ -819,7 +821,7 @@ final class ShopCommerceTest extends WebTestCase
         self::assertSame(303, $this->post($this->app, '/shop/checkout', $first)->getStatusCode());
         $this->add();
         $page = $this->body($this->get($this->app, '/shop/checkout'));
-        $this->assertCheckoutValues($page, ['buyer_name' => '구매회원', 'phone' => '01011112222', 'email' => 'buyer@example.test',
+        $this->assertCheckoutValues($page, ['buyer_name' => '구매회원', 'phone' => '01011112222',
             'recipient' => '기본 수령인', 'recipient_phone' => '01022223333', 'postcode' => '04524', 'address' => '기본길 1', 'address_detail' => '101호']);
         self::assertStringContainsString('name="buyer_name"', $page);
         $input = $this->checkout(['recipient' => '임시 수령인', 'recipient_phone' => '01099998888', 'postcode' => '06236', 'address' => '임시길 2']);
@@ -841,7 +843,7 @@ final class ShopCommerceTest extends WebTestCase
     private function assertCheckoutValues(string $body, array $expected): void
     {
         foreach ($expected as $name => $value) {
-            if (in_array($name, ['phone', 'recipient_phone'], true) && $value !== '') {
+            if (in_array($name, ['recipient_phone'], true) && $value !== '') {
                 $value = \GnuCms\Aligo\PhoneNumber::format($value);
             }
             self::assertMatchesRegularExpression('/name="' . preg_quote($name, '/') . '"[^>]*value="'

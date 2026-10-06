@@ -51,7 +51,7 @@ final class ProfilePhoneTest extends DatabaseTestCase
      * 한다. off 는 "칸을 건드리지 않는다"는 뜻이지 "지운다"는 뜻이 아니다.
      */
     #[DataProvider('connectionProvider')]
-    public function testStoredNumberSurvivesAPolicySwitchToOff(array $config): void
+    public function testProfileNumberRemainsEditableWhenSignupCollectionIsOff(array $config): void
     {
         [$service, $db, $userId, $cms] = $this->bootWithMember($config, 'optional');
         $service->updateProfile($userId, $this->profile(['phone' => '010-1234-5678']));
@@ -63,10 +63,10 @@ final class ProfilePhoneTest extends DatabaseTestCase
         $cms->saveWritingSettings($this->adminAcl(), $this->writingInput(['signup_phone' => 'off']));
 
         $service->updateProfile($userId, $this->profile(['phone' => '010-9999-8888']));
-        self::assertSame('01012345678', $this->phoneOf($db, $userId), '정책이 꺼진 동안은 새 값도 쓰지 않아야 한다');
+        self::assertSame('01099998888', $this->phoneOf($db, $userId));
 
         $service->updateProfile($userId, $this->profile(['phone' => '']));
-        self::assertSame('01012345678', $this->phoneOf($db, $userId), '빈 값 제출도 off 에서는 지우는 뜻이 아니다');
+        self::assertNull($this->phoneOf($db, $userId));
     }
 
     /**

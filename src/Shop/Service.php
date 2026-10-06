@@ -43,12 +43,14 @@ final class Service
         $this->products = new Catalog\Products($this->store, $app->htmlSanitizer(), $app->contentImages(), $this->images, $this->options, $this->categories);
         $this->listing = new Catalog\Listing($this->store, $this->settings, $this->options);
         $this->cart = new Commerce\Cart($this->products, $this->settings, $this->store);
-        $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings);
+        $this->orders = new Commerce\Orders($this->store, $this->cart, $this->settings, (string) $app->cmsService()->settings()['timezone'],
+            fn (int $userId, int $orderId, string $status, string $number, array $vars = []) => $app->notificationService()->notifyOrderChannels($userId, $orderId, $status, $number, $vars));
         $this->payments = new Commerce\Payments($app, $this->settings, $this->orders);
         $this->checkoutIntents = new Commerce\CheckoutIntents($app, $this->cart, $this->orders, $this->payments);
         $this->fulfillment = new Commerce\Fulfillment($this->store, $this->orders, new ManualCsvCarrierAdapter());
         $this->reports = new Commerce\Reports($this->store);
         $this->settlements = new Commerce\Settlements($this->store, new ManualSettlementAdapter($app->paymentProviders()));
-        $this->feedback = new ProductFeedback($this->store);
+        $this->feedback = new ProductFeedback($this->store,
+            fn (array $feedback, array $product) => $app->notificationService()->notifyInquiryReply($feedback, $product));
     }
 }

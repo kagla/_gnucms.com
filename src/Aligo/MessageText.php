@@ -7,8 +7,9 @@ namespace GnuCms\Aligo;
 use GnuCms\Error\DomainError;
 
 /**
- * 알리고 문자 API 는 EUC-KR 을 쓴다. SMS/LMS 경계인 90바이트도 EUC-KR 기준이므로
- * 여기서만 길이를 재고, 변환할 수 없는 글자는 깨진 문자를 내보내는 대신 거절한다.
+ * 문자 단말기 기준의 SMS/LMS 길이를 EUC-KR 바이트로 검사한다.
+ * API 요청은 UTF-8이며 이 검사 결과로 HTTP 본문 인코딩을 바꾸지 않는다.
+ * 변환할 수 없는 글자는 깨진 문자를 내보내는 대신 거절한다.
  */
 final class MessageText
 {

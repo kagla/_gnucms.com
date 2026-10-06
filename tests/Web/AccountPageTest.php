@@ -75,7 +75,7 @@ final class AccountPageTest extends WebTestCase
         session_write_close();
 
         $form = $this->body($this->get($app, '/account'));
-        self::assertStringContainsString('표시 이름을 바꿉니다.', $form);
+        self::assertStringContainsString('닉네임과 주문자 정보를 변경합니다.', $form);
         self::assertStringNotContainsString('비밀번호 바꾸기', $form);
         self::assertStringNotContainsString('name="current_password"', $form);
         self::assertStringNotContainsString('name="password"', $form);
@@ -317,7 +317,7 @@ final class AccountPageTest extends WebTestCase
         preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
         self::assertNotEmpty($tag, '번호 칸은 있어야 한다');
         self::assertStringNotContainsString(' required', $tag[0], '막지 않을 것에 required 를 붙이면 안 된다');
-        self::assertStringContainsString('비워 두고 저장해도 됩니다', $form);
+        self::assertStringContainsString('비워 두면 첫 주문에서 입력합니다', $form);
         self::assertStringNotContainsString('비워 두고 저장하면 번호가 지워집니다', $form);
 
         $saved = $this->post($app, '/account', [
@@ -349,7 +349,7 @@ final class AccountPageTest extends WebTestCase
         preg_match('/<input[^>]*name="phone"[^>]*>/', $form, $tag);
         self::assertNotEmpty($tag);
         self::assertStringContainsString(' required', $tag[0], '서버가 거절할 것은 화면도 막아야 한다');
-        self::assertStringContainsString('번호를 지울 수는 없습니다', $form);
+        self::assertStringContainsString('번호를 변경하려면 새 휴대폰번호를 입력해 주세요.', $form);
 
         $refused = $this->post($app, '/account', [
             'csrf_token' => $_SESSION['csrf_token'], 'display_name' => '나야', 'phone' => '',
@@ -367,7 +367,7 @@ final class AccountPageTest extends WebTestCase
      * 감추는 것과 같게 맞춘다. 저장된 번호가 있으면 그때는 보여 준다(잠긴 채로).
      */
     #[DataProvider('connectionProvider')]
-    public function testTheProfileHidesThePhoneFieldWhenCollectionIsOffAndNothingIsStored(array $dbConfig): void
+    public function testProfileAlwaysOffersOrderContactInformation(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig);
         $this->saveSiteSettings($app, ['signup_phone' => 'off']);
@@ -379,14 +379,14 @@ final class AccountPageTest extends WebTestCase
         ]);
 
         $empty = $this->body($this->get($app, '/account'));
-        self::assertStringNotContainsString('name="phone"', $empty, '보여 줄 번호가 없으면 칸도 없어야 한다');
+        self::assertStringContainsString('name="phone"', $empty);
         self::assertStringNotContainsString('번호 수집이 꺼져 있어', $empty);
 
         $app->users()->updatePhone($id, '01012345678');
         $stored = $this->body($this->get($app, '/account'));
         self::assertStringContainsString('name="phone"', $stored, '저장된 번호는 보여 줘야 한다');
         self::assertStringContainsString('value="010-1234-5678"', $stored);
-        self::assertStringContainsString('번호 수집이 꺼져 있어', $stored);
+        self::assertStringContainsString('주문할 때 자동으로 사용합니다', $stored);
     }
 
     /**
@@ -410,7 +410,7 @@ final class AccountPageTest extends WebTestCase
 
         // off 화면의 번호 칸은 disabled 다 — 브라우저는 이 칸을 제출하지 않는다.
         preg_match('/<input[^>]*name="phone"[^>]*>/', $this->body($this->get($app, '/account')), $tag);
-        self::assertStringContainsString('disabled', $tag[0]);
+        self::assertStringNotContainsString('disabled', $tag[0]);
 
         // 관리자가 정책을 선택으로 바꾼다. CmsService 는 설정을 메모리에 캐시하므로
         // 리포지토리를 직접 건드리면 이 요청이 여전히 off 를 보고, 그러면 이 테스트는

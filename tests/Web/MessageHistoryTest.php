@@ -317,7 +317,7 @@ final class MessageHistoryTest extends WebTestCase
         self::assertStringContainsString('예약됨', $html);
         self::assertStringContainsString('발송 예정', $html);
         $expectedDisplay = (new \DateTimeImmutable($scheduled['scheduled_at'], new \DateTimeZone('UTC')))
-            ->setTimezone(new \DateTimeZone('Asia/Seoul'))->format('Y.m.d H:i');
+            ->setTimezone(new \DateTimeZone('Asia/Seoul'))->format('y-m-d H:i:s');
         self::assertStringContainsString($expectedDisplay, $html, '한국 시각으로 바뀌어 보여야 한다');
         self::assertStringContainsString(
             '/admin/messages/history/' . $scheduled['id'] . '/cancel', $html, '취소 폼이 있어야 한다'
@@ -434,9 +434,9 @@ final class MessageHistoryTest extends WebTestCase
         self::assertSame(303, $response->getStatusCode(), $this->body($response));
 
         $html = $this->body($this->get($app, '/admin/messages/history'));
-        self::assertStringContainsString('<td data-label="성공" class="right">0</td>', $html,
+        self::assertStringContainsString('<span>성공</span><strong>0</strong>', $html,
             '아무에게도 가지 않았으므로 성공은 0 이다');
-        self::assertStringContainsString('<td data-label="취소" class="right">1</td>', $html,
+        self::assertStringContainsString('<span>취소</span><strong>1</strong>', $html,
             '멈춘 1명은 취소 칸에 그대로 보여야 한다');
         self::assertStringContainsString('badge-ghost badge-soft">취소됨</span>', $html);
 

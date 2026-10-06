@@ -230,10 +230,13 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('회원 관리', $this->body($dashboard));
         self::assertStringNotContainsString('title="메일 설정"', $this->body($dashboard));
 
-        $mail = $this->get($app, '/admin/mail');
+        $alias = $this->get($app, '/admin/mail');
+        self::assertSame(303, $alias->getStatusCode());
+        self::assertSame('/admin/settings/messaging', $alias->getHeaderLine('Location'));
+        $mail = $this->get($app, '/admin/settings/messaging');
         self::assertSame(200, $mail->getStatusCode());
         self::assertStringContainsString('href="/admin/settings" class="menu-active"', $this->body($mail));
-        self::assertStringContainsString('class="tab tab-active" aria-current="page" href="/admin/mail"', $this->body($mail));
+        self::assertStringContainsString('알림·발송 설정', $this->body($mail));
         self::assertStringContainsString('smtp.gmail.com', $this->body($mail));
         $saved = $this->post($app, '/admin/mail', [
             'csrf_token' => $_SESSION['csrf_token'], 'enabled' => '1', 'provider' => 'gmail',
@@ -242,8 +245,8 @@ final class AdminPageTest extends WebTestCase
             'from_email' => 'owner@gmail.com', 'from_name' => GNUCMS,
         ]);
         self::assertSame(303, $saved->getStatusCode());
-        self::assertSame('/admin/mail?saved=1#mail', $saved->getHeaderLine('Location'));
-        $savedMail = $this->body($this->get($app, '/admin/mail'));
+        self::assertSame('/admin/settings/messaging?channel_mail_saved=1#channel-mail', $saved->getHeaderLine('Location'));
+        $savedMail = $this->body($this->get($app, '/admin/settings/messaging'));
         self::assertStringNotContainsString('google-app-password', $savedMail);
         self::assertStringContainsString('placeholder="••••••••••••••••"', $savedMail);
         self::assertStringContainsString('data-mail-password-toggle', $savedMail);
@@ -596,7 +599,7 @@ final class AdminPageTest extends WebTestCase
 
             $body = $this->body($this->get($app, '/admin/settings/maintenance'));
 
-            self::assertStringContainsString('2026-08-30 10:02:03 Asia/Seoul', $body);
+            self::assertStringContainsString('26-08-30 10:02:03 Asia/Seoul', $body);
             self::assertStringContainsString('배포 전에 아래 전체 백업', $body);
             self::assertStringNotContainsString('schema-backups', $body);
             self::assertFileExists($older);

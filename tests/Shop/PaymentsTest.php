@@ -554,4 +554,69 @@ final class PaymentsTest extends ShopTestCase
         $cancelled = $this->shop->orders->transition((int) $after['id'], 'paid', 'cancelled', 'admin', ['note' => '환불 완료']);
         self::assertSame('cancelled', $cancelled['status']);
     }
+
+    #[DataProvider('connectionProvider')]
+    public function testReceivedReturnRefundsCardOnceThroughTheGateway(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $this->queueApproval($card, bin2hex(random_bytes(20)));
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+        $id = (int) $paid['id'];
+        $this->shop->orders->transition($id, 'paid', 'shipped', 'test', ['carrier' => '테스트 택배', 'tracking_number' => 'RETURN-CARD']);
+        $this->shop->orders->transition($id, 'shipped', 'completed', 'test');
+        $request = $this->shop->orders->requestReturn($id, 'test', ['return_reason' => 'defective'], (int) $paid['user_id']);
+        $before = count($this->http->calls);
+        $this->http->responses[] = ['status' => 200, 'body' => ['resultCode' => '00', 'cancelDate' => '20261006', 'cancelTime' => '120000']];
+        $returned = $this->shop->orders->completeReturn($id, 'test', ['return_received' => '1', 'return_restock' => '1'], $this->shop->payments);
+        self::assertSame('returned', $returned['status']);
+        self::assertSame((int) $paid['paid_amount'], (int) $returned['refunded_amount']);
+        self::assertCount($before + 1, $this->http->calls);
+        self::assertSame('https://stginiapi.inicis.com/v2/pg/refund', end($this->http->calls)['url']);
+        self::assertSame($request['payment']['return']['key'], $returned['payment']['refund_keys'][0]);
+        $this->shop->orders->completeReturn($id, 'test', ['return_received' => '1', 'return_restock' => '1'], $this->shop->payments);
+        self::assertCount($before + 1, $this->http->calls, '완료 중복 제출은 PG를 다시 호출하지 않습니다.');
+        self::assertSame(5, (int) $this->shop->products->get((int) $paid['items'][0]['product_id'])['stock']);
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testUncertainReturnRefundWaitsForReconciliationWithoutResendingOrDuplicateNotice(array $config): void
+    {
+        $this->setupPayments($config);
+        $card = $this->place('card');
+        $this->shop->payments->checkout($card, 'web', 'https://shop.example.test/shop/order', 'https://shop.example.test/shop/pay/callback');
+        $tid = bin2hex(random_bytes(20));
+        $this->queueApproval($card, $tid);
+        $paid = $this->shop->payments->complete($card, $this->authCallback($card));
+        $events = [];
+        $orders = new Orders($this->shop->store, $this->shop->cart, $this->shop->settings, 'Asia/Seoul',
+            function (int $user, int $id, string $status) use (&$events): void { $events[] = $status; });
+        $payments = new Payments($this->app, $this->shop->settings, $orders);
+        $id = (int) $paid['id'];
+        $orders->transition($id, 'paid', 'shipped', 'test', ['carrier' => '테스트', 'tracking_number' => 'RETURN-TIMEOUT']);
+        $orders->transition($id, 'shipped', 'completed', 'test');
+        $request = $orders->requestReturn($id, 'test', ['return_reason' => 'defective'], (int) $paid['user_id']);
+        $events = [];
+        $this->http->responses[] = new \RuntimeException('timeout');
+        try { $orders->completeReturn($id, 'test', ['return_received' => '1', 'return_restock' => '1'], $payments); self::fail('미확정 환불'); }
+        catch (\RuntimeException) {}
+        $calls = count($this->http->calls);
+        self::assertSame('returning', $orders->get($id)['status']);
+        self::assertSame(0, (int) $orders->get($id)['refunded_amount']);
+        self::assertSame(4, (int) $this->shop->products->get((int) $paid['items'][0]['product_id'])['stock']);
+        try { $orders->completeReturn($id, 'test', ['return_received' => '1'], $payments); self::fail('자동 재전송 금지'); }
+        catch (DomainError $e) { self::assertSame(503, $e->status()); }
+        self::assertCount($calls, $this->http->calls);
+        try { $orders->closeReturn($id, 'test', '요청 종료', $payments); self::fail('환불 진행 중 종료 금지'); }
+        catch (DomainError $e) { self::assertSame(422, $e->status()); }
+        $reference = bin2hex(random_bytes(20));
+        $this->queuePartialCancelInquiry($request, $tid, [[$reference, (int) $paid['paid_amount']]]);
+        $matched = $payments->confirmRefund($request, $request['payment']['return']['key'], $reference, 'test');
+        self::assertSame((int) $paid['paid_amount'], (int) $matched['refunded_amount']);
+        self::assertSame([], $events, '환불 대조에서는 외부 안내를 중복 발송하지 않는다.');
+        $orders->completeReturn($id, 'test', ['return_received' => '1', 'return_restock' => '1'], $payments);
+        self::assertSame(['returned'], $events);
+        self::assertCount($calls + 1, $this->http->calls, '결제사 조회만 한 번 추가하고 환불 재전송은 없다.');
+    }
 }

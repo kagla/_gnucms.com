@@ -27,6 +27,7 @@ final class MessageTemplatesTest extends WebTestCase
         $_SESSION['session_epoch'] = 0;
         session_write_close();
 
+        $app->aligo()->settings->save(['user_id' => 'test', 'api_key' => 'TEST', 'sender' => '0212345678', 'senderkey' => 'SK1']);
         return $app;
     }
 
@@ -46,7 +47,7 @@ final class MessageTemplatesTest extends WebTestCase
     }
 
     #[DataProvider('connectionProvider')]
-    public function testTurningOnATemplateThatIsNotApprovedFails(array $dbConfig): void
+    public function testRemovedLocalToggleCannotApproveATemplate(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
         $app->db()->insert('alimtalk_templates', ['tpl_code' => 'W1', 'senderkey' => 'SK1', 'name' => '대기',
@@ -56,36 +57,22 @@ final class MessageTemplatesTest extends WebTestCase
         $response = $this->post($app, '/admin/messages/templates/toggle',
             ['csrf_token' => $_SESSION['csrf_token'], 'tpl_code' => 'W1', 'action' => 'enable']);
 
-        self::assertSame(422, $response->getStatusCode());
-        self::assertStringContainsString('승인', $this->body($response));
+        self::assertSame(404, $response->getStatusCode());
+        self::assertFalse($app->aligo()->templates->canUse($app->aligo()->templates->find('W1')));
     }
 
-    /**
-     * 갓 승인된 템플릿은 상태가 대기(R)다 — 정상(A)은 한 번 이상 보낸 뒤에야 된다. 화면의
-     * 버튼 잠금과 저장의 거부가 같은 규칙(Templates::approved)을 쓰므로 둘 다 확인한다:
-     * 버튼이 잠겨 있으면 안 되고, 눌렀을 때 실제로 켜져야 한다. 운영 화면에서 회원가입
-     * 템플릿이 승인을 받고도 켤 수 없었던 사례에서 나온 테스트다.
-     */
+    /** 승인·대기 사본은 별도 켜기 없이 본문 확인과 발송 화면으로 연결한다. */
     #[DataProvider('connectionProvider')]
-    public function testAnApprovedButNotYetSentTemplateCanBeTurnedOnFromTheScreen(array $dbConfig): void
+    public function testApprovedWaitingTemplateHasASendLinkWithoutALocalToggle(array $dbConfig): void
     {
         $app = $this->adminApp($dbConfig);
         $app->db()->insert('alimtalk_templates', ['tpl_code' => 'NEW', 'senderkey' => 'SK1', 'name' => '회원가입',
             'content' => '본문', 'status' => 'R', 'insp_status' => 'APR', 'enabled' => 0,
             'fetched_at' => '2026-09-17 10:00:00']);
-
         $html = $this->body($this->get($app, '/admin/messages/templates'));
-        self::assertStringContainsString('>켜기<', $html);
-        self::assertStringNotContainsString(' disabled title="카카오 승인', $html,
-            '승인(APR)+대기(R)는 켤 수 있어야 하므로 켜기 버튼이 잠겨 있으면 안 된다');
-
-        $response = $this->post($app, '/admin/messages/templates/toggle',
-            ['csrf_token' => $_SESSION['csrf_token'], 'tpl_code' => 'NEW', 'action' => 'enable']);
-
-        self::assertSame(303, $response->getStatusCode(), $this->body($response));
-        $row = $app->db()->selectOne('SELECT enabled FROM ' . $app->db()->table('alimtalk_templates')
-            . ' WHERE tpl_code = ?', ['NEW']);
-        self::assertSame(1, (int) $row['enabled']);
+        self::assertStringContainsString('/admin/messages/send?tpl_code=NEW', $html);
+        self::assertStringNotContainsString('/templates/toggle', $html);
+        self::assertTrue($app->aligo()->templates->canUse($app->aligo()->templates->find('NEW')));
     }
 
     /**
@@ -115,7 +102,7 @@ final class MessageTemplatesTest extends WebTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '본문',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $app->aligo()->templates->fetch();
-        $app->aligo()->templates->setEnabled('T1', true);
+
 
         // 'Z' 로 명시적 UTC 오프셋을 붙인다 — 오프셋 없이 넘기면 SendTime::parse() 가
         // KST 로 읽어 9시간 이르게 해석되므로 하한(10분)을 벗어난다(SendTimeTest 참고).
@@ -203,7 +190,7 @@ final class MessageTemplatesTest extends WebTestCase
         $injected = $this->body($this->get($app, '/admin/messages/templates',
             ['notice' => '계정이 만료되었습니다. 여기로 로그인하세요']));
 
-        self::assertStringContainsString('가져오기 3건, 갱신 1건, 사용 중지 0건', $composed);
+        self::assertStringContainsString('가져오기 3건, 갱신 1건, 발송 불가 0건', $composed);
         self::assertStringNotContainsString('계정이 만료되었습니다', $injected);
         // 취소가 실패하지 않은 평범한 가져오기는 그대로 성공으로 보여준다 — 늘 주의로
         // 칠하면 주의가 무의미해진다.
@@ -219,7 +206,7 @@ final class MessageTemplatesTest extends WebTestCase
         $html = $this->body($this->get($app, '/admin/messages/templates',
             ['imported' => '<b>경고</b>', 'updated' => '-5', 'disabled' => '1']));
 
-        self::assertStringContainsString('가져오기 0건, 갱신 0건, 사용 중지 1건', $html);
+        self::assertStringContainsString('가져오기 0건, 갱신 0건, 발송 불가 1건', $html);
         self::assertStringNotContainsString('경고', $html);
     }
 }

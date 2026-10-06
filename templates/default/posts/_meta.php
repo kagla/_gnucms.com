@@ -8,7 +8,7 @@ $inline_views = $inline_views ?? false;
   </span>
   <span class="post-author" title="<?= $this->e($post['author_name']) ?>"><?= $this->e($this->truncate($post['author_name'], 8)) ?></span>
   <span aria-hidden="true">·</span>
-  <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->compactDate($post['created_at']) ?></time>
+  <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time>
   <?php if ($inline_views): ?><span class="post-meta-views"><?= $this->icon('eye', 14) ?><?= $this->e($post['view_count']) ?></span><?php endif ?>
 </div>
 <?php if (!$inline_views || $post['file_count'] > 0): ?>

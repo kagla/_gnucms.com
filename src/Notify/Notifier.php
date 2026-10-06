@@ -56,7 +56,7 @@ final class Notifier
      * 전달 우선순위. 설정에 적힌 차례도, 배선된 차례도 아니다 — 관리자가 화면에서
      * 채널을 어떤 순서로 켜든 이 차례로 나간다.
      *
-     * 믿을 수 있고 값이 안 드는 것부터 간다: 메일은 코어가 예전부터 쓰던 길이고 계정을
+     * 믿을 수 있고 값이 안 드는 것부터 간다: 필수 알림함을 먼저 기록하고, 메일은 계정을
      * 되찾는 마지막 수단이며, 알림함은 같은 DB 에 한 줄 적는 일이라 거의 실패하지 않는다.
      * 그 뒤가 바깥 서비스를 타는 둘이고, 그중 돈이 더 들고 더 잘 흔들리는 문자가 맨
      * 뒤다. 채널마다 실패를 가두므로 이 차례는 보통 눈에 띄지 않지만, 가둘 수 없는 사고
@@ -64,7 +64,7 @@ final class Notifier
      * 정한다. 여기 없는 채널 키는 영영 나가지 않으므로, NotifySettings::CHANNELS 와 이
      * 목록이 같은 집합인지는 시험이 지킨다.
      */
-    private const ORDER = ['mail', 'inbox', 'alimtalk', 'sms'];
+    private const ORDER = ['inbox', 'mail', 'alimtalk', 'sms'];
 
     /**
      * 이런 이름의 칸은 값을 로그에 적지 않는다(이름은 적는다 — 어느 칸이 거절했는지는
@@ -118,7 +118,7 @@ final class Notifier
     private const BUDGET_SECONDS = 6.0;
 
     /**
-     * 예산과 무관하게 시작할 채널. 메일은 항상 보내야 하고, 알림함은 같은 DB 에
+     * 예산과 무관하게 시작할 채널. 선택된 메일과 필수 알림함은 같은 요청에서
      * 한 줄 적는 일이므로 바깥 발송 시간 상한 때문에 버리지 않는다.
      *
      * 걸린 시간은 그래도 함께 센다($spent) — 지나간 시간은 어느 채널이 썼든 지나갔다.
@@ -137,6 +137,15 @@ final class Notifier
     /** @var \Closure(): float 지금 시각(초, 소수점 포함). 시험이 바꿔 끼운다. */
     private \Closure $clock;
 
+    /** @var (\Closure(): string)|null 사이트 설정의 회사 연락처를 발송 시점에 읽는다. */
+    private ?\Closure $contact;
+
+    /** @var (\Closure(): array<string,string>)|null 사이트별 표시 이름과 홈페이지 주소. */
+    private ?\Closure $siteVariables;
+
+    /** @var (\Closure(): array<string,string>)|null 알림톡 전용 표시 정보. */
+    private ?\Closure $alimtalkVariables;
+
     /** 이 요청에서 채널을 부르는 데 쓴 시간(초). BUDGET_SECONDS 주석 참고. */
     private float $spent = 0.0;
 
@@ -148,7 +157,8 @@ final class Notifier
      *   "얼마나 걸렸는가"를 잴 수 없기 때문이다. 예산을 보는 시험만 이 자리를 바꿔 낀다.
      */
     public function __construct(NotifySettings $settings, array $channels, ?callable $log = null,
-        ?callable $clock = null)
+        ?callable $clock = null, ?callable $contact = null, ?callable $siteVariables = null,
+        ?callable $alimtalkVariables = null)
     {
         $this->settings = $settings;
         foreach ($channels as $channel) {
@@ -176,6 +186,9 @@ final class Notifier
         $this->clock = $clock === null
             ? static fn (): float => microtime(true)
             : \Closure::fromCallable($clock);
+        $this->contact = $contact === null ? null : \Closure::fromCallable($contact);
+        $this->siteVariables = $siteVariables === null ? null : \Closure::fromCallable($siteVariables);
+        $this->alimtalkVariables = $alimtalkVariables === null ? null : \Closure::fromCallable($alimtalkVariables);
     }
 
     /**
@@ -219,7 +232,7 @@ final class Notifier
     }
 
     /** @return bool 한 채널이라도 실제로 나갔는가. 실패(전부 실패)는 예외로 나간다. */
-    public function notify(string $event, Recipient $to, array $vars): bool
+    public function notify(string $event, Recipient $to, array $vars, bool $includeInbox = true): bool
     {
         // 카탈로그에 없는 이벤트는 호출부의 오타이거나 지워진 이벤트를 부르는 코드다.
         // channelsFor() 는 그런 이벤트에 빈 목록을 돌려주므로, 여기서 막지 않으면
@@ -229,8 +242,9 @@ final class Notifier
         }
 
         $wanted = $this->settings->channelsFor($event);
+        if (!$includeInbox) $wanted = array_values(array_diff($wanted, ['inbox']));
         if ($wanted === []) {
-            $this->recordRevoked($event);
+            if ($includeInbox) $this->recordRevoked($event);
 
             return false;
         }
@@ -271,6 +285,22 @@ final class Notifier
                 if (!$channel->available($event, $to)) {
                     continue;
                 }
+                // 필수 알림함은 회사 설정을 읽는 외부 채널 준비보다 먼저 저장한다.
+                if ($key !== 'inbox' && Events::phoneCapable($event) && $this->contact !== null) {
+                    $vars['문의처'] = ($this->contact)();
+                }
+                if ($key !== 'inbox' && Events::phoneCapable($event) && $this->siteVariables !== null) {
+                    $site = ($this->siteVariables)();
+                    foreach (['사이트명', '사이트주소'] as $name) {
+                        if (is_string($site[$name] ?? null)) $vars[$name] = $site[$name];
+                    }
+                }
+                if ($key === 'alimtalk' && $this->alimtalkVariables !== null) {
+                    $info = ($this->alimtalkVariables)();
+                    foreach (['사이트명', '사이트주소', '문의처'] as $name) {
+                        if (is_string($info[$name] ?? null)) $vars[$name] = $info[$name];
+                    }
+                }
                 $channel->send($event, $to, $vars);
                 $delivered++;
                 if ($key === 'alimtalk') {
@@ -282,6 +312,7 @@ final class Notifier
                 // 보인다 — 실패는 일어난 자리에서 바로 남긴다.
                 $failed++;
                 $this->recordFailure($event, self::reason($key, $e));
+                if ($key === 'inbox') throw $e;
             } finally {
                 // 성공했든 터졌든 기다린 시간은 똑같이 지나갔다. 느려서 터진 채널이 예산을
                 // 쓰지 않는다면 이 상한은 정확히 필요한 순간에 아무 일도 하지 않는다.
@@ -348,6 +379,9 @@ final class Notifier
     private function recordRevoked(string $event): void
     {
         $stored = $this->settings->storedChannelsFor($event);
+        if (!$this->settings->mailEnabled()) {
+            $stored = array_diff($stored, ['mail']);
+        }
         if ($stored === []) {
             return;
         }

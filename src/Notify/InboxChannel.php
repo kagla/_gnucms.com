@@ -66,6 +66,26 @@ final class InboxChannel implements ChannelInterface
             throw DomainError::validation(['inbox' => '알림함에 넣을 수 없는 알림입니다.']);
         }
 
+        if (in_array($event, ['welcome', 'password_changed'], true)) {
+            $values = MessageVars::forBody($event, $vars);
+            ($this->notifications)()->recordAccountInbox((string) $to->userId, $event, $values['사이트명'] ?? '');
+            return;
+        }
+        if ($event === 'inquiry_replied') {
+            $feedbackId = MessageVars::contextId($vars, 'feedback_id');
+            if (!is_int($feedbackId)) throw DomainError::validation(['inbox' => '상품문의 번호가 필요합니다.']);
+            $values = MessageVars::forBody($event, $vars);
+            ($this->notifications)()->recordInquiryInbox((string) $to->userId, $feedbackId, $values['상품명'] ?? '');
+            return;
+        }
+        if (str_starts_with($event, 'order_')) {
+            $orderId = MessageVars::contextId($vars, 'order_id');
+            if (!is_int($orderId)) throw DomainError::validation(['inbox' => '주문 알림의 주문번호가 필요합니다.']);
+            $values = MessageVars::forBody($event, $vars);
+            ($this->notifications)()->recordOrderInbox((string) $to->userId, $orderId,
+                substr($event, 6), $values['주문번호'] ?? '');
+            return;
+        }
         $kind = MessageVars::context($vars, 'kind');
         $postId = MessageVars::contextId($vars, 'post_id');
         $commentId = MessageVars::contextId($vars, 'comment_id');

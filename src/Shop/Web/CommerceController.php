@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\Shop\Web;
 
-use GnuCms\Account\UserRepository;
+use GnuCms\Account\BuyerProfile;
 use GnuCms\Error\DomainError;
 use GnuCms\Shop\Commerce\Orders;
 use GnuCms\Shop\Images;
@@ -30,15 +30,15 @@ final class CommerceController
         $input = $request->getMethod() === 'POST' ? $request->getParsedBody() : $request->getQueryParams();
         if (!is_array($input)) $input = [];
         $view = View::forShop($request);
-        $response = $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', in_array($page, ['orders', 'order', 'order/cancel'], true) ? 'no-referrer' : 'same-origin');
+        $response = $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', in_array($page, ['orders', 'order', 'order/cancel', 'order/return'], true) ? 'no-referrer' : 'same-origin');
         $data = ['url' => $url, 'base' => $base, 'admin_url' => $base . ($this->adminRoutePrefix ?? '/admin/shop'), 'admin' => $identity->isAdmin(),
             'page' => $page, 'user_id' => $userId, 'input' => [], 'errors' => [], 'notice' => '', 'type_labels' => Settings::TYPE_LABELS,
             'statuses' => Orders::STATUSES, 'order_ref' => static fn (array $order): string => Orders::reference($order), 'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'img' => static fn (int $id, ?string $file, string $size): ?string => $file === null || $file === '' ? null : Images::url($url, $id, $file, $size)];
         $data['settings'] = $this->service->settings->all();
         // 영수증(order)은 예외다. 공개를 끄기 전에 받은 주문과 진행 중인 결제가 돌아올 곳이다.
-        if (!$data['settings']['visible'] && !in_array($page, ['order', 'order/cancel'], true)) return $view->render($response, 'closed', $data);
-        if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel'], true)) {
+        if (!$data['settings']['visible'] && !in_array($page, ['order', 'order/cancel', 'order/return'], true)) return $view->render($response, 'closed', $data);
+        if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel', 'order/return'], true)) {
             $destination = $url . match ($page) {
                 'checkout', 'checkout/previous-addresses' => '/checkout' . (($input['flow'] ?? '') === 'buy' ? '?flow=buy' : ''),
                 'orders' => '/orders',
@@ -170,7 +170,7 @@ final class CommerceController
             $data['method_labels'] = \GnuCms\Shop\Commerce\Payments::METHODS;
             return $view->render($response, 'orders', $data);
         }
-        if ($page === 'order' || $page === 'order/cancel') {
+        if (in_array($page, ['order', 'order/cancel', 'order/return'], true)) {
             if ($page === 'order' && isset($input['ref'])) {
                 $reference = Input::text($input['ref'], 'ref', 65, false);
                 $order = $this->service->orders->ownedReference($reference, $userId);
@@ -216,6 +216,25 @@ final class CommerceController
                 } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
                 $order = $this->service->orders->owned($number, $userId);
             }
+            if ($page === 'order/return') {
+                try {
+                    if (($input['return_action'] ?? '') === 'withdraw') {
+                        $this->service->orders->closeReturn((int) $order['id'], 'user:' . $userId,
+                            '회원이 반품 요청을 취소했습니다.', $this->service->payments, $userId);
+                    } else {
+                        $this->service->orders->requestReturn((int) $order['id'], 'user:' . $userId, $input, $userId);
+                    }
+                    return $this->redirect($response, $url . '/order?ref=' . rawurlencode(Orders::reference($order)) . '&return_saved=1');
+                } catch (DomainError $e) {
+                    $data['errors'] = $e->details() ?: [$e->getMessage()];
+                    $response = $response->withStatus($e->status());
+                }
+                $order = $this->service->orders->owned($number, $userId);
+                $data['input'] = $this->safeValues($input);
+            }
+            $data['return_attempted'] = $page === 'order/return';
+            $data['return_reasons'] = \GnuCms\Shop\Commerce\ReturnReason::OPTIONS;
+            if ($page === 'order' && ($input['return_saved'] ?? '') === '1') $data['notice'] = '반품 요청을 반영했습니다.';
             $data['order'] = $order;
             $data['is_pg'] = $this->service->payments->isPgOrder($order);
             if ($page === 'order' && ($input['cancelled'] ?? '') === '1' && $order['status'] === 'cancelled') {
@@ -277,12 +296,17 @@ final class CommerceController
         if ($cart === []) return $this->redirect($response, $data['url'] . '/cart');
         $member = $this->service->app->users()->findById($userId);
         if ($member === null) throw DomainError::forbidden('회원정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
-        // 주문자 정보는 주문서에서 수정할 수 있으며 회원 프로필은 바꾸지 않는다.
-        if (!$post) {
-            $input['buyer_name'] = (string) $member['display_name'];
-            $input['phone'] = (string) ($member['phone'] ?? '');
-            $input['email'] = UserRepository::isSocialPlaceholderEmail((string) $member['email']) ? '' : (string) $member['email'];
+        $buyerProfile = BuyerProfile::values($member);
+        $buyerMissing = array_map(static fn (string $value): bool => $value === '', $buyerProfile);
+        // 저장된 주문자 정보는 POST나 이전 배송지로 덮어쓰지 않는다.
+        foreach ($buyerProfile as $field => $value) {
+            if ($value !== '' || !$post) $input[$field] = $value;
         }
+        $input['email'] = $buyerProfile['email'];
+        if ($post && ($input['recipient_same'] ?? '') === '1') {
+            $input['recipient'] = $input['buyer_name']; $input['recipient_phone'] = $input['phone'];
+        }
+        $input['save_buyer_profile'] = ($buyerMissing['buyer_name'] || $buyerMissing['phone']) ? '1' : '0';
         $choices = $post ? ($input['shipping'] ?? []) : ($_SESSION['yc_shipping_' . $flow] ?? []);
         if (!is_array($choices)) throw DomainError::validation(['shipping' => '배송 방식을 확인해 주세요.']);
         $quote = $this->service->cart->quote($cart, $choices, true);
@@ -375,19 +399,20 @@ final class CommerceController
         $data['payment_provider_label'] = $this->service->app->paymentProviders()->get($data['payment']['provider'])->label();
         $data['errors'] += $quote['errors'];
         $data['input'] = $this->safeValues($input);
-        $data['profile_buyer_name'] = (string) $member['display_name'];
-        $data['profile_phone'] = (string) ($member['phone'] ?? '');
-        $data['profile_email'] = UserRepository::isSocialPlaceholderEmail((string) $member['email']) ? '' : (string) $member['email'];
+        $data['buyer_profile'] = $buyerProfile;
+        $data['buyer_missing'] = $buyerMissing;
         $data['has_previous_addresses'] = $this->service->orders->hasPreviousAddressesFor($userId);
         if (!$post) {
             $address = $this->service->orders->defaultAddressFor($userId);
+            // 이전 주문에서는 배송정보만 가져온다. 주문자명을 닉네임으로 대신하지 않는다.
             if ($address !== null) {
-                // 기본 배송지(없으면 최근 주문)에 저장된 주문자 정보도 다음 주문서 기본값으로 쓴다.
-                $data['input']['buyer_name'] = (string) $address['buyer_name'];
-                $data['input']['phone'] = (string) $address['phone'];
-                $data['input']['email'] = (string) $address['email'];
+                foreach (['recipient', 'recipient_phone', 'postcode', 'address', 'address_detail', 'delivery_note'] as $field) {
+                    $data['input'][$field] = (string) $address[$field];
+                }
+            } else {
+                $data['input']['recipient'] = $buyerProfile['buyer_name'];
+                $data['input']['recipient_phone'] = $buyerProfile['phone'];
             }
-            $data['input'] += $address ?? ['recipient' => $member['display_name'], 'recipient_phone' => (string) ($member['phone'] ?? '')];
         }
         return $view->render($response, 'checkout', $data);
     }

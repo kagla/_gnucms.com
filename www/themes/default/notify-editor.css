@@ -1,0 +1,13 @@
+/* 알림 편집에만 적용한다. 공통 테마와 다른 관리자 폼에 영향을 주지 않는다. */
+.notify-editor-tabs{display:flex;border-bottom:var(--border) solid var(--bc-20);margin:.75rem 0 1rem}
+.notify-editor-tabs .tab{background:transparent;cursor:pointer;min-width:5rem}
+.notify-editor-tabs .tab:focus-visible{outline:2px solid var(--color-primary);outline-offset:-2px;border-radius:.25rem}
+.notify-editor-panel{min-width:0;padding:.25rem 0}
+.notify-editor-panel>.form-section-title{margin:.25rem 0 .75rem}
+.notify-editor-panel>.fieldset{margin-top:.75rem}
+.notify-editor-advanced{margin:.75rem 0}
+.notify-editor-advanced>summary{cursor:pointer;color:var(--bc-strong);font-size:.8125rem;font-weight:700;padding:.5rem 0}
+.notify-editor-advanced[open]>summary{margin-bottom:.375rem}
+.notify-editor-actions{position:sticky;bottom:-1.25rem;z-index:2;background:var(--color-base-100);padding-bottom:.75rem}
+.notify-editor-tabs[hidden],.notify-editor-panel[hidden],[data-notify-editor-heading][hidden],[data-notify-editor-empty][hidden],[data-notify-preview-fallback][hidden],[data-notify-editor-tab][hidden]{display:none!important}
+@media(max-width:600px){.notify-editor-actions{bottom:-1rem}.notify-editor-tabs .tab{flex:1;justify-content:center}}

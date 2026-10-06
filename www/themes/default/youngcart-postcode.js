@@ -50,9 +50,6 @@
   postcode.readOnly = true; address.readOnly = true;
   search.hidden = false;
   var previous = document.querySelector('[data-yc-previous-address]');
-  var buyerName = document.getElementById('yc-buyer_name');
-  var buyerPhone = document.getElementById('yc-phone');
-  var buyerEmail = document.getElementById('yc-email');
   var recipient = document.getElementById('yc-recipient');
   var phone = document.getElementById('yc-recipient_phone');
   var deliveryNote = document.getElementById('yc-delivery_note');
@@ -60,17 +57,11 @@
     var selected = previous.selectedOptions[0];
     if (!selected || !selected.value) return;
     var fresh = selected.value === 'new';
-    [[buyerName, fresh ? previous.dataset.defaultBuyerName : selected.dataset.buyerName],
-      [buyerPhone, fresh ? previous.dataset.defaultPhone : selected.dataset.buyerPhone],
-      [buyerEmail, fresh ? previous.dataset.defaultEmail : selected.dataset.email],
-      [recipient, selected.dataset.recipient], [phone, selected.dataset.recipientPhone],
+    [[recipient, selected.dataset.recipient], [phone, selected.dataset.recipientPhone],
       [postcode, selected.dataset.postcode], [address, selected.dataset.address],
       [detail, selected.dataset.addressDetail], [deliveryNote, selected.dataset.deliveryNote]].forEach(function (entry) {
       if (!entry[0]) return;
       entry[0].value = fresh ? '' : (entry[1] || '');
-      if (fresh && (entry[0] === buyerName || entry[0] === buyerPhone || entry[0] === buyerEmail)) {
-        entry[0].value = entry[0] === buyerName ? previous.dataset.defaultBuyerName : (entry[0] === buyerPhone ? previous.dataset.defaultPhone : previous.dataset.defaultEmail);
-      }
       changed(entry[0]);
     });
     close(false);

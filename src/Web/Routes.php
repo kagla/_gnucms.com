@@ -37,6 +37,14 @@ final class Routes
         $slim->get('/sitemap.xml', [$seo, 'sitemap'])->setName('seo.sitemap');
         $slim->get('/robots.txt', [$seo, 'robots'])->setName('seo.robots');
         $slim->get('/rss.xml', [$seo, 'siteRss'])->setName('seo.rss');
+        // 문자용 짧은 조회 주소. 목적지는 고정하며 로그인·소유권 검사는 기존 화면이 수행한다.
+        foreach (\GnuCms\Notify\SmsLinks::PATHS as $key => $path) {
+            $slim->get('/s/' . $key, static function (ServerRequestInterface $request, ResponseInterface $response) use ($path): ResponseInterface {
+                $base = RouteContext::fromRequest($request)->getBasePath();
+                return $response->withStatus(302)->withHeader('Location', $base . $path)
+                    ->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
+            })->setName('sms.short.' . $key);
+        }
         $slim->get('/content/rss.xml', [$seo, 'contentRss'])->setName('seo.content_rss');
         $slim->get('/boards/{key}/rss.xml', [$seo, 'boardRss'])->setName('seo.board_rss');
 
@@ -60,6 +68,10 @@ final class Routes
         $slim->post('/account', [$account, 'update']);
         $slim->post('/account/withdraw', [$account, 'withdraw'])->setName('account.withdraw');
         $slim->get('/account/withdrawn', [$account, 'withdrawn'])->setName('account.withdrawn');
+        $emailNotifications = new \GnuCms\Web\Controller\EmailNotificationController($app);
+        $slim->post('/account/email-notifications', [$emailNotifications, 'save'])->setName('account.email_notifications');
+        $slim->get('/notifications/email/unsubscribe', [$emailNotifications, 'unsubscribeForm'])->setName('notifications.email.unsubscribe');
+        $slim->post('/notifications/email/unsubscribe', [$emailNotifications, 'unsubscribe']);
 
         $oauth = new OauthController($app);
         $slim->post('/auth/email', [$oauth, 'email'])->setName('oauth.email');
@@ -113,12 +125,15 @@ final class Routes
             ->setName('admin.backups.delete');
         $aligo = new AdminAligoController($app);
         $slim->get('/admin/settings/messaging', [$aligo, 'messaging'])->setName('admin.settings.messaging');
+        $slim->post('/admin/settings/messaging/mail', [$aligo, 'saveChannelMail'])
+            ->setName('admin.settings.messaging.mail');
         $slim->get('/admin/mail', [$cms, 'mailForm'])->setName('admin.mail');
         $slim->post('/admin/mail', [$cms, 'mail']);
         $slim->post('/admin/mail/password', [$cms, 'mailPassword'])->setName('admin.mail.password');
         $slim->post('/admin/mail/test', [$cms, 'mailTest'])->setName('admin.mail.test');
         $slim->get('/admin/aligo', [$aligo, 'form'])->setName('admin.aligo');
         $slim->post('/admin/aligo', [$aligo, 'save']);
+        $slim->post('/admin/aligo/info', [$aligo, 'saveMessageInfo'])->setName('admin.aligo.info');
         $slim->post('/admin/aligo/verify', [$aligo, 'verify'])->setName('admin.aligo.verify');
         $slim->post('/admin/aligo/profiles', [$aligo, 'profiles'])->setName('admin.aligo.profiles');
         $slim->post('/admin/aligo/toggle', [$aligo, 'toggle'])->setName('admin.aligo.toggle');
@@ -133,12 +148,14 @@ final class Routes
             ->setName('admin.settings.notifications');
         $slim->post('/admin/settings/notifications/save', [$aligo, 'saveNotifications'])
             ->setName('admin.settings.notifications.save');
+        $slim->post('/admin/settings/notifications/sms-preview', [$aligo, 'previewNotificationSms'])
+            ->setName('admin.settings.notifications.sms_preview');
+        $slim->post('/admin/settings/notifications/mail-preview', [$aligo, 'previewNotificationMail'])
+            ->setName('admin.settings.notifications.mail_preview');
         $msg = new AdminMessageController($app);
         $slim->get('/admin/messages/templates', [$msg, 'templates'])->setName('admin.messages.templates');
         $slim->post('/admin/messages/templates/fetch', [$msg, 'fetchTemplates'])
             ->setName('admin.messages.templates.fetch');
-        $slim->post('/admin/messages/templates/toggle', [$msg, 'toggleTemplate'])
-            ->setName('admin.messages.templates.toggle');
         $slim->get('/admin/messages/send', [$msg, 'send'])->setName('admin.messages.send');
         $slim->post('/admin/messages/send/preview', [$msg, 'preview'])->setName('admin.messages.send.preview');
         $slim->post('/admin/messages/send/dispatch', [$msg, 'dispatch'])->setName('admin.messages.send.dispatch');
@@ -269,6 +286,7 @@ final class Routes
 
         $notifications = new NotificationController($app);
         $slim->get('/notifications', [$notifications, 'index'])->setName('notifications.index');
+        $slim->get('/shop/inquiry/{id:[0-9]+}', [$notifications, 'inquiry'])->setName('shop.inquiry.notification');
         $slim->get('/notifications/{id:[0-9]+}', [$notifications, 'open'])->setName('notifications.open');
         $slim->post('/notifications/read-all', [$notifications, 'readAll'])->setName('notifications.read_all');
 

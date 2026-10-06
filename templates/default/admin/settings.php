@@ -14,6 +14,16 @@
       <fieldset class="fieldset<?= array_key_exists('site_name', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">사이트 이름</legend><input class="input input-bordered input-block" type="text" name="site_name" value="<?= $this->e($values['site_name'] ?? '') ?>" maxlength="50" required><?php if (array_key_exists('site_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['site_name']) ?></p><?php endif ?></fieldset>
       <fieldset class="fieldset<?= array_key_exists('site_tagline', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">짧은 소개</legend><input class="input input-bordered input-block" type="text" name="site_tagline" value="<?= $this->e($values['site_tagline'] ?? '') ?>" maxlength="120" required><?php if (array_key_exists('site_tagline', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['site_tagline']) ?></p><?php endif ?></fieldset>
     </div>
+    <div class="form-section" id="company"><h2 class="form-section-title">회사 정보</h2>
+      <p class="card-sub">알림의 문의처에는 회사 전화와 이메일을 넣습니다. 연락처를 비워 두면 사이트 주소를 안내합니다.</p>
+      <?php foreach (['company_name' => ['회사명', 'text', 100], 'company_phone' => ['회사 전화', 'tel', 50], 'company_email' => ['회사 이메일', 'email', 254]] as $companyField => [$companyLabel, $companyType, $companyLimit]): ?>
+        <fieldset class="fieldset<?= array_key_exists($companyField, $errors) ? ' is-invalid' : '' ?>">
+          <legend class="fieldset-legend"><?= $this->e($companyLabel) ?></legend>
+          <input class="input input-bordered input-block" type="<?= $this->e($companyType) ?>" name="<?= $this->e($companyField) ?>" value="<?= $this->e(is_string($values[$companyField] ?? null) ? $values[$companyField] : '') ?>" maxlength="<?= $companyLimit ?>">
+          <?php if (array_key_exists($companyField, $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors[$companyField]) ?></p><?php endif ?>
+        </fieldset>
+      <?php endforeach ?>
+    </div>
     <div class="form-section"><h2 class="form-section-title">홈 화면</h2>
       <fieldset class="fieldset<?= array_key_exists('home_title', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">홈 제목</legend><input class="input input-bordered input-block" type="text" name="home_title" value="<?= $this->e($values['home_title'] ?? '') ?>" maxlength="120" required><?php if (array_key_exists('home_title', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['home_title']) ?></p><?php endif ?></fieldset>
       <fieldset class="fieldset<?= array_key_exists('home_intro', $errors) ? ' is-invalid' : '' ?>"><legend class="fieldset-legend">홈 소개</legend><textarea class="textarea textarea-bordered textarea-block" name="home_intro" rows="4" maxlength="500" required><?= $this->e($values['home_intro'] ?? '') ?></textarea><?php if (array_key_exists('home_intro', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['home_intro']) ?></p><?php endif ?></fieldset>

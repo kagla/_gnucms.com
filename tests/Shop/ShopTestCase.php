@@ -25,6 +25,10 @@ abstract class ShopTestCase extends DatabaseTestCase
         $this->app = new App(['db' => $config, 'storage' => ['dir' => $this->root], 'uploads' => ['dir' => $this->root . '/uploads'],
             'auth' => ['secret' => bin2hex(random_bytes(32))]]);
         (new CoreSchema($this->app->db()))->create();
+        // 주문 테스트에서 실제 메일을 보내지 않는다. 메일 본문·채널 검증은 별도 테스트가 맡는다.
+        $this->app->setMailer(new class implements \GnuCms\Mail\MailerInterface {
+            public function send(string $to, string $subject, string $body): void {}
+        });
         $this->shop = new Service($this->app);
     }
 

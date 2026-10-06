@@ -1,5 +1,23 @@
 <script>
 (function(){
+  var modal=document.getElementById('aligo-profile-template-modal');
+  if(!modal||typeof modal.showModal!=='function'){return}
+  var title=document.getElementById('aligo-profile-template-title');
+  var content=modal.querySelector('[data-aligo-template-content]');
+  document.addEventListener('click',function(event){
+    if(!(event.target instanceof Element)){return}
+    var button=event.target.closest('[data-aligo-template-detail]');
+    if(!button){return}
+    var detail=document.getElementById(button.dataset.aligoTemplateDetail);
+    if(!detail||detail.tagName!=='TEMPLATE'){return}
+    title.textContent=button.dataset.templateTitle||'알림톡 템플릿';
+    content.replaceChildren(detail.content.cloneNode(true));
+    modal.showModal();
+  });
+})();
+</script>
+<script>
+(function(){
   var radios=document.querySelectorAll('[data-senderkey]');
   var senderkey=document.getElementById('aligo-senderkey'),channelName=document.getElementById('aligo-channel-name');
   if(!radios.length||!senderkey){return}
@@ -51,6 +69,12 @@
     if(summary){summary.textContent=(status.configured?'계정 연결됨':'계정 연결 필요')+
       ' · 문자 '+(status.sms_switch_on?'켜짐':'꺼짐')+' · 알림톡 '+(status.alimtalk_switch_on?'켜짐':'꺼짐')}
     var pending=document.querySelector('[data-aligo-pending]');
+    var combination=document.querySelector('[data-notification-phone-mode]');
+    if(combination){
+      combination.textContent=status.alimtalk_switch_on
+        ?(status.sms_switch_on?'알림톡을 먼저 보내고, 실패하면 문자로 보냅니다.':'알림톡만 보냅니다. 실패해도 문자는 보내지 않습니다.')
+        :(status.sms_switch_on?'문자만 보냅니다.':'알림톡과 문자를 보내지 않습니다.');
+    }
     if(pending&&typeof status.pending==='number'){
       var count=Math.max(0,Number(status.pending)||0);
       pending.textContent=count+'건 대기 중';pending.hidden=count===0;
@@ -82,6 +106,8 @@
         body.set('csrf_token',form.querySelector('input[name="csrf_token"]').value);
         body.set('channel',form.querySelector('input[name="channel"]').value);
         body.set('action',button.dataset.action);
+        var returnTo=form.querySelector('input[name="return_to"]');
+        if(returnTo){body.set('return_to',returnTo.value);}
         // name="action" 인 제출 버튼은 브라우저에서 form.action 속성을 가릴 수 있다.
         // 폼의 HTML 속성을 직접 읽어야 URL 대신 버튼 객체가 넘어가는 일을 막는다.
         var response=await fetch(form.getAttribute('action').split('#')[0],{
@@ -114,7 +140,7 @@
         message(data.notice&&typeof data.notice.message==='string'?data.notice.message:'설정을 저장했습니다.',
           data.notice&&data.notice.ok===false?'alert-warning':'alert-success');
         var url=new URL(window.location.href);
-        ['saved','aligo_saved','cancel_ok','cancel_failed','cancel_unknown'].forEach(function(key){url.searchParams.delete(key)});
+        ['saved','aligo_saved','channel_mail_saved','cancel_ok','cancel_failed','cancel_unknown'].forEach(function(key){url.searchParams.delete(key)});
         try{window.history.replaceState(null,'',url.pathname+url.search+url.hash)}catch(error){}
       }catch(error){
         // 요청이 서버에 도착한 뒤 응답만 끊길 수도 있다. 이전 배지를 그대로 둔 채

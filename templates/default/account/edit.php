@@ -8,12 +8,21 @@
       <div class="auth-head">
         <?php if (!empty($values['avatar_file'])): ?><img class="auth-profile-image" src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="현재 프로필 이미지"><?php else: ?><span class="auth-mark auth-mark-soft" aria-hidden="true"><?= $this->icon('user', 22) ?></span><?php endif ?>
         <h1 class="card-title">회원정보 수정</h1>
-        <p class="card-sub"><?= $has_password ? '표시 이름과 비밀번호를 바꿉니다.' : '표시 이름을 바꿉니다.' ?></p>
+        <p class="card-sub">닉네임과 주문자 정보<?= $has_password ? ', 비밀번호' : '' ?>를 변경합니다.</p>
       </div>
       <?php if ($saved): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>저장했습니다.</span></div><?php endif ?>
       <?php if ($has_password && $password_notice === 'sent'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>비밀번호 변경 알림을 보냈습니다.</span></div><?php endif ?>
       <?php if ($has_password && $password_notice === 'off'): ?><div class="alert alert-info"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림은 어디로도 가지 않았습니다. 이 사이트는 지금 이 알림을 보내지 않도록 설정돼 있습니다.</span></div><?php endif ?>
       <?php if ($has_password && $password_notice === 'failed'): ?><div class="alert alert-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span>비밀번호는 바뀌었지만 변경 알림을 보내지 못했습니다.</span></div><?php endif ?>
+      <section id="email-notifications" class="form-section">
+        <h2 class="form-section-title">이메일 알림</h2>
+        <form method="post" action="<?= $this->url('account.email_notifications') ?>">
+          <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
+          <label class="label toggle-row"><input type="checkbox" name="email_notifications" value="1"<?= $email_notifications ? ' checked' : '' ?>><span>이메일 알림 받기</span></label>
+          <p class="fieldset-label">기본은 수신입니다. 체크를 끄면 댓글·주문 등의 이메일 알림을 받지 않습니다. 사이트 내 알림과 직접 요청한 인증·비밀번호 재설정 메일은 계속 받을 수 있습니다.</p>
+          <button class="btn btn-outline btn-sm" type="submit">이메일 알림 설정 저장</button>
+        </form>
+      </section>
       <form method="post" action="<?= $this->url('account.edit') ?>" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <fieldset class="fieldset">
@@ -23,42 +32,30 @@
           <p class="account-email"><?= $this->e($values['email']) ?></p>
         </fieldset>
         <fieldset class="fieldset<?php if (array_key_exists('display_name', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">표시 이름 <span class="legend-hint">한글·영문·숫자만 · 한글 2자 또는 영문 4자 이상</span></legend>
+          <legend class="fieldset-legend">닉네임 <span class="legend-hint">한글·영문·숫자만 · 한글 2자 또는 영문 4자 이상</span></legend>
           <input class="input input-bordered input-block" type="text" name="display_name" minlength="2" pattern="[가-힣A-Za-z0-9]+" title="한글·영문·숫자만, 공백 없이" value="<?= $this->e($values['display_name']) ?>" maxlength="100" required>
           <?php if (array_key_exists('display_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['display_name']) ?></p><?php endif ?>
         </fieldset>
+      <fieldset class="fieldset<?= array_key_exists('buyer_name', $errors) ? ' is-invalid' : '' ?>">
+        <legend class="fieldset-legend">주문자명 <span class="legend-hint">공개 닉네임과 별도로 사용</span></legend>
+        <input class="input input-bordered input-block" type="text" name="buyer_name" autocomplete="name" maxlength="100"
+               value="<?= $this->e(is_string($values['buyer_name'] ?? null) ? $values['buyer_name'] : '') ?>" placeholder="주문자의 실제 이름">
+        <p class="fieldset-label">주문할 때 자동으로 사용합니다. 비워 두면 첫 주문에서 입력합니다.</p>
+        <?php if (array_key_exists('buyer_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['buyer_name']) ?></p><?php endif ?>
+      </fieldset>
         <?php
-          // 배열(phone[]=x)이 넘어오면 (string) 캐스팅이 경고를 낸다 — 스칼라만 쓴다.
           $phoneValue = is_scalar($values['phone'] ?? null) ? (string) $values['phone'] : '';
-          // 저장된 번호는 제출값과 따로 본다. off 는 칸을 잠그므로 제출값이 아예 없고,
-          // required 의 "지울 수 없음" 표시도 지금 무엇을 쳤는지가 아니라 무엇이
-          // 저장돼 있는지로 정해야 서버 규칙과 어긋나지 않는다.
           $phoneStored = is_scalar($values['phone_stored'] ?? null) ? (string) $values['phone_stored'] : '';
-          $phonePolicy = $site['signup_phone'] ?? 'off';
-          $phoneOff = $phonePolicy === 'off';
-          // 번호를 지울 수 없는 경우에만 required 를 붙인다 — 서버도 딱 그때만 거절한다.
-          $phoneLocked = $phonePolicy === 'required' && $phoneStored !== '';
-          $phoneShown = $phoneOff ? $phoneStored : $phoneValue;
+          $phoneLocked = ($site['signup_phone'] ?? 'off') === 'required' && $phoneStored !== '';
         ?>
-        <?php // 수집이 꺼져 있고 저장된 번호도 없으면 보여 줄 것이 없다 — 가입 화면처럼 칸 자체를 감춘다. ?>
-        <?php if (!$phoneOff || $phoneStored !== ''): ?>
-        <fieldset class="fieldset<?php if (array_key_exists('phone', $errors)): ?> is-invalid<?php endif ?>">
-          <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">알림톡·문자 수신 번호</span></legend>
+        <fieldset class="fieldset<?= array_key_exists('phone', $errors) ? ' is-invalid' : '' ?>">
+          <legend class="fieldset-legend">휴대폰번호 <span class="legend-hint">주문·알림톡·문자 수신 번호</span></legend>
           <input class="input input-bordered input-block" type="tel" name="phone" inputmode="numeric" autocomplete="tel"
-                 value="<?= $this->e($phoneShown === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneShown)) ?>"
-                 placeholder="010-1234-5678"<?php if ($phoneOff): ?> disabled<?php endif ?><?php if ($phoneLocked): ?> required<?php endif ?>>
-          <?php if ($phoneOff): ?>
-          <p class="fieldset-label">번호 수집이 꺼져 있어 여기서는 바꿀 수 없습니다. 이미 저장된 번호는 계속 쓰입니다.</p>
-          <?php elseif ($phoneLocked): ?>
-          <p class="fieldset-label">필수 항목이라 번호를 지울 수는 없습니다. 바꾸려면 새 번호를 입력해 주세요.</p>
-          <?php elseif ($phonePolicy === 'required'): ?>
-          <p class="fieldset-label">번호를 넣으면 알림톡·문자를 받을 수 있습니다. 비워 두고 저장해도 됩니다.</p>
-          <?php else: ?>
-          <p class="fieldset-label">비워 두고 저장하면 번호가 지워집니다.</p>
-          <?php endif ?>
+                 value="<?= $this->e($phoneValue === '' ? '' : \GnuCms\Aligo\PhoneNumber::format($phoneValue)) ?>"
+                 placeholder="010-1234-5678"<?= $phoneLocked ? ' required' : '' ?>>
+          <p class="fieldset-label"><?= $phoneLocked ? '번호를 변경하려면 새 휴대폰번호를 입력해 주세요.' : '주문할 때 자동으로 사용합니다. 비워 두면 첫 주문에서 입력합니다.' ?></p>
           <?php if (array_key_exists('phone', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['phone']) ?></p><?php endif ?>
         </fieldset>
-        <?php endif ?>
         <fieldset class="fieldset<?= array_key_exists('profile_image', $errors) ? ' is-invalid' : '' ?>">
           <legend class="fieldset-legend">프로필 이미지 <span class="legend-hint">JPG, PNG, WebP · 2MB 이하</span></legend>
           <?php if (!empty($values['avatar_file'])): ?><div class="profile-image-preview"><img src="<?= $this->url('avatar.show', ['file' => $values['avatar_file']]) ?>" alt="현재 프로필 이미지"><label><input class="checkbox checkbox-sm" type="checkbox" name="remove_profile_image" value="1"> 현재 이미지 삭제</label></div><?php endif ?>

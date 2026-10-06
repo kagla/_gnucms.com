@@ -317,7 +317,6 @@
         var option = Array.from(previousAddress.options).find(function (entry) { return entry.value === value; });
         if (!option && item !== 'new') {
           option = document.createElement('option'); option.value = value;
-          option.dataset.buyerName = item.buyer_name; option.dataset.buyerPhone = item.phone; option.dataset.email = item.email;
           option.dataset.recipient = item.recipient; option.dataset.recipientPhone = item.recipient_phone;
           option.dataset.postcode = item.postcode; option.dataset.address = item.address;
           option.dataset.addressDetail = item.address_detail; option.dataset.deliveryNote = item.delivery_note;

@@ -215,13 +215,14 @@ final class CommentService
             $this->writeRateLimiter->consume('comment', $acl, $clientIp);
         }
 
-        $id = $this->comments->create($data);
-        $this->postRepo->adjustCommentCount($postId, 1);
+        $id = $this->comments->transaction(function () use ($data, $postId): int {
+            $id = $this->comments->create($data);
+            $this->postRepo->adjustCommentCount($postId, 1);
+            if ($this->notifications !== null) $this->notifications->notifyComment($postId, $id);
+            return $id;
+        });
         if ($data['image_key'] !== null) {
             $this->images->sync((string) $data['image_key'], (string) $data['content']);
-        }
-        if ($this->notifications !== null) {
-            $this->notifications->notifyComment($postId, $id);
         }
 
         return $this->present($this->comments->find($id));

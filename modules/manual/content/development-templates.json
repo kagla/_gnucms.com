@@ -1,0 +1,113 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "프론트 소스 위치",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": [
+            "화면",
+            "기본 파일"
+          ],
+          "rows": [
+            [
+              "전체 사이트 레이아웃",
+              "templates/default/layout.php"
+            ],
+            [
+              "관리자 메뉴·레이아웃",
+              "templates/default/admin/layout.php · admin/_sidebar.php"
+            ],
+            [
+              "알림·발송 설정",
+              "templates/default/admin/messaging.php"
+            ],
+            [
+              "알림별 발송 규칙",
+              "templates/default/admin/notify_settings.php"
+            ],
+            [
+              "발송 이력·직접 발송",
+              "templates/default/admin/message/ 아래"
+            ],
+            [
+              "주문서",
+              "templates/default/shop/checkout.php"
+            ],
+            [
+              "쇼핑몰 관리",
+              "templates/default/shop/admin/ 아래"
+            ],
+            [
+              "CSS·JavaScript",
+              "www/themes/default/ 아래"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "현재 선택한 테마가 기본 파일을 재정의하면 templates/테마명 안의 같은 경로를 사용합니다. GNUCMS.com 전용 테마는 templates/gnucmscom과 www/themes/gnucmscom에 있습니다."
+        }
+      ]
+    },
+    {
+      "title": "새 테마",
+      "blocks": [
+        {
+          "type": "code",
+          "language": "개발 셸",
+          "text": "cp -r templates/default templates/mytheme\ncp -r www/themes/default www/themes/mytheme"
+        },
+        {
+          "type": "p",
+          "text": "기본 upstream은 일반 테마 간 템플릿 fallback을 제공하지 않으므로 default를 통째로 복사해 시작합니다. 정적 자산은 선택 테마에 없으면 default를 사용합니다. theme.php label과 사이트의 theme 설정을 맞춥니다."
+        },
+        {
+          "type": "p",
+          "text": "공식 사이트의 gnucmscom은 별도 fallback 보완을 사용합니다. 이 공식 사이트 구현을 모든 사용자 테마의 계약으로 가정하지 않습니다. 업그레이드마다 코어에서 바뀐 화면·partial·전역 변수를 비교해야 합니다."
+        }
+      ]
+    },
+    {
+      "title": "렌더링과 블록",
+      "blocks": [
+        {
+          "type": "code",
+          "language": "PHP",
+          "text": "<?php $this->layout('layout') ?>\n<?php $this->start('title') ?><?= $this->e($title) ?><?php $this->stop() ?>\n<?php $this->start('body') ?>\n<h1><?= $this->e($title) ?></h1>\n<?php $this->insert('posts/_meta', ['post' => $post]) ?>\n<?php $this->stop() ?>"
+        },
+        {
+          "type": "p",
+          "text": "컨트롤러는 확장자 없는 논리 이름을 render에 전달합니다. layout, start/stop, insert를 사용하고 반복문 안의 조각 데이터는 명시적으로 넘깁니다. 관리 화면은 admin/layout과 admin_section을 사용합니다."
+        }
+      ]
+    },
+    {
+      "title": "출력·URL·자산",
+      "blocks": [
+        {
+          "type": "list",
+          "items": [
+            "일반 출력은 $this->e(), 사용자 HTML은 $this->html()로 정화합니다.",
+            "코어 라우트 주소는 $this->url(), 정적 파일은 $this->asset()으로 생성합니다.",
+            "asset은 내용 해시를 붙여 변경 시 브라우저 캐시를 갱신합니다.",
+            "날짜 화면은 $this->date($value)와 공통 DateTimeDisplay를 사용해 y-m-d H:i:s로 표시합니다.",
+            "모든 POST 폼에 csrf_token을 넣고 로그인 복귀 url은 검증된 return_url을 보존합니다.",
+            "공개·관리자·모바일·다크 모드와 사용자 테마의 같은 partial 영향을 함께 확인합니다."
+          ]
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/architecture",
+    "development/security",
+    "development/extensions"
+  ],
+  "sources": [
+    "docs/template-development.md",
+    "src/View/PhpTemplate.php",
+    "src/View/PhpView.php"
+  ]
+}

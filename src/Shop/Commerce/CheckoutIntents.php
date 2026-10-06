@@ -25,7 +25,7 @@ final class CheckoutIntents
         if ($quote['errors'] !== []) throw DomainError::validation($quote['errors']);
         if (!hash_equals($fingerprint, $quote['fingerprint'])) throw DomainError::validation(['quote' => '주문 내용 또는 배송 조건이 변경되었습니다. 상품·옵션·수량·배송비와 안내를 다시 확인해 주세요.']);
         if ($quote['total'] < 1) throw DomainError::validation(['payment' => '결제 금액을 확인해 주세요.']);
-        $details = $buyer + ['agree' => '1', 'save_default_address' => ($input['save_default_address'] ?? '') === '1' ? '1' : '0'];
+        $details = $buyer + ['agree' => '1', 'save_buyer_profile' => ($input['save_buyer_profile'] ?? '') === '1' ? '1' : '0', 'save_default_address' => ($input['save_default_address'] ?? '') === '1' ? '1' : '0'];
         $first = (string) ($quote['items'][0]['name'] ?? '주문');
         $orderName = count($quote['items']) > 1 ? $first . ' 외 ' . (count($quote['items']) - 1) . '건' : $first;
         $snapshot = ['lines' => $lines, 'input' => $details, 'token' => $token, 'owner' => $owner,

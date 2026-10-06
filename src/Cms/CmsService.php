@@ -14,6 +14,9 @@ final class CmsService
     public const DEFAULT_SETTINGS = [
         'site_name' => GNUCMS,
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
+        'company_name' => '',
+        'company_phone' => '',
+        'company_email' => '',
         'timezone' => 'Asia/Seoul',
         'home_title' => '가볍게 시작하고, 오래 이어지는 공간',
         'home_intro' => '필요한 페이지와 커뮤니티를 한곳에서 운영하세요.',
@@ -280,6 +283,7 @@ final class CmsService
             'attach_max_mb' => (string) $v->int('attach_max_mb', 5, 1, 1024),
             'attach_limit' => (string) $v->int('attach_limit', 5, 0, 999),
         ];
+        $settings = array_merge($settings, $this->companySettings($v, $input));
         $v->check();
         $this->cms->saveSettings($settings);
         $this->settingsCache = null;
@@ -318,9 +322,49 @@ final class CmsService
             'analytics_html' => $analyticsHtml,
             'adsense_html' => $adsenseHtml,
         ];
+        $settings = array_merge($settings, $this->companySettings($v, $input));
         $v->check();
         $this->cms->saveSettings($settings);
         $this->settingsCache = null;
+    }
+
+    /** 알림의 문의처는 사이트 설정에 저장한 회사 연락처만 사용한다. */
+    public function notificationContact(string $siteUrl): string
+    {
+        $settings = $this->settings();
+        $contacts = [];
+        foreach (['company_phone', 'company_email'] as $key) {
+            $value = $settings[$key] ?? '';
+            if (!is_string($value)) continue;
+            $value = trim((string) preg_replace('/[\x00-\x1F\x7F]/u', ' ', $value));
+            if ($value !== '') $contacts[] = $value;
+        }
+        return $contacts !== [] ? implode(' / ', $contacts) : rtrim($siteUrl, '/');
+    }
+
+    /** 예전 설정 폼이 회사 입력란을 보내지 않으면 저장된 값을 보존한다. */
+    private function companySettings(Validator $v, array $input): array
+    {
+        $current = $this->settings();
+        $values = [];
+        foreach (['company_name' => 100, 'company_phone' => 50, 'company_email' => 254] as $key => $limit) {
+            $value = array_key_exists($key, $input)
+                ? ($v->optionalString($key, $limit, '') ?? '')
+                : (string) ($current[$key] ?? '');
+            if (preg_match('/[\x00-\x1F\x7F]/u', $value)) {
+                $v->fail($key, '회사 정보는 줄바꿈 없이 입력해 주세요.');
+            }
+            $values[$key] = $value;
+        }
+        if ($values['company_phone'] !== ''
+            && (preg_match('/^[0-9+(). -]+$/D', $values['company_phone']) !== 1
+                || preg_match('/[0-9]/', $values['company_phone']) !== 1)) {
+            $v->fail('company_phone', '전화번호는 숫자, 공백, +, 괄호, 마침표, 하이픈으로 입력해 주세요.');
+        }
+        if ($values['company_email'] !== '' && filter_var($values['company_email'], FILTER_VALIDATE_EMAIL) === false) {
+            $v->fail('company_email', '올바른 회사 이메일 주소를 입력해 주세요.');
+        }
+        return $values;
     }
 
     private function timezone(Validator $v, array $input, string $default): string

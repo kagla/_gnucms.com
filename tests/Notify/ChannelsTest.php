@@ -63,7 +63,7 @@ final class ChannelsTest extends DatabaseTestCase
             'status' => 'A', 'insp_status' => 'APR', 'enabled' => 1,
             'fetched_at' => '2026-09-17 10:00:00']);
         // 알림 설정은 알리고와 같은 Templates 사본을 본다 — 템플릿이 죽으면 둘 다 안다.
-        $this->notify = new NotifySettings(new SettingsRepository($this->db), $this->aligo->templates);
+        $this->notify = new NotifySettings(new SettingsRepository($this->db), $this->aligo->templates, null, fn (): array => $this->aligo->status());
     }
 
     private function member(string $phone = '01012345678'): Recipient
@@ -187,9 +187,9 @@ final class ChannelsTest extends DatabaseTestCase
         self::assertSame('홍길동님 ***', $row['body']);
         self::assertSame('1', (string) $row['user_id']);
         self::assertSame('홍길동', $row['name']);
-        // 그래도 **나가는 본문은 그대로다.** 문자 API 는 본문을 EUC-KR 로 실어 보낸다 —
+        // 그래도 **나가는 본문은 그대로다.** 문자 API 요청 본문은 UTF-8로 전달하고 길이는 EUC-KR 바이트로 분류한다 —
         // 실제로 그 길을 탔는지까지 본다.
-        self::assertSame(mb_convert_encoding('홍길동님 https://example.com/r', 'EUC-KR', 'UTF-8'),
+        self::assertSame('홍길동님 https://example.com/r',
             $this->transport->requests[0]['fields']['msg_1']);
     }
 
@@ -252,7 +252,7 @@ final class ChannelsTest extends DatabaseTestCase
         $this->aligo->settings->setEnabled('at', true);
         $this->notify->save('password_reset', ['sms' => '1', 'sms_body' => '#{이름}님 #{링크}',
             'alimtalk' => '1', 'tpl_code' => 'T1', 'var_map' => ['고객명' => '이름', '주소' => '링크']]);
-        $this->notify->save('password_reset', ['mail' => '1']);
+        $this->notify->save('password_reset', ['delivery_choice' => '1', 'mail' => '1']);
 
         self::assertFalse((new SmsChannel($this->aligo, $this->notify))
             ->available('password_reset', $this->member()));
@@ -271,7 +271,7 @@ final class ChannelsTest extends DatabaseTestCase
         $channel = new AlimtalkChannel($this->aligo, $this->notify);
         self::assertTrue($channel->available('password_reset', $this->member()));
 
-        $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => 'T1']);
+        $this->db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
         self::assertFalse($channel->available('password_reset', $this->member()));
     }

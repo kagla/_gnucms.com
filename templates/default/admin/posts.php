@@ -60,7 +60,7 @@ $pageUrl = function (array $query, int $p): string {
             <?php if ($post['file_count'] > 0): ?><span class="post-row-clip" title="첨부파일 있음" aria-label="첨부파일 있음"><?= $this->icon('clip', 12) ?></span><?php endif ?>
           </td>
           <td data-label="글쓴이"><?= $this->e($post['author_name']) ?></td>
-          <td data-label="날짜"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at'], 'Y.m.d H:i') ?></time></td>
+          <td data-label="날짜"><time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time></td>
           <td data-label="조회" class="right"><?= $this->e($post['view_count']) ?></td>
           <td data-label="댓글" class="right"><?= $this->e($post['comment_count']) ?></td>
         </tr>

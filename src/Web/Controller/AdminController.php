@@ -28,8 +28,7 @@ final class AdminController
         $data = $this->app->adminService()->dashboard($this->app->guestAcl());
         $data['page_count'] = $this->app->cmsService()->countPages();
         $data['query'] = $request->getQueryParams();
-        // SMTP 가 없으면 가입 인증·비밀번호 변경 알림이 서버 기본 메일로만 나가 안 닿기 쉽다. 늘 보여 준다.
-        $data['mail_configured'] = $this->app->mailSettingsService()->runtime() !== null;
+        $data['mail_mode'] = $this->app->mailSettingsService()->mode();
         return View::fromRequest($request)->render($response, 'admin/index', $data);
     }
 
@@ -173,6 +172,7 @@ final class AdminController
             // 에 얹고, 템플릿의 (string) 캐스팅이 경고를 낸다 — 늘 스칼라만 되돌린다.
             $values = array_merge($member, $input);
             $values['phone'] = isset($input['phone']) && is_scalar($input['phone']) ? $input['phone'] : '';
+            $values['buyer_name'] = is_string($input['buyer_name'] ?? null) ? $input['buyer_name'] : ($member['buyer_name'] ?? '');
             return $this->renderMemberForm($request, $response->withStatus(422), $values, $e->details());
         } catch (\Throwable $e) {
             $this->app->avatars()->delete($newAvatar);

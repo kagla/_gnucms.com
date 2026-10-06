@@ -5,7 +5,7 @@
 <?php
 // 알리고 코드를 관리자가 읽을 수 있는 말로 바꾼다. GNUCMS 는 여기서 템플릿을 만들거나
 // 고치지 않으므로, 이 표는 카카오가 이미 심사·승인한 결과를 그대로 옮겨 보여줄 뿐이다.
-$status_labels = ['A' => '정상', 'S' => '중단', 'R' => '대기'];
+$status_labels = ['A' => '정상', 'S' => '중단', 'R' => '대기', 'M' => '목록 없음'];
 $insp_labels = ['REG' => '등록', 'REQ' => '심사요청', 'APR' => '승인', 'REJ' => '반려'];
 $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고추가형', 'MI' => '복합형'];
 ?>
@@ -14,7 +14,7 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
 <section class="card settings-card">
   <div class="card-body">
     <div class="page-head">
-      <div><h1 class="card-title"><?= $this->icon('bell', 19) ?> 템플릿</h1><p class="card-sub">카카오가 승인한 알림톡 템플릿의 사본을 가져와, 이 사이트에서 쓸 템플릿을 고릅니다. 템플릿 내용은 여기서 만들거나 고치지 않습니다 — 알리고·카카오 쪽에서 심사를 마친 것만 가져옵니다.</p></div>
+      <div><h1 class="card-title"><?= $this->icon('bell', 19) ?> 템플릿</h1><p class="card-sub">알리고 템플릿의 본문·버튼과 카카오 심사 상태를 확인합니다. 승인된 템플릿은 발송 화면에서 받는 사람과 변수값을 입력해 보낼 수 있습니다.</p></div>
       <form method="post" action="<?= $this->url('admin.messages.templates.fetch') ?>">
         <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
         <button class="btn btn-primary" type="submit"><?= $this->icon('search', 15) ?> 가져오기</button>
@@ -27,35 +27,34 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
 
     <div class="table-wrap">
       <table class="table table-zebra">
-        <thead><tr><th>코드</th><th>이름</th><th>유형</th><th>상태</th><th>승인상태</th><th>사용</th><th class="right">관리</th></tr></thead>
+        <thead><tr><th>코드</th><th>이름</th><th>유형</th><th>상태</th><th>카카오 심사</th><th class="right">관리</th></tr></thead>
         <tbody>
         <?php if ($copies === []): ?>
-          <tr class="table-empty"><td colspan="7">아직 가져온 템플릿이 없습니다. "가져오기"를 눌러 알리고에 승인된 템플릿을 불러오세요.</td></tr>
+          <tr class="table-empty"><td colspan="6">아직 가져온 템플릿이 없습니다. "가져오기"를 눌러 알리고 템플릿을 불러오세요.</td></tr>
         <?php else: foreach ($copies as $row): ?>
           <?php
-            $approved = \GnuCms\Aligo\Templates::approved((string) $row['status'], (string) $row['insp_status']);
-            $enabled = (int) $row['enabled'] === 1;
+            $canSend = in_array((string) $row['tpl_code'], $usable_codes, true);
+            $sendUrl = $this->url('admin.messages.send') . '?' . http_build_query(['tpl_code' => $row['tpl_code']]);
           ?>
           <tr>
             <td data-label="코드"><code><?= $this->e($row['tpl_code']) ?></code></td>
             <td data-label="이름"><?= $this->e($row['name']) ?></td>
             <td data-label="유형"><span class="badge badge-ghost badge-sm"><?= $this->e($type_labels[$row['template_type']] ?? $row['template_type']) ?></span></td>
             <td data-label="상태"><span class="badge badge-sm <?= $row['status'] === 'A' ? 'badge-success' : ($row['status'] === 'S' ? 'badge-error' : 'badge-ghost') ?> badge-soft"><?= $this->e($status_labels[$row['status']] ?? $row['status']) ?></span></td>
-            <td data-label="승인상태"><span class="badge badge-sm <?= $row['insp_status'] === 'APR' ? 'badge-success' : ($row['insp_status'] === 'REJ' ? 'badge-error' : 'badge-ghost') ?> badge-soft"><?= $this->e($insp_labels[$row['insp_status']] ?? $row['insp_status']) ?></span></td>
-            <td data-label="사용"><span class="badge badge-sm <?= $enabled ? 'badge-success' : 'badge-ghost' ?> badge-soft"><?= $enabled ? '사용 중' : '사용 안 함' ?></span></td>
+            <td data-label="카카오 심사"><span class="badge badge-sm <?= $row['insp_status'] === 'APR' ? 'badge-success' : ($row['insp_status'] === 'REJ' ? 'badge-error' : 'badge-ghost') ?> badge-soft"><?= $this->e($insp_labels[$row['insp_status']] ?? $row['insp_status']) ?></span></td>
             <td data-label="관리" class="right">
               <div class="row-actions">
                 <button class="btn btn-outline btn-sm" type="button" data-detail
                   data-code="<?= $this->e($row['tpl_code']) ?>"
                   data-name="<?= $this->e($row['name']) ?>"
                   data-content="<?= $this->e($row['content']) ?>"
-                  data-buttons="<?= $this->e($row['buttons']) ?>">상세</button>
-                <form method="post" action="<?= $this->url('admin.messages.templates.toggle') ?>">
-                  <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>">
-                  <input type="hidden" name="tpl_code" value="<?= $this->e($row['tpl_code']) ?>">
-                  <input type="hidden" name="action" value="<?= $enabled ? 'disable' : 'enable' ?>">
-                  <button class="btn btn-sm <?= $enabled ? 'btn-outline' : 'btn-primary' ?>" type="submit"<?= (!$enabled && !$approved) ? ' disabled title="카카오 승인이 끝난 템플릿만 켤 수 있습니다(중단된 템플릿 제외)."' : '' ?>><?= $enabled ? '끄기' : '켜기' ?></button>
-                </form>
+                  data-buttons="<?= $this->e($row['buttons']) ?>"
+                  data-send-url="<?= $canSend ? $this->e($sendUrl) : '' ?>">본문·버튼 보기</button>
+                <?php if ($canSend): ?>
+                  <a class="btn btn-primary btn-sm" href="<?= $this->e($sendUrl) ?>">발송 화면</a>
+                <?php else: ?>
+                  <span class="badge badge-ghost badge-sm">발송 불가</span>
+                <?php endif ?>
               </div>
             </td>
           </tr>
@@ -73,7 +72,7 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
     <pre class="tpl-detail-content" data-detail-content></pre>
     <p class="card-sub">버튼</p>
     <ul class="tpl-detail-buttons" data-detail-buttons></ul>
-    <form method="dialog" class="modal-action"><button class="btn btn-ghost">닫기</button></form>
+    <div class="modal-action"><a class="btn btn-primary" data-detail-send hidden>발송 화면</a><form method="dialog"><button class="btn btn-ghost">닫기</button></form></div>
   </div>
   <form method="dialog" class="modal-backdrop"><button aria-label="닫기">닫기</button></form>
 </dialog>
@@ -86,6 +85,7 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
   var title = document.getElementById('template-detail-title');
   var content = modal.querySelector('[data-detail-content]');
   var buttonsList = modal.querySelector('[data-detail-buttons]');
+  var sendLink = modal.querySelector('[data-detail-send]');
   document.addEventListener('click', function (event) {
     var btn = event.target.closest('[data-detail]');
     if (!btn) { return; }
@@ -105,6 +105,9 @@ $type_labels = ['BA' => '기본형', 'EX' => '부가정보형', 'AD' => '광고�
         buttonsList.appendChild(li);
       });
     }
+    sendLink.hidden = !btn.dataset.sendUrl;
+    if (btn.dataset.sendUrl) sendLink.href = btn.dataset.sendUrl;
+    else sendLink.removeAttribute('href');
     modal.showModal();
   });
 })();

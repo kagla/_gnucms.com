@@ -15,6 +15,23 @@ final class OperationsController extends AdminBase
     public function shipments(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $data = $this->context($request, 'shipments');
+        $data['carriers'] = \GnuCms\Shop\Settings::carriers();
+        $data['default_carrier'] = $this->service->settings->all()['shipping']['default_carrier'];
+        if ($request->getMethod() === 'POST') {
+            try {
+                $input = $data['input'];
+                $id = Input::id($input['id'] ?? null);
+                $from = Input::text($input['from'] ?? '', 'from', 20, false);
+                if (($input['action'] ?? '') !== 'ship' || !in_array($from, ['paid', 'confirmed'], true))
+                    throw DomainError::validation(['status' => '발송할 주문을 확인해 주세요.']);
+                $carrier = Input::text($input['carrier'] ?? '', 'carrier', 100, false);
+                if (!isset($data['carriers'][$carrier])) throw DomainError::validation(['carrier' => '택배사를 선택해 주세요.']);
+                $this->service->orders->transition($id, $from, 'shipped', $data['actor'], ['carrier' => $carrier, 'tracking_number' => $input['tracking_number'] ?? '']);
+                return $this->redirect($response, $data['admin_url'] . '/shipments?processed=1');
+            } catch (DomainError $e) {
+                $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status());
+            }
+        }
         $data['q'] = Input::text($data['input']['q'] ?? '', 'q', 100);
         $data['list'] = $this->service->fulfillment->ready($data['q'], $this->page($data['input']['page'] ?? ''));
         $processed = is_string($data['input']['processed'] ?? null) && preg_match('/^[1-9][0-9]{0,4}$/D', $data['input']['processed'])
@@ -47,6 +64,8 @@ final class OperationsController extends AdminBase
             $data['errors'] = $e->details() ?: [$e->getMessage()];
             $data['q'] = '';
             $data['list'] = $this->service->fulfillment->ready('', 1);
+            $data['carriers'] = \GnuCms\Shop\Settings::carriers();
+            $data['default_carrier'] = $this->service->settings->all()['shipping']['default_carrier'];
             return $this->render($request, $response->withStatus($e->status()), 'shipments', $data);
         }
     }

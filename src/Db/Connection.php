@@ -24,6 +24,9 @@ final class Connection
     /** @var string */
     private $prefix;
 
+    /** @var list<callable> 최외곽 트랜잭션 커밋 뒤에만 실행한다. */
+    private array $afterCommit = [];
+
     private function __construct(PDO $pdo, MysqlDialect $dialect, string $prefix)
     {
         $this->pdo = $pdo;
@@ -180,18 +183,48 @@ final class Connection
     public function transaction(callable $fn)
     {
         if ($this->pdo->inTransaction()) {
-            return $fn($this);
+            $pending = count($this->afterCommit);
+            try {
+                return $fn($this);
+            } catch (Throwable $e) {
+                $this->afterCommit = array_slice($this->afterCommit, 0, $pending);
+                throw $e;
+            }
         }
 
+        $this->afterCommit = [];
         $this->pdo->beginTransaction();
         try {
             $result = $fn($this);
             $this->pdo->commit();
-
-            return $result;
         } catch (Throwable $e) {
-            $this->pdo->rollBack();
+            $this->afterCommit = [];
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
             throw $e;
+        }
+        $callbacks = $this->afterCommit;
+        $this->afterCommit = [];
+        foreach ($callbacks as $callback) $this->runAfterCommit($callback);
+        return $result;
+    }
+
+    /** 외부 발송은 주문·댓글·알림함 저장이 확정된 뒤에만 한다. */
+    public function afterCommit(callable $callback): void
+    {
+        if ($this->pdo->inTransaction()) {
+            $this->afterCommit[] = $callback;
+        } else {
+            $this->runAfterCommit($callback);
+        }
+    }
+
+    private function runAfterCommit(callable $callback): void
+    {
+        try {
+            $callback();
+        } catch (Throwable $e) {
+            // 이미 성공한 거래를 실패로 응답하거나 개인정보를 오류 로그에 남기지 않는다.
+            error_log('커밋 후 알림 처리 실패: ' . get_class($e));
         }
     }
 

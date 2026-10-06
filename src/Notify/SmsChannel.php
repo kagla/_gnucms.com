@@ -20,11 +20,13 @@ final class SmsChannel implements ChannelInterface
 {
     private AligoService $aligo;
     private NotifySettings $settings;
+    private string $siteUrl;
 
-    public function __construct(AligoService $aligo, NotifySettings $settings)
+    public function __construct(AligoService $aligo, NotifySettings $settings, string $siteUrl = '')
     {
         $this->aligo = $aligo;
         $this->settings = $settings;
+        $this->siteUrl = $siteUrl;
     }
 
     public function key(): string
@@ -63,6 +65,7 @@ final class SmsChannel implements ChannelInterface
         $jobId = $this->aligo->send([
             'channel' => 'sms',
             'body' => $this->settings->smsBody($event),
+            'title' => $this->settings->smsTitle($event),
             'event_key' => $event,
             // 한 번 쓰는 비밀을 담은 변수는 발송 이력에 값을 남기지 않는다 —
             // 무엇이 그런 값인지는 Events 의 secret 주석에 있다.
@@ -71,7 +74,7 @@ final class SmsChannel implements ChannelInterface
             // 닿을 수 없고, 그런 이름을 담은 본문은 값을 찾지 못해 Variables::apply()
             // 가 거절한다 — 조용히 채워 내보내지 않는다.
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
-                'user_id' => $to->userId, 'vars' => MessageVars::forBody($event, $vars)]],
+                'user_id' => $to->userId, 'vars' => SmsLinks::forBody($event, $vars, $this->siteUrl)]],
         ]);
         // 작업 행이 생겼다는 것과 알리고가 그것을 받았다는 것은 다른 사실이다 —
         // 그 둘을 가르는 이유는 PhoneOutcome 주석에 있다.

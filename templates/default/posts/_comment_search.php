@@ -18,7 +18,7 @@ $list = is_array($list ?? null) ? $list : ['data' => [], 'total' => 0, 'page' =>
           <span class="author-comment-text"><?= $this->icon('comment', 13) ?> <?= $this->e($row['excerpt']) ?></span>
           <span class="author-comment-post"><?= $this->icon('board', 13) ?> <?= $this->e($row['post_title']) ?> · <?= $this->e($row['author_name']) ?></span>
         </a>
-        <time class="author-comment-date" datetime="<?= $this->e($row['created_at']) ?>"><?= $this->compactDate($row['created_at']) ?></time>
+        <time class="author-comment-date" datetime="<?= $this->e($row['created_at']) ?>"><?= $this->date($row['created_at']) ?></time>
       </li>
     <?php endforeach ?>
   </ul>

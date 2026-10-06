@@ -13,7 +13,8 @@ GNUCMS가 PG와 직접 연동한다. 포트원 계정이나 API를 거치지 않
 ### 결제수단 정책
 
 운영을 단순하게 유지하기 위해 새 PG 주문에는 **일반 신용카드 결제만** 제공한다. KG이니시스,
-NHN KCP REST API, 토스페이먼츠, 나이스페이먼츠 모두 카드 결제만 주문서에 노출한다.
+NHN KCP 기존 방식(TCP/IP), 토스페이먼츠, 나이스페이먼츠는 카드 결제만 주문서에 노출한다.
+NHN KCP REST API 방식은 당분간 새 결제사 선택 목록과 신규 주문에서 제외한다.
 실시간 계좌이체·가상계좌·휴대폰 결제와 에스크로 결제는 새 주문에서 사용할 수 없다.
 토스 카드 결제창에서 간편결제사를 선택해도 결제액 전부가 카드로 청구되고
 계좌·포인트 사용액이 0원인 경우에는 카드 결제로 확인한다.
@@ -30,8 +31,7 @@ PG를 거치지 않는 상점 무통장입금은 별도 수단으로 계속 제�
 **쇼핑몰 → 설정 → 결제**(`/admin/shop/settings#settings-payment`)에서 새 주문에 사용할 PG와
 운영·테스트 환경을 선택한다. 결제수단은 신용카드만 켜거나 끌 수 있고, 무통장입금은 별도로
 켜고 계좌·예금주를 등록한다. 이니시스 테스트 환경은 공용 테스트 정보가 자동 적용된다.
-NHN KCP REST API 방식은 운영 환경에 일반 카드용 사이트 코드와 인증서·개인키·발급 시 설정한
-비밀번호를 입력한다. 테스트 환경은 저장소에 포함한 KCP 공개 테스트 인증 정보를 자동 적용한다.
+NHN KCP REST API 방식은 신규 선택을 중단했다. 기존 KCP REST API 주문의 조회·환불은 유지한다.
 토스페이먼츠 테스트 환경은 [공식 SDK v1 PHP 샘플의 클라이언트 키](https://github.com/tosspayments/tosspayments-sample-v1/blob/main/payment/payment-window/php/index.html)와
 [서버 시크릿 키](https://github.com/tosspayments/tosspayments-sample-v1/blob/main/payment/payment-window/php/success.php)를 설정 저장 시 자동 적용한다.
 나이스페이먼츠 테스트 환경은 [공식 서버 승인·Basic 인증 샌드박스 샘플](https://github.com/nicepayments/nicepay-manual)의 공개 클라이언트 키와 서버 시크릿 키를 설정 저장 시 자동 적용한다.
@@ -161,12 +161,13 @@ KCP 표준결제 웹 스크립트가 브라우저 인증을 수행한 뒤 서명
 기존 TCP/IP 연동은 KCP pp_cli 원장 조회 API가 없어 GNUCMS가 직접 승인·취소한 거래의 암호화
 원장으로만 주문 결제 상태를 표시한다. KCP 상점관리자에서 수동 취소한 거래는 자동으로 동기화되지
 않으므로, 이 방식은 주문 관리 화면에서 환불을 실행해야 한다. KCP는 TCP/IP에서 HTTPS로의 전환과
-REST API 사용을 안내하고 있으므로 신규 연동에는 [KCP REST API 전환 가이드](https://developer.kcp.co.kr/guide/rest-api-guide)가
-권장 경로다.
+REST API 사용을 안내하고 있다([KCP REST API 전환 가이드](https://developer.kcp.co.kr/guide/rest-api-guide)).
+GNUCMS에서는 이 REST API 방식의 신규 선택을 당분간 중단한다.
 
 ## NHN KCP REST API 방식 설정
 
-쇼핑몰 설정 → 결제에서 **NHN KCP REST API 방식**을 선택한다. 테스트 환경은 사이트 코드 `T0000`과
+현재 **NHN KCP REST API 방식**은 쇼핑몰 설정의 신규 결제사 선택 목록에서 숨긴다. 기존 연동 정보와 거래 처리 코드는 유지한다.
+테스트 환경은 사이트 코드 `T0000`과
 KCP 개발자센터가 공개한 `config/payment/kcp/test/splCert.pem`·`splPrikeyPKCS8.pem`과
 `settings.php`의 공개 테스트용 개인키 비밀번호를 설정 저장 시 자동 적용한다. PEM을 관리 화면에 입력하지 않는다.
 운영 환경은 KCP가 발급한 5자리 사이트 코드와 서비스 인증서 PEM, 개인키 PEM, 발급 시 설정한

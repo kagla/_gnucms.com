@@ -32,6 +32,11 @@ final class CommentRepository
         $this->db = $db;
     }
 
+    public function transaction(callable $fn): mixed
+    {
+        return $this->db->transaction($fn);
+    }
+
     public function findByPost(int $postId): array
     {
         $rows = $this->db->select(

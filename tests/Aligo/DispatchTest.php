@@ -195,7 +195,7 @@ final class DispatchTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $this->templates->fetch();
-        $this->templates->setEnabled('T1', true);
+
         $this->transport->queue(200, (string) json_encode(
             ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
 
@@ -226,7 +226,7 @@ final class DispatchTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $this->templates->fetch();
-        $this->templates->setEnabled('T1', true);
+
 
         try {
             $this->dispatch->send(['channel' => 'at', 'tpl_code' => 'T1', 'failover' => true,
@@ -257,7 +257,7 @@ final class DispatchTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $this->templates->fetch();
-        $this->templates->setEnabled('T1', true);
+
         $this->transport->queue(200, (string) json_encode(
             ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
 
@@ -425,7 +425,7 @@ final class DispatchTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '안녕하세요',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $this->templates->fetch();
-        $this->templates->setEnabled('T1', true);
+
         $this->transport->queue(200, (string) json_encode(
             ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 1]]));
 
@@ -564,7 +564,7 @@ final class DispatchTest extends DatabaseTestCase
             'templtCode' => 'T1', 'templtName' => '안내', 'templtContent' => '#{이름}님 안녕하세요',
             'status' => 'A', 'inspStatus' => 'APR']]]));
         $this->templates->fetch();
-        $this->templates->setEnabled('T1', true);
+
         $this->transport->queue(200, (string) json_encode(
             ['code' => 0, 'info' => ['mid' => 'A1', 'scnt' => 1, 'fcnt' => 0]]));
 

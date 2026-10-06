@@ -13,7 +13,8 @@
   </div>
 </div>
 
-<?php if (!$mail_configured): ?><div class="alert alert-warning alert-soft mail-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><strong>서버 기본 메일을 사용 중입니다.</strong> 서버 메일 전송이 설정되지 않았다면 도착하지 않을 수 있습니다. SMTP를 설정하면 SMTP로 보냅니다.</span><a class="btn btn-sm btn-warning" href="<?= $this->url('admin.mail') ?>#mail">SMTP 설정</a></div><?php endif ?>
+<?php if ($mail_mode === 'disabled'): ?><div class="alert alert-info alert-soft mail-warning"><span aria-hidden="true"><?= $this->icon('info', 18) ?></span><span><strong>이메일을 사용하지 않습니다.</strong> 이메일 알림은 발송하지 않으며 일반 회원가입은 이메일 인증 없이 완료됩니다.</span><a class="btn btn-sm btn-outline" href="<?= $this->url('admin.settings.messaging') ?>#channel-mail">메일 설정</a></div>
+<?php elseif ($mail_mode === 'native'): ?><div class="alert alert-warning alert-soft mail-warning"><span aria-hidden="true"><?= $this->icon('warning', 18) ?></span><span><strong>서버 기본 메일을 사용 중입니다.</strong> 서버 메일 전송이 설정되지 않았다면 도착하지 않을 수 있습니다. SMTP를 설정하면 SMTP로 보냅니다.</span><a class="btn btn-sm btn-warning" href="<?= $this->url('admin.settings.messaging') ?>#channel-mail">SMTP 설정</a></div><?php endif ?>
 <?php if (($query['saved'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>변경사항을 저장했습니다.</span></div><?php endif ?>
 <?php if (($query['deleted'] ?? '') === '1'): ?><div class="alert alert-success"><span aria-hidden="true"><?= $this->icon('check-circle', 18) ?></span><span>게시판을 삭제했습니다.</span></div><?php endif ?>
 

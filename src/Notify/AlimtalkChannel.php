@@ -21,11 +21,13 @@ final class AlimtalkChannel implements ChannelInterface
 {
     private AligoService $aligo;
     private NotifySettings $settings;
+    private string $siteUrl;
 
-    public function __construct(AligoService $aligo, NotifySettings $settings)
+    public function __construct(AligoService $aligo, NotifySettings $settings, string $siteUrl = '')
     {
         $this->aligo = $aligo;
         $this->settings = $settings;
+        $this->siteUrl = $siteUrl;
     }
 
     public function key(): string
@@ -100,7 +102,7 @@ final class AlimtalkChannel implements ChannelInterface
             'recipients' => [['phone' => $to->phone, 'name' => $to->name,
                 'user_id' => $to->userId, 'vars' => $mapped,
                 'fallback_body' => $failover ? $fallbackBody : null,
-                'fallback_vars' => $failover ? $values : [],
+                'fallback_vars' => $failover ? SmsLinks::forBody($event, $vars, $this->siteUrl) : [],
                 'fallback_secret_vars' => $failover ? Events::secretVars($event) : []]],
         ]);
         // 작업 행이 생겼다는 것과 알리고가 그것을 받았다는 것은 다른 사실이다 —

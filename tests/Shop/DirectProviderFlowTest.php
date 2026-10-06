@@ -8,14 +8,14 @@ use GnuCms\Payment\{InicisGateway, KcpConfig, KcpGateway, KcpLegacyConfig, Nicep
 use GnuCms\Tests\Payment\FakeTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-/** Real adapters, a member order, and recorded PG replies; no live card data or network calls. */
+/** Currently selectable adapters, a member order, and recorded PG replies; no live card data or network calls. */
 final class DirectProviderFlowTest extends ShopTestCase
 {
     public static function providers(): array
     {
         $config = self::mysqlConfig();
-        return array_combine(['inicis', 'kcp_legacy', 'kcp', 'toss', 'nicepay'],
-            array_map(static fn (string $id): array => [$config, $id], ['inicis', 'kcp_legacy', 'kcp', 'toss', 'nicepay']));
+        return array_combine(['inicis', 'kcp_legacy', 'toss', 'nicepay'],
+            array_map(static fn (string $id): array => [$config, $id], ['inicis', 'kcp_legacy', 'toss', 'nicepay']));
     }
 
     #[DataProvider('providers')]

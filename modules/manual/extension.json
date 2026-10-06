@@ -1,0 +1,14 @@
+{
+  "id": "manual",
+  "type": "module",
+  "name": "매뉴얼",
+  "description": "GNUCMS 설치·사이트 운영·쇼핑몰·알림 발송과 개발자를 위한 상세 설명서",
+  "version": "1.0.0",
+  "api": 1,
+  "route_prefix": "/manual",
+  "aliases": false,
+  "entry_path": "/",
+  "public_path": "/",
+  "requires": [],
+  "optional": []
+}

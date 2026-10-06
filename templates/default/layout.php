@@ -38,6 +38,7 @@
       // 시스템 한글 글꼴만 쓰면 캐시와 무관하게 언제나 같은 화면이고, 받을 것도 없다.
       // Pretendard 가 기기에 설치돼 있으면 --font 의 맨 앞이라 그대로 쓰인다. ?>
 <link rel="stylesheet" href="<?= $this->asset('theme.css') ?>">
+<link rel="stylesheet" href="<?= $this->asset('datetime.css') ?>">
 </head>
 <body class="<?php $this->start('body_class') ?><?php $this->stop() ?>" data-section="<?php $this->start('nav_section') ?><?php $this->stop() ?>">
 <a class="skip-link btn btn-primary btn-sm" href="#main">본문 바로가기</a>
@@ -51,7 +52,6 @@
     <header class="site-header">
       <div class="navbar wrap">
         <div class="navbar-start">
-          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기"><?= $this->icon('menu', 21) ?></label>
           <a class="brand" href="<?= $this->url('boards.index') ?>">
             <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 19) ?></span>
             <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
@@ -100,6 +100,7 @@
             <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
             <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>
           </button>
+          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기"><?= $this->icon('menu', 21) ?></label>
         </div>
       </div>
 

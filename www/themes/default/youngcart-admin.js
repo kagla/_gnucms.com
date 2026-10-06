@@ -79,6 +79,72 @@
       syncStatusFields();
     }
   }
+  var quickDialogs=[].slice.call(root.querySelectorAll('[data-yc-quick-dialog]'));
+  if(quickDialogs.length&&quickDialogs.every(function(dialog){return typeof dialog.showModal==='function';})){
+    root.classList.add('yc-order-quick-ready');
+    var quickByAction={};
+    quickDialogs.forEach(function(dialog){
+      quickByAction[dialog.getAttribute('data-yc-quick-dialog')]=dialog;
+      var close=dialog.querySelector('[data-yc-close-quick-dialog]');
+      if(close){close.addEventListener('click',function(){dialog.close();});}
+    });
+    var shippingDialog=quickByAction.shipped;
+    var quickCarrier=shippingDialog&&shippingDialog.querySelector('[data-yc-carrier-select]');
+    var quickOther=shippingDialog&&shippingDialog.querySelector('[data-yc-carrier-other]');
+    var quickOtherInput=quickOther&&quickOther.querySelector('input');
+    function syncQuickCarrier(){
+      if(!quickCarrier||!quickOther){return;}
+      var other=quickCarrier.value===quickCarrier.getAttribute('data-yc-other-value');
+      quickOther.hidden=!other;
+      if(quickOtherInput){quickOtherInput.required=other;}
+    }
+    if(quickCarrier){quickCarrier.addEventListener('change',syncQuickCarrier);syncQuickCarrier();}
+    root.querySelectorAll('[data-yc-quick-action]').forEach(function(button){
+      button.addEventListener('click',function(){
+        var action=button.getAttribute('data-yc-quick-action'),dialog=quickByAction[action];
+        if(!dialog){return;}
+        var id=dialog.querySelector('[data-yc-quick-id]'),from=dialog.querySelector('[data-yc-quick-from]');
+        var label=dialog.querySelector('[data-yc-quick-label]');
+        if(id){id.value=button.getAttribute('data-yc-order-id');}
+        if(from){from.value=button.getAttribute('data-yc-order-from');}
+        if(label){label.textContent='주문 '+button.getAttribute('data-yc-order-number');}
+        dialog.querySelectorAll('[data-yc-quick-errors],.yc-inline-error').forEach(function(error){error.remove();});
+        dialog.querySelectorAll('[aria-invalid]').forEach(function(field){field.removeAttribute('aria-invalid');field.removeAttribute('aria-describedby');});
+        if(action==='shipped'){
+          if(quickCarrier){quickCarrier.value=quickCarrier.getAttribute('data-yc-default-carrier');}
+          if(quickOtherInput){quickOtherInput.value='';}
+          var tracking=dialog.querySelector('[name="tracking_number"]');
+          if(tracking){tracking.value='';}
+          syncQuickCarrier();
+        }
+        if(action==='cancelled'){
+          var reason=dialog.querySelector('[name="cancel_reason"]'),detail=dialog.querySelector('[name="cancel_detail"]');
+          var warning=dialog.querySelector('[data-yc-return-warning]');
+          if(reason){reason.value='';}
+          if(detail){detail.value='';}
+          if(warning){warning.hidden=button.getAttribute('data-yc-needs-return')!=='1';}
+        }
+        dialog.showModal();
+        var focus=dialog.querySelector('select:not([hidden]),input:not([type="hidden"])');
+        if(focus){focus.focus();}
+      });
+    });
+    quickDialogs.forEach(function(dialog){
+      if(dialog.hasAttribute('data-yc-open-on-error')){
+        if(dialog===quickByAction.cancelled){
+          var failedButton=root.querySelector('[data-yc-quick-action="cancelled"][data-yc-order-id="'+dialog.querySelector('[data-yc-quick-id]').value+'"]');
+          var warning=dialog.querySelector('[data-yc-return-warning]');
+          if(warning&&failedButton){warning.hidden=failedButton.getAttribute('data-yc-needs-return')!=='1';}
+        }
+        dialog.showModal();
+      }
+    });
+  }
+  root.querySelectorAll('[data-yc-confirm-complete]').forEach(function(button){
+    button.form.addEventListener('submit',function(event){
+      if(!window.confirm('주문 '+button.getAttribute('data-yc-confirm-complete')+'을 배송 완료로 변경하시겠습니까?')){event.preventDefault();}
+    });
+  });
   var addNoteDialog=root.querySelector('[data-yc-add-order-note-dialog]');
   if(addNoteDialog&&typeof addNoteDialog.showModal==='function'){
     var addNoteAfter=addNoteDialog.querySelector('[data-yc-add-note-after]');

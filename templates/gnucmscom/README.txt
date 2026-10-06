@@ -6,7 +6,7 @@ default 테마의 기능을 gnucms.com의 브랜드·색상·홈 구성에 맞�
 
 upstream 동기화
 ---------------
-동기화 기준은 upstream/main의 da2210a (v0.5.0)다.
+동기화 기준은 upstream/main의 043e7a5 및 공개 매뉴얼 추가다.
 - 관리자 플러그인·모듈 메뉴와 목록, 확장 운영 화면의 공통 레이아웃·스타일을 반영했다.
 - 활성 공개 확장은 상단 메뉴와 모바일 서랍에 표시하며 현재 화면을 표시한다.
 - 로그인 폼·인증 메일 재발송·소셜 로그인에 검증된 원래 주소를 전달한다.
@@ -23,8 +23,7 @@ upstream 동기화
 같은 폴더의 `theme.php` 가 `['label' => '…']` 를 돌려준다. 이 파일이 있어야 테마 목록에
 오르고 고를 수 있다. 화면 없이 폴더만 있는 것(옛 테마 보관본 등)은 테마로 치지 않는다.
 
-**테마 간 폴백은 없다.** `PhpView` 는 선택한 테마 폴더 한 곳만 본다. 그래서 테마는 화면
-전부 갖는다. 화면을 새로 만들면 모든 테마에 같은 이름의 `.php` 를 만들어야 한다.
+공식 사이트는 ThemeManager의 기본 템플릿 fallback을 보존한다. 전용 홈·레이아웃·브랜드·SEO를 먼저 쓰고 없는 화면은 최신 default로 연결한다. 옛 default와 동일한 사본 56개를 제거해 최신 회원·알림·관리 화면이 가려지지 않게 했다. 이 fallback은 공식 사이트의 보완이며 일반 upstream 테마 계약과 구분한다.
 
 헬퍼 ($this)
 ------------
@@ -45,7 +44,7 @@ upstream 동기화
   $this->asset('theme.css')          테마 정적 파일 주소 (이스케이프됨)
   $this->html($content)              정화된 본문 HTML
   $this->icon('home', 18, 'cls')     _icons.php 의 아이콘 SVG (모르는 이름은 원)
-  $this->date($v, 'Y.m.d')           날짜
+  $this->date($v)                    사이트 시간대의 y-m-d H:i:s
   $this->json($v)                    <script> 안에 넣을 JSON
   $this->base                        기준 경로
 
@@ -82,5 +81,6 @@ upstream 동기화
 - 레이아웃 둘이 서로를 `layout()` 으로 가리키면 예외를 던진다 (`레이아웃이 서로를 감쌉니다`).
 - `stop()` 없이 끝난 `start()` 도 예외다. 조용히 삼키면 이후 화면이 통째로 빈 채 나가기 때문이다.
 - `date()` 는 문자열/정수만 받는다. `DateTimeInterface` 를 넘기면 안 된다. `date(null)` 은 빈 문자열이다.
-- 테마 간 폴백이 없다. 테마를 하나 더 만들면 그때 `ThemeManager::templatePaths()` 에 default 를
-  뒤에 더해 폴백을 열 수 있다 (`PhpView` 는 경로 목록을 차례로 찾는다).
+- 새 화면은 default를 우선 사용하고 브랜드·SEO가 필요한 화면만 전용 테마에서 재정의한다.
+- 매뉴얼은 modules/manual의 선택 모듈이며 공식 사이트에서 /manual로 공개한다.
+- 최신 공통 CSS 변경을 병합하고 날짜 자산 datetime.css를 함께 로드한다.

@@ -13,6 +13,7 @@ use GnuCms\Aligo\Variables;
 use GnuCms\App;
 use GnuCms\Error\DomainError;
 use GnuCms\Notify\Events;
+use GnuCms\Notify\SmsEditor;
 use GnuCms\Support\Clock;
 use GnuCms\View\View;
 use Psr\Http\Message\ResponseInterface;
@@ -88,31 +89,68 @@ final class AdminMessageController
         return $this->redirect($request, $response, 'admin.messages.templates', $query);
     }
 
-    public function toggleTemplate(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
-    {
-        $input = $this->input($request);
-        $this->assertCsrf($input);
-        $this->app->guestAcl()->assertGlobalAdmin();
-        try {
-            $this->app->aligo()->templates->setEnabled(
-                (string) ($input['tpl_code'] ?? ''), ($input['action'] ?? '') === 'enable'
-            );
-        } catch (DomainError $e) {
-            if ($e->status() !== 422) {
-                throw $e;
-            }
-
-            return $this->render($request, $response->withStatus(422), $this->firstError($e));
-        }
-
-        return $this->redirect($request, $response, 'admin.messages.templates');
-    }
-
     public function send(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $this->app->guestAcl()->assertGlobalAdmin();
 
-        return $this->renderSend($request, $response, [], null, [], null);
+        $query = $request->getQueryParams();
+        $input = ['channel' => 'sms',
+            'var_문의처' => $this->app->cmsService()->notificationContact(
+                (string) $this->app->config('app.url', GNUCMS_URL)
+            )];
+        $member = is_string($query['member'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['member']) ? $query['member'] : '';
+        if ($member !== '') $input['members'] = [$member];
+        $preset = is_string($query['preset'] ?? null) ? $query['preset'] : '';
+        if (Events::phoneCapable($preset)) {
+            $values = $this->app->notifySettings()->formValues()[$preset];
+            $input['body'] = $values['sms_body_stored'] !== '' ? $values['sms_body_stored'] : Events::defaultSmsBody($preset);
+            $input['title'] = $values['sms_title_stored'];
+            $input['var_사이트명'] = (string) $this->app->cmsService()->settings()['site_name'];
+            $input['template_event'] = $preset;
+            // 재설정 링크 등 비밀이나 예시 데이터를 직접 발송 칸에 자동으로 넣지 않는다.
+        }
+        // 상세 화면의 링크는 수신 회원과 실제 업무 값을 서버에서 가져온다.
+        $orderId = is_string($query['order'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['order']) ? $query['order'] : '';
+        if ($orderId !== '') {
+            $order = $this->app->db()->selectOne('SELECT user_id, number, total, paid_amount, carrier, tracking_number FROM '
+                . $this->app->db()->table('yc_orders') . ' WHERE id = ?', [$orderId]);
+            if ($order !== null) {
+                $input['members'] = [(string) $order['user_id']];
+                $input['var_주문번호'] = (string) $order['number'];
+                $input['var_주문금액'] = number_format((int) $order['total']) . '원';
+                $input['var_결제금액'] = number_format((int) $order['paid_amount']) . '원';
+                $input['var_택배사'] = (string) $order['carrier'];
+                $input['var_운송장번호'] = (string) $order['tracking_number'];
+                $input['var_배송정보'] = trim((string) $order['carrier'] . ' / ' . (string) $order['tracking_number'], ' /');
+                $input['var_링크'] = rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/') . '/shop/order?number=' . rawurlencode((string) $order['number']);
+            }
+        }
+        $inquiryId = is_string($query['inquiry'] ?? null) && preg_match('/^[1-9][0-9]{0,18}$/D', $query['inquiry']) ? $query['inquiry'] : '';
+        if ($inquiryId !== '' && $orderId === '') {
+            $inquiry = $this->app->db()->selectOne('SELECT f.user_id, p.name FROM ' . $this->app->db()->table('yc_product_feedback')
+                . ' f JOIN ' . $this->app->db()->table('yc_products') . " p ON p.id = f.product_id WHERE f.id = ? AND f.kind = 'inquiry'", [$inquiryId]);
+            if ($inquiry !== null) {
+                $input['members'] = [(string) $inquiry['user_id']];
+                $input['var_상품명'] = (string) $inquiry['name'];
+                $input['var_링크'] = rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/') . '/shop/inquiry/' . $inquiryId;
+            }
+        }
+        if (count($input['members'] ?? []) === 1) {
+            $user = $this->app->users()->findById((int) $input['members'][0]);
+            if ($user !== null && $user['status'] === 'active') $input['var_이름'] = (string) $user['display_name'];
+        }
+        $error = null;
+        $tplCode = is_string($query['tpl_code'] ?? null) ? trim($query['tpl_code']) : '';
+        if ($tplCode !== '') {
+            $input['channel'] = 'at';
+            $template = strlen($tplCode) <= 64 ? $this->app->aligo()->templates->find($tplCode) : null;
+            if ($template === null || !$this->app->aligo()->templates->canUse($template)) {
+                $error = '이 템플릿은 현재 채널에서 발송할 수 없습니다. 승인 상태와 채널을 확인해 주세요.';
+            } else {
+                $input['tpl_code'] = $tplCode;
+            }
+        }
+        return $this->renderSend($request, $response, $input, $error, [], null);
     }
 
     /**
@@ -170,6 +208,10 @@ final class AdminMessageController
         // 같은 422 로 다시 그려 입력을 지켜야 한다.
         try {
             $collected = $this->collect($input);
+            // 별도 예시 발송 버튼을 선택한 요청에만 빈 변수의 예시 값을 적용한다.
+            if (($input['send_example'] ?? '') === '1') {
+                $collected['request'] = $this->withExampleValues($collected['request']);
+            }
             $fingerprint = self::fingerprint($collected['request']);
             $alreadySent = $this->recentlySentJob($fingerprint);
             if ($alreadySent !== null) {
@@ -421,11 +463,22 @@ final class AdminMessageController
     {
         $vars = [];
         foreach ($input as $name => $value) {
-            if (str_starts_with((string) $name, 'var_')) {
+            if (str_starts_with((string) $name, 'var_') && is_scalar($value)) {
                 $vars[substr((string) $name, 4)] = (string) $value;
             }
         }
 
+        $isAlimtalk = ($input['channel'] ?? 'sms') === 'at';
+        $siteDefaults = $isAlimtalk ? $this->app->alimtalkMessageInfo()->resolved() : [
+            '사이트명' => (string) $this->app->cmsService()->settings()['site_name'],
+            '사이트주소' => rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/'),
+            '문의처' => $this->app->cmsService()->notificationContact((string) $this->app->config('app.url', GNUCMS_URL)),
+        ];
+        foreach ($this->variableNames($input) as $name) {
+            if (isset($siteDefaults[$name]) && ($isAlimtalk || trim($vars[$name] ?? '') === '')) {
+                $vars[$name] = $siteDefaults[$name];
+            }
+        }
         $recipients = [];
         $skipped = 0;
         $ineligible = 0;
@@ -471,9 +524,12 @@ final class AdminMessageController
                 'tpl_code' => (string) ($input['tpl_code'] ?? ''),
                 'failover' => ($input['failover'] ?? '') === '1',
                 'created_by' => $this->app->guestAcl()->identity()->displayName() ?? '',
+                'secret_vars' => Events::secretVars(is_string($input['template_event'] ?? null) ? $input['template_event'] : ''),
                 'recipients' => $recipients,
                 'scheduled_at' => $this->scheduledAtForRequest((string) ($input['scheduled_at'] ?? '')),
             ],
+            // 수신자가 없어도 본문을 미리 볼 값. 실제 발송 request에는 넣지 않는다.
+            'preview_vars' => $vars,
             'skipped' => $skipped,
             'ineligible' => $ineligible,
             'missing' => $missing,
@@ -522,7 +578,7 @@ final class AdminMessageController
             return null;
         }
 
-        $message = sprintf('가져오기 %d건, 갱신 %d건, 사용 중지 %d건',
+        $message = sprintf('가져오기 %d건, 갱신 %d건, 발송 불가 %d건',
             self::countParam($query, 'imported'),
             self::countParam($query, 'updated'),
             self::countParam($query, 'disabled'))
@@ -652,34 +708,60 @@ final class AdminMessageController
     }
 
     /**
-     * 미리보기에 보여줄 값. 실제로 보내질 첫 수신자의 본문을 Variables::apply() 로 그대로
-     * 채운다 — 빈 변수 거절은 그 함수 하나가 맡으므로 여기서 따로 다시 검사하지 않는다.
-     * 알림톡 템플릿의 승인 여부 같은 발송 가능 판정도 마찬가지로 여기서 다시 하지 않는다 —
-     * 그건 실제로 보낼 때 AligoService::send() 가 판정한다. 이 화면은 지금 저장된 사본
-     * 내용을 그대로 읽어 보여줄 뿐이다.
+     * 입력된 값은 보존하고 빈 변수만 표시용 예시로 채운다. 수신자가 없어도 확인한다.
+     * 미리보기만으로 예시를 폼이나 설정에 저장하지 않는다. 예시 발송을 명시한 경우에만
+     * 같은 예시 생성 함수를 실제 발송에 적용한다. 일반 발송의 빈 변수 거절은 유지한다.
      */
     private function buildPreview(array $collected): array
     {
         $request = $collected['request'];
-        // scheduled_at 은 collect() 안에서 이미 SendTime::parse() 가 검증·정규화했다
-        // (실패했다면 그 예외가 이미 preview()/dispatch() 의 422 처리로 빠졌을 것이고
-        // 여기까지 오지 않는다) — 여기서 다시 검증하지 않는다.
         $scheduledAt = $request['scheduled_at'] ?? null;
         $recipients = $request['recipients'];
-        $body = $request['channel'] === 'at' ? $this->templateBody($request['tpl_code']) : $request['body'];
+        $isAlimtalk = $request['channel'] === 'at';
+        $body = $isAlimtalk ? $this->templateBody($request['tpl_code']) : $request['body'];
+        if (trim($body) === '') {
+            throw DomainError::validation([($isAlimtalk ? 'tpl_code' : 'body') =>
+                $isAlimtalk ? '미리 볼 템플릿을 선택해 주세요.' : '미리 볼 본문을 입력해 주세요.']);
+        }
 
-        $sample = $recipients === [] ? null : Variables::apply($body, (array) $recipients[0]['vars']);
+        $values = $recipients === [] ? $collected['preview_vars'] : (array) $recipients[0]['vars'];
+        $missing = Variables::missing($body, $values);
+        $sample = Variables::apply($body, $this->exampleValues($body, $values));
 
         return [
             'sample' => $sample,
+            'example_mode' => $missing !== [] || $recipients === [],
+            'example_variables' => $missing,
+            'can_send' => $missing === [] && $recipients !== [],
             'count' => count($recipients),
             'skipped' => $collected['skipped'],
             'ineligible' => $collected['ineligible'],
             'missing' => $collected['missing'],
-            'bytes' => $sample === null ? null : MessageText::byteLength($sample),
-            'classify' => $sample === null ? null : MessageText::channelFor($sample),
+            'bytes' => MessageText::byteLength($sample),
+            'classify' => MessageText::channelFor($sample),
             'scheduled_at' => $scheduledAt,
         ];
+    }
+
+    /** 미리보기와 예시 발송이 같은 값으로 빈 변수만 채운다. 입력값은 덮어쓰지 않는다. */
+    private function exampleValues(string $body, array $values): array
+    {
+        $examples = SmsEditor::samples();
+        foreach (Variables::missing($body, $values) as $name) {
+            $values[$name] = $examples[$name] ?? '[' . $name . ' 예시]';
+        }
+        return $values;
+    }
+
+    /** 관리자 직접 발송의 명시적인 예시 선택에만 적용하며, Dispatch의 검증은 그대로 거친다. */
+    private function withExampleValues(array $request): array
+    {
+        $body = $request['channel'] === 'at' ? $this->templateBody($request['tpl_code']) : $request['body'];
+        foreach ($request['recipients'] as &$recipient) {
+            $recipient['vars'] = $this->exampleValues($body, (array) $recipient['vars']);
+        }
+        unset($recipient);
+        return $request;
     }
 
     /** 알림톡 템플릿 사본의 본문. 코드가 비어 있거나 가져온 적 없으면 빈 문자열이다. */
@@ -763,6 +845,18 @@ final class AdminMessageController
     private function renderSend(ServerRequestInterface $request, ResponseInterface $response, array $input,
         ?string $error, array $fieldErrors, ?array $preview): ResponseInterface
     {
+        $isAlimtalk = ($input['channel'] ?? 'sms') === 'at';
+        $siteDefaults = $isAlimtalk ? $this->app->alimtalkMessageInfo()->resolved() : [
+            '사이트명' => (string) $this->app->cmsService()->settings()['site_name'],
+            '사이트주소' => rtrim((string) $this->app->config('app.url', GNUCMS_URL), '/'),
+            '문의처' => $this->app->cmsService()->notificationContact((string) $this->app->config('app.url', GNUCMS_URL)),
+        ];
+        foreach ($siteDefaults as $name => $value) {
+            $field = 'var_' . $name;
+            if ($isAlimtalk || !isset($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
+                $input[$field] = $value;
+            }
+        }
         $selectedIds = array_map('strval', (array) ($input['members'] ?? []));
         $query = $request->getQueryParams();
         $searchQuery = is_string($query['q'] ?? null) ? trim($query['q']) : '';
@@ -775,6 +869,7 @@ final class AdminMessageController
             'search_results' => $this->searchMembers($searchQuery, $selectedIds),
             'selected_members' => $this->selectedMembers($selectedIds),
             'variable_names' => $this->variableNames($input),
+            'template_content' => $isAlimtalk ? $this->templateBody((string) ($input['tpl_code'] ?? '')) : '',
             'preview' => $preview,
             'error' => $error,
             'field_errors' => $fieldErrors,
@@ -795,6 +890,7 @@ final class AdminMessageController
     {
         return View::fromRequest($request)->render($response, 'admin/message/templates', [
             'copies' => $this->app->aligo()->templates->all(),
+            'usable_codes' => array_column($this->app->aligo()->templates->usable(), 'tpl_code'),
             'error' => $error,
             'notice' => $notice,
         ]);

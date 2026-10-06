@@ -19,7 +19,7 @@ use GnuCms\Repository\PostRepository;
  * 사이트 내 알림함, 그리고 댓글 알림이 채널로 나가는 자리.
  *
  * 회원에게만 알린다. 비회원 글·댓글은 받을 사람을 특정할 수 없기 때문이다.
- * 알림을 만들다 실패해도 댓글 등록 자체는 막지 않는다 (부수적인 일이다).
+ * 댓글과 필수 알림함은 함께 저장하며, 외부 발송 실패는 이미 저장한 댓글을 되돌리지 않는다.
  */
 final class NotificationService
 {
@@ -89,83 +89,93 @@ final class NotificationService
             : \Closure::fromCallable($log);
     }
 
-    /**
-     * 새 댓글이 달렸을 때 알린다.
-     *
-     * 받을 사람은 두 갈래다. 글쓴이에게는 "내 글에 댓글", 답글이면 부모 댓글
-     * 작성자에게 "내 댓글에 답글". 둘이 같은 사람이면 한 번만 보낸다.
-     *
-     * **한 사람에 한 번씩 부른다.** notify() 는 수신자 하나를 받으므로 받을 사람이
-     * 둘이면 두 번이다. 그래서 둘은 서로의 결과를 모른다 — 한 사람에게 실패해도 다른
-     * 사람은 받아야 하고(그 사람 잘못이 아니다), 문자·알림톡이 켜져 있으면 관리자
-     * 발송 내역(message_jobs)에도 사람마다 한 건씩 남는다. 번호도 내용의 '이름'도
-     * 사람마다 다르니 그것이 맞는 모양이다.
-     *
-     * **무엇이 실패해도 댓글 등록은 막지 않는다.** 이 메서드는 댓글이 이미 저장된
-     * 뒤에 불린다(CommentService::create). 여기서 예외가 올라가면 화면은 오류가 되는데
-     * 댓글은 남아 있어, 사람은 같은 댓글을 한 번 더 쓴다. 발송기가 전부 실패로 올리는
-     * 예외(Notifier 주석)도 여기서 멈춘다 — 대신 로그에 남는다.
-     */
+    /** 댓글 저장과 같은 거래에서 필수 알림함을 기록하고 외부 채널은 커밋 뒤에 보낸다. */
     public function notifyComment(int $postId, int $commentId): void
     {
         $comment = $this->comments->find($commentId);
         $post = $this->posts->find($postId);
-        if ($comment === null || $post === null) {
-            return;
-        }
-
-        $targets = $this->targetsFor($post, $comment);
-        if ($targets === []) {
-            return;
-        }
-
-        $siteName = (string) $this->cms->settings()['site_name'];
-        // 알림함이 알림을 눌렀을 때 보내는 곳과 같은 자리다(NotificationController::open).
-        $link = $this->appUrl . '/posts/' . $postId . '#comment-' . $commentId;
-
-        $tried = 0;
-        foreach ($targets as $userId => $kind) {
+        if ($comment === null || $post === null) return;
+        foreach ($this->targetsFor($post, $comment) as $userId => $kind) {
             $user = $this->users->findById((int) $userId);
-            // 차단·탈퇴 회원은 없는 회원과 같게 다룬다 — 이 저장소의 원칙이다
-            // (CommentService::listByAuthor, PostService, UserRepository::searchActive).
-            // 로그인을 막아 둔 사람의 알림함에 쌓아 봐야 읽을 사람이 없고, 메일·문자로
-            // 보내면 내보낸 사람에게 사이트가 계속 말을 거는 꼴이 된다. 탈퇴 회원은
-            // 이름·주소가 이미 익명으로 바뀌어 있어 보낼 곳도 없다.
-            if ($user === null || (string) $user['status'] !== 'active') {
-                continue;
-            }
-            $tried++;
-            try {
-                ($this->notifier)()->notify('comment_new', Recipient::forUser($user), [
-                    '사이트명' => $siteName,
-                    '이름'    => (string) $user['display_name'],
-                    '글제목'   => (string) $post['title'],
-                    '작성자'   => (string) $comment['author_name'],
-                    '링크'    => $link,
-                    // 채널만 읽는 문맥. 알림함이 두 종류를 구분해 적으려면 이 셋이
-                    // 필요한데 notify() 의 서명에는 들어갈 자리가 없다. 밑줄로 시작하는
-                    // 이름이라 어떤 본문에도 치환되지 않는다(MessageVars 주석).
-                    MessageVars::CONTEXT_PREFIX . 'kind'       => $kind,
-                    MessageVars::CONTEXT_PREFIX . 'post_id'    => $postId,
-                    MessageVars::CONTEXT_PREFIX . 'comment_id' => $commentId,
-                ]);
-            } catch (\Throwable $e) {
-                // 사람 하나에서 멈추지 않는다. 이 자리에서 바로 적는다 — 뒤 사람을
-                // 보내다 프로세스가 죽으면 모아 둔 기록은 함께 사라진다(Notifier 와 같은 이유).
-                ($this->log)('댓글 알림(글 ' . $postId . ')을 보내지 못했습니다 — '
-                    . get_class($e) . ': ' . $e->getMessage());
-            }
+            if ($user === null || $user['status'] !== 'active') continue;
+            $this->recordInbox((string) $userId, $kind, $postId, $commentId,
+                (string) $comment['author_name'], (string) $post['title']);
+            $vars = [
+                '사이트명' => (string) $this->cms->settings()['site_name'],
+                '이름' => (string) $user['display_name'], '글제목' => (string) $post['title'],
+                '작성자' => (string) $comment['author_name'],
+                '링크' => $this->appUrl . '/posts/' . $postId . '#comment-' . $commentId,
+            ];
+            $this->notifications->afterCommit(fn () => $this->sendExternal('comment_new', $user, $vars));
         }
+    }
 
-        if ($tried === 0) {
-            // 받을 사람은 있었는데 한 사람도 부르지 못했다 = 전부 활성 회원이 아니다.
-            // 사고가 아니라 규칙이므로 조용히 끝내되, 아무 줄도 남기지 않으면 운영자에게는
-            // "알림이 안 온다"는 사실만 남고 이유가 없다 — Notifier 가 "켠 채널 중 지금
-            // 보낼 수 있는 것이 없다"고 적는 자리와 같은 이유의 같은 한 줄이다.
-            // 받을 사람이 처음부터 없었던 경우(비회원 글에 비회원 댓글)는 여기까지 오지
-            // 않는다. 그건 평범한 일이라 적을 것이 없다.
-            ($this->log)('댓글 알림(글 ' . $postId . ') — 받을 사람이 모두 활성 회원이 아니어서'
-                . ' 아무 데도 나가지 않았습니다');
+    public function recordAccountInbox(string $userId, string $kind, string $siteName): void
+    {
+        if (!in_array($kind, ['welcome', 'password_changed'], true)) throw DomainError::internal('알 수 없는 계정 알림입니다.');
+        $user = $this->users->findById((int) $userId);
+        if ($user === null || $user['status'] !== 'active') throw DomainError::notFound('알림 수신자를 찾을 수 없습니다.');
+        $this->notifications->create([
+            'user_id' => $userId, 'kind' => $kind, 'post_id' => null, 'comment_id' => null,
+            'order_id' => null, 'actor_name' => '', 'subject' => $siteName,
+        ]);
+    }
+
+    public function recordOrderInbox(string $userId, int $orderId, string $status, string $number): void
+    {
+        $this->notifications->recordOrderStatus($orderId, (int) $userId, $status, $number);
+    }
+
+    /** Orders가 이미 필수 알림함을 저장했으므로 이메일·전화 채널만 실행한다. */
+    public function notifyOrderChannels(int $userId, int $orderId, string $status, string $number, array $vars = []): void
+    {
+        if (!\GnuCms\Notify\Events::exists('order_' . $status)) return;
+        $user = $this->users->findById($userId);
+        if ($user === null || $user['status'] !== 'active') return;
+        $contact = $this->notifications->ownedOrderContact($orderId, (string) $userId);
+        if ($contact === null || (string) $contact['number'] !== $number) return;
+        // 회원가입 알림은 회원 번호, 주문 알림은 주문서의 주문자 번호를 사용한다.
+        // 없는/유효하지 않은 주문자 번호를 회원 번호나 배송지 수령인 번호로 대신하지 않는다.
+        $phone = \GnuCms\Aligo\PhoneNumber::digits((string) $contact['phone']);
+        $user['phone'] = \GnuCms\Aligo\PhoneNumber::isMobile($phone) ? $phone : null;
+        $user['display_name'] = (string) $contact['buyer_name'];
+        $this->sendExternal('order_' . $status, $user, [
+            '사이트명' => (string) $this->cms->settings()['site_name'],
+            '이름' => (string) $user['display_name'], '주문번호' => $number,
+            '링크' => $this->appUrl . '/shop/order?number=' . rawurlencode($number),
+        ] + $vars);
+    }
+
+    public function recordInquiryInbox(string $userId, int $feedbackId, string $productName): void
+    {
+        if ($this->notifications->ownedInquiry($feedbackId, $userId) === null) {
+            throw DomainError::notFound('문의 수신자를 찾을 수 없습니다.');
+        }
+        $this->notifications->create([
+            'user_id' => $userId, 'kind' => 'inquiry_replied', 'post_id' => null, 'comment_id' => null,
+            'order_id' => null, 'feedback_id' => $feedbackId, 'actor_name' => '', 'subject' => mb_substr($productName, 0, 200),
+        ]);
+    }
+
+    /** 문의 답변은 저장 거래 안에서 필수 알림을 적고 외부 채널은 커밋 뒤에 보낸다. */
+    public function notifyInquiryReply(array $feedback, array $product): void
+    {
+        $user = $this->users->findById((int) $feedback['user_id']);
+        if ($user === null || $user['status'] !== 'active') return;
+        $this->recordInquiryInbox((string) $user['id'], (int) $feedback['id'], (string) $product['name']);
+        $vars = ['사이트명' => (string) $this->cms->settings()['site_name'],
+            '이름' => (string) $user['display_name'], '상품명' => (string) $product['name'],
+            // 링크는 소유권 검사 뒤에 현재 상품과 문의 페이지로 안내한다. 비공개 답변 본문은 싣지 않는다.
+            '링크' => $this->appUrl . '/shop/inquiry/' . (int) $feedback['id']];
+        $this->notifications->afterCommit(fn () => $this->sendExternal('inquiry_replied', $user, $vars));
+    }
+
+    private function sendExternal(string $event, array $user, array $vars): void
+    {
+        try {
+            ($this->notifier)()->notify($event, Recipient::forUser($user), $vars, false);
+        } catch (\Throwable $e) {
+            ($this->log)('외부 알림 ' . $event . ' 발송 실패: ' . get_class($e));
         }
     }
 
@@ -259,6 +269,25 @@ final class NotificationService
         // 남의 알림인지 없는 알림인지 구분해 알려 줄 이유가 없다. 둘 다 404 로 답한다.
         if ($row === null || $row['user_id'] !== $userId) {
             throw DomainError::notFound('알림을 찾을 수 없습니다.');
+        }
+
+        if (in_array($row['kind'], ['welcome', 'password_changed'], true)) {
+            $this->notifications->markRead($id, $userId);
+            return ['account' => true];
+        }
+        if ($row['feedback_id'] !== null) {
+            $target = $this->notifications->ownedInquiry($row['feedback_id'], $userId);
+            if ($target === null) throw DomainError::notFound('문의 알림을 찾을 수 없습니다.');
+            $this->notifications->markRead($id, $userId);
+            return ['inquiry' => $target];
+        }
+        if ($row['order_id'] !== null) {
+            $number = $this->notifications->ownedOrderNumber($row['order_id'], $userId);
+            if ($number === null) {
+                throw DomainError::notFound('알림을 찾을 수 없습니다.');
+            }
+            $this->notifications->markRead($id, $userId);
+            return ['order_number' => $number];
         }
 
         $this->notifications->markRead($id, $userId);

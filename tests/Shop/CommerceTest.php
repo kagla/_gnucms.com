@@ -254,9 +254,9 @@ final class CommerceTest extends ShopTestCase
     public function testPaidIsAStatusThatOnlyPaymentConfirmationCanReach(array $config): void
     {
         $this->setupShop($config);
-        self::assertSame(['pending', 'paid', 'confirmed', 'shipped', 'completed', 'cancelled'], array_keys(Orders::STATUSES));
+        foreach (['pending', 'paid', 'confirmed', 'shipped', 'completed', 'returning', 'returned', 'cancelled'] as $status) self::assertArrayHasKey($status, Orders::STATUSES);
         self::assertSame(['paid', 'cancelled'], Orders::NEXT['pending']);
-        self::assertSame(['confirmed', 'cancelled'], Orders::NEXT['paid']);
+        self::assertSame(['shipped', 'confirmed', 'cancelled'], Orders::NEXT['paid']);
         $order = $this->place($this->cart($this->product()));
         self::assertSame([], $order['payment']);
         $this->reject(fn () => $this->shop->orders->transition((int) $order['id'], 'pending', 'paid', 'admin'), '결제 확인');

@@ -38,7 +38,7 @@
             </div>
           </td>
           <td data-label="휴대폰번호"><?= !is_scalar($member['phone']) || (string) $member['phone'] === '' ? '<span class="muted">—</span>' : $this->e(\GnuCms\Aligo\PhoneNumber::mask((string) $member['phone'])) ?></td>
-          <td data-label="가입일"><?= $this->date($member['created_at'], 'Y.m.d') ?></td>
+          <td data-label="가입일"><?= $this->date($member['created_at']) ?></td>
           <?php $status_label = $member['status'] === 'active' ? '활성' : ($member['status'] === 'withdrawn' ? '탈퇴' : '차단'); ?>
           <td data-label="상태"><span class="badge badge-sm <?= $member['status'] === 'active' ? 'badge-success' : ($member['status'] === 'withdrawn' ? 'badge-ghost' : 'badge-error') ?> badge-soft"><?= $status_label ?></span></td>
           <td data-label="관리" class="right">
