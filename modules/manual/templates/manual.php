@@ -48,6 +48,7 @@ $manualLink = fn (string $slug): string => $manualHome . ($slug === '' ? '' : '/
           <?php elseif ($block['type'] === 'list' || $block['type'] === 'steps'): $tag = $block['type'] === 'steps' ? 'ol' : 'ul'; ?><<?= $tag ?> class="manual-<?= $block['type'] ?>"><?php foreach ($block['items'] as $line): ?><li><?= $this->e($line) ?></li><?php endforeach ?></<?= $tag ?>>
           <?php elseif ($block['type'] === 'table'): ?><table class="manual-table"><thead><tr><?php foreach ($block['headers'] as $header): ?><th scope="col"><?= $this->e($header) ?></th><?php endforeach ?></tr></thead><tbody><?php foreach ($block['rows'] as $row): ?><tr><?php foreach ($row as $n => $cell): ?><td data-label="<?= $this->e($block['headers'][$n]) ?>"><?= $this->e($cell) ?></td><?php endforeach ?></tr><?php endforeach ?></tbody></table>
           <?php elseif ($block['type'] === 'code'): ?><div class="manual-code"><div><span><?= $this->e($block['language'] ?? '예시') ?></span><button type="button" data-manual-copy>복사</button></div><pre><code><?= $this->e($block['text']) ?></code></pre></div>
+          <?php elseif ($block['type'] === 'gallery'): ?><div class="manual-gallery"><?php foreach ($block['images'] as $picture): ?><figure><a href="<?= $this->asset($picture['file']) ?>" data-manual-image data-image-title="<?= $this->e($picture['title']) ?>" aria-label="<?= $this->e($picture['title'] . ' 크게 보기') ?>"><img src="<?= $this->asset($picture['file']) ?>" alt="<?= $this->e($picture['alt']) ?>" loading="lazy" decoding="async"><span>크게 보기</span></a><figcaption><strong><?= $this->e($picture['title']) ?></strong><p><?= $this->e($picture['caption']) ?></p></figcaption></figure><?php endforeach ?></div>
           <?php endif ?>
         <?php endforeach ?></section><?php endforeach ?>
         <?php if (!empty($manual_article['related'])): ?><section class="manual-related"><h2>함께 읽기</h2><ul><?php foreach ($manual_article['related'] as $slug): foreach ($manual_catalog['articles'] as $item): if ($item['slug'] !== $slug) continue; ?><li><a href="<?= $this->e($manualLink($slug)) ?>"><?= $this->e($item['title']) ?></a></li><?php endforeach; endforeach ?></ul></section><?php endif ?>
@@ -58,6 +59,7 @@ $manualLink = fn (string $slug): string => $manualHome . ($slug === '' ? '' : '/
     <?php endif ?>
     </div>
   </div>
+  <dialog class="manual-image-dialog" data-manual-image-dialog aria-labelledby="manual-image-title"><header><h2 id="manual-image-title"></h2><button type="button" data-manual-image-close aria-label="큰 이미지 닫기">닫기</button></header><div class="manual-image-body"><img alt=""></div><footer><a data-manual-image-original target="_blank" rel="noopener">원본 이미지 열기</a></footer></dialog>
 </div>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?><script src="<?= $this->asset('manual.js') ?>" defer></script><?php $this->stop() ?>
