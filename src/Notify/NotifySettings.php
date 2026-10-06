@@ -20,6 +20,7 @@ final class NotifySettings
         'signup_attempt' => ['mail'], 'social_email_verify' => ['mail'],
         'order_pending' => ['inbox'], 'order_paid' => ['inbox'], 'order_cancelled' => ['inbox'],
         'order_refunded' => ['inbox'], 'inquiry_replied' => ['inbox'],
+        'order_returning' => ['inbox'], 'order_returned' => ['inbox'], 'order_return_closed' => ['mail', 'inbox'],
         'order_confirmed' => ['inbox'], 'order_shipped' => ['inbox'], 'order_completed' => ['inbox'],
     ];
 

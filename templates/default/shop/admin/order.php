@@ -83,6 +83,7 @@
 <?php if ($is_pg): ?><?php if (!in_array($order['payment_provider'], ['toss', 'nicepay'], true) && in_array($order['payment_method'], ['virtual_account', 'mobile'], true) && (int) $order['paid_at'] > 0): ?><p class="yc-help">이 결제 수단의 환불은 이니시스 관리자에서 처리한 뒤 결제 상태 갱신으로 결과를 반영합니다.</p><?php endif ?><form method="post" action="<?= $this->e($admin_url) ?>/orders/detail"><input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-outline btn-sm" type="submit">결제 상태 갱신</button></form><?php endif ?>
 <?php $this->insert('admin/_refund_form') ?>
 </section>
+<?php $this->insert('admin/_return_form') ?>
 <?php if ($next !== []): ?><form class="yc-form-stack" method="post" action="<?= $this->e($admin_url) ?>/orders/detail" data-yc-order-status-form>
 <input type="hidden" name="csrf_token" value="<?= $this->e($csrf_token) ?>"><input type="hidden" name="id" value="<?= (int) $order['id'] ?>"><input type="hidden" name="from" value="<?= $this->e($order['status']) ?>">
 <label class="yc-field"><span>변경할 상태</span><select class="select select-bordered" name="status" required><?php foreach ($next as $status): ?><option value="<?= $this->e($status) ?>"<?= ($input['status'] ?? '') === $status ? ' selected' : '' ?>><?= $this->e($statuses[$status]) ?></option><?php endforeach ?></select></label>

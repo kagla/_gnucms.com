@@ -17,7 +17,7 @@
       <li><a href="<?= $this->e($admin_url . ($key === 'paid' ? '/shipments' : '/orders?status=' . $key)) ?>"<?= $key === 'pending' ? ' class="yc-workflow-priority"' : '' ?>><span><?= $label ?></span><strong><?= number_format((int) ($order_stats[$key] ?? 0) + ($key === 'paid' ? (int) ($order_stats['confirmed'] ?? 0) : 0)) ?><small>건</small></strong><small><?= $hint ?></small></a></li>
     <?php endforeach ?>
   </ol>
-  <div class="yc-panel-foot"><span class="muted">주문 상태는 결제 완료를 의미하지 않습니다.</span><a href="<?= $this->e($admin_url) ?>/orders?status=cancelled">취소 <?= (int) ($order_stats['cancelled'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a></div>
+  <div class="yc-panel-foot"><span class="muted">주문 상태는 결제 완료를 의미하지 않습니다.</span><a href="<?= $this->e($admin_url) ?>/orders?status=cancelled">취소 <?= (int) ($order_stats['cancelled'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a> <a href="<?= $this->e($admin_url) ?>/orders?status=returning">반품 요청 <?= (int) ($order_stats['returning'] ?? 0) ?>건 <?= $this->icon('chevron-right', 14) ?></a></div>
 </div></section>
 <div class="yc-dashboard-grid">
   <section class="card"><div class="card-body">

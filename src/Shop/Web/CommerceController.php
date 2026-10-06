@@ -30,15 +30,15 @@ final class CommerceController
         $input = $request->getMethod() === 'POST' ? $request->getParsedBody() : $request->getQueryParams();
         if (!is_array($input)) $input = [];
         $view = View::forShop($request);
-        $response = $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', in_array($page, ['orders', 'order', 'order/cancel'], true) ? 'no-referrer' : 'same-origin');
+        $response = $response->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', in_array($page, ['orders', 'order', 'order/cancel', 'order/return'], true) ? 'no-referrer' : 'same-origin');
         $data = ['url' => $url, 'base' => $base, 'admin_url' => $base . ($this->adminRoutePrefix ?? '/admin/shop'), 'admin' => $identity->isAdmin(),
             'page' => $page, 'user_id' => $userId, 'input' => [], 'errors' => [], 'notice' => '', 'type_labels' => Settings::TYPE_LABELS,
             'statuses' => Orders::STATUSES, 'order_ref' => static fn (array $order): string => Orders::reference($order), 'csrf_token' => $_SESSION['csrf_token'] ?? '',
             'img' => static fn (int $id, ?string $file, string $size): ?string => $file === null || $file === '' ? null : Images::url($url, $id, $file, $size)];
         $data['settings'] = $this->service->settings->all();
         // 영수증(order)은 예외다. 공개를 끄기 전에 받은 주문과 진행 중인 결제가 돌아올 곳이다.
-        if (!$data['settings']['visible'] && !in_array($page, ['order', 'order/cancel'], true)) return $view->render($response, 'closed', $data);
-        if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel'], true)) {
+        if (!$data['settings']['visible'] && !in_array($page, ['order', 'order/cancel', 'order/return'], true)) return $view->render($response, 'closed', $data);
+        if ($userId === null && in_array($page, ['checkout', 'checkout/previous-addresses', 'orders', 'order', 'order/cancel', 'order/return'], true)) {
             $destination = $url . match ($page) {
                 'checkout', 'checkout/previous-addresses' => '/checkout' . (($input['flow'] ?? '') === 'buy' ? '?flow=buy' : ''),
                 'orders' => '/orders',
@@ -170,7 +170,7 @@ final class CommerceController
             $data['method_labels'] = \GnuCms\Shop\Commerce\Payments::METHODS;
             return $view->render($response, 'orders', $data);
         }
-        if ($page === 'order' || $page === 'order/cancel') {
+        if (in_array($page, ['order', 'order/cancel', 'order/return'], true)) {
             if ($page === 'order' && isset($input['ref'])) {
                 $reference = Input::text($input['ref'], 'ref', 65, false);
                 $order = $this->service->orders->ownedReference($reference, $userId);
@@ -216,6 +216,25 @@ final class CommerceController
                 } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
                 $order = $this->service->orders->owned($number, $userId);
             }
+            if ($page === 'order/return') {
+                try {
+                    if (($input['return_action'] ?? '') === 'withdraw') {
+                        $this->service->orders->closeReturn((int) $order['id'], 'user:' . $userId,
+                            '회원이 반품 요청을 취소했습니다.', $this->service->payments, $userId);
+                    } else {
+                        $this->service->orders->requestReturn((int) $order['id'], 'user:' . $userId, $input, $userId);
+                    }
+                    return $this->redirect($response, $url . '/order?ref=' . rawurlencode(Orders::reference($order)) . '&return_saved=1');
+                } catch (DomainError $e) {
+                    $data['errors'] = $e->details() ?: [$e->getMessage()];
+                    $response = $response->withStatus($e->status());
+                }
+                $order = $this->service->orders->owned($number, $userId);
+                $data['input'] = $this->safeValues($input);
+            }
+            $data['return_attempted'] = $page === 'order/return';
+            $data['return_reasons'] = \GnuCms\Shop\Commerce\ReturnReason::OPTIONS;
+            if ($page === 'order' && ($input['return_saved'] ?? '') === '1') $data['notice'] = '반품 요청을 반영했습니다.';
             $data['order'] = $order;
             $data['is_pg'] = $this->service->payments->isPgOrder($order);
             if ($page === 'order' && ($input['cancelled'] ?? '') === '1' && $order['status'] === 'cancelled') {

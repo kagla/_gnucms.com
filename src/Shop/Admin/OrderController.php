@@ -72,6 +72,10 @@ final class OrderController extends AdminBase
                     'confirm-deposit' => $this->service->orders->confirmDeposit($id, $data['actor']),
                     'sync' => $this->service->payments->sync($order),
                     'refund' => $this->refund($order, $data),
+                    'request-return' => $this->service->orders->requestReturn($id, $data['actor'], $data['input']),
+                    'complete-return' => $this->service->orders->completeReturn($id, $data['actor'], $data['input'], $this->service->payments),
+                    'close-return' => $this->service->orders->closeReturn($id, $data['actor'],
+                        Input::text($data['input']['reason'] ?? '', 'reason', 400, false), $this->service->payments),
                     'refund-confirm' => $this->service->payments->confirmRefund($order, self::refundKey($data),
                         Input::text($data['input']['reference'] ?? '', 'reference', 100, false), $data['actor']),
                     'refund-unprocessed' => $this->service->payments->dismissRefund($order, self::refundKey($data)),
@@ -99,6 +103,7 @@ final class OrderController extends AdminBase
             } catch (DomainError $e) { $data['errors'] = $e->details() ?: [$e->getMessage()]; $response = $response->withStatus($e->status()); }
         }
         $data['order'] = $this->service->orders->get($id);
+        $data['return_reasons'] = \GnuCms\Shop\Commerce\ReturnReason::OPTIONS;
         $data['previous'] = Orders::previousStatus($data['order']);
         $undoHistoryId = $data['previous'] === null ? null : Orders::activeStatusHistoryId($data['order']);
         $data['undo_history_id'] = $undoHistoryId;
@@ -151,6 +156,7 @@ final class OrderController extends AdminBase
             '1' => '주문 상태를 변경했습니다.', 'confirm-deposit' => '입금을 확인했습니다.', 'sync' => '결제 상태를 확인하고 필요한 변경을 반영했습니다.', 'refund' => '환불을 처리했습니다.',
             'refund-confirm' => '환불을 결제사 기록과 맞췄습니다.', 'refund-unprocessed' => '처리되지 않은 환불 요청을 정리했습니다.',
             'add-note' => '처리 메모를 추가했습니다.', 'edit-note' => '처리 메모를 수정했습니다.', 'delete-note' => '처리 메모를 삭제했습니다.',
+            'request-return' => '반품 요청을 등록했습니다.', 'complete-return' => '반품과 환불을 완료했습니다.', 'close-return' => '반품 요청을 종료했습니다.',
             'undo-status' => '주문 상태를 직전 단계로 되돌렸습니다.', default => '',
         };
         return $this->render($request, $response, 'order', $data);
@@ -174,6 +180,7 @@ final class OrderController extends AdminBase
     /** 환불. 전액 환불이고 cancel_order 가 켜져 있으면 주문도 취소한다(재고 복원은 transition 이 한다). */
     private function refund(array $order, array $data): void
     {
+        if ($order['status'] === 'returning') throw DomainError::validation(['refund' => '반품 처리에서 상품 회수를 확인하고 반품을 완료해 주세요.']);
         $amount = Input::int($data['input']['amount'] ?? null, 'amount', 1, 999999999);
         $reason = Input::text($data['input']['reason'] ?? '', 'reason', 200, false);
         $key = Input::text($data['input']['refund_key'] ?? '', 'refund_key', 40, false);

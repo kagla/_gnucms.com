@@ -62,6 +62,16 @@ final class Events
             'vars' => ['사이트명', '이름', '주문번호', '링크', '문의처', '사이트주소'], 'phone' => true, 'inbox' => true, 'secret' => [],
             'sms_body' => '[#{사이트명}] #{주문번호} 배송완료
 #{링크}'],
+        'order_returning' => ['label' => '반품 요청',
+            'vars' => ['사이트명', '이름', '주문번호', '사유', '링크', '문의처', '사이트주소'], 'phone' => true, 'inbox' => true, 'secret' => [],
+            'sms_body' => '[#{사이트명}] #{주문번호} 반품접수
+#{링크}'],
+        'order_returned' => ['label' => '반품 완료·환불',
+            'vars' => ['사이트명', '이름', '주문번호', '환불금액', '링크', '문의처', '사이트주소'], 'phone' => true, 'inbox' => true, 'secret' => [],
+            'sms_body' => '[#{사이트명}] #{주문번호} 반품완료
+#{링크}'],
+        'order_return_closed' => ['label' => '반품 요청 종료',
+            'vars' => ['사이트명', '이름', '주문번호', '사유', '링크'], 'phone' => false, 'inbox' => true, 'secret' => []],
         'email_verify' => ['label' => '이메일 인증',
             'vars' => ['사이트명', '이름', '링크', '유효시간'], 'phone' => false, 'inbox' => false,
             'secret' => ['링크']],
@@ -102,6 +112,9 @@ final class Events
             'order_shipped' => '주문 상태가 배송 중으로 변경될 때. 배송 CSV도 같은 규칙을 사용합니다.',
             'order_completed' => '주문 상태가 배송 완료로 변경될 때',
             'order_cancelled' => '고객·관리자 취소 또는 결제 기한 만료로 주문 취소가 확정될 때',
+            'order_returning' => '배송 중·완료 주문의 전체 반품을 요청할 때',
+            'order_returned' => '상품 회수 확인 뒤 잔액 환불과 반품을 완료할 때. 환불 안내는 이 알림에 함께 보냅니다.',
+            'order_return_closed' => '회원이 요청을 취소하거나 관리자가 반품 요청을 종료할 때',
             'order_refunded' => '새 환불 기록이 저장될 때. 부분 환불은 건별로 안내하며 같은 환불 키는 중복 발송하지 않습니다.',
             'inquiry_replied' => '상품문의에 첫 답변을 등록하거나 답변 내용을 변경할 때. 동일 내용 저장·답변 삭제에는 발송하지 않습니다.',
             'email_verify' => '이메일 가입 인증 링크를 요청할 때',
@@ -109,7 +122,7 @@ final class Events
             'social_email_verify' => '소셜 로그인 이메일 확인이 필요할 때',
             default => '',
         };
-        $target = str_starts_with($key, 'order_') ? '활성 주문 회원의 계정 연락처. 배송지 수령인에게는 보내지 않습니다.'
+        $target = str_starts_with($key, 'order_') ? '활성 주문 회원의 주문자 연락처. 배송지 수령인에게는 보내지 않습니다.'
             : ($key === 'inquiry_replied' ? '상품문의를 작성한 활성 회원의 계정 연락처'
             : ($key === 'comment_new' ? '글 작성자·부모 댓글 작성자, 최대 두 명. 작성자 본인은 제외합니다.'
             : (self::phoneCapable($key) ? '해당 회원의 계정 연락처' : '해당 요청에서 확인한 이메일 주소')));

@@ -40,7 +40,7 @@ final class NotificationRepository
     /** 주문 상태와 같은 트랜잭션에서 기록한다. 외부 발송 채널은 호출하지 않는다. */
     public function recordOrderStatus(int $orderId, int $userId, string $status, string $number): void
     {
-        if (!in_array($status, ['pending', 'paid', 'confirmed', 'shipped', 'completed', 'cancelled', 'refunded'], true)) {
+        if (!in_array($status, ['pending', 'paid', 'confirmed', 'shipped', 'completed', 'cancelled', 'refunded', 'returning', 'returned', 'return_closed'], true)) {
             return;
         }
         $user = $this->db->selectOne('SELECT id FROM ' . $this->db->table('users')

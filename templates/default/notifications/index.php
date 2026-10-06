@@ -44,6 +44,9 @@
                     'order_confirmed' => '주문하신 상품을 준비 중입니다.',
                     'order_shipped' => '주문하신 상품이 배송 중입니다.',
                     'order_completed' => '주문하신 상품의 배송이 완료되었습니다.',
+                    'order_returning' => '반품 요청이 접수되었습니다.',
+                    'order_returned' => '반품 처리가 완료되었습니다.',
+                    'order_return_closed' => '반품 요청이 종료되었습니다.',
                     default => '주문 진행 상태가 변경되었습니다.',
                 }) ?>
               <?php else: ?>

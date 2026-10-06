@@ -568,7 +568,7 @@ final class AdminAligoController
             'welcome', 'email_verify', 'signup_attempt', 'social_email_verify',
             'password_reset', 'password_changed', 'comment_new',
             'order_pending', 'order_paid', 'order_confirmed', 'order_shipped',
-            'order_completed', 'order_cancelled', 'order_refunded', 'inquiry_replied',
+            'order_completed', 'order_returning', 'order_returned', 'order_return_closed', 'order_cancelled', 'order_refunded', 'inquiry_replied',
         ];
         $orderedRows = [];
         foreach ($displayOrder as $key) {

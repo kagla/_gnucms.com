@@ -171,7 +171,7 @@ final class Payments
             $syncKey = 'sync-' . substr(hash('sha256', (string) $payment['transaction_id'] . '-' . $settled), 0, 64);
             $this->orders->recordRefund((int) $order['id'], $settled - (int) $order['refunded_amount'],
                 'pg:' . $order['payment_provider'], '결제사 조회로 확인한 취소', $syncKey,
-                ['id' => (string) $payment['transaction_id'], 'at' => Clock::timestamp()]);
+                ['id' => (string) $payment['transaction_id'], 'at' => Clock::timestamp()], $order['status'] !== 'returning');
         }
         if ((int) ($payment['open_cancellations'] ?? 0) > 0) {
             throw DomainError::validation(['refund' => '결제사에서 아직 확정되지 않은 환불 요청이 있습니다. 환불 대조를 진행해 주세요.']);
@@ -207,9 +207,9 @@ final class Payments
     }
 
     /** 환불. 결제사 주문은 PG 환불이 먼저 성공해야 기록하고, 무통장은 밖에서 돌려준 돈을 기록만 한다. */
-    public function refund(array $order, int $amount, string $reason, string $key, string $actor): array
+    public function refund(array $order, int $amount, string $reason, string $key, string $actor, bool $sendExternal = true): array
     {
-        if (!in_array($order['status'], ['paid', 'confirmed'], true)
+        if (!in_array($order['status'], ['paid', 'confirmed', 'returning'], true)
             && !($order['status'] === 'cancelled' && !$this->isPgOrder($order))) {
             throw DomainError::validation(['refund' => '결제 완료 상태의 주문만 환불할 수 있습니다.']);
         }
@@ -231,7 +231,7 @@ final class Payments
             $gw = self::gatewayOrder($order);
             $result = ExecutionLock::run($this->app->storageDir(), static fn (): array => $gateway->cancel($gw, $amount, $remaining, $reason, $key));
         }
-        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key, $result);
+        return $this->orders->recordRefund((int) $order['id'], $amount, $actor, $reason, $key, $result, $sendExternal);
     }
 
     /**
@@ -255,7 +255,7 @@ final class Payments
         if ($pending === null) throw DomainError::validation(['refund' => '대조할 환불 요청이 없습니다. 화면을 새로고침해 주세요.']);
         $gateway->confirmRefund($gw, $key, $reference);
         return $this->orders->recordRefund((int) $order['id'], (int) $pending['amount'], $actor, '결제사 확인: ' . $reference, $key,
-            ['id' => $reference, 'at' => (int) ($pending['at'] ?? Clock::timestamp()), 'tax' => $pending['tax'] ?? []]);
+            ['id' => $reference, 'at' => (int) ($pending['at'] ?? Clock::timestamp()), 'tax' => $pending['tax'] ?? []], $order['status'] !== 'returning');
     }
 
     /** 결제사가 처리하지 않은 것으로 확인된 환불 요청을 닫는다. 주문 금액은 그대로다. */

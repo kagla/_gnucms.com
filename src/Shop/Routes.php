@@ -59,7 +59,7 @@ final class Routes
         $map('POST', '/checkout/previous-addresses', static fn ($request, $response) => $commerce->handle('checkout/previous-addresses', $request, $response));
         $map('GET', '/orders', static fn ($request, $response) => $commerce->handle('orders', $request, $response));
         $map('GET', '/order', static fn ($request, $response) => $commerce->handle('order', $request, $response))->setName('shop.order');
-        foreach (['cart/add', 'order/cancel'] as $page) {
+        foreach (['cart/add', 'order/cancel', 'order/return'] as $page) {
             $map('POST', '/' . $page, static fn ($request, $response) => $commerce->handle($page, $request, $response));
         }
         $map('GET', '/pay', static fn ($request, $response) => $pay->show($request, $response));
