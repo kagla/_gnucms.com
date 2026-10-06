@@ -52,7 +52,6 @@
     <header class="site-header">
       <div class="navbar wrap">
         <div class="navbar-start">
-          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기"><?= $this->icon('menu', 21) ?></label>
           <a class="brand" href="<?= $this->url('boards.index') ?>">
             <span class="brand-logo" aria-hidden="true"><?= $this->icon('brand', 19) ?></span>
             <span class="brand-name"><?= $this->e($site['site_name']) ?></span>
@@ -101,6 +100,7 @@
             <span class="theme-ico theme-ico-light"><?= $this->icon('sun', 19) ?></span>
             <span class="theme-ico theme-ico-dark"><?= $this->icon('moon', 19) ?></span>
           </button>
+          <label for="nav-drawer" class="btn btn-ghost btn-square drawer-button" aria-label="메뉴 열기"><?= $this->icon('menu', 21) ?></label>
         </div>
       </div>
 
