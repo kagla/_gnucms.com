@@ -46,13 +46,14 @@ function page(int $step, string $title, string $body): void
         $steps .= '<li class="' . $cls . '"><span>' . $n . '</span>' . h($name) . '</li>';
     }
     echo '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-        . '<title>' . h($title) . ' · ' . h(GNUCMS) . ' 설치</title>'
+        . '<title>' . h($title) . ' · GNUCMS 설치 · GNUCMS Install</title>'
         . '<style>'
         . ':root{color-scheme:light;--bg:#f4f8fd;--panel:#fff;--fg:#0f172a;--muted:#64748b;--line:#dbe4f0;--primary:#2f7fe0;--danger:#d92d20;--ok:#1a7f4b}'
         . '@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0b1220;--panel:#111a2b;--fg:#e5edf8;--muted:#94a3b8;--line:#243043;--primary:#6aa6f0;--danger:#ff8b81;--ok:#5ad28f}}'
         . '*{box-sizing:border-box}body{margin:0;padding:40px 16px;background:var(--bg);color:var(--fg);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}'
         . 'main{max-width:680px;margin:auto;padding:clamp(24px,5vw,40px);border:1px solid var(--line);border-radius:20px;background:var(--panel)}'
         . '.brand{color:var(--primary);font-weight:800;margin-bottom:18px}'
+        . '.brand span{font-size:12px;font-weight:500;color:var(--muted);margin-left:8px}'
         . 'ol.steps{display:flex;gap:6px;list-style:none;margin:0 0 26px;padding:0;font-size:12px;color:var(--muted)}'
         . 'ol.steps li{display:flex;flex:1;align-items:center;justify-content:center;gap:5px;padding:6px 0;border-top:3px solid var(--line);text-align:center}ol.steps li span{font-weight:800}'
         . 'ol.steps li.now{border-color:var(--primary);color:var(--fg)}ol.steps li.done{border-color:var(--ok)}'
@@ -72,7 +73,7 @@ function page(int $step, string $title, string $body): void
         . 'a{color:var(--primary);font-weight:700}code{padding:2px 5px;border-radius:5px;background:rgba(47,127,224,.12)}'
         . 'dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px}dt{color:var(--muted)}dd{margin:0}'
         . '.pw{position:relative}.pw button{position:absolute;right:6px;bottom:6px;min-height:0;padding:6px 8px;background:transparent;color:var(--muted);font-size:12px}'
-        . '</style></head><body><main><div class="brand">' . h(GNUCMS) . '</div><ol class="steps">' . $steps . '</ol>'
+        . '</style></head><body><main><div class="brand">GNUCMS 설치 <span lang="en">GNUCMS Install</span></div><ol class="steps">' . $steps . '</ol>'
         . '<h1>' . h($title) . '</h1>' . $body . '</main>'
         . '<script>document.querySelectorAll("[data-show]").forEach(function(b){b.addEventListener("click",function(){var i=document.getElementById(b.dataset.show);i.type=i.type==="password"?"text":"password";b.textContent=i.type==="password"?"보기":"숨기기"})})</script>'
         . '</body></html>';
@@ -130,7 +131,7 @@ if ($step === 1) {
             . '<td>' . h($item['label']) . (!$item['required'] ? ' <span class="opt">권장</span>' : '') . '</td>'
             . '<td class="opt">' . h($item['note']) . '</td></tr>';
     }
-    $body = '<p class="intro">이 서버에서 ' . h(GNUCMS) . ' 가 돌 수 있는지 봅니다.</p><table>' . $rows . '</table>';
+    $body = '<p class="intro">이 서버에서 ' . h(GNUCMS) . '를 실행할 수 있는지 확인합니다.</p><table>' . $rows . '</table>';
     $body .= $result['ok']
         ? '<form method="post"><div class="actions"><span></span><button type="submit">다음</button></div></form>'
         : '<p class="alert">✗ 표시된 필수 항목을 고친 뒤 <a href="?step=1">다시 점검</a>하세요.</p>';
