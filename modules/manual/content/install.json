@@ -2,6 +2,56 @@
   "screen": "",
   "sections": [
     {
+      "title": "설치 화면 미리보기",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "썸네일을 누르면 설치 화면을 크게 볼 수 있습니다. 실제 설치 화면 소스로 만든 예시이며 계정·주소는 설명용 값입니다. 아래 순서대로 진행하되 접속 정보와 점검 결과는 본인의 호스팅 환경을 기준으로 확인하세요."
+        },
+        {
+          "type": "gallery",
+          "images": [
+            {
+              "file": "manual/install/server-check.jpg",
+              "title": "1. 서버 점검",
+              "alt": "GNUCMS 1. 서버 점검 화면 예시",
+              "caption": "PHP·필수 확장·폴더 권한을 확인합니다. 실제 점검 결과는 서버 환경에 따라 다릅니다."
+            },
+            {
+              "file": "manual/install/database.jpg",
+              "title": "2. 데이터베이스",
+              "alt": "GNUCMS 2. 데이터베이스 화면 예시",
+              "caption": "호스팅에서 발급받은 DB 접속 정보를 입력합니다. 사진의 계정은 예시입니다."
+            },
+            {
+              "file": "manual/install/site.jpg",
+              "title": "3. 사이트 정보",
+              "alt": "GNUCMS 3. 사이트 정보 화면 예시",
+              "caption": "사이트 이름·주소·발신 이메일을 입력합니다. example.com은 예시 주소입니다."
+            },
+            {
+              "file": "manual/install/administrator.jpg",
+              "title": "4. 첫 관리자",
+              "alt": "GNUCMS 4. 첫 관리자 화면 예시",
+              "caption": "첫 관리자 이메일과 표시 이름을 입력하고 본인의 비밀번호를 설정합니다."
+            },
+            {
+              "file": "manual/install/confirmation.jpg",
+              "title": "5. 설치 확인",
+              "alt": "GNUCMS 5. 설치 확인 화면 예시",
+              "caption": "앞 단계의 값을 확인한 뒤 실제 설치를 실행합니다."
+            },
+            {
+              "file": "manual/install/complete.jpg",
+              "title": "6. 설치 완료",
+              "alt": "GNUCMS 6. 설치 완료 화면 예시",
+              "caption": "완료 안내와 설치기 자동 삭제 여부를 확인하고 로그인합니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
       "title": "설치 전 준비",
       "blocks": [
         {
