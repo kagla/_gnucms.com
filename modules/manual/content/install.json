@@ -1,0 +1,130 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "설치 전 준비",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": [
+            "항목",
+            "준비할 내용"
+          ],
+          "rows": [
+            [
+              "PHP",
+              "8.2 이상. 운영 환경은 8.4 권장"
+            ],
+            [
+              "데이터베이스",
+              "MySQL 또는 MariaDB, utf8mb4 문자셋"
+            ],
+            [
+              "필수 PHP 확장",
+              "PDO, pdo_mysql, mbstring, fileinfo, openssl, phar"
+            ],
+            [
+              "권장 확장",
+              "zip: ZIP 백업 / gd: 사진 축소본"
+            ],
+            [
+              "접속 정보",
+              "DB 호스트·포트·이름·사용자·비밀번호"
+            ],
+            [
+              "관리자",
+              "본인이 수신할 이메일과 충분히 긴 비밀번호"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "SQLite 설치는 지원하지 않습니다. 웹호스팅 관리 화면에서 DB와 전용 계정을 먼저 만들고 GNUCMS에 접속 정보를 입력합니다. GNUCMS가 호스팅 계정이나 DB 서버 자체를 만들어 주지는 않습니다."
+        }
+      ]
+    },
+    {
+      "title": "어떤 파일을 받아야 하나요",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "GitHub Releases에 첨부된 gnucms-X.Y.Z.zip 완성 배포본을 받습니다. 실행에 필요한 vendor와 정적 파일이 포함됩니다. Source code (zip)와 main.zip은 개발용 소스로 vendor가 없으므로 그대로 설치할 수 없습니다."
+        },
+        {
+          "type": "note",
+          "title": "운영 서버에서 빌드하지 않습니다",
+          "text": "Composer나 npm을 운영 호스팅에서 실행하지 않습니다. 완성 배포본의 vendor를 포함해 업로드하세요. 개발자가 소스에서 준비하는 방법은 개발자 배포 문서를 참고합니다."
+        }
+      ]
+    },
+    {
+      "title": "파일 배치",
+      "blocks": [
+        {
+          "type": "code",
+          "language": "폴더 구조",
+          "text": "gnucms/\n  config/\n  src/\n  storage/\n  templates/\n  modules/\n  plugins/\n  vendor/\n  www/         ← 웹 문서 루트\n    .htaccess\n    index.php\n    install.php"
+        },
+        {
+          "type": "steps",
+          "items": [
+            "웹 문서 루트를 www 폴더로 지정합니다. 호스팅 계정의 www가 고정이면 배포본 www의 내용만 그 안에 올립니다.",
+            "config·src·storage·templates·modules·plugins·vendor는 웹 문서 루트보다 한 단계 위에 배치합니다.",
+            "숨김 파일 .htaccess도 업로드합니다. Apache에서 mod_rewrite를 사용할 수 있어야 짧은 경로를 정상 처리합니다.",
+            "PHP 실행 계정에 config와 storage 쓰기 권한을 줍니다. 나머지 소스는 읽기 권한으로 운영합니다."
+          ]
+        },
+        {
+          "type": "p",
+          "text": "config나 storage 전체를 웹에서 직접 내려받을 수 있게 공개하지 않습니다. 특히 config/config.php와 백업 파일은 공개 경로에 두지 않습니다."
+        }
+      ]
+    },
+    {
+      "title": "웹 설치 실행",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "사이트를 열거나 /install.php로 접속합니다. 설정 파일이 없으면 설치 화면으로 이동합니다.",
+            "서버 점검을 확인하고 필수 항목의 오류부터 해결합니다.",
+            "DB 접속 정보를 입력합니다. 별도의 테이블 접두어는 한 DB에 여러 사이트를 넣는 경우에만 지정합니다.",
+            "사이트 이름·주소·발신 이메일과 첫 관리자 계정을 입력합니다.",
+            "마지막 확인 화면에서 설치를 실행하고 완료 안내를 확인합니다.",
+            "로그인해 관리 콘솔을 엽니다. install.php가 자동 삭제되지 않았다면 FTP에서 해당 파일을 삭제합니다."
+          ]
+        },
+        {
+          "type": "note",
+          "title": "새 설치와 업그레이드는 다릅니다",
+          "text": "기존 사이트의 config/config.php를 삭제하고 설치기를 다시 실행하지 마세요. 기존 사이트에는 업그레이드 절차를 적용합니다."
+        }
+      ]
+    },
+    {
+      "title": "설치 후 확인",
+      "blocks": [
+        {
+          "type": "list",
+          "items": [
+            "홈과 /login, /admin에서 오류 없이 화면이 열리는지 확인합니다.",
+            "사이트 주소는 실제 HTTPS 도메인과 설치 폴더를 가리켜야 합니다. 다른 주소가 설정되면 메일·문자 링크도 잘못 만들어질 수 있습니다.",
+            "DB 접두어는 설치 후 바꾸지 않습니다. 접두어 변경은 기존 테이블의 데이터 이전 작업이 필요합니다.",
+            "외부 메일·문자·카드 결제는 별도 계정과 설정을 연결한 뒤 사용합니다. 설치 완료만으로 자동 연결되지 않습니다."
+          ]
+        }
+      ]
+    }
+  ],
+  "related": [
+    "start",
+    "upgrade",
+    "site/settings",
+    "troubleshooting"
+  ],
+  "sources": [
+    "README.md",
+    "config/config.sample.php",
+    "www/install.php"
+  ]
+}

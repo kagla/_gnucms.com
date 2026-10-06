@@ -1,0 +1,122 @@
+{
+  "screen": "/admin/shop/settlements",
+  "sections": [
+    {
+      "title": "순서",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "정산 → 정산 대사(/admin/shop/settlements)를 엽니다.",
+            "표준 CSV 양식을 내려받습니다.",
+            "계약한 PG의 실제 정산 자료를 표준 열에 맞춥니다. 환경과 상점 ID를 구분합니다.",
+            "CSV를 가져옵니다. 거래 고유 키와 금액을 확인합니다.",
+            "일치·정산 없음·불일치·주문 없음 상태를 확인하고 필요한 거래를 PG 관리자와 비교합니다."
+          ]
+        },
+        {
+          "type": "p",
+          "text": "현재 공통 CSV 방식으로 연동합니다. 결제사별 정산 API를 자동 호출한다고 가정하지 않습니다. API를 추가할 때는 해당 계약의 정산 권한과 어댑터 구현이 필요합니다."
+        }
+      ]
+    },
+    {
+      "title": "중요 열",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": [
+            "열",
+            "뜻"
+          ],
+          "rows": [
+            [
+              "provider / environment",
+              "결제사 ID / test 또는 live"
+            ],
+            [
+              "merchant_id",
+              "PG 상점 ID"
+            ],
+            [
+              "payment_id",
+              "GNUCMS 결제 원장 키 또는 주문번호"
+            ],
+            [
+              "transaction_key",
+              "PG 정산 거래의 고유 키"
+            ],
+            [
+              "kind / amount",
+              "payment 양수, refund 음수"
+            ],
+            [
+              "fee_supply / fee_vat",
+              "수수료 공급가·부가세"
+            ],
+            [
+              "payout_amount",
+              "실제 지급 예정액"
+            ],
+            [
+              "sold_date / payout_date",
+              "매출일·지급일. YYYY-MM-DD 형식"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "중복과 상태",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "provider + environment + merchant_id + transaction_key가 같은 자료는 한 번만 저장합니다. 같은 키의 내용이 다르면 덮어쓰지 않고 오류로 막습니다. 키를 매번 임의로 바꾸면 중복 자료를 만들 수 있습니다."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "상태",
+            "의미"
+          ],
+          "rows": [
+            [
+              "일치",
+              "주문 순결제액과 정산 거래액 합계가 같음"
+            ],
+            [
+              "정산 없음",
+              "비교할 정산 자료가 없음"
+            ],
+            [
+              "불일치",
+              "금액이 다름"
+            ],
+            [
+              "주문 없음",
+              "해당 주문을 찾지 못함"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "오류 조사",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "불일치에서는 환불 시점·외부 수동 취소·테스트 환경·상점 ID·주문 연결 키부터 비교합니다. CSV 지급 예정액만 보고 고객의 주문 결제 상태를 수동 변경하지 않습니다. 실제 승인·취소 문제는 결제 오류 화면과 PG 거래 조회를 함께 봅니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "shop/reports",
+    "shop/payments",
+    "development/payments"
+  ],
+  "sources": [
+    "docs/shop-fulfillment-reports.md",
+    "src/Payment/SettlementAdapter.php"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "준비",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "저장소를 받아 PHP 8.2 이상과 Composer를 개발 환경에 준비합니다.",
+            "composer install로 개발 의존성을 설치합니다.",
+            "config/config.sample.php를 참고해 개발 전용 설정을 만듭니다. 실제 운영 설정을 복사해 공개 저장소에 넣지 않습니다.",
+            "MySQL/MariaDB의 별도 개발 DB와 계정을 사용합니다. SQLite로 운영 동작을 대체하지 않습니다.",
+            "웹 문서 루트를 www로 지정하거나 로컬 전용 서버를 사용합니다."
+          ]
+        },
+        {
+          "type": "code",
+          "language": "개발 환경에서만",
+          "text": "git clone https://github.com/kagla/gnucms.git\ncd gnucms\ncomposer install"
+        }
+      ]
+    },
+    {
+      "title": "검사 실행 규칙",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "이 저장소는 사용자에게 명시적으로 요청받은 경우에만 자동 테스트·PHP 문법 검사 등 실행 검증을 수행합니다. 커밋·릴리스 요청만으로 검사 승인을 추정하지 않습니다. 코드 변경 시에는 요청 범위와 지침을 먼저 확인합니다."
+        },
+        {
+          "type": "p",
+          "text": "검사를 실행할 때 전용 MySQL DB의 TEST_MYSQL_DSN, TEST_MYSQL_USER, TEST_MYSQL_PASS를 지정합니다. 운영 DB·실제 회원·PG 운영 키·문자 수신자를 테스트 fixture에 사용하지 않습니다."
+        },
+        {
+          "type": "code",
+          "language": "명시적 검사 요청이 있을 때",
+          "text": "./vendor/bin/phpunit tests/관련테스트.php\n./vendor/bin/phpunit\nphp -l 수정파일.php"
+        }
+      ]
+    },
+    {
+      "title": "외부 서비스 격리",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "자동 검사는 transport·connection provider 등 제공되는 대체 경로를 사용합니다. 실제 알리고 수신이나 PG 승인 검사는 별도 명시 범위에서 최소 건수로 수행합니다. 테스트 모드·실제 모드, 접수·전달 완료를 기록하고 불명확한 결과에 자동 재요청하지 않습니다."
+        }
+      ]
+    },
+    {
+      "title": "커밋 대상",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "config/config.php, storage의 실제 데이터, vendor와 비밀 환경 파일은 커밋하지 않습니다. 소스·샘플 설정·문서와 필요한 정적 자산을 커밋합니다. 사용자가 변경한 파일이 있는 작업 트리에서는 관련 없는 변경을 덮어쓰지 않습니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/architecture",
+    "development/deployment",
+    "development/security"
+  ],
+  "sources": [
+    "AGENTS.md",
+    "composer.json",
+    "phpunit.xml.dist",
+    "config/config.sample.php"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "코어 라우트",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "사이트 라우트는 src/Web/Routes.php, 쇼핑몰은 src/Shop/Routes.php에 등록합니다. 라우트 이름은 뷰의 url 헬퍼에서 참조합니다. 새 업무 확장에 코어 라우트를 하나씩 추가하지 않고 Context를 사용합니다."
+        },
+        {
+          "type": "p",
+          "text": "상태 변경은 GET 링크로 실행하지 않습니다. POST에서 입력 형식·권한·CSRF를 확인한 뒤 서비스를 호출합니다. 화면에서 버튼을 숨기는 것만으로 서버 권한을 대신하지 않습니다."
+        }
+      ]
+    },
+    {
+      "title": "서버 입력 검증",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "문자열·숫자·배열의 요청 타입을 먼저 확인합니다. 문자열 칸에 배열이 들어오는 요청을 단순 형변환으로 받아 저장하지 않습니다. 길이·범위·허용값을 업무 서비스에서 다시 검증합니다."
+        },
+        {
+          "type": "code",
+          "language": "PHP 개념 예시",
+          "text": "$input = $request->getParsedBody();\n$input = is_array($input) ? $input : [];\n// 코어 컨트롤러의 Input 헬퍼와 서비스 검증을 적용한다.\n// 권한과 CSRF를 통과한 POST에서만 상태를 바꾼다."
+        }
+      ]
+    },
+    {
+      "title": "오류 모델",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "DomainError는 사용자에게 보여 줄 수 있는 오류입니다. validation은 칸별 details와 422, forbidden은 403, notFound는 404, unauthorized는 401 등으로 응답에 연결됩니다. 그 외 예외 원문은 운영 debug가 꺼진 상태에서 공개하지 않고 로그에 기록합니다."
+        },
+        {
+          "type": "p",
+          "text": "검증 실패 화면은 values·errors를 보존해 다시 그립니다. 요청 입력을 오류 HTML에 넣을 때도 이스케이프합니다. 번호가 없는 고객이나 미승인 템플릿은 서버 검증으로 거절합니다."
+        }
+      ]
+    },
+    {
+      "title": "로그인과 외부 콜백",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "HTML GET의 로그인 복귀는 현재 설치 내부 경로만 허용합니다. POST를 로그인 후 자동 재실행하지 않습니다. JSON 요청의 401 응답은 유지합니다."
+        },
+        {
+          "type": "p",
+          "text": "PG처럼 세션 없는 외부 POST는 별도 인증·크기·Content-Type 검사 경로를 사용합니다. 일반 CSRF를 제거하고 임의 콜백을 열지 않습니다. 요청 인증과 업무 중복 방지를 각각 구현해야 합니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/extensions",
+    "development/security",
+    "development/payments"
+  ],
+  "sources": [
+    "src/Web/Routes.php",
+    "src/Error/DomainError.php",
+    "src/Extension/Context.php"
+  ]
+}

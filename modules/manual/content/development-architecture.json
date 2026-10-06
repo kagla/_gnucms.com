@@ -1,0 +1,109 @@
+{
+  "screen": "",
+  "sections": [
+    {
+      "title": "디렉터리 지도",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": [
+            "경로",
+            "책임"
+          ],
+          "rows": [
+            [
+              "www/index.php",
+              "HTTP 진입점"
+            ],
+            [
+              "src/Web/Kernel.php · Routes.php",
+              "미들웨어·서비스 연결·코어 라우트"
+            ],
+            [
+              "src/App.php",
+              "서비스 생성과 공통 설정"
+            ],
+            [
+              "src/Db",
+              "DB 연결·구조·마이그레이션"
+            ],
+            [
+              "src/View · templates/default",
+              "PHP 템플릿과 공통 화면"
+            ],
+            [
+              "src/Shop · templates/default/shop",
+              "상품·주문·배송·반품·관리 화면"
+            ],
+            [
+              "src/Payment",
+              "PG 어댑터·결제·환불·정산"
+            ],
+            [
+              "src/Aligo · src/Notify",
+              "발송 엔진과 자동 알림"
+            ],
+            [
+              "plugins · modules",
+              "선택 확장 패키지"
+            ],
+            [
+              "storage",
+              "사용자 파일·로그·확장 상태 등 런타임"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "요청 흐름",
+      "blocks": [
+        {
+          "type": "steps",
+          "items": [
+            "www/index.php에서 설정과 autoload를 읽어 Kernel을 구성합니다.",
+            "미들웨어가 세션·사용자·뷰·오류 응답 등 요청 기반 정보를 준비합니다.",
+            "라우트가 컨트롤러로 연결하고 입력·CSRF·권한을 확인합니다.",
+            "서비스가 업무 규칙과 트랜잭션을 적용하고 저장소가 DB를 처리합니다.",
+            "뷰가 논리 템플릿 이름을 선택 테마에서 해석해 HTML을 렌더링합니다.",
+            "외부 알림은 관련 업무 트랜잭션이 완료된 뒤 발송 엔진을 통해 처리합니다."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "수정 위치 결정",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "URL과 HTTP 응답은 Web·Shop Routes/Controller, 주문 상태와 재고·환불 규칙은 해당 서비스, 화면 배치는 PHP 템플릿, 색·반응형은 테마 자산에서 수정합니다. 컨트롤러에서 주문 DB를 직접 수정해 서비스 검사를 우회하지 않습니다."
+        },
+        {
+          "type": "p",
+          "text": "쇼핑몰·알리고·결제는 코어입니다. 옛 modules/shop 또는 별도 PG 플러그인 코드를 되살려 중복 라우트와 테이블을 추가하지 않습니다. 새로운 업무는 확장 Context의 등록 API를 사용합니다."
+        }
+      ]
+    },
+    {
+      "title": "소스 확인 순서",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "먼저 루트 AGENTS.md와 하위 지침을 읽습니다. 현재 기능은 AGENTS의 기능 지도, 공개 계약은 docs/, 실제 경로는 Routes.php, 최종 동작은 서비스와 템플릿에서 확인합니다. 오래된 설계 문서를 현재 화면보다 우선하지 않습니다."
+        }
+      ]
+    }
+  ],
+  "related": [
+    "development/environment",
+    "development/templates",
+    "development/extensions",
+    "development/database"
+  ],
+  "sources": [
+    "AGENTS.md",
+    "src/Web/Kernel.php",
+    "src/Web/Routes.php",
+    "src/Shop/Routes.php"
+  ]
+}
