@@ -2,7 +2,9 @@
   'use strict';
   var root=document.querySelector('[data-manual-root]');if(!root)return;
   var navigation=root.querySelector('.manual-navigation');
-  if(window.matchMedia('(max-width:680px)').matches)navigation.open=false;
+  var narrow=window.matchMedia('(max-width:680px)');
+  if(narrow.matches)navigation.open=false;
+  narrow.addEventListener('change',function(event){navigation.open=!event.matches});
   root.querySelector('[data-manual-print]')?.addEventListener('click',function(){window.print()});
   root.querySelectorAll('[data-manual-copy]').forEach(function(button){button.addEventListener('click',async function(){
     try{await navigator.clipboard.writeText(button.closest('.manual-code').querySelector('code').textContent);button.textContent='복사됨'}catch(e){button.textContent='본문을 선택해 복사하세요'}
