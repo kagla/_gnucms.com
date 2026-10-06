@@ -149,9 +149,9 @@ final class NotifierTest extends WebTestCase
         $db->insert('alimtalk_templates', ['tpl_code' => 'T1', 'senderkey' => 'SK1', 'name' => '안내',
             'content' => '#{고객명}님 #{주소} 를 확인하세요', 'status' => 'A', 'insp_status' => 'APR',
             'enabled' => 1, 'fetched_at' => '2026-09-17 10:00:00']);
-        $settings = $this->settings($db);
+        $settings = $this->settings($db, $on);
 
-        $input = ['mail' => '0', 'alimtalk' => '0', 'sms' => '0', 'inbox' => '0'];
+        $input = ['delivery_choice' => '1', 'mail' => '1', 'phone' => (in_array('sms', $on, true) || in_array('alimtalk', $on, true)) ? '1' : '0'];
         foreach ($on as $channel) {
             $input[$channel] = '1';
         }
@@ -165,6 +165,10 @@ final class NotifierTest extends WebTestCase
         // 닿지 않는 메일 채널을 배선해, 다른 채널의 순서·실패·시간 예산만 관찰한다.
         if (!in_array('mail', array_map(static fn (ChannelInterface $channel): string => $channel->key(), $channels), true)) {
             array_unshift($channels, $this->channel('mail', false));
+        }
+
+        if (\GnuCms\Notify\Events::inboxCapable($event) && !in_array('inbox', array_map(static fn (ChannelInterface $channel): string => $channel->key(), $channels), true)) {
+            $channels[] = $this->channel('inbox', false);
         }
 
         return new Notifier($settings, $channels, $this->log(), $this->clock());
@@ -211,13 +215,15 @@ final class NotifierTest extends WebTestCase
         };
     }
 
-    private function settings(Connection $db): NotifySettings
+    private function settings(Connection $db, array $on = []): NotifySettings
     {
         $aligo = new AligoSettings(new AligoSettingsRepository($db), new SecretCipher('s'));
+        $aligo->save(['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678', 'senderkey' => 'SK1']);
 
         return new NotifySettings(
             new SettingsRepository($db),
-            new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo)
+            new Templates($db, new AlimtalkApi(new FakeAligoTransport(), $aligo), $aligo), null,
+            static fn (): array => ['sms_enabled' => in_array('sms', $on, true), 'alimtalk_enabled' => in_array('alimtalk', $on, true)]
         );
     }
 
@@ -508,7 +514,7 @@ final class NotifierTest extends WebTestCase
         $this->notifier($dbConfig, [$mail, $inbox], ['mail', 'inbox'], 'comment_new')
             ->notify('comment_new', $this->to(), []);
 
-        self::assertSame(['log', 'send:inbox'], $this->timeline);
+        self::assertSame(['send:inbox', 'log'], $this->timeline);
         self::assertStringContainsString('mail', $this->logged[0]);
     }
 
@@ -576,7 +582,7 @@ final class NotifierTest extends WebTestCase
         $alimtalk = $this->channel('alimtalk');
         $notifier = $this->notifier($dbConfig, [$alimtalk], ['alimtalk']);
         // 승인이 풀려 템플릿이 꺼졌다. 저장된 설정은 그대로 'alimtalk 켜짐'이다.
-        $this->db->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => 'T1']);
+        $this->db->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
         self::assertFalse($notifier->notify('welcome', $this->to(), []));
 
@@ -683,7 +689,7 @@ final class NotifierTest extends WebTestCase
         $this->notifier($dbConfig, $channels, ['mail', 'alimtalk', 'sms', 'inbox'], 'comment_new')
             ->notify('comment_new', $this->to(), []);
 
-        self::assertSame(['mail', 'inbox', 'alimtalk'], $this->order);
+        self::assertSame(['inbox', 'mail', 'alimtalk'], $this->order);
     }
 
     /** 설정에 있는 채널은 모두 배달 순서에 자리가 있어야 한다. 빠진 채널은 켜 두어도

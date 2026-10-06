@@ -134,7 +134,7 @@ final class NotificationRoutingTest extends WebTestCase
         self::assertSame('회원이름', $call['vars']['이름']);
         // 문자·알림톡으로도 나갈 수 있는 값이라 시간대 표기를 값이 들고 간다.
         self::assertMatchesRegularExpression(
-            '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC\)$/', $call['vars']['일시']);
+            '/^\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC\)$/', $call['vars']['일시']);
         self::assertStringEndsWith('/forgot-password', $call['vars']['링크']);
     }
 
@@ -260,6 +260,9 @@ final class NotificationRoutingTest extends WebTestCase
         $id = $this->unverifiedMember($app);
         $app->users()->verifyEmail($id);
         $this->get($app, '/login');
+        $app->setAligo(new AligoService($app->db(), new FakeAligoTransport(), new SecretCipher('s')));
+        $app->aligo()->settings->save(['user_id' => 'shop', 'api_key' => 'K', 'sender' => '0212345678']);
+        $app->aligo()->settings->setEnabled('sms', true);
         $app->notifySettings()->save('password_reset', ['mail' => '1', 'alimtalk' => '0',
             'sms' => '1', 'inbox' => '0', 'sms_body' => '#{이름}님 #{링크} 에서 다시 설정해 주세요']);
         self::assertSame(['mail', 'sms'], $app->notifySettings()->channelsFor('password_reset'),
@@ -772,7 +775,8 @@ final class NotificationRoutingTest extends WebTestCase
     {
         $app = $this->makeApp($config);
         (new \ReflectionProperty(App::class, 'notifier'))
-            ->setValue($app, new Notifier($app->notifySettings(), [$this->spyChannel()]));
+            ->setValue($app, new Notifier($app->notifySettings(), [$this->spyChannel()], null, null, fn (): string => $app->cmsService()->notificationContact((string) $app->config('app.url', GNUCMS_URL)),
+                fn (): array => ['사이트명' => $app->cmsService()->settings()['site_name'], '사이트주소' => $app->config('app.url', GNUCMS_URL)]));
         $this->calls = [];
 
         return $app;
@@ -828,7 +832,7 @@ final class NotificationRoutingTest extends WebTestCase
 
     private function channels(array $on): array
     {
-        $input = ['mail' => '0', 'alimtalk' => '0', 'sms' => '0', 'inbox' => '0'];
+        $input = ['delivery_choice' => '1', 'mail' => '1', 'phone' => in_array('sms', $on, true) || in_array('alimtalk', $on, true) ? '1' : '0'];
         foreach ($on as $channel) {
             $input[$channel] = '1';
         }

@@ -141,7 +141,7 @@ final class AligoSettingsTest extends WebTestCase
 
         $html = $this->body($this->get($app, '/admin/aligo'));
 
-        self::assertStringContainsString('코어 알림', $html);
+        self::assertStringContainsString('알림·발송 설정', $html);
         self::assertStringContainsString('/admin/settings/notifications', $html);
     }
 
@@ -313,19 +313,11 @@ final class AligoSettingsTest extends WebTestCase
      * 강조된다 — 켜기는 초록, 끄기는 진회색이라 색만 봐도 어느 쪽인지 안다. 강조된 버튼은 이미 그 상태라 제출하지 않고(눌린 상태), 반대쪽 버튼만 제출한다.
      * 버튼 하나만 있으면 "끄기"가 지금 꺼져 있다는 뜻인지 끌 수 있다는 뜻인지 읽히지 않았다.
      */
-    public function testEachChannelSwitchIsAButtonPairWithTheSavedStateHighlighted(): void
+    public function testChannelModeHasOneCommonSettingsLink(): void
     {
-        $html = $this->renderAligoSettings(['status' => ['configured' => true, 'sms_switch_on' => true,
-            'alimtalk_switch_on' => false, 'test_mode' => false, 'pending' => 0]]);
-
-        // 알림톡은 꺼져 있다: 끄기가 강조(눌림)되고 켜기가 제출한다.
-        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,1400}?'
-            . '<button class="btn btn-sm join-item btn-outline"[^>]*value="enable"[^>]*aria-pressed="false">켜기</button>\s*'
-            . '<button class="btn btn-sm join-item btn-neutral"[^>]*aria-pressed="true">끄기</button>~su', $html);
-        // 문자는 켜져 있다: 켜기가 강조되고 끄기가 제출한다.
-        self::assertMatchesRegularExpression('~channel-switch-name">문자\(SMS·LMS\) 발송</span>.{0,1400}?'
-            . '<button class="btn btn-sm join-item btn-success"[^>]*aria-pressed="true">켜기</button>\s*'
-            . '<button class="btn btn-sm join-item btn-outline"[^>]*value="disable"[^>]*aria-pressed="false">끄기</button>~su', $html);
+        $html = $this->renderAligoSettings();
+        self::assertStringContainsString('/admin/settings/messaging', $html);
+        self::assertStringNotContainsString('channel-switch-name', $html);
     }
 
     /**
@@ -333,12 +325,11 @@ final class AligoSettingsTest extends WebTestCase
      * 쓰면 hidden input 이 첫째 자식이 되어 왼쪽 버튼이 각진 채 남는다. 그래서 join 안에는
      * 버튼 둘만 있어야 한다.
      */
-    public function testTheButtonPairIsTheOnlyContentOfItsJoin(): void
+    public function testLocalChannelButtonsAreNotDuplicated(): void
     {
         $html = $this->renderAligoSettings();
-
-        self::assertMatchesRegularExpression('~<span class="join">\s*<button [^>]*>켜기</button>\s*<button [^>]*>끄기</button>\s*</span>~su', $html);
-        self::assertStringNotContainsString('class="join">' . "\n" . '            <input', $html);
+        self::assertDoesNotMatchRegularExpression('/<input\b[^>]*name="channel"/', $html);
+        self::assertStringContainsString('공통', $html);
     }
 
     /**
@@ -360,22 +351,19 @@ final class AligoSettingsTest extends WebTestCase
     }
 
     /** 문자 줄이 먼저, 알림톡 줄이 그 아래다. */
-    public function testSmsSwitchComesBeforeTheAlimtalkSwitch(): void
+    public function testAccountPageKeepsBothChannelConnectionInformation(): void
     {
         $html = $this->renderAligoSettings();
-
-        self::assertLessThan(strpos($html, 'channel-switch-name">알림톡 발송<'),
-            strpos($html, 'channel-switch-name">문자(SMS·LMS) 발송<'));
+        self::assertStringContainsString('문자 (SMS·LMS)', $html);
+        self::assertStringContainsString('알림톡 (카카오)', $html);
     }
 
     /** 계정을 저장하기 전에는 켤 수 없다 — 켜기 버튼이 잠긴다. 끄기는 이미 꺼진 상태라 눌린 채다. */
-    public function testTurningOnIsLockedUntilAnAccountIsSaved(): void
+    public function testUnconfiguredAccountIsClearlyReported(): void
     {
-        $html = $this->renderAligoSettings(['status' => ['configured' => false, 'sms_switch_on' => false,
-            'alimtalk_switch_on' => false, 'test_mode' => false, 'pending' => 0]]);
-
-        self::assertMatchesRegularExpression('~channel-switch-name">알림톡 발송</span>.{0,1400}?'
-            . 'value="enable"[^>]*aria-pressed="false" disabled>켜기</button>~su', $html);
+        $html = $this->renderAligoSettings(['status' => ['configured' => false, 'sms_switch_on' => false, 'alimtalk_switch_on' => false, 'test_mode' => false, 'pending' => 0]]);
+        self::assertStringContainsString('계정 연결 안 됨', $html);
+        self::assertStringNotContainsString('channel-switch-name', $html);
     }
 
     /** 잔여 건수는 수천 단위가 보통이라 천 단위 구분 기호가 있어야 한눈에 읽힌다. */
@@ -426,7 +414,7 @@ final class AligoSettingsTest extends WebTestCase
         ]);
 
         self::assertStringContainsString('action="/admin/aligo/verify#aligo-verify"', $html);
-        self::assertStringContainsString('action="/admin/aligo/toggle#aligo-result"', $html);
+        self::assertStringNotContainsString('action="/admin/aligo/toggle', $html);
         self::assertStringContainsString('action="/admin/aligo/profiles#aligo-profiles"', $html);
 
         $result = strpos($html, 'id="aligo-result"');

@@ -68,7 +68,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
         self::assertCount(1, $mailer->messages);
         self::assertSame('writer@example.com', $mailer->messages[0]['to']);
         self::assertSame('[' . self::SITE . '] 새 댓글이 달렸습니다', $mailer->messages[0]['subject']);
-        self::assertSame(
+        self::assertStringStartsWith(
             self::WRITER . '님, ' . self::ACTOR . "님이 「알림이 붙을 글」 글에 댓글을 남겼습니다.\n\n"
             . self::URL . '/posts/' . $postId . '#comment-' . $commentId,
             $mailer->messages[0]['body']
@@ -143,7 +143,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         self::assertSame(['sms', 'sms'], array_column($this->jobs($app), 'channel'),
             '사람마다 한 건씩 남는다 — 한 건에 둘을 묶으면 본문이 한쪽 이름으로 고정된다');
-        $link = self::URL . '/posts/' . $postId . '#comment-' . $replyId;
+        $link = self::URL . '/s/notice';
         self::assertSame([
             ['01033334444', self::REPLIED . '님 「두 사람이 받을 글」 ' . $link, $replied],
             ['01011112222', self::WRITER . '님 「두 사람이 받을 글」 ' . $link, $writer],
@@ -220,7 +220,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
         self::assertSame(['writer@example.com'], array_column($mailer->messages, 'to'),
             '앞사람이 실패해도 뒷사람에게는 간다');
         self::assertCount(1, $logged);
-        self::assertStringContainsString('보내지 못했습니다', $logged[0]);
+        self::assertStringContainsString('외부 알림 comment_new 발송 실패', $logged[0]);
     }
 
     /**
@@ -233,6 +233,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
     public function testItSaysSoWhenEveryTargetWasDropped(array $dbConfig): void
     {
         $app = $this->makeApp($dbConfig, ['app' => ['url' => self::URL]]);
+        $mailer = $this->collectMail($app);
         $this->collectMail($app);
         $this->turnOn($app, ['mail', 'inbox']);
         $this->spaceOutIds($app);
@@ -246,14 +247,15 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         $service->notifyComment($postId, $commentId);
 
-        self::assertCount(1, $logged);
-        self::assertStringContainsString('활성 회원이 아니어서', $logged[0]);
+        self::assertSame([], $logged);
 
         // 비회원이 쓴 글에 비회원이 단 댓글 — 받을 사람이 처음부터 없다.
         $guestPostId = $this->seedPost($app, null, '손님이 쓴 글');
         $service->notifyComment($guestPostId, $this->seedComment($app, $guestPostId, null, self::ACTOR, null));
 
-        self::assertCount(1, $logged, '받을 사람이 없던 평범한 경우는 적지 않는다');
+        self::assertSame([], $logged, '받을 사람이 없던 평범한 경우는 적지 않는다');
+        self::assertSame([], $this->inbox($app));
+        self::assertSame([], $mailer->messages);
     }
 
     /**
@@ -306,8 +308,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         self::assertSame([], $this->inbox($app));
         self::assertSame([], $mailer->messages);
-        self::assertCount(1, $logged);
-        self::assertStringContainsString('활성 회원이 아니어서', $logged[0]);
+        self::assertSame([], $logged);
     }
 
     /**
@@ -329,7 +330,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
 
         $app->notificationService()->notifyComment($postId, $commentId);
 
-        self::assertSame([], $this->inbox($app));
+        self::assertSame([[$writer, 'comment', $postId, $commentId]], $this->inbox($app));
         self::assertSame(['writer@example.com'], array_column($mailer->messages, 'to'));
     }
 
@@ -448,21 +449,21 @@ final class CommentNotificationRoutingTest extends WebTestCase
         $postId = $this->seedPost($app, $writer, '알림이 멈출 글');
         $commentId = $this->seedComment($app, $postId, null, self::ACTOR, null);
         // 카카오 승인이 풀려 Templates::fetch() 가 이 템플릿을 껐다.
-        $app->db()->update('alimtalk_templates', ['enabled' => 0], 'tpl_code = :code', ['code' => 'T1']);
+        $app->db()->update('alimtalk_templates', ['status' => 'S'], 'tpl_code = :code', ['code' => 'T1']);
 
         $logged = $this->captureErrorLog(function () use ($app, $postId, $commentId): void {
             $app->notificationService()->notifyComment($postId, $commentId);
         });
 
         self::assertSame([], $this->jobs($app), '보낼 수 없는 채널로 발송을 만들지는 않는다');
-        self::assertSame([], $this->inbox($app));
+        self::assertSame([[$writer, 'comment', $postId, $commentId]], $this->inbox($app));
         self::assertSame('', $logged, '메일이 남아 있으면 알림 전체가 중단된 상태가 아니다');
     }
 
     /** 이 알림으로 켤 채널. 관리자 화면이 저장하는 그 길로 저장한다. */
     private function turnOn(App $app, array $channels, array $extra = []): void
     {
-        $input = ['mail' => '0', 'alimtalk' => '0', 'sms' => '0', 'inbox' => '0'];
+        $input = ['delivery_choice' => '1', 'mail' => '1', 'phone' => (in_array('sms', $channels, true) || in_array('alimtalk', $channels, true)) ? '1' : '0'];
         foreach ($channels as $channel) {
             $input[$channel] = '1';
         }

@@ -31,6 +31,9 @@ final class OrderNotificationTest extends WebTestCase
 
     private function paidOrder(App $app, int $user): array
     {
+        foreach (['order_pending', 'order_paid', 'order_confirmed', 'order_shipped', 'order_completed'] as $event) {
+            $app->notifySettings()->save($event, ['delivery_choice' => '1']);
+        }
         $shop = $app->shop();
         $category = $shop->categories->save(['name' => '테스트', 'parent_id' => '', 'active' => '1',
             'list_columns' => '3', 'list_rows' => '5', 'image_width' => '200', 'image_height' => '0']);
@@ -62,24 +65,24 @@ final class OrderNotificationTest extends WebTestCase
         $mailer = new CollectingMailer(); $app->setMailer($mailer);
         $user = $this->member($app); $this->login($app);
         $order = $this->paidOrder($app, $user); $id = (int) $order['id'];
-        self::assertSame([], $this->rows($app));
+        self::assertSame(['order_pending', 'order_paid'], array_column($this->rows($app), 'kind'));
         foreach (['paid' => 'confirmed', 'confirmed' => 'shipped', 'shipped' => 'completed'] as $from => $to) {
             $app->shop()->orders->transition($id, $from, $to, 'admin', ['carrier' => 'CJ대한통운', 'tracking_number' => '12345678']);
             $this->reject(fn () => $app->shop()->orders->transition($id, $from, $to, 'admin', ['carrier' => 'CJ대한통운', 'tracking_number' => '12345678']));
         }
-        self::assertSame(['order_confirmed', 'order_shipped', 'order_completed'], array_column($this->rows($app), 'kind'));
+        self::assertSame(['order_pending', 'order_paid', 'order_confirmed', 'order_shipped', 'order_completed'], array_column($this->rows($app), 'kind'));
         self::assertSame([(string) $user], array_values(array_unique(array_column($this->rows($app), 'user_id'))));
-        self::assertSame(3, $app->notificationService()->unreadCount($app->guestAcl()));
+        self::assertSame(5, $app->notificationService()->unreadCount($app->guestAcl()));
         $body = $this->body($this->get($app, '/notifications'));
-        self::assertStringContainsString('알림 3개', $body);
+        self::assertStringContainsString('알림 5개', $body);
         foreach (['상품을 준비 중', '상품이 배송 중', '배송이 완료'] as $text) self::assertStringContainsString($text, $body);
-        self::assertSame(3, $app->notificationService()->unreadCount($app->guestAcl()), '목록 열기는 읽음 처리하지 않는다');
+        self::assertSame(5, $app->notificationService()->unreadCount($app->guestAcl()), '목록 열기는 읽음 처리하지 않는다');
         self::assertSame([], $mailer->messages, '주문 상태는 외부 메일을 보내지 않는다');
         $notification = $this->rows($app)[0];
         $opened = $this->get($app, '/notifications/' . $notification['id']);
         self::assertSame(303, $opened->getStatusCode());
         self::assertSame('/shop/order?number=' . rawurlencode($order['number']), $opened->getHeaderLine('Location'));
-        self::assertSame(2, $app->notificationService()->unreadCount($app->guestAcl()));
+        self::assertSame(4, $app->notificationService()->unreadCount($app->guestAcl()));
         self::assertSame(303, $this->post($app, '/notifications/read-all', ['csrf_token' => $_SESSION['csrf_token']])->getStatusCode());
         self::assertSame(0, $app->notificationService()->unreadCount($app->guestAcl()));
     }
@@ -96,14 +99,14 @@ final class OrderNotificationTest extends WebTestCase
             self::fail('rollback expected');
         } catch (\RuntimeException $e) { self::assertSame('isolated rollback', $e->getMessage()); }
         self::assertSame('paid', $app->shop()->orders->get($id)['status']);
-        self::assertSame([], $this->rows($app));
+        self::assertSame(['order_pending', 'order_paid'], array_column($this->rows($app), 'kind'));
         $app->shop()->orders->transition($id, 'paid', 'confirmed', 'admin');
         $csv = "주문번호,택배사,운송장번호\n{$order['number']},CJ대한통운,12345678\nmissing-order,CJ대한통운,12345679\n";
         $this->reject(fn () => $app->shop()->fulfillment->importAndShip($csv, 'admin'));
         self::assertSame('confirmed', $app->shop()->orders->get($id)['status']);
-        self::assertCount(1, $this->rows($app));
+        self::assertCount(3, $this->rows($app));
         self::assertSame(1, $app->shop()->fulfillment->importAndShip("주문번호,택배사,운송장번호\n{$order['number']},CJ대한통운,12345678\n", 'admin'));
-        self::assertSame(['order_confirmed', 'order_shipped'], array_column($this->rows($app), 'kind'));
+        self::assertSame(['order_pending', 'order_paid', 'order_confirmed', 'order_shipped'], array_column($this->rows($app), 'kind'));
     }
 
     #[DataProvider('connectionProvider')]
@@ -116,7 +119,7 @@ final class OrderNotificationTest extends WebTestCase
         self::assertSame(0, $app->notificationService()->unreadCount($app->guestAcl()));
         $repo = new NotificationRepository($app->db());
         $repo->recordOrderStatus((int) $order['id'], $other, 'shipped', $order['number']);
-        $forged = $this->rows($app)[1];
+        $forged = $this->rows($app)[3];
         self::assertSame(404, $this->get($app, '/notifications/' . $forged['id'])->getStatusCode());
         self::assertSame(1, $app->notificationService()->unreadCount($app->guestAcl()), '잘못된 대상은 읽음도 바꾸지 않는다');
         self::assertSame(404, $this->get($app, '/shop/order?number=' . rawurlencode($order['number']))->getStatusCode());
@@ -134,7 +137,7 @@ final class OrderNotificationTest extends WebTestCase
             self::assertSame(303, $response->getStatusCode());
             self::assertSame($to, $app->shop()->orders->get((int) $order['id'])['status']);
         }
-        self::assertSame(['order_confirmed', 'order_shipped', 'order_completed'], array_column($this->rows($app), 'kind'));
+        self::assertSame(['order_pending', 'order_paid', 'order_confirmed', 'order_shipped', 'order_completed'], array_column($this->rows($app), 'kind'));
     }
 
     #[DataProvider('connectionProvider')]
@@ -150,7 +153,7 @@ final class OrderNotificationTest extends WebTestCase
         self::assertSame(123, $row['post_id']); self::assertSame(456, $row['comment_id']); self::assertNull($row['order_id']); self::assertFalse($row['is_read']);
         $order = $this->paidOrder($app, $user); $app->shop()->orders->transition((int) $order['id'], 'paid', 'confirmed', 'admin');
         $this->login($app);
-        self::assertSame(2, $app->notificationService()->unreadCount($app->guestAcl()));
+        self::assertSame(4, $app->notificationService()->unreadCount($app->guestAcl()));
         $body = $this->body($this->get($app, '/notifications'));
         self::assertStringContainsString('내 글에 댓글을 달았습니다', $body); self::assertStringContainsString('상품을 준비 중', $body);
     }
@@ -161,7 +164,7 @@ final class OrderNotificationTest extends WebTestCase
         $app = $this->makeApp($config); $user = $this->member($app); $order = $this->paidOrder($app, $user);
         $app->db()->update('users', ['status' => 'blocked'], 'id = :id', ['id' => $user]);
         $app->shop()->orders->transition((int) $order['id'], 'paid', 'confirmed', 'admin');
-        self::assertSame([], $this->rows($app));
+        self::assertSame(['order_pending', 'order_paid'], array_column($this->rows($app), 'kind'));
         self::assertSame('confirmed', $app->shop()->orders->get((int) $order['id'])['status']);
     }
 
