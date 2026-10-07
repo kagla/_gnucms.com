@@ -1,6 +1,7 @@
 <?php
 // 목록 항목의 글쓴이·날짜·집계. 갤러리에서는 조회수를 날짜 바로 뒤에 붙인다.
 $inline_views = $inline_views ?? false;
+$compact_date = $compact_date ?? false;
 $compact_mobile_date = $compact_mobile_date ?? false;
 ?>
 <div class="post-meta">
@@ -9,11 +10,15 @@ $compact_mobile_date = $compact_mobile_date ?? false;
   </span>
   <span class="post-author" title="<?= $this->e($post['author_name']) ?>"><?= $this->e($this->truncate($post['author_name'], 8)) ?></span>
   <span aria-hidden="true">·</span>
-  <?php if ($compact_mobile_date): ?>
-    <?php $mobileDateFormat = $this->date($post['created_at'], 'Y-m-d') === $this->date(time(), 'Y-m-d') ? 'H:i' : 'm-d'; ?>
+  <?php if ($compact_date || $compact_mobile_date): ?>
+    <?php $compactDateFormat = $this->date($post['created_at'], 'Y-m-d') === $this->date(time(), 'Y-m-d') ? 'H:i' : 'm-d'; ?>
     <time datetime="<?= $this->e($post['created_at']) ?>" title="<?= $this->e($this->date($post['created_at'])) ?>">
-      <span class="feed-line-date-full"><?= $this->e($this->date($post['created_at'])) ?></span>
-      <span class="feed-line-date-mobile"><?= $this->e($this->date($post['created_at'], $mobileDateFormat)) ?></span>
+      <?php if ($compact_date): ?>
+        <?= $this->e($this->date($post['created_at'], $compactDateFormat)) ?>
+      <?php else: ?>
+        <span class="feed-line-date-full"><?= $this->e($this->date($post['created_at'])) ?></span>
+        <span class="feed-line-date-mobile"><?= $this->e($this->date($post['created_at'], $compactDateFormat)) ?></span>
+      <?php endif ?>
     </time>
   <?php else: ?>
     <time datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time>
