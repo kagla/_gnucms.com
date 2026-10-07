@@ -1,15 +1,16 @@
 name: Release
+run-name: GNUCMS v${{ inputs.version }} 릴리스
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      version:
+        description: '릴리스 버전 (v 없이 X.Y.Z 입력, 예: 0.8.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: release-main
@@ -18,9 +19,22 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
-      - name: Check out source
+      - name: Require main branch
+        run: |
+          if [ "${GITHUB_REF}" != refs/heads/main ]; then
+            echo '::error::Release는 main 브랜치에서 실행해야 합니다.'
+            exit 1
+          fi
+
+      - name: Check out release source
         uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -30,33 +44,51 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - name: Prepare release pull request or GitHub Release
-        id: release
-        uses: googleapis/release-please-action@v5
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-
-      - name: Check out released source
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ steps.release.outputs.sha }}
-
-      - name: Verify released version
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: test "$(cat version.txt)" = "${RELEASE_VERSION}"
+      - name: Prepare version, changelog and release commit
+        id: prepare
+        run: |
+          if [[ ! "${RELEASE_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::버전은 v 없이 X.Y.Z 형식으로 입력해야 합니다.'
+            exit 1
+          fi
+          RELEASE_TAG="v${RELEASE_VERSION}"
+          export RELEASE_TAG
+          release_state="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.tag_name == \"${RELEASE_TAG}\") | .draft")"
+          if [ "${release_state}" = false ]; then
+            echo '::error::이미 공개된 릴리스입니다. 기존 태그와 배포 파일을 덮어쓰지 않습니다.'
+            exit 1
+          fi
+          cp .github/scripts/prepare-release.php "${RUNNER_TEMP}/gnucms-prepare-release.php"
+          main_version="$(cat version.txt)"
+          if git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"; then
+            git merge-base --is-ancestor "${RELEASE_TAG}^{commit}" HEAD
+            git checkout --detach "${RELEASE_TAG}"
+            if [ "$(cat version.txt)" != "${RELEASE_VERSION}" ]; then
+              echo '::error::기존 태그와 version.txt의 버전이 일치하지 않습니다.'
+              exit 1
+            fi
+            echo 'reuse_tag=true' >> "${GITHUB_OUTPUT}"
+          else
+            if [ -n "${release_state}" ]; then
+              echo '::error::릴리스 초안의 태그가 없습니다. 기존 초안을 먼저 확인해 주세요.'
+              exit 1
+            fi
+            echo 'reuse_tag=false' >> "${GITHUB_OUTPUT}"
+          fi
+          php "${RUNNER_TEMP}/gnucms-prepare-release.php" "${RELEASE_VERSION}" "${RUNNER_TEMP}/gnucms-release-notes.md" "${main_version}"
+          if [ "$(git branch --show-current)" = main ]; then
+            git add version.txt CHANGELOG.md
+            if ! git diff --cached --quiet; then
+              git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "chore: release ${RELEASE_VERSION}"
+            fi
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' tag -a "${RELEASE_TAG}" -m "GNUCMS ${RELEASE_TAG}"
+          fi
+          echo "draft=${release_state:-false}" >> "${GITHUB_OUTPUT}"
 
       - name: Prepare production dependencies
-        if: ${{ steps.release.outputs.release_created == 'true' }}
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
 
       - name: Build deployment archive
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           package="gnucms-${RELEASE_VERSION}"
           mkdir -p "build/${package}"
@@ -78,10 +110,27 @@ jobs:
           unzip -tq "build/${package}.zip"
           (cd build && sha256sum "${package}.zip" > "${package}.zip.sha256")
 
+      - name: Push release commit and tag together
+        if: steps.prepare.outputs.reuse_tag != 'true'
+        run: git push --atomic origin HEAD:refs/heads/main "refs/tags/v${RELEASE_VERSION}"
+
+      - name: Create release draft
+        if: steps.prepare.outputs.draft != 'true'
+        run: |
+          gh release create "v${RELEASE_VERSION}" --verify-tag --draft \
+            --title "GNUCMS v${RELEASE_VERSION}" \
+            --notes-file "${RUNNER_TEMP}/gnucms-release-notes.md"
+
       - name: Attach deployment archive
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: gh release upload "${RELEASE_TAG}" "build/gnucms-${RELEASE_VERSION}.zip" "build/gnucms-${RELEASE_VERSION}.zip.sha256" --clobber
+        run: |
+          gh release upload "v${RELEASE_VERSION}" \
+            "build/gnucms-${RELEASE_VERSION}.zip" \
+            "build/gnucms-${RELEASE_VERSION}.zip.sha256" --clobber
+
+      - name: Publish release
+        run: |
+          gh release edit "v${RELEASE_VERSION}" --draft=false --latest \
+            --title "GNUCMS v${RELEASE_VERSION}" \
+            --notes-file "${RUNNER_TEMP}/gnucms-release-notes.md"
+          echo "### GNUCMS v${RELEASE_VERSION}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${RELEASE_VERSION}" >> "${GITHUB_STEP_SUMMARY}"

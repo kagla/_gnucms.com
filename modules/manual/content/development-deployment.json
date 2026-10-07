@@ -22,7 +22,17 @@
       "blocks": [
         {
           "type": "p",
-          "text": "제품 버전의 원본은 version.txt입니다. 직접 바꾸지 않고 Release Please가 릴리스 PR에서 갱신합니다. 정식 릴리스는 해당 vX.Y.Z 태그와 GitHub Release로 배포합니다. main 스냅샷에 임의 정식 태그를 붙이지 않습니다."
+          "text": "제품 버전의 원본은 version.txt입니다. 일반 작업에서 직접 올리지 않고 수동 Release 워크플로가 변경 내역과 함께 main에 기록합니다. 릴리스 PR은 사용하지 않습니다. 정식 태그는 vX.Y.Z, GitHub Release 제목은 GNUCMS vX.Y.Z, 완성 배포 파일은 gnucms-X.Y.Z.zip입니다. 제품 버전과 DB 구조 판은 별개입니다."
+        },
+        {
+          "type": "steps",
+          "items": [
+            "배포할 코드·문서와 CHANGELOG.md 맨 위의 ## [Unreleased]를 main에 반영합니다. 한국어 변경사항과 ### 업그레이드 안내를 작성합니다. 주의사항이 없으면 그렇게 명시합니다.",
+            "GitHub Actions → Release → Run workflow에서 main을 선택하고 v 없는 X.Y.Z 버전을 입력해 실행합니다. 버그 수정만 있으면 마지막 숫자만 1 올립니다. 일반 main push는 릴리스를 만들지 않습니다.",
+            "워크플로가 운영용 vendor·정적 자산·Linux/Windows KCP 모듈을 포함한 ZIP을 빌드하고 체크섬을 만듭니다. 빌드 성공 뒤 버전 커밋과 태그를 함께 올립니다.",
+            "ZIP과 체크섬을 첨부한 초안을 GNUCMS vX.Y.Z 제목과 한국어 변경 내역으로 공개합니다. ZIP을 별도로 만들거나 업로드할 필요가 없습니다.",
+            "중간 실패는 같은 버전으로 재실행합니다. 기존 태그가 있으면 해당 소스로 이어서 처리합니다. 이미 공개된 릴리스나 main의 제품 버전보다 낮은 버전은 덮어쓰지 않습니다."
+          ]
         },
         {
           "type": "p",
@@ -73,6 +83,7 @@
   "sources": [
     "AGENTS.md",
     ".github/workflows/release.yml",
-    "modules/manual/README.md"
+    "modules/manual/README.md",
+    "docs/release.md"
   ]
 }
