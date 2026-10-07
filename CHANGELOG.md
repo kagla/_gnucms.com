@@ -279,7 +279,7 @@
 
 * make core and shop MySQL only ([6c8c3da](https://github.com/kagla/gnucms/commit/6c8c3da6ecd79e054bcb4babd59b8fe74f0e6d4a))
 
-## [Unreleased]
+## 이전 개발 변경 기록
 
 ### 주요 변경
 
