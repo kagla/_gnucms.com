@@ -64,6 +64,9 @@ $__seo_type = trim($this->block('seo_type', 'website'));
 <link rel="stylesheet" href="<?= $this->asset('theme.css') ?>">
 <link rel="stylesheet" href="<?= $this->asset('datetime.css') ?>">
 <link rel="stylesheet" href="<?= $this->asset('modern.css') ?>">
+<link rel="stylesheet" href="<?= $this->asset('community.css') ?>">
+<?php if (trim($this->block('nav_section')) === 'modules/manual'): ?><link rel="stylesheet" href="<?= $this->asset('manual-blue.css') ?>"><?php endif ?>
+<?php if (trim($this->block('nav_section')) === 'shop'): ?><link rel="stylesheet" href="<?= $this->asset('shop-orange.css') ?>"><?php endif ?>
 </head>
 <body class="<?php $this->start('body_class') ?><?php $this->stop() ?>" data-section="<?php $this->start('nav_section') ?><?php $this->stop() ?>">
 <a class="skip-link btn btn-primary btn-sm" href="#main">본문 바로가기</a>
@@ -81,7 +84,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
           </a>
         </div>
 
-        <?php $this->insert('_primary_nav') ?>
+        <?php $this->insert('_primary_nav', ['nav_section' => trim($this->block('nav_section'))]) ?>
 
         <div class="navbar-end">
           <?php if ($current_user['is_guest']): ?>
@@ -177,8 +180,8 @@ $__seo_type = trim($this->block('seo_type', 'website'));
       <a href="<?= $this->url('boards.index') ?>"<?php if (trim($this->block('nav_section')) === 'home'): ?> class="dock-active" aria-current="page"<?php endif ?>>
         <?= $this->icon('home', 21) ?><span class="dock-label">홈</span>
       </a>
-      <a href="<?= $this->url('posts.index', ['key' => 'free']) ?>"<?php if (isset($board['board_key']) && $board['board_key'] === 'free'): ?> class="dock-active" aria-current="page"<?php endif ?>>
-        <?= $this->icon('board', 21) ?><span class="dock-label">게시판</span>
+      <a href="<?= $this->e($this->base . '/community') ?>"<?php if (in_array(trim($this->block('nav_section')), ['community', 'board', 'all'], true)): ?> class="dock-active" aria-current="page"<?php endif ?>>
+        <?= $this->icon('comment', 21) ?><span class="dock-label">커뮤니티</span>
       </a>
       <?php if ($shop_visible ?? false): ?><a href="<?= $this->url('shop.index') ?>"<?php if (trim($this->block('nav_section')) === 'shop'): ?> class="dock-active" aria-current="page"<?php endif ?>><?= $this->icon('gift', 21) ?><span class="dock-label">쇼핑몰</span></a><?php endif ?>
       <?php if ($current_user['is_guest']): ?>
@@ -223,6 +226,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
       <ul class="menu">
         <li class="menu-title">둘러보기</li>
         <li><a href="<?= $this->url('boards.index') ?>"><?= $this->icon('home', 18) ?> 홈</a></li>
+        <li><a href="<?= $this->e($this->base . '/community') ?>"><?= $this->icon('comment', 18) ?> 커뮤니티</a></li>
         <li><a href="<?= $this->url('boards.index') ?>#about"><?= $this->icon('info', 18) ?> 소개</a></li>
         <li><a href="<?= $this->url('boards.index') ?>#features"><?= $this->icon('sparkle', 18) ?> 기능</a></li>
         <li><a href="<?= $this->e($this->base . '/manual/install') ?>"><?= $this->icon('document', 18) ?> 설치</a></li>

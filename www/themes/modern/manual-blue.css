@@ -1,0 +1,42 @@
+/* 매뉴얼은 modern 메인의 글꼴·파란 포인트·얇은 테두리를 공유한다. */
+.manual-page .main-area{padding-top:28px}
+.manual-page .manual{--manual-accent:var(--cb-blue);--manual-line:var(--cb-line);--manual-muted:var(--cb-muted);margin:0 auto 40px;font-size:15px;line-height:1.85;color:var(--cb-ink)}
+.manual-page .manual-heading{align-items:center;gap:32px;padding:0 0 28px;margin-bottom:28px;border-bottom:1px solid var(--cb-line)}
+.manual-page .manual-eyebrow{display:inline-flex;align-items:center;gap:7px;letter-spacing:.035em;font-size:12px;font-weight:650}
+.manual-page .manual-heading h1{margin:15px 0 12px;font-size:clamp(28px,4vw,40px);font-weight:750;line-height:1.35;letter-spacing:-.055em}
+.manual-page .manual-heading p{font-size:14px;line-height:1.8;word-break:keep-all}
+.manual-page .manual-search label{font-size:12px;font-weight:600}
+.manual-page .manual-search input{background:var(--cb-paper);border-radius:8px;font-size:14px;min-height:44px}
+.manual-page .manual-search button{border-radius:8px;color:var(--cb-on-blue);font-size:13px;font-weight:650;background:var(--cb-blue)}
+.manual-page .manual-grid{grid-template-columns:240px minmax(0,1fr);gap:28px}
+.manual-page .manual-sidebar{top:100px;max-height:calc(100vh - 120px);padding:16px;background:var(--cb-surface);border:1px solid var(--cb-line);border-radius:12px}
+.manual-page .manual-navigation>summary{font-size:13px;padding:0 7px 12px;color:var(--cb-ink)}
+.manual-page .manual-nav-group summary{font-size:13px;font-weight:650}
+.manual-page .manual-nav-group a,.manual-page .manual-home-link{font-size:12px;border-radius:7px;padding:7px 10px}
+.manual-page .manual [aria-current="page"]{background:var(--cb-tint);color:var(--cb-blue)}
+.manual-page .manual-content h2{font-size:22px;font-weight:750;letter-spacing:-.04em}
+.manual-page .manual-start{background:var(--cb-surface);border-radius:12px;padding:24px;margin-bottom:28px}
+.manual-page .manual-start li>a{color:var(--cb-blue);font-size:14px;font-weight:650}
+.manual-page .manual-start li>p{font-size:13px}
+.manual-page .manual-topic{margin:28px 0}
+.manual-page .manual-topic>p{font-size:14px}
+.manual-page .manual-cards{gap:14px;margin-top:18px}
+.manual-page .manual-card{padding:21px;border-radius:12px;background:var(--cb-paper)}
+.manual-page .manual-card strong{font-size:15px;font-weight:650}
+.manual-page .manual-card span{font-size:13px;line-height:1.85}
+.manual-page .manual-card:hover{background:var(--cb-surface);border-color:var(--cb-blue)}
+.manual-page .manual-on-this-page{background:var(--cb-surface);border-radius:12px;padding:20px 24px}
+.manual-page .manual-on-this-page a{font-size:13px}
+.manual-page .manual-meta{font-size:12px}
+.manual-page .manual-meta button,.manual-page .manual-code button{border-radius:7px;background:var(--cb-paper);color:var(--cb-ink)}
+.manual-page .manual-section{scroll-margin-top:110px}
+.manual-page .manual-note{border-left-color:var(--cb-blue);background:var(--cb-tint);border-radius:0 9px 9px 0;font-size:14px}
+.manual-page .manual-code{border-radius:10px}
+.manual-page .manual-code>div,.manual-page .manual-table th{background:var(--cb-surface)}
+.manual-page .manual-table{font-size:13px}
+.manual-page .manual-prev-next a{color:var(--cb-blue);font-size:14px}
+.manual-page .manual-search-results{border-radius:12px;background:var(--cb-paper)}
+@media(max-width:1050px){.manual-page .manual-sidebar{top:145px;max-height:calc(100vh - 165px)}.manual-page .manual-section{scroll-margin-top:150px}}
+@media(max-width:960px){.manual-page .manual-grid{grid-template-columns:1fr;gap:22px}.manual-page .manual-sidebar{position:static;max-height:none}.manual-page .manual-heading{flex-direction:column;align-items:stretch;gap:22px}.manual-page .manual-search{flex:auto;min-width:0;max-width:none}}
+@media(max-width:640px){.manual-page .main-area{padding-top:24px}.manual-page .manual-heading{padding-bottom:22px}.manual-page .manual-cards{grid-template-columns:1fr}.manual-page .manual-start,.manual-page .manual-card{padding:20px}.manual-page .manual-content h2{font-size:20px}.manual-page .manual{font-size:14px}.manual-page .manual-search input{font-size:16px}}
+@media print{.manual-page .manual-sidebar{display:none}.manual-page .manual-grid{display:block}.manual-page .manual-card,.manual-page .manual-start,.manual-page .manual-note{background:none}.manual-page .manual{color:#000}}

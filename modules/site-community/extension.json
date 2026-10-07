@@ -1,0 +1,14 @@
+{
+  "id": "site-community",
+  "type": "module",
+  "name": "공식 사이트 커뮤니티",
+  "description": "modern 테마의 최신글·갤러리 커뮤니티 첫 화면에 권한 검사된 게시판 자료를 제공합니다.",
+  "version": "1.0.0",
+  "api": 1,
+  "route_prefix": "/community",
+  "aliases": false,
+  "entry_path": "/",
+  "public_path": null,
+  "requires": [],
+  "optional": []
+}

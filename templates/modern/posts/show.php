@@ -24,6 +24,7 @@ $below_view_list = $below_view_list ?? null;
 <?php $this->start('nav_section') ?>board<?php $this->stop() ?>
 <?php $this->start('extra_tabs') ?><a class="tab tab-active" href="<?= $this->url('posts.index', ['key' => $board['board_key']]) ?>" aria-current="page"><?= $this->e($board['name']) ?></a><?php $this->stop() ?>
 <?php $this->start('body') ?>
+<?php $this->insert('community/_nav', ['nav_section' => 'board']) ?>
 <div class="read-progress" aria-hidden="true"></div>
 
 <div class="breadcrumbs">

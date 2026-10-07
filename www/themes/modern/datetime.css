@@ -1,0 +1,13 @@
+/* 날짜·시간을 생략하지 않고 날짜와 시간 사이에서 줄바꿈한다. */
+.posts-table .post-col-date{white-space:normal;font-variant-numeric:tabular-nums}
+.posts-table .post-col-date time{white-space:normal;word-break:normal;overflow-wrap:normal}
+@media(min-width:641px){.posts-table .post-col-date{width:7.5rem}}
+.feed-line-date,.notice-date,.notice-time,.author-comment-date{max-width:7.5rem;white-space:normal;word-break:normal;overflow-wrap:normal;line-height:1.5;font-variant-numeric:tabular-nums}
+.feed-line-date,.notice-date{text-align:right}
+.notice-time{min-width:0}
+/* 메인 최신글 목록은 모바일에서 오늘은 시·분, 다른 날은 월·일을 표시한다. */
+.feed-line-date-mobile{display:none}
+@media(max-width:640px){
+  .feed-line-date-full{display:none}
+  .feed-line-date-mobile{display:inline;white-space:nowrap}
+}

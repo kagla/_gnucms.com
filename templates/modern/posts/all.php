@@ -24,6 +24,7 @@ $allUrl = function ($q, $page) use ($list): string {
 </form>
 <?php $this->stop() ?>
 <?php $this->start('body') ?>
+<?php $this->insert('community/_nav', ['nav_section' => 'all']) ?>
 <div class="page-head">
   <div>
     <p class="board-eyebrow">GNUCMS COMMUNITY</p>

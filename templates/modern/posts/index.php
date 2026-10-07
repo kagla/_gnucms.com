@@ -49,6 +49,7 @@ $commentUrl = function (int $page) use ($board, $query, $view_param): string {
 <?php $this->stop() ?>
 
 <?php $this->start('body') ?>
+<?php $this->insert('community/_nav', ['nav_section' => 'board']) ?>
 <div class="breadcrumbs">
   <ul>
     <li><a href="<?= $this->url('boards.index') ?>">홈</a></li>

@@ -1,0 +1,2 @@
+<?php if (($notice ?? '') !== ''): ?><div class="yc-feedback yc-feedback-success" role="status"><?= $this->icon('check-circle', 20) ?><p><?= $this->e($notice) ?></p></div><?php endif ?>
+<?php if (($errors ?? []) !== []): ?><div class="yc-feedback yc-feedback-error" role="alert" tabindex="-1" data-yc-errors><div><strong>다시 확인해 주세요</strong><ul><?php foreach ($errors as $error): ?><li><?= $this->e($error) ?></li><?php endforeach ?></ul></div></div><?php endif ?>

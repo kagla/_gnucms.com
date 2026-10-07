@@ -1,0 +1,23 @@
+/* 공식 사이트 쇼핑몰은 오렌지 포인트를 사용한다. 관리자 화면에는 적용하지 않는다. */
+body[data-section="shop"]{
+  --cb-blue:light-dark(#c65316,#ffb37f);--cb-on-blue:light-dark(#ffffff,#321909);
+  --cb-tint:light-dark(#fff0e3,#38281e);--cb-surface:light-dark(#fff9f3,#211c18);
+  --premium-accent:var(--cb-blue);--premium-accent-strong:var(--cb-blue);--premium-accent-soft:var(--cb-tint);--premium-accent-text:var(--cb-on-blue);
+  --color-primary:var(--cb-blue);--color-primary-content:var(--cb-on-blue);--color-secondary:var(--cb-blue);
+  --brand-vivid:var(--cb-blue);--brand-deep:var(--cb-blue);--brand-wash:var(--cb-tint);
+}
+body[data-section="shop"] .yc-shop,
+[data-theme="dark"] body[data-section="shop"] .yc-shop,
+:root:not([data-theme="light"]) body[data-section="shop"] .yc-shop{
+  --yc-accent:var(--cb-blue);--yc-button:#c65316;--yc-tint:var(--cb-tint);--yc-soft:var(--cb-surface);
+  --yc-ink:var(--cb-ink);--yc-muted:var(--cb-muted);--yc-line:var(--cb-line);--yc-paper:var(--cb-paper);
+}
+body[data-section="shop"] .yc-button-primary:hover{background:#a94210;border-color:#a94210}
+body[data-section="shop"] .yc-header{border-color:var(--cb-line);background:var(--cb-paper)}
+body[data-section="shop"] .yc-promo-tile{background:var(--cb-tint);border:1px solid var(--cb-line);color:var(--cb-ink)}
+body[data-section="shop"] .yc-promo-sale{background:var(--cb-surface);color:var(--cb-ink)}
+body[data-section="shop"] .yc-promo-tile h2{color:var(--cb-ink)}
+body[data-section="shop"] .yc-category-icon{color:var(--cb-blue);background:var(--cb-tint)}
+body[data-section="shop"] .yc-panel,body[data-section="shop"] .yc-product{border-radius:12px}
+body[data-section="shop"] .yc-product-price,body[data-section="shop"] .yc-price{color:var(--cb-blue)}
+body[data-section="shop"] .yc-nav a[aria-current="page"]{color:var(--cb-blue)}

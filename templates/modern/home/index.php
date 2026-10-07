@@ -49,6 +49,7 @@ $releaseVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/
             <a class="cb-install-link cursor-interaction" href="<?= $this->e($this->base . '/manual/install') ?>">설치 전 확인할 사항<?= $this->icon('arrow-right', 18) ?></a>
           </aside>
         </section>
+        <?php $this->insert('community/_content', ['boards' => $boards, 'on_home' => true]) ?>
         <section class="cb-wrap cb-section" id="features">
           <div class="cb-section-head"><h2>사이트 운영에 필요한 기본 기능</h2><p>게시판부터 주문 관리까지, 하나의 관리자 화면에서.</p></div>
           <div class="cb-feature-grid">
