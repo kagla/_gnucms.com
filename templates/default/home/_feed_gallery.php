@@ -6,7 +6,7 @@
         <?php $this->insert('posts/_thumb', ['post' => $post, 'board_badge' => false]) ?>
         <div class="card-body">
           <h3 class="card-title"><?= $this->e($post['title']) ?> <?php $this->insert('posts/_count', ['post' => $post]) ?></h3>
-          <?php $this->insert('posts/_meta', ['post' => $post]) ?>
+          <?php $this->insert('posts/_meta', ['post' => $post, 'compact_mobile_date' => true]) ?>
         </div>
       </a>
     </div>

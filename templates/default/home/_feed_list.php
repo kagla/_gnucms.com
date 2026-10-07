@@ -1,13 +1,18 @@
 <?php // 목록형: 제목과 날짜만. 가장 조밀하다. 공지·자료 게시판에 맞는다. ?>
+<?php $feedToday = $this->date(time(), 'Y-m-d'); ?>
 <ul class="list card feed-lines">
   <?php foreach ($board['latest_posts'] as $post): ?>
+    <?php $mobileDateFormat = $this->date($post['created_at'], 'Y-m-d') === $feedToday ? 'H:i' : 'm-d'; ?>
     <li class="list-row">
       <?php if ($post['is_notice']): ?><span class="badge badge-primary badge-soft badge-sm">공지</span>
       <?php elseif ($post['category']): ?><span class="badge badge-ghost badge-sm"><?= $this->e($post['category']) ?></span><?php endif ?>
       <a class="feed-line-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>" title="<?= $this->e($post['title']) ?>"><?= $this->e($post['title']) ?></a>
       <?php $this->insert('posts/_count', ['post' => $post]) ?>
       <?php if ($post['is_secret']): ?><span class="feed-line-lock" title="비밀글" aria-label="비밀글"><?= $this->icon('lock', 12) ?></span><?php endif ?>
-      <time class="feed-line-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time>
+      <time class="feed-line-date" datetime="<?= $this->e($post['created_at']) ?>" title="<?= $this->e($this->date($post['created_at'])) ?>">
+        <span class="feed-line-date-full"><?= $this->e($this->date($post['created_at'])) ?></span>
+        <span class="feed-line-date-mobile"><?= $this->e($this->date($post['created_at'], $mobileDateFormat)) ?></span>
+      </time>
     </li>
   <?php endforeach ?>
 </ul>
