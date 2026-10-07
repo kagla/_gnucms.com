@@ -54,8 +54,16 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
           <div class="cb-section-head"><h2>사이트 운영에 필요한 기본 기능</h2><p>게시판부터 주문 관리까지, 하나의 관리자 화면에서.</p></div>
           <div class="cb-feature-grid">
             <article class="cb-feature"><div class="cb-feature-heading"><span class="cb-feature-icon"><?= $this->icon('panels-top-left', 18) ?></span><h3>게시판과 콘텐츠</h3></div><p>목록·갤러리·뉴스·매거진 형태를 고르고,<br>글과 댓글, 첨부파일, 공개 권한을 관리합니다.</p><div class="cb-feature-note"><?= $this->icon('images', 18) ?>콘텐츠에 맞는 네 가지 목록</div></article>
-            <article class="cb-feature"><div class="cb-feature-heading"><span class="cb-feature-icon"><?= $this->icon('shopping-bag', 18) ?></span><h3>쇼핑몰과 결제</h3></div><p>상품을 올리고 주문과 재고를 관리합니다.<br>신용카드 결제와 배송, 환불까지 연결합니다.</p><div class="cb-feature-note"><?= $this->icon('credit-card', 18) ?>상품 등록부터 주문 처리까지</div></article>
-            <article class="cb-feature"><div class="cb-feature-heading"><span class="cb-feature-icon"><?= $this->icon('users-round', 18) ?></span><h3>회원과 알림</h3></div><p>회원가입과 소셜 로그인을 제공합니다.<br>사이트 알림, 이메일, 알림톡·문자를 설정합니다.</p><div class="cb-feature-note"><?= $this->icon('bell', 18) ?>가입과 운영 소식을 필요한 채널로</div></article>
+            <article class="cb-feature">
+              <div class="cb-feature-heading"><span class="cb-feature-icon"><?= $this->icon('shopping-bag', 18) ?></span><h3>쇼핑몰과 결제</h3></div>
+              <p>상품과 주문, 재고·배송·환불을 관리합니다.<br>KG이니시스, NHN KCP, 토스페이먼츠, 나이스페이의 신용카드 결제를 지원합니다.</p>
+              <a class="cb-feature-note cb-feature-service-link" href="https://sir.kr/services" target="_blank" rel="noopener"><?= $this->icon('credit-card', 18) ?><span>SIR 운영서비스</span><?= $this->icon('arrow-up-right', 16) ?></a>
+            </article>
+            <article class="cb-feature">
+              <div class="cb-feature-heading"><span class="cb-feature-icon"><?= $this->icon('users-round', 18) ?></span><h3>회원과 알림</h3></div>
+              <p>회원가입과 소셜 로그인을 제공합니다.<br>알리고 서비스를 통해 카카오 알림톡과 문자(SMS·LMS) 발송을 지원합니다.</p>
+              <a class="cb-feature-note cb-feature-service-link" href="https://smartsms.aligo.in/" target="_blank" rel="noopener"><?= $this->icon('bell', 18) ?><span>알리고 알림톡·문자 서비스</span><?= $this->icon('arrow-up-right', 16) ?></a>
+            </article>
           </div>
         </section>
         <section class="cb-wrap cb-docs" aria-label="공개 매뉴얼 안내">

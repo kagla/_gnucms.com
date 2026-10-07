@@ -60,6 +60,9 @@
   .cb-feature p {font-size:12px;color:var(--cb-muted);line-height:1.9;word-break:keep-all}
   .cb-feature-note {margin-top:16px;border-top:1px solid var(--cb-line);padding-top:11px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--cb-muted)}
   .cb-feature-note svg {width:14px;height:14px}
+  .cb-page .cb-feature-service-link {color:var(--cb-blue);font-size:12px;text-decoration:none}
+  .cb-feature-service-link span {flex:1;min-width:0}
+  .cb-feature-service-link:hover span {text-decoration:underline;text-underline-offset:3px}
   .cb-docs {background:var(--cb-surface);border:1px solid var(--cb-line);border-radius:var(--cb-radius);padding:26px 28px;margin-bottom:34px}
   .cb-docs-head {display:flex;align-items:center;gap:13px}
   .cb-doc-icon {display:grid;place-items:center;width:40px;height:40px;background:var(--cb-paper);border:1px solid var(--cb-line);border-radius:9px;color:var(--cb-blue);flex:none}
@@ -103,7 +106,7 @@
     .cb-action {padding-inline:12px;font-size:12px}
   }
   @media(pointer:coarse) {
-    .cb-nav a,.cb-login,.cb-doc-link,.cb-install-link,.cb-footer a {min-height:44px}
+    .cb-nav a,.cb-login,.cb-doc-link,.cb-install-link,.cb-footer a,.cb-feature-service-link {min-height:44px}
   }
 
 /* 기존 게시판·회원 화면도 선택한 클린 블루 팔레트를 사용한다. */
