@@ -1,5 +1,5 @@
 <div class="cb-gallery-grid">
-  <?php foreach (array_slice($board['latest_posts'], 0, $on_home ? 4 : 8) as $post): ?>
+  <?php foreach (array_slice($board['latest_posts'], 0, $on_home ? 3 : 8) as $post): ?>
     <article class="cb-gallery-card">
       <a class="cb-gallery-link" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>">
         <?php $this->insert('posts/_thumb', ['post' => $post, 'board' => $board, 'board_badge' => false]) ?>

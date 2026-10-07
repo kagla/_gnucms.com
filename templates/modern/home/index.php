@@ -21,13 +21,13 @@
 <?php $this->start('nav_section') ?>home<?php $this->stop() ?>
 <?php $this->start('body_class') ?>modern-home<?php $this->stop() ?>
 <?php
-$releaseVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/version.txt'));
+$sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/version.txt'));
 ?>
 <?php $this->start('body') ?>
       <div class="cb-page cb-body">
         <section class="cb-wrap cb-hero" id="about">
           <div>
-            <div class="cb-kicker"><?= $this->icon('code-xml', 18) ?>GNUCMS · OPEN SOURCE CMS</div>
+            <div class="cb-kicker"><?= $this->icon('code-xml', 18) ?>GNUCMS · OPEN SOURCE CMS<span class="cb-source-version">소스코드 <?= $this->e($sourceVersion) ?></span></div>
             <h1 class="cb-headline">만드는 일은 가볍게.<br><span>운영은 더 편하게.</span></h1>
             <p class="cb-intro">게시판, 회원, 쇼핑몰과 결제까지.<br>PHP 호스팅에 설치해 직접 운영하는 오픈소스 CMS.</p>
             <div class="cb-actions">
@@ -37,7 +37,7 @@ $releaseVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/
             <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2+</span><span><?= $this->icon('database', 18) ?>MySQL · MariaDB</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
           </div>
           <aside id="install" class="cb-install" aria-label="배포본과 설치 안내">
-            <div class="cb-install-top"><span class="cb-package"><?= $this->icon('package', 18) ?></span><div><strong>GNUCMS 다운로드</strong><small>최신 정식 배포본</small></div><a class="cb-version" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기"><span data-github-release-version><?= $this->e($releaseVersion) ?></span></a></div>
+            <div class="cb-install-top"><span class="cb-package"><?= $this->icon('package', 18) ?></span><div><strong>GNUCMS 다운로드</strong><small>최신 정식 배포본</small></div><a class="cb-version" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기"><span data-github-release-version><?= $this->e($sourceVersion) ?></span></a></div>
             <div class="cb-install-content">
               <h2>내 호스팅에서 시작하기</h2><p class="cb-install-copy">배포본을 올리고 브라우저에서 설치합니다.</p>
               <ol class="cb-steps">
