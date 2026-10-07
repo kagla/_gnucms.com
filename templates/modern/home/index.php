@@ -27,11 +27,11 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
       <div class="cb-page cb-body">
         <section class="cb-wrap cb-hero" id="about">
           <div>
-            <div class="cb-kicker"><?= $this->icon('code-xml', 18) ?>GNUCMS · OPEN SOURCE CMS<span class="cb-source-version">소스코드 <?= $this->e($sourceVersion) ?></span></div>
+            <div class="cb-kicker"><?= $this->icon('code-xml', 18) ?>GNUCMS · OPEN SOURCE CMS</div>
             <h1 class="cb-headline">만드는 일은 가볍게.<br><span>운영은 더 편하게.</span></h1>
             <p class="cb-intro">게시판, 회원, 쇼핑몰과 결제까지.<br>PHP 호스팅에 설치해 직접 운영하는 오픈소스 CMS.</p>
             <div class="cb-actions">
-              <a class="cb-action cb-primary cursor-interaction" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener"><?= $this->icon('download', 18) ?>GNUCMS 다운로드</a>
+              <a class="cb-action cb-primary cursor-interaction" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener"><?= $this->icon('download', 18) ?><span>GNUCMS <span data-github-download-version><?= $this->e($sourceVersion) ?></span> 다운로드</span></a>
               <a class="cb-action cursor-interaction" href="<?= $this->e($this->base . '/manual') ?>"><?= $this->icon('book-open', 18) ?>매뉴얼 보기</a>
             </div>
             <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2+</span><span><?= $this->icon('database', 18) ?>MySQL · MariaDB</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
@@ -73,6 +73,7 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
   var badge = document.querySelector('[data-github-release]');
   if (!badge) { return; }
   var version = badge.querySelector('[data-github-release-version]');
+  var downloadVersion = document.querySelector('[data-github-download-version]');
   var cacheKey = 'gnucms-github-latest-release';
   var cacheMaxAge = 21600000;
   var hasVersion = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version.textContent.trim());
@@ -80,6 +81,7 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
   function show(tag) {
     if (typeof tag !== 'string' || !/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) { return false; }
     version.textContent = tag;
+    if (downloadVersion) { downloadVersion.textContent = tag; }
     hasVersion = true;
     badge.classList.add('is-loaded');
     badge.setAttribute('aria-label', 'GitHub 최신 릴리스 ' + tag + ' 보기');
