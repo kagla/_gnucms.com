@@ -68,50 +68,8 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
         </section>
       </div>
 
-<script>
-(function () {
-  var badge = document.querySelector('[data-github-release]');
-  if (!badge) { return; }
-  var version = badge.querySelector('[data-github-release-version]');
-  var downloadVersion = document.querySelector('[data-github-download-version]');
-  var cacheKey = 'gnucms-github-latest-release';
-  var cacheMaxAge = 21600000;
-  var hasVersion = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version.textContent.trim());
 
-  function show(tag) {
-    if (typeof tag !== 'string' || !/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) { return false; }
-    version.textContent = tag;
-    if (downloadVersion) { downloadVersion.textContent = tag; }
-    hasVersion = true;
-    badge.classList.add('is-loaded');
-    badge.setAttribute('aria-label', 'GitHub 최신 릴리스 ' + tag + ' 보기');
-    return true;
-  }
-
-  try {
-    var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-    if (cached && show(cached.tag) && Date.now() - cached.checkedAt < cacheMaxAge) { return; }
-  } catch (e) {}
-
-  if (typeof window.fetch !== 'function') {
-    if (!hasVersion) { version.textContent = '릴리스 보기'; }
-    return;
-  }
-  fetch('https://api.github.com/repos/kagla/gnucms/releases/latest', {
-    headers: {'Accept': 'application/vnd.github+json'}
-  }).then(function (response) {
-    if (!response.ok) { throw new Error('GitHub release request failed'); }
-    return response.json();
-  }).then(function (release) {
-    if (!show(release.tag_name)) { throw new Error('Invalid GitHub release tag'); }
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify({tag: release.tag_name, checkedAt: Date.now()}));
-    } catch (e) {}
-  }).catch(function () {
-    if (!hasVersion) { version.textContent = '릴리스 보기'; }
-  });
-})();
-</script>
 
 
 <?php $this->stop() ?>
+<?php $this->start('scripts') ?><script src="<?= $this->asset('release-version.js') ?>" defer></script><?php $this->stop() ?>
