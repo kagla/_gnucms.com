@@ -94,7 +94,12 @@ final class NotificationService
     {
         $comment = $this->comments->find($commentId);
         $post = $this->posts->find($postId);
-        if ($comment === null || $post === null) return;
+        if ($comment === null || $post === null || (int) $comment['post_id'] !== $postId
+            || $comment['deleted_at'] !== null || $post['deleted_at'] !== null) return;
+        $postExcerpt = (bool) $post['is_secret'] ? '비밀글 내용은 사이트에서 확인해 주세요.'
+            : self::contentExcerpt((string) $post['content']);
+        $commentExcerpt = (bool) $post['is_secret'] || (bool) $comment['is_secret']
+            ? '비밀 내용은 사이트에서 확인해 주세요.' : self::contentExcerpt((string) $comment['content']);
         foreach ($this->targetsFor($post, $comment) as $userId => $kind) {
             $user = $this->users->findById((int) $userId);
             if ($user === null || $user['status'] !== 'active') continue;
@@ -104,10 +109,30 @@ final class NotificationService
                 '사이트명' => (string) $this->cms->settings()['site_name'],
                 '이름' => (string) $user['display_name'], '글제목' => (string) $post['title'],
                 '작성자' => (string) $comment['author_name'],
+                '글내용' => $postExcerpt, '댓글내용' => $commentExcerpt,
                 '링크' => $this->appUrl . '/posts/' . $postId . '#comment-' . $commentId,
             ];
             $this->notifications->afterCommit(fn () => $this->sendExternal('comment_new', $user, $vars));
         }
+    }
+
+    /** HTML·엔티티를 정리한 일반 텍스트. 문단을 유지하고 말줄임표를 포함해 최대 200자다. */
+    private static function contentExcerpt(string $html): string
+    {
+        // 예전 등록 도구에서 태그까지 엔티티로 저장한 본문도 미리보기에서 정리한다.
+        $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $html = (string) preg_replace('#<(script|style)\b[^>]*>.*?</\1\s*>#is', '', $html);
+        $html = (string) preg_replace('#<br\b[^>]*>|</(?:p|div|h[1-6]|li|tr|blockquote|pre)\s*>#i', "\n", $html);
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = str_replace(["\r\n", "\r", "\u{00A0}"], ["\n", "\n", ' '], $text);
+        $text = (string) preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
+        $text = (string) preg_replace('/[^\S\n]+/u', ' ', $text);
+        $text = (string) preg_replace('/ *\n */u', "\n", $text);
+        $text = trim((string) preg_replace('/\n{3,}/u', "\n\n", $text));
+        if ($text === '') {
+            return stripos($html, '<img') !== false ? '사진이 포함된 내용입니다.' : '텍스트 내용이 없습니다.';
+        }
+        return mb_strlen($text, 'UTF-8') > 200 ? rtrim(mb_substr($text, 0, 199, 'UTF-8')) . '…' : $text;
     }
 
     public function recordAccountInbox(string $userId, string $kind, string $siteName): void

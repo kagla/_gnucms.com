@@ -41,6 +41,10 @@ use GnuCms\Error\DomainError;
  */
 final class MailBodies
 {
+    /** 예전 기본 문구를 저장한 사이트도 새 본문 미리보기를 사용한다. */
+    public const LEGACY_COMMENT_BODY = '#{이름}님, #{작성자}님이 「#{글제목}」 글에 댓글을 남겼습니다.'
+        . "\n\n#{링크}";
+
     /** 기존 문구에 #{변수}를 채워 편집 화면의 기본 템플릿을 만든다. */
     public static function defaults(string $event): array
     {
@@ -161,6 +165,8 @@ final class MailBodies
             'comment_new' => static fn (array $v): array => [
                 'subject' => '[' . $v['사이트명'] . '] 새 댓글이 달렸습니다',
                 'body' => $v['이름'] . "님, {$v['작성자']}님이 「{$v['글제목']}」 글에 댓글을 남겼습니다.\n\n"
+                    . ($v['글내용'] !== '' ? "글 내용:\n{$v['글내용']}\n\n" : '')
+                    . ($v['댓글내용'] !== '' ? "댓글 내용:\n{$v['댓글내용']}\n\n" : '')
                     . "{$v['링크']}",
             ],
         ];

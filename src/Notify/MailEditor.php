@@ -34,6 +34,10 @@ final class MailEditor
         $template = [];
         foreach (['subject', 'body'] as $field) {
             $value = $stored[$event . '.mail_' . $field] ?? '';
+            if ($event === 'comment_new' && $field === 'body' && is_string($value)
+                && trim(str_replace(["\r\n", "\r"], "\n", $value)) === MailBodies::LEGACY_COMMENT_BODY) {
+                $value = '';
+            }
             $template[$field] = is_string($value) && $value !== '' ? $value : $default[$field];
         }
         self::validate($event, $template);
