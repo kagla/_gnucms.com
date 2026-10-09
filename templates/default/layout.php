@@ -12,10 +12,14 @@
 <?php $this->start('seo_meta') ?><?php $this->stop() ?>
 <?php $this->start('feed_links') ?><link rel="alternate" type="application/rss+xml" title="<?= $this->e($site['site_name']) ?> RSS" href="<?= $this->e($site_url) ?>/rss.xml"><?php $this->stop() ?>
 <?php $this->start('external_service_head') ?>
+<?php if (($site['privacy_mode'] ?? 'off') !== 'off'): ?>
+<?php $this->insert('_privacy_head') ?>
+<?php else: ?>
 <?php foreach (['site_verification_html', 'analytics_html', 'adsense_html'] as $headSetting): ?>
 <?php if (($site[$headSetting] ?? '') !== ''): ?><?= (string) $site[$headSetting] ?>
 <?php endif ?>
 <?php endforeach ?>
+<?php endif ?>
 <?php $this->stop() ?>
 <script>
 (function(){
@@ -194,6 +198,7 @@
           <?php foreach ($legal_pages as $doc): ?>
             <a class="link link-hover" href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a>
           <?php endforeach ?>
+          <?php $this->insert('_privacy_links') ?>
         </nav>
         <p class="footer-note">
           <?= $this->e($site['site_name']) ?> 은 회원이 직접 올린 글과 사진으로 채워집니다.

@@ -33,6 +33,10 @@ modules/site-community를 관리자 확장 관리에서 켜면 /community가 열
 
 upstream 반영
 -------------
+동기화 기준은 upstream/main의 24d9da7 (GNUCMS 0.9.0)이다.
+광고·분석 동의 관리 head·하단 조각은 default 템플릿 fallback으로 사용하고,
+privacy.js는 정적 자산 fallback을 사용한다. 공개 레이아웃과 하단 메뉴에 동의 설정을 연결하며
+관리자 화면은 기존 external_service_head 차단을 따른다.
 코어 컨트롤러와 templates/default, modules/manual의 원본은 이번 화면 작업에서 수정하지 않는다.
 전용 템플릿·CSS·JS를 modern에 보관했으므로 기본 테마의 화면 변경이 자동으로 덮어쓰지 않는다.
 업데이트 때 templates/modern, www/themes/modern, modules/site-community와 활성 테마 설정을 보존한다.

@@ -174,3 +174,7 @@ body[data-section="board"] .post-card,body[data-section="all"] .post-card{box-sh
   .site-primary-nav{gap:6px}
   .site-primary-nav a .icon{width:14px;height:14px}
 }
+
+.cb-footer-links .privacy-preferences-link{padding:0;border:0;background:none;color:var(--cb-muted);font:inherit;cursor:pointer;text-decoration:none}
+.cb-footer-links .privacy-preferences-link:hover{color:var(--cb-blue)}
+@media(max-width:640px){.cb-footer-links .privacy-preferences-link{min-height:44px}}

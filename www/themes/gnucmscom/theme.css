@@ -3131,3 +3131,7 @@ body:not(.admin-page) .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent
 .notify-mail-preview h3{overflow-wrap:anywhere}
 .notify-event[hidden],.notify-sms-preview[hidden],.notify-mail-preview[hidden]{display:none}
 @media(max-width:600px){.notify-sample-fields{grid-template-columns:1fr}.notify-trigger dl{grid-template-columns:1fr;gap:.25rem}.notify-trigger dd{margin-bottom:.5rem}}
+
+.site-footer .footer-nav .privacy-preferences-link{padding:0;border:0;background:none;color:var(--product-muted,var(--bc-mid));font:inherit;font-size:13.5px;font-weight:500;text-align:left;cursor:pointer}
+.site-footer .footer-nav .privacy-preferences-link:hover{color:var(--product-text,var(--color-base-content))}
+@media(max-width:640px){.site-footer .footer-nav .privacy-preferences-link{font-size:14px;min-height:44px}}

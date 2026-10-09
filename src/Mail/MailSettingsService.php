@@ -17,6 +17,7 @@ final class MailSettingsService
     public const PRESETS = [
         'gmail' => ['host' => 'smtp.gmail.com', 'port' => 465, 'encryption' => 'ssl'],
         'naver' => ['host' => 'smtp.naver.com', 'port' => 587, 'encryption' => 'tls'],
+        'kakao' => ['host' => 'smtp.kakao.com', 'port' => 465, 'encryption' => 'ssl'],
         'daum' => ['host' => 'smtp.daum.net', 'port' => 465, 'encryption' => 'ssl'],
     ];
 
@@ -61,7 +62,7 @@ final class MailSettingsService
             ? $v->inList('mode', self::MODES, self::MODE_NATIVE)
             : ($v->bool('enabled', false) ? self::MODE_SMTP : self::MODE_NATIVE);
 
-        $provider = $v->inList('provider', ['gmail', 'naver', 'daum', 'custom'],
+        $provider = $v->inList('provider', ['gmail', 'naver', 'kakao', 'daum', 'custom'],
             (string) ($current['provider'] ?? 'gmail'));
         $host = strtolower((string) ($current['host'] ?? 'smtp.gmail.com'));
         $port = (int) ($current['port'] ?? 465);

@@ -170,7 +170,7 @@
     {
       "slug": "site/seo",
       "title": "검색 노출·RSS·외부 서비스",
-      "summary": "사이트맵·robots·RSS와 소유 확인·통계·광고 코드를 관리합니다.",
+      "summary": "사이트맵·robots·RSS와 소유 확인·통계·광고 코드 및 지역별 동의 관리를 설정합니다.",
       "group": "site",
       "audience": "운영자",
       "file": "site-seo.json"

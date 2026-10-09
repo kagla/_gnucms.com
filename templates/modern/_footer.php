@@ -6,6 +6,7 @@
     <a href="<?= $this->e($this->base . '/community') ?>">커뮤니티</a>
     <a href="<?= $this->e($this->base . '/manual') ?>">매뉴얼</a>
     <?php foreach ($legal_pages as $doc): ?><a href="<?= $this->url('terms.show', ['slug' => $doc['slug']]) ?>"><?= $this->e($doc['title']) ?></a><?php endforeach ?>
+    <?php $this->insert('_privacy_links') ?>
     <a href="https://github.com/kagla/gnucms/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
   </nav>
 </footer>
