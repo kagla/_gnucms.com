@@ -962,18 +962,31 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .posts-table .post-notice-row{background:color-mix(in srgb,var(--color-primary) 5%,var(--color-base-100))}
 .posts-table .post-notice-row:hover{background:color-mix(in srgb,var(--color-primary) 9%,var(--color-base-100))}
 
-/* 인기 글 순위: 왼쪽에 큰 숫자를 세운다 */
+/* 인기 글 순위: 제목은 넓게, 게시판과 조회수는 아래 보조 정보로 둔다. */
 .rank-list{counter-reset:rank}
-.rank-list .list-row{gap:1rem;padding:.875rem 1.25rem}
+.rank-list .list-row{
+  display:grid;grid-template-columns:1.5rem minmax(0,1fr) auto;
+  column-gap:.625rem;row-gap:.375rem;padding:.875rem 1.25rem;
+}
 .rank-list .list-row::before{
   counter-increment:rank;content:counter(rank);
-  flex:none;width:1.75rem;text-align:center;
+  grid-column:1;grid-row:1 / 3;align-self:start;text-align:center;line-height:1.5;
   color:var(--bc-soft);font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;
 }
 .rank-list .list-row:nth-child(-n+3)::before{color:var(--color-primary)}
-.rank-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:600}
-.rank-title:hover{color:var(--color-primary)}
-.rank-meta{flex:none;color:var(--bc-soft);font-size:11.5px}
+.rank-list .rank-title{
+  grid-column:2 / -1;grid-row:1;min-width:0;
+  white-space:normal;overflow-wrap:anywhere;font-size:14px;font-weight:600;line-height:1.5;
+}
+.rank-list .rank-title:hover{color:var(--color-primary)}
+.rank-list .list-row > .badge{
+  grid-column:2;grid-row:2;justify-self:start;min-width:0;max-width:100%;
+  height:auto;min-height:1.25rem;padding-block:.125rem;white-space:normal;overflow-wrap:anywhere;
+}
+.rank-list .rank-meta{
+  grid-column:3;grid-row:2;display:inline-flex;align-items:center;gap:.25rem;
+  white-space:nowrap;color:var(--bc-soft);font-size:11.5px;
+}
 
 /* 분류 칩 줄은 알약 모양 필터로 표현한다. */
 .subnav{
