@@ -7,7 +7,7 @@
       <a class="feed-line-title" href="<?= $this->url('posts.show', ['id' => $post['id']]) ?>" title="<?= $this->e($post['title']) ?>"><?= $this->e($post['title']) ?></a>
       <?php $this->insert('posts/_count', ['post' => $post]) ?>
       <?php if ($post['is_secret']): ?><span class="feed-line-lock" title="비밀글" aria-label="비밀글"><?= $this->icon('lock', 12) ?></span><?php endif ?>
-      <time class="feed-line-date" datetime="<?= $this->e($post['created_at']) ?>"><?= $this->date($post['created_at']) ?></time>
+      <time class="feed-line-date" datetime="<?= $this->e($post['created_at']) ?>" title="<?= $this->e($this->date($post['created_at'])) ?>"><?= $this->compactDate($post['created_at']) ?></time>
     </li>
   <?php endforeach ?>
 </ul>
