@@ -1,4 +1,4 @@
-/* upstream 정식 릴리스: 페이지 방문과 캐시 만료, 탭 복귀 때 확인한다. */
+/* upstream 정식 릴리스: 페이지 방문 즉시, 5분마다, 탭 복귀 때 확인한다. */
 (function () {
   'use strict';
   var badge = document.querySelector('[data-github-release]');
@@ -8,10 +8,12 @@
   if (!version || typeof window.fetch !== 'function') { return; }
 
   var endpoint = 'https://api.github.com/repos/kagla/gnucms/releases/latest';
-  var cacheKey = 'gnucms-github-latest-release';
-  var cacheMaxAge = 6 * 60 * 60 * 1000;
+  var cacheKey = 'gnucms-github-latest-release-v2-' + version.textContent.trim();
+  var refreshInterval = 5 * 60 * 1000;
+  var minCheckInterval = 60 * 1000;
   var retryDelay = 5 * 60 * 1000;
   var nextCheckAt = 0;
+  var lastCheckAt = 0;
   var pending = false;
   var timer = null;
 
@@ -29,10 +31,13 @@
     timer = window.setTimeout(refresh, Math.max(1000, nextCheckAt - Date.now()));
   }
 
-  function refresh() {
+  function refresh(force) {
     if (pending) { return; }
-    if (Date.now() < nextCheckAt) { schedule(); return; }
+    if (Date.now() < nextCheckAt && (!force || Date.now() - lastCheckAt < minCheckInterval)) {
+      schedule(); return;
+    }
     pending = true;
+    lastCheckAt = Date.now();
     nextCheckAt = Date.now() + retryDelay;
     var controller = typeof window.AbortController === 'function' ? new window.AbortController() : null;
     var timeout = controller ? window.setTimeout(function () { controller.abort(); }, 10000) : null;
@@ -44,7 +49,7 @@
     }).then(function (release) {
       if (!show(release.tag_name)) { throw new Error('Invalid GitHub release tag'); }
       var checkedAt = Date.now();
-      nextCheckAt = checkedAt + cacheMaxAge;
+      nextCheckAt = checkedAt + refreshInterval;
       try {
         window.localStorage.setItem(cacheKey, JSON.stringify({tag: release.tag_name, checkedAt: checkedAt}));
       } catch (e) {}
@@ -60,14 +65,14 @@
 
   try {
     var cached = JSON.parse(window.localStorage.getItem(cacheKey) || 'null');
-    if (cached && show(cached.tag) && typeof cached.checkedAt === 'number'
+    if (cached && typeof cached.checkedAt === 'number'
         && Number.isFinite(cached.checkedAt) && cached.checkedAt > 0 && cached.checkedAt <= Date.now()) {
-      nextCheckAt = cached.checkedAt + cacheMaxAge;
+      show(cached.tag);
     }
   } catch (e) {}
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') { refresh(); }
+    if (document.visibilityState === 'visible') { refresh(true); }
   });
   refresh();
 })();

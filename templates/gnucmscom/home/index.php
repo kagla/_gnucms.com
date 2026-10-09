@@ -254,8 +254,7 @@ $freshAfter = time() - 86400;
   var badge = document.querySelector('[data-github-release]');
   if (!badge) { return; }
   var version = badge.querySelector('[data-github-release-version]');
-  var cacheKey = 'gnucms-github-latest-release';
-  var cacheMaxAge = 21600000;
+  var cacheKey = 'gnucms-github-latest-release-v2-<?= $this->e(GNUCMS_VERSION) ?>';
   var hasVersion = false;
 
   function show(tag) {
@@ -269,7 +268,8 @@ $freshAfter = time() - 86400;
 
   try {
     var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-    if (cached && show(cached.tag) && Date.now() - cached.checkedAt < cacheMaxAge) { return; }
+    if (cached && typeof cached.checkedAt === 'number' && cached.checkedAt > 0
+        && cached.checkedAt <= Date.now()) { show(cached.tag); }
   } catch (e) {}
 
   if (typeof window.fetch !== 'function') {
@@ -277,7 +277,7 @@ $freshAfter = time() - 86400;
     return;
   }
   fetch('https://api.github.com/repos/kagla/gnucms/releases/latest', {
-    headers: {'Accept': 'application/vnd.github+json'}
+    headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-cache'
   }).then(function (response) {
     if (!response.ok) { throw new Error('GitHub release request failed'); }
     return response.json();
