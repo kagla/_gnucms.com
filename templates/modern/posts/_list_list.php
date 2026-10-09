@@ -3,6 +3,5 @@
   'list' => $list,
   'notices' => $list['notices'] ?? [],
   'show_category' => (bool) $board['use_category'],
-  'compact' => true,
   'current_post_id' => $current_post_id ?? null,
 ]) ?>
