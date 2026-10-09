@@ -36,7 +36,29 @@ final class KakaoProvider extends AbstractProvider
             && (bool) ($account['is_email_verified'] ?? false);
         return new SocialProfile($this->key(), (string) ($data['id'] ?? ''),
             $email, $verified, (string) ($profile['nickname'] ?? $properties['nickname'] ?? '카카오 회원'),
-            isset($profile['profile_image_url']) ? (string) $profile['profile_image_url']
-                : (isset($properties['profile_image']) ? (string) $properties['profile_image'] : null));
+            $this->imageUrl($profile, $properties));
+    }
+
+    private function imageUrl(array $profile, array $properties): ?string
+    {
+        foreach ([$profile['profile_image_url'] ?? null, $properties['profile_image'] ?? null,
+            $profile['thumbnail_image_url'] ?? null, $properties['thumbnail_image'] ?? null] as $candidate) {
+            if (!is_string($candidate) || trim($candidate) === '') continue;
+            $url = trim($candidate);
+            $parts = parse_url($url);
+            $host = strtolower((string) ($parts['host'] ?? ''));
+            // 카카오가 HTTP 주소를 반환해도 공식 CDN에서 HTTPS로만 내려받는다.
+            // AvatarService의 HTTPS·제공자 호스트 검사와 리다이렉트 차단은 유지한다.
+            if (strtolower((string) ($parts['scheme'] ?? '')) === 'http') {
+                foreach (['kakaocdn.net', 'daumcdn.net'] as $allowed) {
+                    if ($host === $allowed || str_ends_with($host, '.' . $allowed)) {
+                        $url = 'https://' . substr($url, 7);
+                        break;
+                    }
+                }
+            }
+            return $url;
+        }
+        return null;
     }
 }

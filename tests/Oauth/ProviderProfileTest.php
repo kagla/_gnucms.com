@@ -85,6 +85,80 @@ final class ProviderProfileTest extends TestCase
         self::assertFalse($unverified->emailVerified);
     }
 
+    public function testKakaoUpgradesOfficialCdnHttpImageUrlsToHttps(): void
+    {
+        $cases = [
+            ['http://k.kakaocdn.net/avatar.jpg', 'https://k.kakaocdn.net/avatar.jpg'],
+            ['http://kakaocdn.net/avatar.jpg', 'https://kakaocdn.net/avatar.jpg'],
+            ['http://profile.daumcdn.net/avatar.jpg', 'https://profile.daumcdn.net/avatar.jpg'],
+            ['HTTP://K.KAKAOCdn.NET/avatar.jpg', 'https://K.KAKAOCdn.NET/avatar.jpg'],
+        ];
+        foreach ($cases as [$url, $expected]) {
+            $profile = $this->map(new KakaoProvider($this->config()), [
+                'id' => 42, 'kakao_account' => ['profile' => ['profile_image_url' => $url]],
+            ]);
+
+            self::assertSame($expected, $profile->imageUrl, $url);
+        }
+    }
+
+    public function testKakaoDoesNotUpgradeImageUrlsOutsideOfficialCdnHosts(): void
+    {
+        foreach (['http://example.com/avatar.jpg', 'http://kakaocdn.net.example.com/avatar.jpg',
+            'http://notkakaocdn.net/avatar.jpg', 'http://daumcdn.net.example.com/avatar.jpg',
+            'http://k.kakaocdn.net@evil.example/avatar.jpg'] as $url) {
+            $profile = $this->map(new KakaoProvider($this->config()), [
+                'id' => 42, 'kakao_account' => ['profile' => ['profile_image_url' => $url]],
+            ]);
+
+            self::assertSame($url, $profile->imageUrl, $url);
+        }
+    }
+
+    public function testKakaoFallsBackFromBlankImageUrlToLegacyImageOrThumbnail(): void
+    {
+        $cases = [
+            [['profile_image_url' => ' '], ['profile_image' => 'http://k.kakaocdn.net/legacy.jpg'],
+                'https://k.kakaocdn.net/legacy.jpg'],
+            [['profile_image_url' => '', 'thumbnail_image_url' => 'http://k.kakaocdn.net/thumb.jpg'],
+                ['profile_image' => ' '], 'https://k.kakaocdn.net/thumb.jpg'],
+            [[], ['thumbnail_image' => 'http://profile.daumcdn.net/thumb.jpg'],
+                'https://profile.daumcdn.net/thumb.jpg'],
+        ];
+        foreach ($cases as [$accountProfile, $properties, $expected]) {
+            $profile = $this->map(new KakaoProvider($this->config()), [
+                'id' => 42, 'kakao_account' => ['profile' => $accountProfile], 'properties' => $properties,
+            ]);
+
+            self::assertSame($expected, $profile->imageUrl);
+        }
+    }
+
+    public function testKakaoPrefersOriginalImageToLegacyImageAndThumbnail(): void
+    {
+        $profile = $this->map(new KakaoProvider($this->config()), [
+            'id' => 42,
+            'kakao_account' => ['profile' => [
+                'profile_image_url' => 'http://k.kakaocdn.net/original.jpg',
+                'thumbnail_image_url' => 'http://k.kakaocdn.net/thumb.jpg',
+            ]],
+            'properties' => ['profile_image' => 'http://k.kakaocdn.net/legacy.jpg'],
+        ]);
+
+        self::assertSame('https://k.kakaocdn.net/original.jpg', $profile->imageUrl);
+    }
+
+    public function testKakaoAllowsProfileWithoutOptionalPhoto(): void
+    {
+        foreach ([[], ['profile_image_url' => '', 'thumbnail_image_url' => ' ']] as $accountProfile) {
+            $profile = $this->map(new KakaoProvider($this->config()), [
+                'id' => 42, 'kakao_account' => ['profile' => $accountProfile],
+            ]);
+
+            self::assertNull($profile->imageUrl);
+        }
+    }
+
     public function testKakaoAuthorizationUrlDoesNotForceOptionalConsentItems(): void
     {
         $url = (new KakaoProvider($this->config()))->authorizationUrl('kakao-state');
