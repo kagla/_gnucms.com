@@ -5,6 +5,7 @@
   var presets={
     gmail:{host:'smtp.gmail.com',port:'465',encryption:'ssl',help:'Google 계정의 2단계 인증을 켠 뒤 16자리 앱 비밀번호를 발급하세요.'},
     naver:{host:'smtp.naver.com',port:'587',encryption:'tls',help:'네이버 메일에서 IMAP/SMTP 사용을 켜고 애플리케이션 비밀번호를 발급하세요.'},
+    kakao:{host:'smtp.kakao.com',port:'465',encryption:'ssl',help:'카카오계정에서 2단계 인증을 켜고 앱 비밀번호를 발급한 뒤, 카카오메일 설정 → IMAP/POP3 → IMAP에서 IMAP/SMTP 사용을 켜세요. SMTP 사용자 이름은 @kakao.com 앞의 아이디, 발신 이메일은 해당 아이디의 전체 카카오메일 주소를 입력하세요.'},
     daum:{host:'smtp.daum.net',port:'465',encryption:'ssl',help:'다음 계정에서 앱 비밀번호를 발급하고 SMTP 사용을 켜세요. 발신 이메일은 로그인한 다음 메일 주소를 사용해야 합니다.'}
   };
   function sync(change){

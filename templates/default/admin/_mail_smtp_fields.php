@@ -7,6 +7,7 @@
             <select class="select select-bordered select-block" name="provider" data-mail-provider>
               <option value="gmail"<?= $this->def($values['provider'] ?? null, 'gmail') === 'gmail' ? ' selected' : '' ?>>Gmail</option>
               <option value="naver"<?= ($values['provider'] ?? '') === 'naver' ? ' selected' : '' ?>>네이버 메일</option>
+              <option value="kakao"<?= ($values['provider'] ?? '') === 'kakao' ? ' selected' : '' ?>>카카오 메일</option>
               <option value="daum"<?= ($values['provider'] ?? '') === 'daum' ? ' selected' : '' ?>>다음 메일</option>
               <option value="custom"<?= ($values['provider'] ?? '') === 'custom' ? ' selected' : '' ?>>직접 설정</option>
             </select>
