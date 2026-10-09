@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.0](https://github.com/kagla/gnucms/compare/v0.8.0...v0.9.0) (2026-10-09)
 
 ### 기능 추가 및 개선
 
