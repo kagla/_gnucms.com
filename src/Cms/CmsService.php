@@ -11,6 +11,14 @@ use GnuCms\Validation\Validator;
 
 final class CmsService
 {
+    public const PRIVACY_MODES = [
+        'off' => '사용 안 함',
+        'europe' => '유럽 규정 (EEA·영국·스위스)',
+        'us_states' => '미국 주 규정',
+        'europe_us' => '유럽·미국 주 규정',
+        'external' => '기타 규정 (외부 CMP)',
+    ];
+
     public const DEFAULT_SETTINGS = [
         'site_name' => GNUCMS,
         'site_tagline' => '가볍게 시작하는 기초 커뮤니티',
@@ -23,6 +31,9 @@ final class CmsService
         'site_verification_html' => '',
         'analytics_html' => '',
         'adsense_html' => '',
+        'privacy_mode' => 'off',
+        'privacy_cmp_html' => '',
+        'privacy_regulation_name' => '',
         'password_login_enabled' => '1',
         'social_login_enabled' => '1',
         'registration_enabled' => '1',
@@ -90,6 +101,10 @@ final class CmsService
             $stored['social_registration_enabled'] = $stored['registration_enabled'];
         }
         $settings = array_merge(self::DEFAULT_SETTINGS, $stored);
+        if (!array_key_exists($settings['privacy_mode'], self::PRIVACY_MODES)) {
+            // 손상된 값 때문에 추적 코드를 동의 없이 실행하지 않는다.
+            $settings['privacy_mode'] = 'external';
+        }
         $settings['password_login_enabled'] = $settings['password_login_enabled'] === '1';
         $settings['social_login_enabled'] = $settings['social_login_enabled'] === '1';
         $settings['registration_enabled'] = $settings['registration_enabled'] === '1';
@@ -306,6 +321,20 @@ final class CmsService
         );
         $analyticsHtml = $this->headHtml($v, $input, 'analytics_html', (string) $current['analytics_html']);
         $adsenseHtml = $this->headHtml($v, $input, 'adsense_html', (string) $current['adsense_html']);
+        $privacyMode = $v->inList('privacy_mode', array_keys(self::PRIVACY_MODES), $current['privacy_mode']);
+        $privacyCmpHtml = $this->headHtml($v, $input, 'privacy_cmp_html', (string) $current['privacy_cmp_html']);
+        $privacyRegulationName = $v->optionalString('privacy_regulation_name', 80,
+            array_key_exists('privacy_regulation_name', $input) ? '' : $current['privacy_regulation_name']) ?? '';
+        if ($privacyMode === 'external') {
+            if ($privacyCmpHtml === '') {
+                $v->fail('privacy_cmp_html', '외부 CMP에서 발급한 연동 코드를 입력해 주세요.');
+            }
+            if ($privacyRegulationName === '') {
+                $v->fail('privacy_regulation_name', '적용할 규정 이름을 입력해 주세요.');
+            }
+        } elseif ($privacyMode !== 'off' && $adsenseHtml === '' && $privacyCmpHtml === '') {
+            $v->fail('privacy_cmp_html', 'Google CMP를 불러올 애드센스 코드 또는 CMP 연동 코드가 필요합니다.');
+        }
         $settings = [
             'site_name' => $v->requiredString('site_name', 50),
             'site_tagline' => $v->requiredString('site_tagline', 120),
@@ -321,6 +350,9 @@ final class CmsService
             'site_verification_html' => $siteVerificationHtml,
             'analytics_html' => $analyticsHtml,
             'adsense_html' => $adsenseHtml,
+            'privacy_mode' => $privacyMode,
+            'privacy_cmp_html' => $privacyCmpHtml,
+            'privacy_regulation_name' => $privacyRegulationName,
         ];
         $settings = array_merge($settings, $this->companySettings($v, $input));
         $v->check();

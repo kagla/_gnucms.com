@@ -58,12 +58,59 @@
         <?php if (array_key_exists('adsense_html', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['adsense_html']) ?></p><?php endif ?>
       </fieldset>
     </div>
+    <div class="form-section" id="privacy"><h2 class="form-section-title">광고·분석 동의 관리</h2>
+      <p class="card-sub">방문자에게 광고·분석 동의와 거부 기능을 제공합니다. 유럽과 미국 방문자가 모두 있다면 두 규정을 함께 선택하세요.</p>
+      <fieldset class="fieldset<?= array_key_exists('privacy_mode', $errors) ? ' is-invalid' : '' ?>">
+        <legend class="fieldset-legend">적용 규정</legend>
+        <select class="select select-bordered select-block" name="privacy_mode" data-privacy-mode>
+          <?php foreach (\GnuCms\Cms\CmsService::PRIVACY_MODES as $privacyValue => $privacyLabel): ?>
+            <option value="<?= $this->e($privacyValue) ?>"<?= ($values['privacy_mode'] ?? 'off') === $privacyValue ? ' selected' : '' ?>><?= $this->e($privacyLabel) ?></option>
+          <?php endforeach ?>
+        </select>
+        <p class="fieldset-label">사용 안 함은 GNUCMS의 동의 관리 연동을 끕니다. 애드센스 계정에 게시된 메시지를 해제하지는 않습니다.</p>
+        <?php if (array_key_exists('privacy_mode', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['privacy_mode']) ?></p><?php endif ?>
+      </fieldset>
+      <div data-privacy-google>
+        <p class="fieldset-label">Google CMP를 사용합니다. 애드센스의 개인정보 보호 및 메시지에서 이 사이트의 선택한 규정 메시지를 생성·게시하고 대상 지역을 설정하세요. 이 화면에서 저장하는 것만으로 Google 메시지가 게시되지는 않습니다.</p>
+        <p class="fieldset-label">유럽 규정에서는 애드센스의 동의 모드 설정 중 광고 목적과 분석 목적을 켜세요. 분석 동의가 허용되거나 해당 목적이 적용되지 않을 때 분석 코드를 실행합니다. 거부·확인 대기·미설정 상태에서는 실행하지 않습니다. 미국 주 규정에서는 판매·공유 거부와 GPC 신호를 반영합니다.</p>
+        <p class="fieldset-label"><a class="link link-hover" href="https://support.google.com/adsense/answer/7666366?hl=ko" target="_blank" rel="noopener noreferrer">Google 동의 관리 안내</a></p>
+      </div>
+      <div data-privacy-external<?= array_key_exists('privacy_regulation_name', $errors) ? ' data-has-error' : '' ?>>
+        <fieldset class="fieldset<?= array_key_exists('privacy_regulation_name', $errors) ? ' is-invalid' : '' ?>">
+          <legend class="fieldset-legend">기타 규정 이름</legend>
+          <input class="input input-bordered input-block" type="text" name="privacy_regulation_name" value="<?= $this->e(is_string($values['privacy_regulation_name'] ?? null) ? $values['privacy_regulation_name'] : '') ?>" maxlength="80" placeholder="연결할 CMP가 지원하는 규정 이름">
+          <?php if (array_key_exists('privacy_regulation_name', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['privacy_regulation_name']) ?></p><?php endif ?>
+        </fieldset>
+        <p class="fieldset-label">해당 규정을 지원하는 외부 CMP를 연결합니다. 동의 결과 전달과 설정 창 열기 기능을 GNUCMS에 연결한 코드를 사용하세요. 배너만 표시하는 코드로는 광고·분석 코드를 실행하지 않습니다.</p>
+        <details><summary>외부 CMP 연결 방법 (개발자용)</summary><p class="fieldset-label">CMP가 저장한 동의 결과를 <code>window.GnuCmsPrivacy.update()</code>로 전달하고, 설정 창을 여는 함수를 <code>window.GnuCmsPrivacy.setPreferencesHandler()</code>에 등록합니다. 분석은 <code>analytics</code>, 광고는 <code>advertising</code>, Google 광고 데이터·개인 맞춤 목적은 <code>adUserData</code>·<code>adPersonalization</code>에 각각 허용 여부를 전달합니다. 동의 철회 시 CMP에 먼저 저장하고 결과를 전달하세요.</p></details>
+      </div>
+      <fieldset class="fieldset<?= array_key_exists('privacy_cmp_html', $errors) ? ' is-invalid' : '' ?>" data-privacy-code<?= array_key_exists('privacy_cmp_html', $errors) ? ' data-has-error' : '' ?>>
+        <legend class="fieldset-legend">CMP 연동 코드</legend>
+        <textarea class="textarea textarea-bordered textarea-block code-textarea" name="privacy_cmp_html" rows="6" maxlength="20000" spellcheck="false" placeholder="CMP에서 발급한 전체 연동 코드를 붙여넣으세요."><?= $this->e(is_string($values['privacy_cmp_html'] ?? null) ? $values['privacy_cmp_html'] : '') ?></textarea>
+        <p class="fieldset-label">Google CMP는 기존 애드센스 코드가 있으면 추가 코드를 생략할 수 있습니다. 외부 CMP는 연동 코드가 필요합니다. 코드는 공개 화면에만 적용됩니다. 사용 안 함으로 바꿔도 입력한 코드는 보존합니다.</p>
+        <?php if (array_key_exists('privacy_cmp_html', $errors)): ?><p class="validator-hint"><?= $this->icon('warning', 14) ?> <?= $this->e($errors['privacy_cmp_html']) ?></p><?php endif ?>
+      </fieldset>
+      <p class="fieldset-label">동의 관리는 연결한 광고·분석 코드에 적용합니다. 개별 광고 단위와 테마·확장에 직접 삽입한 코드는 별도로 연동해야 합니다. 규정 선택만으로 사이트 전체의 법적 준수가 보장되지는 않습니다.</p>
+    </div>
     <div class="card-actions form-actions"><a class="btn btn-ghost" href="<?= $this->url('admin.index') ?>">취소</a><button class="btn btn-primary" type="submit">설정 저장</button></div>
   </form>
 </div></section>
 <?php $this->stop() ?>
 <?php $this->start('scripts') ?><script>
 (function(){
+  var privacy=document.querySelector('[data-privacy-mode]');
+  if(privacy){
+    function syncPrivacy(){
+      var mode=privacy.value;
+      document.querySelector('[data-privacy-google]').hidden=mode==='off'||mode==='external';
+      var external=document.querySelector('[data-privacy-external]');
+      var code=document.querySelector('[data-privacy-code]');
+      external.hidden=mode!=='external'&&!external.hasAttribute('data-has-error');
+      code.hidden=mode==='off'&&!code.hasAttribute('data-has-error');
+    }
+    privacy.addEventListener('change',syncPrivacy);
+    syncPrivacy();
+  }
   var root=document.querySelector('[data-membership-policy]');
   if(!root){return}
   ['regular','social'].forEach(function(kind){
