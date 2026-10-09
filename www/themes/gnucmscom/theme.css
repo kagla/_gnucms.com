@@ -1064,18 +1064,31 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
 .post-stats{display:flex;align-items:center;gap:.75rem;color:var(--bc-soft);font-size:12px;font-weight:600}
 .post-stats span{display:inline-flex;align-items:center;gap:.25rem}
 
-/* 인기 글 순위: 왼쪽에 큰 숫자를 세운다 */
+/* 인기 글 순위: 제목은 넓게, 게시판과 조회수는 아래 보조 정보로 둔다. */
 .rank-list{counter-reset:rank}
-.rank-list .list-row{gap:1rem;padding:.875rem 1.25rem}
+.rank-list .list-row{
+  display:grid;grid-template-columns:1.5rem minmax(0,1fr) auto;
+  column-gap:.625rem;row-gap:.375rem;padding:.875rem 1.25rem;
+}
 .rank-list .list-row::before{
   counter-increment:rank;content:counter(rank);
-  flex:none;width:1.75rem;text-align:center;
+  grid-column:1;grid-row:1 / 3;align-self:start;text-align:center;line-height:1.5;
   color:var(--bc-soft);font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;
 }
 .rank-list .list-row:nth-child(-n+3)::before{color:var(--color-primary)}
-.rank-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:600}
-.rank-title:hover{color:var(--color-primary)}
-.rank-meta{flex:none;color:var(--bc-soft);font-size:11.5px}
+.rank-list .rank-title{
+  grid-column:2 / -1;grid-row:1;min-width:0;
+  white-space:normal;overflow-wrap:anywhere;font-size:14px;font-weight:600;line-height:1.5;
+}
+.rank-list .rank-title:hover{color:var(--color-primary)}
+.rank-list .list-row > .badge{
+  grid-column:2;grid-row:2;justify-self:start;min-width:0;max-width:100%;
+  height:auto;min-height:1.25rem;padding-block:.125rem;white-space:normal;overflow-wrap:anywhere;
+}
+.rank-list .rank-meta{
+  grid-column:3;grid-row:2;display:inline-flex;align-items:center;gap:.25rem;
+  white-space:nowrap;color:var(--bc-soft);font-size:11.5px;
+}
 
 /* 분류 칩 줄은 알약 모양 필터로 표현한다. */
 .subnav{
@@ -1785,6 +1798,16 @@ a.stat .stat-desc{color:var(--color-primary);font-weight:700}
   .table td.right{padding-top:.625rem}
   .table-empty td{padding:3rem 0;text-align:center}
   .table-empty td::before{display:none}
+  /* 모바일 제목은 배지와 함께 자연스럽게 줄바꿈하며 전체를 표시한다. */
+  .posts-table .post-title-line{display:block;flex:1;min-width:0;line-height:1.6}
+  .posts-table .post-title-line > .badge{white-space:nowrap}
+  .posts-table .post-col-title .cell-title{
+    display:inline;overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;
+  }
+  /* 카드형 목록에서는 라벨을 뺀 남은 폭을 글쓴이 이름에 쓴다. */
+  .posts-table .cell-author{max-width:none}
+  .posts-table .cell-author > .link-author,
+  .posts-table .cell-author > .post-list-author{flex:1;min-width:0}
 }
 
 @media (max-width: 520px){

@@ -68,7 +68,7 @@
                  aria-label="검색 열기" title="검색 (/)"><?= $this->icon('search', 20) ?></label>
 
           <?php if ($current_user['is_guest']): ?>
-            <a class="btn btn-ghost btn-sm hide-sm" href="<?= $this->url('auth.login') ?>">로그인</a>
+            <a class="btn btn-ghost btn-sm hide-sm" href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>">로그인</a>
             <?php if ($registration_available): ?><a class="btn btn-primary btn-sm hide-sm" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
           <?php else: ?>
             <a class="btn btn-ghost btn-circle bell-link" href="<?= $this->url('notifications.index') ?>"
@@ -216,7 +216,7 @@
         <?= $this->icon('grid', 21) ?><span class="dock-label">카테고리</span>
       </label>
       <?php if ($current_user['is_guest']): ?>
-        <a href="<?= $this->url('auth.login') ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
+        <a href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
       <?php else: ?>
         <a href="<?= $this->url('notifications.index') ?>" class="bell-link">
           <?= $this->icon('bell', 21) ?><span class="dock-label">알림</span>
@@ -279,7 +279,7 @@
 
       <div class="drawer-foot">
         <?php if ($current_user['is_guest']): ?>
-          <a class="btn btn-outline btn-block" href="<?= $this->url('auth.login') ?>">로그인</a>
+          <a class="btn btn-outline btn-block" href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>">로그인</a>
           <?php if ($registration_available): ?><a class="btn btn-primary btn-block" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
         <?php else: ?>
           <form method="post" action="<?= $this->url('auth.logout') ?>">

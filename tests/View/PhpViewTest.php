@@ -182,12 +182,12 @@ final class PhpViewTest extends TestCase
         );
     }
 
-    public function testCompactDateAlwaysUsesFullDateTime(): void
+    public function testCompactDateUsesTimeTodayAndMonthDayOtherwise(): void
     {
         Clock::freeze('2026-08-31 12:00:00');
         try {
             $this->write('a', "<?= \$this->compactDate('2026-08-31 09:07:00') ?>|<?= \$this->compactDate('2026-08-30 23:59:00') ?>");
-            self::assertSame('26-08-31 09:07:00|26-08-30 23:59:00', $this->view()->fetch('a'));
+            self::assertSame('09:07|08-30', $this->view()->fetch('a'));
         } finally {
             Clock::unfreeze();
         }
@@ -200,7 +200,7 @@ final class PhpViewTest extends TestCase
             $this->write('a', "<?= \$this->date('2026-09-03 14:02:00', 'Y-m-d H:i') ?>|<?= \$this->compactDate('2026-09-03 14:02:00') ?>");
             $view = $this->view();
             $view->addGlobal('site', ['timezone' => 'Asia/Seoul']);
-            self::assertSame('2026-09-03 23:02|26-09-03 23:02:00', $view->fetch('a'));
+            self::assertSame('2026-09-03 23:02|23:02', $view->fetch('a'));
         } finally {
             Clock::unfreeze();
         }

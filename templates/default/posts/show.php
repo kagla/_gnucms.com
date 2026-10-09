@@ -168,7 +168,7 @@ $below_view_list = $below_view_list ?? null;
         </div>
       </form>
     <?php else: ?>
-      <p class="comment-denied"><?php if ($current_user['is_guest']): ?>댓글을 쓰려면 <a class="link" href="<?= $this->url('auth.login') ?>">로그인</a>이 필요합니다.<?php else: ?>이 게시판에 댓글을 쓸 권한이 없습니다.<?php endif ?></p>
+      <p class="comment-denied"><?php if ($current_user['is_guest']): ?>댓글을 쓰려면 <a class="link" href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>">로그인</a>이 필요합니다.<?php else: ?>이 게시판에 댓글을 쓸 권한이 없습니다.<?php endif ?></p>
     <?php endif ?>
   </div>
 </section>

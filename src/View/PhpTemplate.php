@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GnuCms\View;
 
+use GnuCms\Support\Clock;
 use GnuCms\Support\DateTimeDisplay;
 use RuntimeException;
 use Throwable;
@@ -201,10 +202,16 @@ final class PhpTemplate
         return DateTimeDisplay::format($v, $timezone, $format);
     }
 
-    /** 기존 테마 호환용. 생략 없이 공통 날짜·시간 형식을 표시한다. */
+    /** 목록용: 사이트 시간대에서 오늘이면 시간, 그 외에는 월·일을 표시한다. */
     public function compactDate(mixed $v): string
     {
-        return $this->date($v);
+        $day = $this->date($v, 'Y-m-d');
+        if ($day === '') {
+            return '';
+        }
+
+        $today = $this->date(Clock::timestamp(), 'Y-m-d');
+        return $this->date($v, $day === $today ? 'H:i' : 'm-d');
     }
 
     public function truncate(mixed $v, int $length): string

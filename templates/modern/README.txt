@@ -35,7 +35,10 @@ modules/site-community를 관리자 확장 관리에서 켜면 /community가 열
 
 upstream 반영
 -------------
-동기화 기준은 upstream/main의 24d9da7 (GNUCMS 0.9.0)이다.
+동기화 기준은 upstream/main의 5b1a642 (GNUCMS 0.9.3)이다.
+상단·모바일·전체 메뉴와 댓글 안내는 요청별 login_url로 로그인 후 원래 화면에 복귀한다.
+목록 날짜는 compactDate()를 사용하고 전체 일시는 title에 제공한다. 메인 최신글은 기존대로
+데스크톱 전체 일시·모바일 간단 일시를 유지한다. 모바일 제목은 전체 표시하며 인기글은 줄바꿈한다.
 광고·분석 동의 관리 head·하단 조각은 default 템플릿 fallback으로 사용하고,
 privacy.js는 정적 자산 fallback을 사용한다. 공개 레이아웃과 하단 메뉴에 동의 설정을 연결하며
 관리자 화면은 기존 external_service_head 차단을 따른다.

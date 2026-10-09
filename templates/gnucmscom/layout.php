@@ -116,7 +116,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
 
         <div class="navbar-end">
           <?php if ($current_user['is_guest']): ?>
-            <a class="site-header-link hide-sm" href="<?= $this->url('auth.login') ?>">로그인</a>
+            <a class="site-header-link hide-sm" href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>">로그인</a>
             <?php if ($registration_available): ?><a class="site-header-cta hide-sm" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
           <?php else: ?>
             <a class="site-icon-button bell-link" href="<?= $this->url('notifications.index') ?>"
@@ -246,7 +246,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
       </a>
       <?php if ($shop_visible ?? false): ?><a href="<?= $this->url('shop.index') ?>"<?php if (trim($this->block('nav_section')) === 'shop'): ?> class="dock-active" aria-current="page"<?php endif ?>><?= $this->icon('gift', 21) ?><span class="dock-label">쇼핑몰</span></a><?php endif ?>
       <?php if ($current_user['is_guest']): ?>
-        <a href="<?= $this->url('auth.login') ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
+        <a href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>"><?= $this->icon('user', 21) ?><span class="dock-label">로그인</span></a>
       <?php else: ?>
         <a href="<?= $this->url('notifications.index') ?>" class="bell-link">
           <?= $this->icon('bell', 21) ?><span class="dock-label">알림</span>
@@ -309,7 +309,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
 
       <div class="drawer-foot">
         <?php if ($current_user['is_guest']): ?>
-          <a class="btn btn-outline btn-block" href="<?= $this->url('auth.login') ?>">로그인</a>
+          <a class="btn btn-outline btn-block" href="<?= $this->e($login_url ?? $this->url('auth.login')) ?>">로그인</a>
           <?php if ($registration_available): ?><a class="btn btn-primary btn-block" href="<?= $this->url('auth.register') ?>">회원가입</a><?php endif ?>
         <?php else: ?>
           <form method="post" action="<?= $this->url('auth.logout') ?>">

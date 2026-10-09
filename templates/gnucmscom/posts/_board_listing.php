@@ -37,7 +37,7 @@ $show_views = count($view_types) > 1 && ($show_view_selector ?? true);
           <span class="badge badge-primary badge-soft badge-sm">공지</span>
         <?php endif ?>
         <a class="notice-title" href="<?= $this->url('posts.show', ['id' => $notice['id']]) ?>"><?= $this->e($notice['title']) ?></a>
-        <time class="notice-date" datetime="<?= $this->e($notice['created_at']) ?>"><?= $this->compactDate($notice['created_at']) ?></time>
+        <time class="notice-date" datetime="<?= $this->e($notice['created_at']) ?>" title="<?= $this->e($this->date($notice['created_at'])) ?>"><?= $this->compactDate($notice['created_at']) ?></time>
       </li>
     <?php endforeach ?>
   </ul>
