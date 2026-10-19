@@ -70,6 +70,7 @@ final class CommentNotificationRoutingTest extends WebTestCase
         self::assertSame('[' . self::SITE . '] 새 댓글이 달렸습니다', $mailer->messages[0]['subject']);
         self::assertStringStartsWith(
             self::WRITER . '님, ' . self::ACTOR . "님이 「알림이 붙을 글」 글에 댓글을 남겼습니다.\n\n"
+            . "글 내용:\n본문입니다.\n\n댓글 내용:\n댓글입니다.\n\n"
             . self::URL . '/posts/' . $postId . '#comment-' . $commentId,
             $mailer->messages[0]['body']
         );
