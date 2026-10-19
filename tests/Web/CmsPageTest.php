@@ -54,6 +54,9 @@ final class CmsPageTest extends WebTestCase
         self::assertStringContainsString('name="site_verification_html"', $form);
         self::assertStringContainsString('name="analytics_html"', $form);
         self::assertStringContainsString('name="adsense_html"', $form);
+        self::assertStringNotContainsString('name="privacy_mode"', $form);
+        self::assertStringNotContainsString('name="privacy_cmp_html"', $form);
+        self::assertStringNotContainsString('name="privacy_regulation_name"', $form);
         self::assertStringContainsString('name="timezone"', $form);
         self::assertStringContainsString('value="Asia/Seoul" selected', $form);
 
@@ -95,6 +98,39 @@ final class CmsPageTest extends WebTestCase
         ]));
         self::assertSame(422, $invalid->getStatusCode());
         self::assertStringContainsString('html, head, body 태그는 입력할 수 없습니다.', $this->body($invalid));
+    }
+
+    #[DataProvider('connectionProvider')]
+    public function testRetiredPrivacySettingsDoNotGateExternalServiceCodes(array $dbConfig): void
+    {
+        $app = $this->makeApp($dbConfig);
+        $analytics = '<script data-analytics-code>window.analyticsLoaded=true;</script>';
+        $adsense = '<script async data-ad-client="ca-pub-test"></script>';
+        $cmp = '<script data-retired-cmp>window.retiredCmpLoaded=true;</script>';
+
+        foreach (['europe', 'us_states', 'europe_us', 'external', 'unsupported'] as $mode) {
+            $this->saveSiteSettings($app, [
+                'privacy_mode' => $mode,
+                'privacy_cmp_html' => $cmp,
+                'privacy_regulation_name' => '기존 규정',
+                'analytics_html' => $analytics,
+                'adsense_html' => $adsense,
+            ]);
+            // 예전 CMP 설정이 남아 있어도 공개 코드 실행을 막거나 CMP를 되살리지 않는다.
+            $app->cmsService()->saveGeneralSettings($this->adminAcl(), [
+                'site_name' => GNUCMS, 'site_tagline' => '소개',
+                'home_title' => '홈', 'home_intro' => '본문', 'theme' => 'default',
+            ]);
+            $home = $this->body($this->get($app, '/'));
+            self::assertStringContainsString($analytics, $home);
+            self::assertStringContainsString($adsense, $home);
+            self::assertStringNotContainsString($cmp, $home);
+            self::assertStringNotContainsString('gnucms-privacy-config', $home);
+            self::assertStringNotContainsString('data-privacy-preferences', $home);
+            self::assertStringNotContainsString('/privacy.js', $home);
+            self::assertSame($analytics, $app->cms()->settings()['analytics_html']);
+            self::assertSame($adsense, $app->cms()->settings()['adsense_html']);
+        }
     }
 
     #[DataProvider('connectionProvider')]

@@ -47,12 +47,11 @@ return ['label' => '기본 (하늘빛)'];
 
 자세한 헬퍼 규칙과 알려진 한계는 [`default/README.txt`](default/README.txt) 를 보세요.
 
-## 광고·분석 동의 관리
+## 외부 서비스 코드
 
-`layout.php`의 `external_service_head` 블록은 동의 관리가 켜지면 `_privacy_head.php`를,
-공개 하단 메뉴는 `_privacy_links.php`를 사용합니다. 기존 테마에도 두 조각과 레이아웃 호출을
-함께 적용하세요. `privacy.js`는 정적 자산 폴백과 내용 해시 버전을 사용합니다.
-관리자 레이아웃은 `external_service_head`를 비워 CMP·광고·분석 코드 실행을 막습니다.
-별도 공개 레이아웃을 쓰는 확장도 이 블록과 하단 조각을 연결해야 합니다.
-테마·확장에 직접 넣은 광고 단위와 추적 코드는 별도 동의 연동이 필요합니다.
-상세 계약은 [`docs/privacy-consent.md`](../docs/privacy-consent.md)를 참고하세요.
+`layout.php`의 `external_service_head` 블록은 저장한 사이트 소유 확인 태그,
+애널리틱스·애드센스 코드를 공개 화면의 `<head>`에 출력합니다.
+관리자 레이아웃은 이 블록을 비워 외부 코드를 실행하지 않습니다.
+별도 공개 레이아웃을 쓰는 확장도 같은 블록을 연결하세요.
+GNUCMS는 광고·분석 동의 상태를 판별하거나 코드를 차단하지 않습니다.
+기존 독립 테마의 갱신 방법은 [`docs/external-service-codes.md`](../docs/external-service-codes.md)를 참고하세요.
