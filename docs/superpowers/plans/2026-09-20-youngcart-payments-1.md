@@ -1,5 +1,7 @@
 # 영카트 결제 3.1 구현 계획
 
+> 과거 계획·작업 기록입니다. 작성 당시의 제안·검증 결과는 보존하며 현재 기능 제공을 보장하지 않습니다. 현재 지원 범위는 [공개 매뉴얼](https://gnucms.com/manual/support)과 [지원 범위 문서](https://github.com/kagla/gnucms/blob/main/docs/supported-features.md)를 따릅니다. 백업·확장·쇼핑몰은 현재 코어에 구현되어 있으며 자동 복원·자동 DB 백업은 제공하지 않습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 쇼핑몰(`modules/youngcart`) 주문에 결제를 붙인다 — 이니시스 결제 계층 이식, 주문의 결제 수단·결제 완료 상태·기한, 카드 결제창과 콜백, 무통장입금과 관리자 입금 확인, 환불, 미결제 만료.

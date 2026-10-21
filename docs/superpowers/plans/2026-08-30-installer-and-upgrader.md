@@ -1,5 +1,7 @@
 # 단계형 설치기와 스키마 업그레이더 구현 계획
 
+> 과거 계획·작업 기록입니다. 작성 당시의 제안·검증 결과는 보존하며 현재 기능 제공을 보장하지 않습니다. 현재 지원 범위는 [공개 매뉴얼](https://gnucms.com/manual/support)과 [지원 범위 문서](https://github.com/kagla/gnucms/blob/main/docs/supported-features.md)를 따릅니다. 백업·확장·쇼핑몰은 현재 코어에 구현되어 있으며 자동 복원·자동 DB 백업은 제공하지 않습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 다섯 단계 설치기(`public/install.php`)와, 코드를 올린 뒤 첫 요청에서 백업 → 마이그레이션 → 실패 시 점검 화면을 스스로 처리하는 `SchemaUpgrader` 를 만든다.

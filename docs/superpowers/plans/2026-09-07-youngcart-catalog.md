@@ -1,5 +1,7 @@
 # 영카트 모듈 1단계(기반과 카탈로그) Implementation Plan
 
+> 과거 계획·작업 기록입니다. 작성 당시의 제안·검증 결과는 보존하며 현재 기능 제공을 보장하지 않습니다. 현재 지원 범위는 [공개 매뉴얼](https://gnucms.com/manual/support)과 [지원 범위 문서](https://github.com/kagla/gnucms/blob/main/docs/supported-features.md)를 따릅니다. 백업·확장·쇼핑몰은 현재 코어에 구현되어 있으며 자동 복원·자동 DB 백업은 제공하지 않습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `modules/youngcart` 확장 모듈을 새로 만들어 관리자가 분류·상품·옵션·이미지·재고를 관리하고 방문자가 `/shop`에서 메인·분류 목록·유형별 목록·검색·상세를 볼 수 있게 한다.

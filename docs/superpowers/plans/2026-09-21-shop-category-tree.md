@@ -1,5 +1,7 @@
 # 쇼핑몰 분류: 무한 단계 트리와 슬러그 주소 — 구현 계획
 
+> 과거 계획·작업 기록입니다. 작성 당시의 제안·검증 결과는 보존하며 현재 기능 제공을 보장하지 않습니다. 현재 지원 범위는 [공개 매뉴얼](https://gnucms.com/manual/support)과 [지원 범위 문서](https://github.com/kagla/gnucms/blob/main/docs/supported-features.md)를 따릅니다. 백업·확장·쇼핑몰은 현재 코어에 구현되어 있으며 자동 복원·자동 DB 백업은 제공하지 않습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 2자 코드 계층(최대 5단계)을 부모 id 트리(`path` 열, 10단계 상한)로 바꾸고, 공개 주소를 `/shop/c/{slug}` 로 옮기며, 옛 주소와 기존 데이터를 살린다.

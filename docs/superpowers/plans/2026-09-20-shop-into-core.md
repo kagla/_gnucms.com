@@ -1,5 +1,7 @@
 # 쇼핑몰을 코어로 옮기기 — 구현 계획
 
+> 과거 계획·작업 기록입니다. 작성 당시의 제안·검증 결과는 보존하며 현재 기능 제공을 보장하지 않습니다. 현재 지원 범위는 [공개 매뉴얼](https://gnucms.com/manual/support)과 [지원 범위 문서](https://github.com/kagla/gnucms/blob/main/docs/supported-features.md)를 따릅니다. 백업·확장·쇼핑몰은 현재 코어에 구현되어 있으며 자동 복원·자동 DB 백업은 제공하지 않습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `modules/youngcart`(켜고 끌 수 있는 모듈)를 코어 기능으로 옮긴다 — 코드는 `src/Shop`, 템플릿은 `templates/default/shop`, 표는 코어 스키마 27판이 만들고, 라우트·메뉴·사이드바는 코어가 그리며, 모듈은 사라진다.
