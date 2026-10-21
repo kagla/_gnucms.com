@@ -1,3 +1,5 @@
+이전 gnucmscom 테마 보관 문서입니다. 현재 공식 사이트 테마는 modern이며 운영 안내는 https://gnucms.com/manual/support 를 따릅니다.
+
 gnucmscom 테마 — gnucms.com 전용 PHP 파일 템플릿
 ==============================
 
