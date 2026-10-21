@@ -12,7 +12,7 @@
   'description' => '게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림 기능을 제공하는 오픈소스 PHP CMS',
   'url' => 'https://gnucms.com/',
   'downloadUrl' => 'https://github.com/kagla/gnucms/releases/latest',
-  'softwareRequirements' => 'PHP 8.2+, PDO MySQL, MySQL or MariaDB',
+  'softwareRequirements' => 'PHP 8.2+, PDO MySQL, MySQL, MariaDB',
   'license' => 'https://opensource.org/license/mit',
   'codeRepository' => 'https://github.com/kagla/gnucms',
   'inLanguage' => 'ko-KR',
@@ -34,7 +34,7 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
               <a class="cb-action cb-primary cursor-interaction" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener"><?= $this->icon('download', 18) ?><span>GNUCMS <span data-github-download-version><?= $this->e($sourceVersion) ?></span> 다운로드</span></a>
               <a class="cb-action cursor-interaction" href="<?= $this->e($this->base . '/manual') ?>"><?= $this->icon('book-open', 18) ?>매뉴얼 보기</a>
             </div>
-            <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2+</span><span><?= $this->icon('database', 18) ?>MySQL · MariaDB</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
+            <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2+</span><span><?= $this->icon('database', 18) ?>MySQL, MariaDB 지원</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
           </div>
           <aside id="install" class="cb-install" aria-label="배포본과 설치 안내">
             <div class="cb-install-top"><span class="cb-package"><?= $this->icon('package', 18) ?></span><div><strong>GNUCMS 다운로드</strong><small>최신 정식 배포본</small></div><a class="cb-version" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기"><span data-github-release-version><?= $this->e($sourceVersion) ?></span></a></div>

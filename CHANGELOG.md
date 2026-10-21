@@ -1,6 +1,12 @@
 # Changelog
 
+현재 DB 지원 범위: **MySQL, MariaDB 지원**. SQLite·PostgreSQL은 지원하지 않습니다. 이전 릴리스의 DB 지원 설명과 시험 결과는 당시 이력이며, 현재 기준은 [데이터베이스 지원 정책](docs/database-support.md)을 따릅니다.
+
 ## [Unreleased]
+
+### DB 지원 안내
+
+* 메인·설치·유지보수 안내, README와 개발 문서 및 공개 매뉴얼·검색 자료의 DB 지원을 MySQL·MariaDB로 통일했습니다. 화면에는 “MySQL, MariaDB 지원”으로 표시하고 SQLite·PostgreSQL 미지원 범위를 문서에 명시합니다.
 
 ### 기능 추가 및 개선
 
