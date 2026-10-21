@@ -226,7 +226,7 @@ $__seo_type = trim($this->block('seo_type', 'website'));
         </div>
         <div class="site-footer-bottom">
           <span>© <?= date('Y') ?> GNUCMS</span>
-          <span>PHP 8.2+ · MIT License</span>
+          <span>PHP 8.2 이상 지원, PHP 8.4 권장 · MIT License</span>
         </div>
       </div>
     </footer>

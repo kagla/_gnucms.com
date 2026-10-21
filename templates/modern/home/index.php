@@ -1,7 +1,7 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>GNUCMS · 커뮤니티와 쇼핑몰을 위한 PHP CMS<?php $this->stop() ?>
-<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다.<?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다."><?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS는 오픈소스 CMS입니다. PHP 8.2 이상 지원, PHP 8.4 권장. MySQL, MariaDB를 지원합니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 오픈소스 CMS입니다. PHP 8.2 이상 지원, PHP 8.4 권장. MySQL, MariaDB를 지원합니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다."><?php $this->stop() ?>
 <?php $this->start('extra_head') ?>
 <script type="application/ld+json"><?php echo json_encode([
   '@context' => 'https://schema.org',
@@ -34,7 +34,7 @@ $sourceVersion = 'v' . trim((string) file_get_contents(dirname(__DIR__, 3) . '/v
               <a class="cb-action cb-primary cursor-interaction" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener"><?= $this->icon('download', 18) ?><span>GNUCMS <span data-github-download-version><?= $this->e($sourceVersion) ?></span> 다운로드</span></a>
               <a class="cb-action cursor-interaction" href="<?= $this->e($this->base . '/manual') ?>"><?= $this->icon('book-open', 18) ?>매뉴얼 보기</a>
             </div>
-            <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2+</span><span><?= $this->icon('database', 18) ?>MySQL, MariaDB 지원</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
+            <div class="cb-specs"><span><?= $this->icon('code-xml', 18) ?>PHP 8.2 이상 지원, PHP 8.4 권장</span><span><?= $this->icon('database', 18) ?>MySQL, MariaDB 지원</span><span><?= $this->icon('scale', 18) ?>MIT License</span></div>
           </div>
           <aside id="install" class="cb-install" aria-label="배포본과 설치 안내">
             <div class="cb-install-top"><span class="cb-package"><?= $this->icon('package', 18) ?></span><div><strong>GNUCMS 다운로드</strong><small>최신 정식 배포본</small></div><a class="cb-version" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기"><span data-github-release-version><?= $this->e($sourceVersion) ?></span></a></div>

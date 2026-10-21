@@ -1,7 +1,7 @@
 <?php $this->layout('layout') ?>
 <?php $this->start('title') ?>GNUCMS · 커뮤니티와 쇼핑몰을 위한 PHP CMS<?php $this->stop() ?>
-<?php $this->start('seo_description') ?>GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다.<?php $this->stop() ?>
-<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 PHP 8.2 이상과 MySQL/MariaDB에서 동작하는 오픈소스 CMS입니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다."><?php $this->stop() ?>
+<?php $this->start('seo_description') ?>GNUCMS는 오픈소스 CMS입니다. PHP 8.2 이상 지원, PHP 8.4 권장. MySQL, MariaDB를 지원합니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다.<?php $this->stop() ?>
+<?php $this->start('meta_description') ?><meta name="description" content="GNUCMS는 오픈소스 CMS입니다. PHP 8.2 이상 지원, PHP 8.4 권장. MySQL, MariaDB를 지원합니다. 게시판, 회원, 쇼핑몰, 신용카드 결제, 배송과 정산, 알림톡·문자 운영을 제공합니다."><?php $this->stop() ?>
 <?php $this->start('extra_head') ?>
 <script type="application/ld+json"><?php echo json_encode([
   '@context' => 'https://schema.org',
@@ -55,7 +55,7 @@ $freshAfter = time() - 86400;
   <section class="product-hero">
     <div class="product-shell product-hero-inner">
       <div class="product-hero-meta">
-        <p class="product-label">OPEN SOURCE · PHP 8.2+</p>
+        <p class="product-label">OPEN SOURCE · PHP 8.2 이상 지원, PHP 8.4 권장</p>
         <a class="product-release-badge" href="https://github.com/kagla/gnucms/releases/latest" target="_blank" rel="noopener" data-github-release aria-label="GitHub 최신 릴리스 보기">
           <span class="product-release-dot" aria-hidden="true"></span><span>GitHub 최신</span><strong data-github-release-version>확인 중</strong><?= $this->icon('external', 13) ?>
         </a>
@@ -206,7 +206,7 @@ $freshAfter = time() - 86400;
         <p>저가형 공유 호스팅부터 독립 서버까지, PHP가 실행되는 환경이라면 같은 코드로 운영할 수 있습니다.</p>
       </div>
       <dl class="product-facts">
-        <div><dt>Runtime</dt><dd>PHP 8.2 이상</dd></div>
+        <div><dt>Runtime</dt><dd>PHP 8.2 이상 지원, PHP 8.4 권장</dd></div>
         <div><dt>Database</dt><dd>MySQL · MariaDB</dd></div>
         <div><dt>Rendering</dt><dd>서버 렌더링 PHP 템플릿</dd></div>
         <div><dt>License</dt><dd>MIT 오픈소스 라이선스</dd></div>
