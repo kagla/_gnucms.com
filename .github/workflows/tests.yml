@@ -6,6 +6,7 @@ on:
         description: 'Optional PHPUnit filter; empty runs the full suite'
         required: false
         default: ''
+        type: string
 permissions:
   contents: read
 jobs:
@@ -20,7 +21,6 @@ jobs:
       database:
         image: ${{ matrix.database }}
         env:
-      PHPUNIT_FILTER: ${{ inputs.filter }}
           MYSQL_ROOT_PASSWORD: test-only-password
           MYSQL_DATABASE: gnucms_test
         ports:
@@ -30,6 +30,7 @@ jobs:
           --health-cmd="mysqladmin ping -h localhost -ptest-only-password || mariadb-admin ping -h localhost -ptest-only-password"
           --health-interval=10s --health-timeout=5s --health-retries=12
     env:
+      PHPUNIT_FILTER: ${{ inputs.filter }}
       TEST_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=gnucms_test;charset=utf8mb4
       TEST_MYSQL_USER: root
       TEST_MYSQL_PASS: test-only-password
