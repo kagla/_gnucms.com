@@ -1,6 +1,11 @@
 name: Tests
 on:
   workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Optional PHPUnit filter; empty runs the full suite'
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -15,6 +20,7 @@ jobs:
       database:
         image: ${{ matrix.database }}
         env:
+      PHPUNIT_FILTER: ${{ inputs.filter }}
           MYSQL_ROOT_PASSWORD: test-only-password
           MYSQL_DATABASE: gnucms_test
         ports:
@@ -38,6 +44,12 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y default-mysql-client
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: composer validate --no-check-publish
-      - run: ./vendor/bin/phpunit
+      - name: PHPUnit
+        run: |
+          if [ -n "$PHPUNIT_FILTER" ]; then
+            ./vendor/bin/phpunit --filter "$PHPUNIT_FILTER"
+          else
+            ./vendor/bin/phpunit
+          fi
       - name: Real HTTP installation and backup round trip
         run: python3 tests/integration/http_install.py
