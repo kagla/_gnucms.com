@@ -29,8 +29,10 @@ final class AdminPageTest extends WebTestCase
         self::assertStringContainsString('href="/admin/shop"', $dashboard);
 
         $settings = $this->body($this->get($app, '/admin/settings'));
-        self::assertStringContainsString('href="/admin/aligo"', $settings);
-        self::assertStringContainsString('href="/admin/settings/notifications"', $settings);
+        self::assertStringContainsString('href="/admin/settings/messaging"', $settings);
+        $messaging = $this->body($this->get($app, '/admin/settings/messaging'));
+        self::assertStringContainsString('href="/admin/aligo"', $messaging);
+        self::assertStringContainsString('href="/admin/settings/notifications"', $messaging);
         self::assertStringContainsString('href="/admin/settings/payment"', $settings);
 
         $maintenance = $this->body($this->get($app, '/admin/settings/maintenance'));

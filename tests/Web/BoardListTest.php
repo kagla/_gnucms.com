@@ -103,7 +103,8 @@ final class BoardListTest extends WebTestCase
 
         $body = $this->body($this->get($app, '/'));
         self::assertStringContainsString('커뮤니티와 쇼핑몰을 함께 운영하는', $body);
-        self::assertStringContainsString('README 보기', $body);
+        self::assertStringContainsString('href="https://github.com/kagla/gnucms"', $body);
+        self::assertStringContainsString('매뉴얼 보기', $body);
     }
 
     /** @dataProvider connectionProvider */
